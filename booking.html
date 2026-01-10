@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Flight - Urgent Travel</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="auth-styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <a href="index.html" style="text-decoration: none; color: inherit;">
+                    <h1><i class="fas fa-plane"></i> Urgent Travel</h1>
+                </a>
+            </div>
+            <nav class="nav">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="#search" class="nav-link">Search Flights</a>
+                <a href="#emergency" class="nav-link">Emergency</a>
+                <a href="#contact" class="nav-link">Contact</a>
+                <div class="auth-links">
+                    <a href="signin.html" class="nav-link auth-link">Sign In</a>
+                    <a href="signup.html" class="nav-link auth-link signup-link">Sign Up</a>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main">
+        <!-- Booking Header -->
+        <section class="booking-header">
+            <div class="container">
+                <div class="booking-breadcrumb">
+                    <a href="index.html"><i class="fas fa-home"></i> Home</a>
+                    <span><i class="fas fa-chevron-right"></i></span>
+                    <span>Flight Search</span>
+                    <span><i class="fas fa-chevron-right"></i></span>
+                    <span class="current">Booking</span>
+                </div>
+                <h1 class="booking-title">Complete Your Booking</h1>
+                <p class="booking-subtitle">Secure your urgent travel with our fast and reliable booking system</p>
+            </div>
+        </section>
+
+        <!-- Flight Summary -->
+        <section class="flight-summary-section">
+            <div class="container">
+                <div class="flight-summary-card" id="flightSummaryCard">
+                    <!-- Flight details will be populated by JavaScript -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Booking Form -->
+        <section class="booking-form-section">
+            <div class="container">
+                <div class="booking-form-container">
+                    <form class="booking-form" id="bookingForm">
+                        <!-- Passenger Information -->
+                        <div class="form-section">
+                            <div class="section-header">
+                                <h2><i class="fas fa-user"></i> Passenger Information</h2>
+                                <p>Enter the passenger details for this booking</p>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="firstName">First Name *</label>
+                                    <input type="text" id="firstName" name="firstName" required>
+                                    <div class="error-message"></div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="middleName">Middle Name</label>
+                                    <input type="text" id="middleName" name="middleName">
+                                </div>
+                                <div class="form-group">
+                                    <label for="lastName">Last Name *</label>
+                                    <input type="text" id="lastName" name="lastName" required>
+                                    <div class="error-message"></div>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="email">Email Address *</label>
+                                    <input type="email" id="email" name="email" required>
+                                    <div class="error-message"></div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="phone">Phone Number *</label>
+                                    <input type="tel" id="phone" name="phone" required>
+                                    <div class="error-message"></div>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="dateOfBirth">Date of Birth *</label>
+                                    <input type="date" id="dateOfBirth" name="dateOfBirth" required>
+                                    <div class="error-message"></div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="gender">Gender *</label>
+                                    <select id="gender" name="gender" required>
+                                        <option value="">Select Gender</option>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                        <option value="other">Other</option>
+                                        <option value="prefer-not-to-say">Prefer not to say</option>
+                                    </select>
+                                    <div class="error-message"></div>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="passportNumber">Passport Number</label>
+                                    <input type="text" id="passportNumber" name="passportNumber" placeholder="Required for international flights">
+                                    <div class="error-message"></div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="passportExpiry">Passport Expiry Date</label>
+                                    <input type="date" id="passportExpiry" name="passportExpiry">
+                                    <div class="error-message"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Emergency Contact -->
+                        <div class="form-section">
+                            <div class="section-header">
+                                <h2><i class="fas fa-phone"></i> Emergency Contact</h2>
+                                <p>Provide an emergency contact person</p>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="emergencyName">Emergency Contact Name *</label>
+                                    <input type="text" id="emergencyName" name="emergencyName" required>
+                                    <div class="error-message"></div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="emergencyPhone">Emergency Contact Phone *</label>
+                                    <input type="tel" id="emergencyPhone" name="emergencyPhone" required>
+                                    <div class="error-message"></div>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="emergencyRelation">Relationship *</label>
+                                    <select id="emergencyRelation" name="emergencyRelation" required>
+                                        <option value="">Select Relationship</option>
+                                        <option value="spouse">Spouse</option>
+                                        <option value="parent">Parent</option>
+                                        <option value="child">Child</option>
+                                        <option value="sibling">Sibling</option>
+                                        <option value="friend">Friend</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                    <div class="error-message"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Payment Information -->
+                        <div class="form-section">
+                            <div class="section-header">
+                                <h2><i class="fas fa-credit-card"></i> Payment Information</h2>
+                                <p>Choose your preferred payment method</p>
+                            </div>
+
+                            <div class="payment-methods">
+                                <div class="payment-option">
+                                    <input type="radio" id="creditCard" name="paymentMethod" value="creditCard" checked>
+                                    <label for="creditCard" class="payment-label">
+                                        <i class="fas fa-credit-card"></i>
+                                        <span>Credit/Debit Card</span>
+                                    </label>
+                                </div>
+                                <div class="payment-option">
+                                    <input type="radio" id="paypal" name="paymentMethod" value="paypal">
+                                    <label for="paypal" class="payment-label">
+                                        <i class="fab fa-paypal"></i>
+                                        <span>PayPal</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Credit Card Details -->
+                            <div class="payment-details" id="creditCardDetails">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="cardNumber">Card Number *</label>
+                                        <input type="text" id="cardNumber" name="cardNumber" placeholder="1234 5678 9012 3456" maxlength="19">
+                                        <div class="error-message"></div>
+                                    </div>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="cardHolderName">Cardholder Name *</label>
+                                        <input type="text" id="cardHolderName" name="cardHolderName" placeholder="As it appears on card">
+                                        <div class="error-message"></div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="cardExpiry">Expiry Date *</label>
+                                        <input type="text" id="cardExpiry" name="cardExpiry" placeholder="MM/YY" maxlength="5">
+                                        <div class="error-message"></div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="cardCvv">CVV *</label>
+                                        <input type="text" id="cardCvv" name="cardCvv" placeholder="123" maxlength="4">
+                                        <div class="error-message"></div>
+                                    </div>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="billingAddress">Billing Address *</label>
+                                        <input type="text" id="billingAddress" name="billingAddress" placeholder="Street address">
+                                        <div class="error-message"></div>
+                                    </div>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="billingCity">City *</label>
+                                        <input type="text" id="billingCity" name="billingCity">
+                                        <div class="error-message"></div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="billingState">State/Province *</label>
+                                        <input type="text" id="billingState" name="billingState">
+                                        <div class="error-message"></div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="billingZip">ZIP/Postal Code *</label>
+                                        <input type="text" id="billingZip" name="billingZip">
+                                        <div class="error-message"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- PayPal Details -->
+                            <div class="payment-details" id="paypalDetails" style="display: none;">
+                                <div class="paypal-info">
+                                    <div class="paypal-icon">
+                                        <i class="fab fa-paypal"></i>
+                                    </div>
+                                    <div class="paypal-text">
+                                        <h3>PayPal Payment</h3>
+                                        <p>You will be redirected to PayPal to complete your payment securely.</p>
+                                        <p><strong>Benefits:</strong></p>
+                                        <ul>
+                                            <li>Secure payment processing</li>
+                                            <li>Buyer protection</li>
+                                            <li>No need to enter card details</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Terms and Conditions -->
+                        <div class="form-section">
+                            <div class="terms-section">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="termsAccepted" name="termsAccepted" required>
+                                    <label for="termsAccepted">
+                                        I agree to the <a href="#" onclick="showTermsModal()">Terms and Conditions</a> and <a href="#" onclick="showPrivacyModal()">Privacy Policy</a> *
+                                    </label>
+                                    <div class="error-message"></div>
+                                </div>
+                                
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="marketingEmails" name="marketingEmails">
+                                    <label for="marketingEmails">
+                                        I would like to receive promotional emails and travel deals
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Booking Summary -->
+                        <div class="booking-summary">
+                            <div class="summary-header">
+                                <h3>Booking Summary</h3>
+                            </div>
+                            <div class="summary-details" id="bookingSummaryDetails">
+                                <!-- Summary will be populated by JavaScript -->
+                            </div>
+                            <div class="total-section">
+                                <div class="total-line">
+                                    <span>Subtotal:</span>
+                                    <span id="subtotal">$0.00</span>
+                                </div>
+                                <div class="total-line">
+                                    <span>Taxes & Fees:</span>
+                                    <span id="taxes">$0.00</span>
+                                </div>
+                                <div class="total-line total">
+                                    <span>Total:</span>
+                                    <span id="total">$0.00</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="form-actions">
+                            <button type="button" class="btn-secondary" onclick="goBack()">
+                                <i class="fas fa-arrow-left"></i> Back to Search
+                            </button>
+                            <button type="submit" class="btn-primary" id="bookNowBtn">
+                                <i class="fas fa-lock"></i> Complete Booking
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Terms and Conditions Modal -->
+    <div id="termsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Terms and Conditions</h2>
+                <button class="modal-close" onclick="closeModal('termsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h3>Booking Terms</h3>
+                <ul>
+                    <li>All bookings are subject to airline terms and conditions</li>
+                    <li>Cancellation policies vary by airline and fare type</li>
+                    <li>Name changes may incur additional fees</li>
+                    <li>Refunds are processed according to airline policies</li>
+                </ul>
+                
+                <h3>Payment Terms</h3>
+                <ul>
+                    <li>Payment is required at time of booking</li>
+                    <li>All prices are in USD unless otherwise stated</li>
+                    <li>Additional fees may apply for certain services</li>
+                    <li>Payment processing is secure and encrypted</li>
+                </ul>
+                
+                <h3>Travel Requirements</h3>
+                <ul>
+                    <li>Valid ID required for domestic flights</li>
+                    <li>Passport required for international flights</li>
+                    <li>Check-in requirements vary by airline</li>
+                    <li>Baggage policies differ by airline and fare type</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Privacy Policy Modal -->
+    <div id="privacyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Privacy Policy</h2>
+                <button class="modal-close" onclick="closeModal('privacyModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h3>Information We Collect</h3>
+                <ul>
+                    <li>Personal information for booking purposes</li>
+                    <li>Payment information (securely processed)</li>
+                    <li>Contact details for travel notifications</li>
+                    <li>Emergency contact information</li>
+                </ul>
+                
+                <h3>How We Use Your Information</h3>
+                <ul>
+                    <li>Process your flight booking</li>
+                    <li>Send booking confirmations and updates</li>
+                    <li>Provide customer support</li>
+                    <li>Improve our services</li>
+                </ul>
+                
+                <h3>Data Protection</h3>
+                <ul>
+                    <li>All data is encrypted and secure</li>
+                    <li>We never sell your personal information</li>
+                    <li>You can request data deletion at any time</li>
+                    <li>We comply with all privacy regulations</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <h3>Processing Your Booking...</h3>
+            <p>Please wait while we secure your flight</p>
+        </div>
+    </div>
+
+    <!-- Razorpay SDK -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    
+    <!-- Razorpay Configuration -->
+    <script src="razorpay-config.js"></script>
+    
+    <!-- Booking Script -->
+    <script src="booking-script.js"></script>
+</body>
+</html>
