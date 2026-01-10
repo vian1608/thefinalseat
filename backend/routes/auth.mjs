@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 // In-memory user store (replace with database in production)
 const users = [];
@@ -135,4 +135,4 @@ router.get('/verify', (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

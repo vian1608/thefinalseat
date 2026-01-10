@@ -1,4 +1,4 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
 
 // In-memory admin credentials (replace with database in production)
@@ -62,4 +62,4 @@ router.get('/stats', (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

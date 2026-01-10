@@ -1,6 +1,7 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const Razorpay = require('razorpay');
+import Razorpay from 'razorpay';
+import { createHmac } from 'crypto';
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -44,8 +45,7 @@ router.post('/razorpay/verify', async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
-    const crypto = require('crypto');
-    const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'your_secret_key');
+    const hmac = createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'your_secret_key');
     hmac.update(razorpay_order_id + '|' + razorpay_payment_id);
     const generated_signature = hmac.digest('hex');
 
@@ -63,4 +63,4 @@ router.post('/razorpay/verify', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

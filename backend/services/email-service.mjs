@@ -1,4 +1,4 @@
-const nodemailer = require('nodemailer');
+import nodemailer from 'nodemailer';
 
 // Create email transporter
 const transporter = nodemailer.createTransport({
@@ -12,7 +12,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // Send booking confirmation email
-async function sendBookingConfirmation(bookingData) {
+export async function sendBookingConfirmation(bookingData) {
   try {
     const flight = bookingData.flight || {};
     
@@ -94,6 +94,6 @@ Please contact the passenger directly for any queries.
   }
 }
 
-module.exports = {
+export default {
   sendBookingConfirmation
 };

@@ -1,5 +1,5 @@
 // API Configuration
-module.exports = {
+export default {
   AMADEUS: {
     API_KEY: process.env.AMADEUS_API_KEY,
     API_SECRET: process.env.AMADEUS_API_SECRET,

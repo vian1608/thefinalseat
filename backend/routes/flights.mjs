@@ -1,6 +1,6 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const amadeusService = require('../services/amadeus-service');
+import amadeusService from '../services/amadeus-service.mjs';
 
 // Search flights
 router.post('/search', async (req, res) => {
@@ -37,4 +37,4 @@ router.post('/search', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

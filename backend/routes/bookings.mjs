@@ -1,6 +1,6 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const emailService = require('../services/email-service');
+import { sendBookingConfirmation } from '../services/email-service.mjs';
 
 // In-memory bookings store (replace with database in production)
 const bookings = [];
@@ -25,7 +25,7 @@ router.post('/', async (req, res) => {
 
     // Send confirmation email
     try {
-      await emailService.sendBookingConfirmation(booking);
+      await sendBookingConfirmation(booking);
     } catch (emailError) {
       console.error('Failed to send email:', emailError);
       // Don't fail the booking if email fails
@@ -69,4 +69,4 @@ router.get('/:reference', (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

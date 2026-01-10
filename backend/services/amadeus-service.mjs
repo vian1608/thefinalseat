@@ -1,5 +1,5 @@
-const axios = require('axios');
-const config = require('../config/api-config');
+import axios from 'axios';
+import config from '../config/api-config.mjs';
 
 class AmadeusService {
   constructor() {
@@ -237,4 +237,4 @@ class AmadeusService {
   }
 }
 
-module.exports = new AmadeusService();
+export default new AmadeusService();
