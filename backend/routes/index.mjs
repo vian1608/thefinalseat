@@ -4,7 +4,7 @@ const router = express.Router();
 // Import all route modules
 import flightsRouter from './flights.mjs';
 import airportsRouter from './airports.mjs';
-import authRouter from './auth.mjs';
+import authRouter from './Users/Users.mjs';
 import bookingsRouter from './bookings.mjs';
 import adminRouter from './admin.mjs';
 import paymentsRouter from './payments.mjs';

@@ -2,39 +2,41 @@ import express from 'express';
 const router = express.Router();
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-
-// In-memory user store (replace with database in production)
-const users = [];
+import User from '../../models/user/User.mjs';
 
 // Register new user
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, firstName, lastName, phone } = req.body;
+    const { email, password, firstName, lastName, phone, dateOfBirth, gender, nationality, passportNumber, passportExpiry } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Check if user exists
-    if (users.find(u => u.email === email)) {
-      return res.status(400).json({ error: 'User already exists' });
+    // Check if user already exists
+    const existingUser = await User.findOne({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists with this email' });
     }
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
-    const user = {
-      id: Date.now().toString(),
+    // Create user in database
+    const user = await User.create({
       email,
       password: hashedPassword,
       firstName,
       lastName,
       phone,
-      createdAt: new Date().toISOString()
-    };
-
-    users.push(user);
+      dateOfBirth,
+      gender,
+      nationality,
+      passportNumber,
+      passportExpiry,
+      isActive: true,
+      role: 'user'
+    });
 
     // Generate JWT token
     const token = jwt.sign(
@@ -51,11 +53,23 @@ router.post('/register', async (req, res) => {
         id: user.id,
         email: user.email,
         firstName: user.firstName,
-        lastName: user.lastName
+        lastName: user.lastName,
+        phone: user.phone,
+        role: user.role
       }
     });
   } catch (error) {
     console.error('Registration error:', error);
+    
+    // Handle Sequelize validation errors
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({ error: 'User already exists with this email' });
+    }
+    
+    if (error.name === 'SequelizeValidationError') {
+      return res.status(400).json({ error: error.errors[0].message });
+    }
+    
     res.status(500).json({ error: 'Failed to create account' });
   }
 });
@@ -69,10 +83,16 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Find user
-    const user = users.find(u => u.email === email);
+    // Find user in database
+    const user = await User.findOne({ where: { email } });
+    
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Check if user is active
+    if (!user.isActive) {
+      return res.status(403).json({ error: 'Account is deactivated' });
     }
 
     // Verify password
@@ -83,7 +103,7 @@ router.post('/login', async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, email: user.email },
+      { userId: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '7d' }
     );
@@ -96,7 +116,9 @@ router.post('/login', async (req, res) => {
         id: user.id,
         email: user.email,
         firstName: user.firstName,
-        lastName: user.lastName
+        lastName: user.lastName,
+        phone: user.phone,
+        role: user.role
       }
     });
   } catch (error) {
@@ -106,7 +128,7 @@ router.post('/login', async (req, res) => {
 });
 
 // Verify token
-router.get('/verify', (req, res) => {
+router.get('/verify', async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     
@@ -115,10 +137,18 @@ router.get('/verify', (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-    const user = users.find(u => u.id === decoded.userId);
+    
+    // Find user in database
+    const user = await User.findByPk(decoded.userId, {
+      attributes: { exclude: ['password'] } // Exclude password from response
+    });
 
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ error: 'Account is deactivated' });
     }
 
     res.json({
@@ -127,11 +157,20 @@ router.get('/verify', (req, res) => {
         id: user.id,
         email: user.email,
         firstName: user.firstName,
-        lastName: user.lastName
+        lastName: user.lastName,
+        phone: user.phone,
+        role: user.role,
+        dateOfBirth: user.dateOfBirth,
+        gender: user.gender,
+        nationality: user.nationality
       }
     });
   } catch (error) {
-    res.status(401).json({ error: 'Invalid token' });
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    console.error('Token verification error:', error);
+    res.status(500).json({ error: 'Failed to verify token' });
   }
 });
 
