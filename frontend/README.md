@@ -28,5 +28,5 @@ This creates an optimized production build in the `build` folder.
 
 Create a `.env` file in the frontend directory:
 ```
-REACT_APP_API_URL=http://localhost:5000/api
+REACT_APP_API_URL=http://localhost:5001/api
 ```
