@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { airportAPI, flightAPI } from '../services/api';
+import { airportAPI } from '../services/api';
 import './Home.css';
 
 function Home() {
@@ -345,7 +345,7 @@ function Home() {
               </div>
               <h3>Medical Emergency</h3>
               <p>Specialized services for medical emergencies requiring immediate travel.</p>
-              <a href="#" className="emergency-btn">Get Help</a>
+              <button type="button" className="emergency-btn">Get Help</button>
             </div>
             <div className="emergency-card">
               <div className="card-icon">
@@ -353,7 +353,7 @@ function Home() {
               </div>
               <h3>Family Emergency</h3>
               <p>Compassionate support for family emergencies and bereavement travel.</p>
-              <a href="#" className="emergency-btn">Contact Us</a>
+              <button type="button" className="emergency-btn">Contact Us</button>
             </div>
             <div className="emergency-card">
               <div className="card-icon">
@@ -361,7 +361,7 @@ function Home() {
               </div>
               <h3>Business Emergency</h3>
               <p>Rapid deployment for critical business meetings and urgent corporate travel.</p>
-              <a href="#" className="emergency-btn">Book Now</a>
+              <button type="button" className="emergency-btn">Book Now</button>
             </div>
           </div>
         </div>

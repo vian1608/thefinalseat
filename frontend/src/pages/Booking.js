@@ -64,7 +64,7 @@ function Booking() {
       // Process payment if credit card
       if (formData.paymentMethod === 'creditCard') {
         // Create Razorpay order
-        const orderResponse = await paymentAPI.createRazorpayOrder(
+        await paymentAPI.createRazorpayOrder(
           parseFloat(pricing.total),
           'USD'
         );

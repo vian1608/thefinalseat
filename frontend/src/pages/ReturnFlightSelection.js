@@ -7,7 +7,6 @@ function ReturnFlightSelection() {
   const navigate = useNavigate();
   const [flights, setFlights] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchParams, setSearchParams] = useState(null);
 
   useEffect(() => {
     const outboundFlight = JSON.parse(sessionStorage.getItem('selectedFlight') || 'null');
@@ -17,15 +16,6 @@ function ReturnFlightSelection() {
       navigate('/');
       return;
     }
-
-    setSearchParams({
-      from: searchParams.to,
-      to: searchParams.from,
-      departure: searchParams.returnDate,
-      passengers: searchParams.passengers,
-      travelClass: searchParams.travelClass,
-      maxResults: 10
-    });
 
     searchReturnFlights({
       from: searchParams.to,

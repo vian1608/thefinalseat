@@ -9,14 +9,12 @@ function SearchResults() {
   const [flights, setFlights] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchParams, setSearchParams] = useState(null);
   const [searchType, setSearchType] = useState('oneway');
 
   useEffect(() => {
     const params = location.state?.searchParams || JSON.parse(sessionStorage.getItem('searchParams') || '{}');
     const type = location.state?.searchType || sessionStorage.getItem('searchType') || 'oneway';
     
-    setSearchParams(params);
     setSearchType(type);
 
     if (params.from && params.to && params.departure) {
