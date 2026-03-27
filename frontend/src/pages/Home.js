@@ -128,7 +128,7 @@ function Home() {
         <div className="container">
           <div className="hero-content">
             <h2 className="hero-title">Experience Premium Travel</h2>
-            <p className="hero-subtitle">Discover the world with Urgent Travel - Where speed meets comfort</p>
+            <p className="hero-subtitle">Discover the world with The Final Seat - Where speed meets comfort</p>
             
             <div className="promo-banner">
               <div className="promo-content">
@@ -370,7 +370,7 @@ function Home() {
       {/* Features Section */}
       <section className="features-section">
         <div className="container">
-          <h2 className="section-title">Why Choose Urgent Travel?</h2>
+          <h2 className="section-title">Why Choose The Final Seat?</h2>
           <div className="features-grid">
             <div className="feature-item">
               <i className="fas fa-clock"></i>

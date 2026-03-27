@@ -43,7 +43,7 @@ function SignUp() {
               <i className="fas fa-user-plus"></i>
             </div>
             <h2>Create Account</h2>
-            <p>Join Urgent Travel for faster bookings and better deals</p>
+            <p>Join The Final Seat for faster bookings and better deals</p>
           </div>
 
           <form onSubmit={handleSubmit}>

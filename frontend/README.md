@@ -1,6 +1,6 @@
 # Frontend React Application
 
-React frontend for Urgent Travel flight booking application.
+React frontend for The Final Seat flight booking application.
 
 ## Setup
 

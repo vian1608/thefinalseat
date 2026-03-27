@@ -9,7 +9,7 @@ function Header() {
         <div className="logo">
           <i className="fas fa-plane-departure"></i>
           <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <h1>Urgent Travel</h1>
+            <h1>The Final Seat</h1>
           </Link>
         </div>
         <nav className="nav">

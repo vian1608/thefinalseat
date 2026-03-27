@@ -33,7 +33,7 @@ function AdminLogin() {
           <div className="admin-header">
             <i className="fas fa-shield-alt"></i>
             <h1>Admin Panel</h1>
-            <p>Urgent Travel Management System</p>
+            <p>The Final Seat Management System</p>
           </div>
 
           <form onSubmit={handleSubmit}>

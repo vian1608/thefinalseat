@@ -37,7 +37,7 @@ function SignIn() {
               <i className="fas fa-user-circle"></i>
             </div>
             <h2>Welcome Back</h2>
-            <p>Sign in to your Urgent Travel account</p>
+            <p>Sign in to your account at The Final Seat</p>
           </div>
 
           <form onSubmit={handleSubmit}>

@@ -7,7 +7,7 @@ function Footer() {
       <div className="container">
         <div className="footer-content">
           <div className="footer-section">
-            <h3>Urgent Travel</h3>
+            <h3>The Final Seat</h3>
             <p>Your trusted partner for emergency and urgent travel needs.</p>
           </div>
           <div className="footer-section">
@@ -28,7 +28,7 @@ function Footer() {
           </div>
         </div>
         <div className="footer-bottom">
-          <p>&copy; 2024 Urgent Travel. All rights reserved.</p>
+          <p>&copy; 2024 The Final Seat. All rights reserved.</p>
         </div>
       </div>
     </footer>
