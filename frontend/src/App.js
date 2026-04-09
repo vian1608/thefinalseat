@@ -12,6 +12,8 @@ import AdminDashboard from './pages/AdminDashboard';
 import OneWayConfirmation from './pages/OneWayConfirmation';
 import RoundTripConfirmation from './pages/RoundTripConfirmation';
 import ReturnFlightSelection from './pages/ReturnFlightSelection';
+import TermsAndConditions from './pages/TermsAndConditions';
+import ContactInfo from './pages/ContactInfo';
 import './App.css';
 
 function App() {
@@ -31,6 +33,8 @@ function App() {
             <Route path="/confirmation/one-way" element={<OneWayConfirmation />} />
             <Route path="/confirmation/round-trip" element={<RoundTripConfirmation />} />
             <Route path="/return-flight" element={<ReturnFlightSelection />} />
+            <Route path="/terms" element={<TermsAndConditions />} />
+            <Route path="/contact" element={<ContactInfo />} />
           </Routes>
         </main>
         <Footer />
