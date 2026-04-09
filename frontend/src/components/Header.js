@@ -69,9 +69,9 @@ function Header() {
           <a href="#emergency" className="nav-link">
             Emergency
           </a>
-          <a href="#contact" className="nav-link">
+          <Link to="/contact" className="nav-link">
             Contact
-          </a>
+          </Link>
           <div className="auth-links">
             <Link to="/signin" className="nav-link auth-link">
               Sign In
