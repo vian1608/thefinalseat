@@ -7,28 +7,31 @@ function Footer() {
     <footer className="footer">
       <div className="container">
         <div className="footer-content">
-          <div className="footer-section">
-            <h3>The Final Seat</h3>
-            <p>Your trusted partner for emergency and urgent travel needs.</p>
+          <div className="footer-section footer-brand">
+            <h3>The Final Seat LLC</h3>
+            <p>Your trusted partner for urgent travel advisory and support.</p>
           </div>
           <div className="footer-section">
-            <h4>Quick Links</h4>
+            <h4>Company</h4>
             <ul>
               <li><Link to="/">Home</Link></li>
-              <li><Link to="/terms">Terms & Conditions</Link></li>
-              <li><Link to="/privacy-policy">Privacy Policy</Link></li>
-              <li><Link to="/refund-policy">Refund Policy</Link></li>
               <li><Link to="/contact">Contact Information</Link></li>
             </ul>
           </div>
           <div className="footer-section">
-            <h4>Support</h4>
+            <h4>Legal</h4>
             <ul>
-              <li><Link to="/signin">Sign In</Link></li>
-              <li><Link to="/signup">Sign Up</Link></li>
+              <li><Link to="/terms">Terms & Conditions</Link></li>
+              <li><Link to="/privacy-policy">Privacy Policy</Link></li>
+              <li><Link to="/refund-policy">Refund Policy</Link></li>
+            </ul>
+          </div>
+          <div className="footer-section">
+            <h4>Contact</h4>
+            <ul>
               <li><a href="mailto:support@thefinalseat.com">support@thefinalseat.com</a></li>
               <li><a href="tel:+18083015460">+1 808 301 5460</a></li>
-              <li>5830 E 2nd St, Ste 7000 #34290, Casper, Wyoming 82609 US</li>
+              <li>5830 E 2nd St, Ste 7000, Casper, WY 82609</li>
             </ul>
           </div>
         </div>

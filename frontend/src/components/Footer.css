@@ -1,1 +1,88 @@
-/* Footer styles are in the main styles.css file */
+.footer {
+  background: #0f172a;
+  color: #cbd5e1;
+  padding: 2.75rem 0 1rem;
+  border-top: 3px solid #8b1538;
+}
+
+.footer-content {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr 0.85fr 1.15fr;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.footer-section h3,
+.footer-section h4 {
+  margin: 0 0 0.85rem;
+  color: #f8fafc;
+}
+
+.footer-section h3 {
+  font-size: 1.25rem;
+}
+
+.footer-section h4 {
+  font-size: 1rem;
+}
+
+.footer-section p {
+  margin: 0;
+  color: #cbd5e1;
+  line-height: 1.65;
+}
+
+.footer-section ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.footer-section li {
+  margin-bottom: 0.5rem;
+  color: #cbd5e1;
+  line-height: 1.55;
+}
+
+.footer-section a {
+  color: #cbd5e1;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.footer-section a:hover {
+  color: #ffffff;
+}
+
+.footer-bottom {
+  border-top: 1px solid rgba(148, 163, 184, 0.3);
+  padding-top: 0.95rem;
+  text-align: center;
+}
+
+.footer-bottom p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 900px) {
+  .footer-content {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .footer-brand {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .footer {
+    padding: 2rem 0 1rem;
+  }
+
+  .footer-content {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+}
