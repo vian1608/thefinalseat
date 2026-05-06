@@ -79,13 +79,6 @@ function Header() {
             <Link to="/signup" className="nav-link auth-link signup-link">
               Sign Up
             </Link>
-            <Link
-              to="/admin/login"
-              className="nav-link auth-link admin-link"
-              style={{ color: '#ffc107', fontWeight: 600 }}
-            >
-              <i className="fas fa-shield-alt" aria-hidden="true" /> Admin
-            </Link>
           </div>
         </nav>
         {menuOpen && (
