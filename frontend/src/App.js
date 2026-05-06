@@ -15,6 +15,8 @@ import ReturnFlightSelection from './pages/ReturnFlightSelection';
 import TermsAndConditions from './pages/TermsAndConditions';
 import ContactInfo from './pages/ContactInfo';
 import './App.css';
+import PrivacyPolicy from './pages/privacypolicy';
+import RefundPolicy from './pages/refundpolicy';
 
 function App() {
   return (
@@ -35,6 +37,10 @@ function App() {
             <Route path="/return-flight" element={<ReturnFlightSelection />} />
             <Route path="/terms" element={<TermsAndConditions />} />
             <Route path="/contact" element={<ContactInfo />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/refund-policy" element={<RefundPolicy />} />
+            <Route path="/privacypolicy" element={<PrivacyPolicy />} />
+            <Route path="/refundpolicy" element={<RefundPolicy />} />
           </Routes>
         </main>
         <Footer />

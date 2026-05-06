@@ -16,6 +16,8 @@ function Footer() {
             <ul>
               <li><Link to="/">Home</Link></li>
               <li><Link to="/terms">Terms & Conditions</Link></li>
+              <li><Link to="/privacy-policy">Privacy Policy</Link></li>
+              <li><Link to="/refund-policy">Refund Policy</Link></li>
               <li><Link to="/contact">Contact Information</Link></li>
             </ul>
           </div>
@@ -31,7 +33,7 @@ function Footer() {
           </div>
         </div>
         <div className="footer-bottom">
-          <p>&copy; 2026 The Final Seat. All rights reserved.</p>
+          <p>&copy; 2026 The Final Seat LLC. All rights reserved.</p>
         </div>
       </div>
     </footer>

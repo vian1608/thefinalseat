@@ -3210,28 +3210,26 @@ input:focus, select:focus, textarea:focus {
     background: linear-gradient(135deg, #17a2b8, #6f42c1);
 }
 
-/* Enhanced Form Styling */
-.form-group {
+/* Enhanced Form Styling (booking form only) */
+.booking-form .form-group {
     position: relative;
     margin-bottom: 1.5rem;
 }
 
-.form-group label {
-    position: absolute;
-    top: -8px;
-    left: 12px;
-    background: white;
-    padding: 0 8px;
-    font-size: 0.875rem;
-    color: var(--qa-burgundy);
-    font-weight: 500;
-    transition: all 0.3s ease;
+.booking-form .form-group label {
+    position: static;
+    background: transparent;
+    padding: 0;
+    font-size: 0.9rem;
+    color: #374151;
+    font-weight: 600;
+    transition: color 0.3s ease;
 }
 
-.form-group input:focus + label,
-.form-group select:focus + label {
+.booking-form .form-group input:focus + label,
+.booking-form .form-group select:focus + label {
     color: var(--qa-gold);
-    transform: scale(1.05);
+    transform: none;
 }
 
 /* Enhanced Mobile Animations */
