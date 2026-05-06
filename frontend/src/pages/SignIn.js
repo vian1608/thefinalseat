@@ -37,33 +37,37 @@ function SignIn() {
               <i className="fas fa-user-circle"></i>
             </div>
             <h2>Welcome Back</h2>
-            <p>Sign in to your account at The Final Seat</p>
+            <p>Sign in to continue your travel planning with The Final Seat LLC.</p>
           </div>
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} className="auth-form">
             {error && <div className="error-message">{error}</div>}
             
-            <div className="form-group">
+            <div className="auth-input-group">
+              <label htmlFor="signin-email">Email Address</label>
               <input
+                id="signin-email"
                 type="email"
-                placeholder="Email"
+                placeholder="you@example.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
               />
             </div>
 
-            <div className="form-group">
+            <div className="auth-input-group">
+              <label htmlFor="signin-password">Password</label>
               <input
+                id="signin-password"
                 type="password"
-                placeholder="Password"
+                placeholder="Enter your password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 required
               />
             </div>
 
-            <button type="submit" className="btn-primary" disabled={loading}>
+            <button type="submit" className="auth-submit-btn" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>

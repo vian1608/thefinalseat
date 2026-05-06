@@ -43,60 +43,74 @@ function SignUp() {
               <i className="fas fa-user-plus"></i>
             </div>
             <h2>Create Account</h2>
-            <p>Join The Final Seat for faster bookings and better deals</p>
+            <p>Create your profile to manage quotes and travel updates faster.</p>
           </div>
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} className="auth-form">
             {error && <div className="error-message">{error}</div>}
             
-            <div className="form-row">
+            <div className="auth-grid">
+              <div className="auth-input-group">
+                <label htmlFor="signup-first-name">First Name</label>
               <input
+                id="signup-first-name"
                 type="text"
-                placeholder="First Name"
+                placeholder="First name"
                 value={formData.firstName}
                 onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                 required
               />
+              </div>
+              <div className="auth-input-group">
+                <label htmlFor="signup-last-name">Last Name</label>
               <input
+                id="signup-last-name"
                 type="text"
-                placeholder="Last Name"
+                placeholder="Last name"
                 value={formData.lastName}
                 onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                 required
               />
+              </div>
             </div>
 
-            <div className="form-group">
+            <div className="auth-input-group">
+              <label htmlFor="signup-email">Email Address</label>
               <input
+                id="signup-email"
                 type="email"
-                placeholder="Email"
+                placeholder="you@example.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
               />
             </div>
 
-            <div className="form-group">
+            <div className="auth-input-group">
+              <label htmlFor="signup-phone">Phone Number</label>
               <input
+                id="signup-phone"
                 type="tel"
-                placeholder="Phone"
+                placeholder="+1 555 123 4567"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 required
               />
             </div>
 
-            <div className="form-group">
+            <div className="auth-input-group">
+              <label htmlFor="signup-password">Password</label>
               <input
+                id="signup-password"
                 type="password"
-                placeholder="Password"
+                placeholder="Create a secure password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 required
               />
             </div>
 
-            <button type="submit" className="btn-primary" disabled={loading}>
+            <button type="submit" className="auth-submit-btn" disabled={loading}>
               {loading ? 'Creating account...' : 'Sign Up'}
             </button>
           </form>

@@ -63,10 +63,10 @@ function Header() {
             }
           }}
         >
-          <a href="#search" className="nav-link">
+          <a href="/#search" className="nav-link">
             Search Flights
           </a>
-          <a href="#emergency" className="nav-link">
+          <a href="/#emergency" className="nav-link">
             Emergency
           </a>
           <Link to="/contact" className="nav-link">
