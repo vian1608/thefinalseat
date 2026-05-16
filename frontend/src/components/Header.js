@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import './Header.css';
 
 function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const onScroll = () => {
@@ -33,17 +34,33 @@ function Header() {
     return () => window.removeEventListener('scroll', onScroll);
   }, [menuOpen]);
 
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
   const closeMenu = () => setMenuOpen(false);
 
+  const isFlightsActive = location.pathname === '/';
+  const isRailActive = location.pathname.startsWith('/amtrak');
+  const isContactActive = location.pathname === '/contact';
+  const isRailTheme = isRailActive;
+
   return (
-    <header className={`header ${scrolled ? 'header--scrolled' : ''}`}>
+    <header
+      className={`header ${isRailTheme ? 'header--rail' : 'header--flights'} ${scrolled ? 'header--scrolled' : ''}`}
+    >
       <div className="container header-inner">
         <div className="logo">
-          <i className="fas fa-plane-departure" aria-hidden="true" />
-          <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }} onClick={closeMenu}>
+          <i
+            key={isRailTheme ? 'rail-icon' : 'flight-icon'}
+            className={`fas logo-icon ${isRailTheme ? 'fa-train' : 'fa-plane-departure'}`}
+            aria-hidden="true"
+          />
+          <Link to="/" className="logo-link" onClick={closeMenu}>
             <h1>The Final Seat</h1>
           </Link>
         </div>
+
         <button
           type="button"
           className="nav-toggle"
@@ -54,6 +71,7 @@ function Header() {
         >
           <i className={menuOpen ? 'fas fa-times' : 'fas fa-bars'} aria-hidden="true" />
         </button>
+
         <nav
           id="site-nav"
           className={`nav ${menuOpen ? 'nav--open' : ''}`}
@@ -63,24 +81,37 @@ function Header() {
             }
           }}
         >
-          <a href="/#search" className="nav-link">
-            Search Flights
-          </a>
-          <a href="/#emergency" className="nav-link">
-            Emergency
-          </a>
-          <Link to="/contact" className="nav-link">
-            Contact
-          </Link>
-          <div className="auth-links">
-            <Link to="/signin" className="nav-link auth-link">
+          <div className="nav-main">
+            <Link
+              to="/"
+              className={`header-nav-link ${isFlightsActive ? 'header-nav-link--active' : ''}`}
+            >
+              Flights
+            </Link>
+            <Link
+              to="/amtrak-assistance"
+              className={`header-nav-link ${isRailActive ? 'header-nav-link--active' : ''}`}
+            >
+              Rail (Amtrak)
+            </Link>
+            <Link
+              to="/contact"
+              className={`header-nav-link ${isContactActive ? 'header-nav-link--active' : ''}`}
+            >
+              Contact Us
+            </Link>
+          </div>
+
+          <div className="header-auth">
+            <Link to="/signin" className="header-nav-link header-auth__signin">
               Sign In
             </Link>
-            <Link to="/signup" className="nav-link auth-link signup-link">
+            <Link to="/signup" className="header-nav-link header-auth__signup">
               Sign Up
             </Link>
           </div>
         </nav>
+
         {menuOpen && (
           <button
             type="button"

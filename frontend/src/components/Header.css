@@ -1,21 +1,199 @@
-/* Desktop: single row, hide hamburger */
+/* Smooth theme transition when switching Flights ↔ Rail */
+.header {
+  transition:
+    background 0.45s ease,
+    box-shadow 0.45s ease;
+}
+
+.header .logo-icon {
+  transition: color 0.35s ease, transform 0.35s ease, opacity 0.35s ease;
+}
+
+.header--rail .logo-icon {
+  animation: headerIconSwap 0.45s ease;
+}
+
+.header--flights .logo-icon {
+  animation: headerIconSwap 0.45s ease;
+}
+
+@keyframes headerIconSwap {
+  0% {
+    opacity: 0;
+    transform: scale(0.85) translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Rail (Amtrak) — blue header theme */
+.header.header--rail {
+  background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 55%, #163a5c 100%);
+  box-shadow: 0 4px 20px rgba(15, 39, 68, 0.35);
+}
+
+.header.header--rail .logo i,
+.header.header--rail .logo-icon {
+  color: #9ec5e8;
+  filter: drop-shadow(0 2px 4px rgba(126, 184, 232, 0.35));
+}
+
+.header.header--rail .logo h1 {
+  background: linear-gradient(45deg, #fff 0%, #c5dff5 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.header.header--rail .header-auth__signup {
+  color: #1e3a5f;
+}
+
+.header.header--rail .header-auth__signup:hover {
+  color: #0f2744;
+  background: #e8f2fa;
+  border-color: #e8f2fa;
+  border-bottom-color: #e8f2fa;
+}
+
 .header-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 1.5rem;
   width: 100%;
+}
+
+.logo-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.nav-main {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.header-auth {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-left: 0.5rem;
+  padding-left: 1.5rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+/* Classical professional nav — text links with understated active state */
+.header .header-nav-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.35rem 0;
+  color: rgba(255, 255, 255, 0.88);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.9375rem;
+  letter-spacing: 0.01em;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+  overflow: visible;
+  position: relative;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.header .header-nav-link::before {
+  display: none;
+}
+
+.header .header-nav-link:hover {
+  color: #fff;
+  background: transparent;
+  border-bottom-color: rgba(255, 255, 255, 0.45);
+  transform: none;
+  box-shadow: none;
+}
+
+.header .header-nav-link--active {
+  color: #fff;
+  font-weight: 600;
+  border-bottom-color: #fff;
+  background: transparent;
+}
+
+.header .header-nav-link--active:hover {
+  color: #fff;
+  border-bottom-color: #fff;
+}
+
+.header .header-auth__signin {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.header .header-auth__signup {
+  min-height: 40px;
+  padding: 0.45rem 1.15rem;
+  color: #8b1538;
+  background: #fff;
+  border: 1px solid #fff;
+  border-radius: 4px;
+  border-bottom: 1px solid #fff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  letter-spacing: 0.03em;
+  text-transform: none;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.header .header-auth__signup:hover {
+  background: #f8f4f5;
+  color: #6b0f2a;
+  border-color: #f8f4f5;
+  border-bottom-color: #f8f4f5;
+  transform: none;
+  box-shadow: none;
 }
 
 .nav-toggle {
   display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.nav-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.nav-toggle i {
+  font-size: 1.1rem;
 }
 
 .nav-backdrop {
   display: none;
 }
 
-/* Mobile: compact bar + slide-down panel */
 @media (max-width: 768px) {
   .header {
     padding: 0.55rem 0;
@@ -25,6 +203,10 @@
   .header--scrolled {
     padding: 0.3rem 0;
     box-shadow: 0 2px 12px rgba(139, 21, 56, 0.35);
+  }
+
+  .header.header--rail.header--scrolled {
+    box-shadow: 0 2px 12px rgba(15, 39, 68, 0.45);
   }
 
   .header--scrolled .logo h1 {
@@ -41,8 +223,6 @@
     position: relative;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    row-gap: 0;
   }
 
   .logo {
@@ -65,21 +245,8 @@
 
   .nav-toggle {
     display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    border: none;
-    background: rgba(255, 255, 255, 0.18);
-    color: #fff;
-    border-radius: 10px;
-    cursor: pointer;
     flex-shrink: 0;
     z-index: 1002;
-  }
-
-  .nav-toggle i {
-    font-size: 1.2rem;
   }
 
   .nav {
@@ -90,40 +257,64 @@
     top: calc(100% + 0.35rem);
     flex-direction: column;
     align-items: stretch;
-    gap: 0.35rem;
+    gap: 0;
     width: 100%;
     margin: 0;
-    padding: 0.75rem 0.75rem 1rem;
+    padding: 0.5rem 0;
     background: linear-gradient(135deg, #8b1538 0%, #6b0f2a 100%);
-    border-radius: 0 0 12px 12px;
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    transition: background 0.45s ease;
     z-index: 1001;
-    max-height: min(70vh, 420px);
+    max-height: min(75vh, 480px);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    flex: none;
+    justify-content: flex-start;
   }
 
   .nav.nav--open {
     display: flex;
   }
 
-  .nav-link {
-    text-align: left;
-    padding: 0.65rem 0.85rem;
-    border-radius: 8px;
-    margin: 0;
+  .header.header--rail .nav {
+    background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%);
   }
 
-  .auth-links {
-    margin-left: 0;
-    padding-left: 0;
-    border-left: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
-    padding-top: 0.65rem;
-    margin-top: 0.35rem;
+  .nav-main {
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0;
     width: 100%;
+  }
+
+  .header-auth {
+    margin-left: 0;
+    padding: 0.5rem 1rem 0.75rem;
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.18);
+    flex-direction: column;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .header .header-nav-link {
+    padding: 0.75rem 1rem;
+    border-bottom: none;
+    border-left: 3px solid transparent;
+    min-height: auto;
+  }
+
+  .header .header-nav-link:hover,
+  .header .header-nav-link--active {
+    background: rgba(255, 255, 255, 0.06);
+    border-left-color: #fff;
+    border-bottom-color: transparent;
+  }
+
+  .header .header-auth__signup {
+    margin: 0 1rem;
+    justify-content: center;
+    text-align: center;
   }
 
   .nav-backdrop {

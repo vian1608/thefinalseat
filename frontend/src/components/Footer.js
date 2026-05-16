@@ -14,7 +14,8 @@ function Footer() {
           <div className="footer-section">
             <h4>Company</h4>
             <ul>
-              <li><Link to="/">Home</Link></li>
+              <li><Link to="/">Flights</Link></li>
+              <li><Link to="/amtrak-assistance">Amtrak Assistance</Link></li>
               <li><Link to="/contact">Contact Information</Link></li>
             </ul>
           </div>

@@ -1,400 +1,277 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { airportAPI } from '../services/api';
+import React, { useState } from 'react';
+import HeroSlider from '../components/HeroSlider';
+import CustomerReviews from '../components/CustomerReviews';
+import { flightReviews } from '../data/customerReviews';
+import { flightHeroSlides } from '../data/heroSlides';
 import './Home.css';
 
 function Home() {
-  const navigate = useNavigate();
-  const [searchType, setSearchType] = useState('roundtrip');
   const [formData, setFormData] = useState({
-    from: '',
-    to: '',
-    departure: '',
-    return: '',
-    passengers: 1,
-    class: 'economy'
+    name: '',
+    email: '',
+    phone: '',
+    origin: '',
+    destination: '',
+    tripType: 'roundtrip',
+    travelDate: '',
+    returnDate: '',
+    passengers: '1',
+    cabinClass: 'economy',
+    notes: '',
   });
-  const [fromSuggestions, setFromSuggestions] = useState([]);
-  const [toSuggestions, setToSuggestions] = useState([]);
-  const [showFromSuggestions, setShowFromSuggestions] = useState(false);
-  const [showToSuggestions, setShowToSuggestions] = useState(false);
-  const fromInputRef = useRef(null);
-  const toInputRef = useRef(null);
-  const fromTimeoutRef = useRef(null);
-  const toTimeoutRef = useRef(null);
 
-  useEffect(() => {
-    // Set default dates
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const nextWeek = new Date(tomorrow);
-    nextWeek.setDate(nextWeek.getDate() + 7);
-
-    setFormData(prev => ({
-      ...prev,
-      departure: tomorrow.toISOString().split('T')[0],
-      return: nextWeek.toISOString().split('T')[0]
-    }));
-  }, []);
-
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const handleChange = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleFromInput = async (value) => {
-    handleInputChange('from', value);
-    if (value.length >= 2) {
-      clearTimeout(fromTimeoutRef.current);
-      fromTimeoutRef.current = setTimeout(async () => {
-        try {
-          const response = await airportAPI.search(value);
-          setFromSuggestions(response.data || []);
-          setShowFromSuggestions(true);
-        } catch (error) {
-          console.error('Error fetching airport suggestions:', error);
-        }
-      }, 300);
-    } else {
-      setShowFromSuggestions(false);
-    }
-  };
-
-  const handleToInput = async (value) => {
-    handleInputChange('to', value);
-    if (value.length >= 2) {
-      clearTimeout(toTimeoutRef.current);
-      toTimeoutRef.current = setTimeout(async () => {
-        try {
-          const response = await airportAPI.search(value);
-          setToSuggestions(response.data || []);
-          setShowToSuggestions(true);
-        } catch (error) {
-          console.error('Error fetching airport suggestions:', error);
-        }
-      }, 300);
-    } else {
-      setShowToSuggestions(false);
-    }
-  };
-
-  const selectAirport = (airport, type) => {
-    const displayValue = `${airport.name} (${airport.code})`;
-    if (type === 'from') {
-      handleInputChange('from', displayValue);
-      setShowFromSuggestions(false);
-    } else {
-      handleInputChange('to', displayValue);
-      setShowToSuggestions(false);
-    }
-  };
-
-  const swapAirports = () => {
-    setFormData(prev => ({
-      ...prev,
-      from: prev.to,
-      to: prev.from
-    }));
-  };
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    
-    const searchParams = {
-      from: formData.from,
-      to: formData.to,
-      departure: formData.departure,
-      passengers: formData.passengers,
-      travelClass: formData.class.toUpperCase(),
-      maxResults: 10
-    };
+    const body = [
+      `Name: ${formData.name}`,
+      `Email: ${formData.email}`,
+      `Phone: ${formData.phone || 'Not provided'}`,
+      `Origin: ${formData.origin}`,
+      `Destination: ${formData.destination}`,
+      `Trip type: ${formData.tripType}`,
+      `Departure date: ${formData.travelDate || 'Flexible'}`,
+      formData.tripType === 'roundtrip'
+        ? `Return date: ${formData.returnDate || 'Flexible'}`
+        : null,
+      `Passengers: ${formData.passengers}`,
+      `Preferred cabin: ${formData.cabinClass}`,
+      '',
+      'Advisory notes:',
+      formData.notes || 'None',
+    ]
+      .filter(Boolean)
+      .join('\n');
 
-    if (searchType === 'roundtrip' && formData.return) {
-      searchParams.returnDate = formData.return;
-    }
-
-    // Store search params in sessionStorage
-    sessionStorage.setItem('searchParams', JSON.stringify(searchParams));
-    sessionStorage.setItem('searchType', searchType);
-
-    // Navigate to search results
-    navigate('/search', { state: { searchParams, searchType } });
+    const subject = encodeURIComponent('Air Logistics Advisory — Consulting Inquiry');
+    const mailBody = encodeURIComponent(body);
+    window.location.href = `mailto:support@thefinalseat.com?subject=${subject}&body=${mailBody}`;
   };
 
   return (
-    <div className="home-page">
-      {/* Hero Section */}
-      <section className="hero">
+    <div className="flights-page">
+      <HeroSlider
+        slides={flightHeroSlides}
+        variant="flights"
+        serviceNavActive="flights"
+        inquiryHref="#inquiry"
+      />
+
+      <section className="flights-section">
         <div className="container">
-          <div className="hero-content">
-            <h2 className="hero-title">Experience Premium Travel</h2>
-            <p className="hero-subtitle">Discover the world with The Final Seat - Where speed meets comfort</p>
-            
-            <div className="promo-banner">
-              <div className="promo-content">
-                <div className="promo-icon">
-                  <i className="fas fa-percentage"></i>
-                </div>
-                <div className="promo-text">
-                  <h3>Get Up To 30% Off</h3>
-                  <p>On flights booked within 7 days</p>
-                </div>
-                <div className="promo-badge">
-                  <span>Limited Time</span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="urgent-badges">
-              <span className="badge urgent">24/7 Support</span>
-              <span className="badge urgent">Same Day Flights</span>
-              <span className="badge urgent">Emergency Booking</span>
-            </div>
+          <h2 className="flights-section__title">Logistics Advisory Services</h2>
+          <div className="flights-grid">
+            <article className="flights-card">
+              <i className="fas fa-route" aria-hidden="true" />
+              <h3>Itinerary Optimization</h3>
+              <p>
+                Multi-leg routing with realistic connection windows, backup options, and
+                carrier-specific guidance when schedules change.
+              </p>
+            </article>
+            <article className="flights-card">
+              <i className="fas fa-clock" aria-hidden="true" />
+              <h3>Urgent Air Logistics</h3>
+              <p>
+                Same-week and emergency advisory for family, medical, and business travel
+                requiring fast, workable options.
+              </p>
+            </article>
+            <article className="flights-card">
+              <i className="fas fa-globe-americas" aria-hidden="true" />
+              <h3>International Strategy</h3>
+              <p>
+                Cross-border routing, document timing, and coordinated connections for complex
+                global itineraries.
+              </p>
+            </article>
+            <article className="flights-card">
+              <i className="fas fa-headset" aria-hidden="true" />
+              <h3>24/7 Advisory Desk</h3>
+              <p>
+                Direct consultant access for cancellations, re-routing, and escalation support
+                when plans shift unexpectedly.
+              </p>
+            </article>
           </div>
         </div>
       </section>
 
-      {/* Flight Search Form */}
-      <section id="search" className="search-section">
+      <section className="flights-section flights-section--muted">
         <div className="container">
-          <div className="search-card">
-            <div className="search-tabs">
-              <button 
-                className={`tab-btn ${searchType === 'roundtrip' ? 'active' : ''}`}
-                onClick={() => setSearchType('roundtrip')}
-              >
-                <i className="fas fa-exchange-alt"></i>
-                Round Trip
-              </button>
-              <button 
-                className={`tab-btn ${searchType === 'oneway' ? 'active' : ''}`}
-                onClick={() => setSearchType('oneway')}
-              >
-                <i className="fas fa-arrow-right"></i>
-                One Way
-              </button>
-            </div>
+          <h2 className="flights-section__title">How Consulting Works</h2>
+          <ol className="flights-steps">
+            <li>
+              <strong>Consulting inquiry</strong> — Share origin, destination, dates, and urgency.
+            </li>
+            <li>
+              <strong>Logistics strategy</strong> — We evaluate routes, cabins, and connection risk.
+            </li>
+            <li>
+              <strong>Advisory delivery</strong> — You receive a structured plan and fulfillment
+              coordination through authorized third-party providers.
+            </li>
+          </ol>
+          <p className="flights-disclaimer">
+            The Final Seat LLC is an independent logistics consultancy and does not issue tickets
+            directly. Air transport is fulfilled subject to carrier and third-party provider terms.
+          </p>
+        </div>
+      </section>
 
-            <form className="search-form" onSubmit={handleSubmit}>
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="from">From</label>
-                  <div className="input-wrapper">
-                    <i className="fas fa-plane-departure"></i>
-                    <input
-                      type="text"
-                      id="from"
-                      ref={fromInputRef}
-                      value={formData.from}
-                      onChange={(e) => handleFromInput(e.target.value)}
-                      onFocus={() => formData.from.length >= 2 && setShowFromSuggestions(true)}
-                      placeholder="City or Airport"
-                      required
-                    />
-                    <button type="button" className="swap-btn" onClick={swapAirports}>
-                      <i className="fas fa-exchange-alt"></i>
-                    </button>
-                    {showFromSuggestions && fromSuggestions.length > 0 && (
-                      <div className="suggestions-dropdown">
-                        {fromSuggestions.map((airport, idx) => (
-                          <div
-                            key={idx}
-                            className="suggestion-item"
-                            onClick={() => selectAirport(airport, 'from')}
-                          >
-                            <i className="fas fa-plane"></i>
-                            <div>
-                              <strong>{airport.name}</strong>
-                              <span>{airport.code} - {airport.city}, {airport.country}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+      <section id="inquiry" className="flights-section">
+        <div className="container">
+          <div className="flights-inquiry-card">
+            <h2>Consulting Inquiry</h2>
+            <p className="flights-inquiry__intro">
+              Submit your air logistics details. A consultant will respond with advisory options and
+              a quote outline.
+            </p>
+            <form className="flights-form" onSubmit={handleSubmit}>
+              <div className="flights-form__row">
+                <div className="flights-form__group">
+                  <label htmlFor="flight-name">Full name</label>
+                  <input
+                    id="flight-name"
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => handleChange('name', e.target.value)}
+                    required
+                    autoComplete="name"
+                  />
                 </div>
-
-                <div className="form-group">
-                  <label htmlFor="to">To</label>
-                  <div className="input-wrapper">
-                    <i className="fas fa-plane-arrival"></i>
-                    <input
-                      type="text"
-                      id="to"
-                      ref={toInputRef}
-                      value={formData.to}
-                      onChange={(e) => handleToInput(e.target.value)}
-                      onFocus={() => formData.to.length >= 2 && setShowToSuggestions(true)}
-                      placeholder="City or Airport"
-                      required
-                    />
-                    {showToSuggestions && toSuggestions.length > 0 && (
-                      <div className="suggestions-dropdown">
-                        {toSuggestions.map((airport, idx) => (
-                          <div
-                            key={idx}
-                            className="suggestion-item"
-                            onClick={() => selectAirport(airport, 'to')}
-                          >
-                            <i className="fas fa-plane"></i>
-                            <div>
-                              <strong>{airport.name}</strong>
-                              <span>{airport.code} - {airport.city}, {airport.country}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                <div className="flights-form__group">
+                  <label htmlFor="flight-email">Email</label>
+                  <input
+                    id="flight-email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => handleChange('email', e.target.value)}
+                    required
+                    autoComplete="email"
+                  />
                 </div>
               </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="departure">Departure</label>
-                  <div className="input-wrapper">
-                    <i className="fas fa-calendar-alt"></i>
-                    <input
-                      type="date"
-                      id="departure"
-                      value={formData.departure}
-                      onChange={(e) => handleInputChange('departure', e.target.value)}
-                      required
-                    />
-                  </div>
+              <div className="flights-form__row">
+                <div className="flights-form__group">
+                  <label htmlFor="flight-phone">Phone (optional)</label>
+                  <input
+                    id="flight-phone"
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => handleChange('phone', e.target.value)}
+                    autoComplete="tel"
+                  />
                 </div>
-
-                {searchType === 'roundtrip' && (
-                  <div className="form-group">
-                    <label htmlFor="return">Return</label>
-                    <div className="input-wrapper">
-                      <i className="fas fa-calendar-alt"></i>
-                      <input
-                        type="date"
-                        id="return"
-                        value={formData.return}
-                        onChange={(e) => handleInputChange('return', e.target.value)}
-                      />
-                    </div>
+                <div className="flights-form__group">
+                  <label htmlFor="flight-passengers">Passengers</label>
+                  <select
+                    id="flight-passengers"
+                    value={formData.passengers}
+                    onChange={(e) => handleChange('passengers', e.target.value)}
+                  >
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5+">5+</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flights-form__row">
+                <div className="flights-form__group">
+                  <label htmlFor="flight-origin">Origin city or airport</label>
+                  <input
+                    id="flight-origin"
+                    type="text"
+                    value={formData.origin}
+                    onChange={(e) => handleChange('origin', e.target.value)}
+                    placeholder="e.g. Los Angeles (LAX)"
+                    required
+                  />
+                </div>
+                <div className="flights-form__group">
+                  <label htmlFor="flight-destination">Destination city or airport</label>
+                  <input
+                    id="flight-destination"
+                    type="text"
+                    value={formData.destination}
+                    onChange={(e) => handleChange('destination', e.target.value)}
+                    placeholder="e.g. New York (JFK)"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="flights-form__row">
+                <div className="flights-form__group">
+                  <label htmlFor="flight-trip-type">Trip type</label>
+                  <select
+                    id="flight-trip-type"
+                    value={formData.tripType}
+                    onChange={(e) => handleChange('tripType', e.target.value)}
+                  >
+                    <option value="oneway">One way</option>
+                    <option value="roundtrip">Round trip</option>
+                  </select>
+                </div>
+                <div className="flights-form__group">
+                  <label htmlFor="flight-cabin">Preferred cabin</label>
+                  <select
+                    id="flight-cabin"
+                    value={formData.cabinClass}
+                    onChange={(e) => handleChange('cabinClass', e.target.value)}
+                  >
+                    <option value="economy">Economy</option>
+                    <option value="premium">Premium economy</option>
+                    <option value="business">Business</option>
+                    <option value="first">First</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flights-form__row">
+                <div className="flights-form__group">
+                  <label htmlFor="flight-date">Departure date</label>
+                  <input
+                    id="flight-date"
+                    type="date"
+                    value={formData.travelDate}
+                    onChange={(e) => handleChange('travelDate', e.target.value)}
+                  />
+                </div>
+                {formData.tripType === 'roundtrip' && (
+                  <div className="flights-form__group">
+                    <label htmlFor="flight-return">Return date</label>
+                    <input
+                      id="flight-return"
+                      type="date"
+                      value={formData.returnDate}
+                      onChange={(e) => handleChange('returnDate', e.target.value)}
+                    />
                   </div>
                 )}
               </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="passengers">Passengers</label>
-                  <div className="input-wrapper">
-                    <i className="fas fa-users"></i>
-                    <select
-                      id="passengers"
-                      value={formData.passengers}
-                      onChange={(e) => handleInputChange('passengers', parseInt(e.target.value))}
-                    >
-                      <option value="1">1 Passenger</option>
-                      <option value="2">2 Passengers</option>
-                      <option value="3">3 Passengers</option>
-                      <option value="4">4 Passengers</option>
-                      <option value="5">5+ Passengers</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="class">Class</label>
-                  <div className="input-wrapper">
-                    <i className="fas fa-chair"></i>
-                    <select
-                      id="class"
-                      value={formData.class}
-                      onChange={(e) => handleInputChange('class', e.target.value)}
-                    >
-                      <option value="economy">Economy</option>
-                      <option value="premium">Premium Economy</option>
-                      <option value="business">Business</option>
-                      <option value="first">First Class</option>
-                    </select>
-                  </div>
-                </div>
+              <div className="flights-form__group">
+                <label htmlFor="flight-notes">Advisory notes (urgency, visa, accessibility, etc.)</label>
+                <textarea
+                  id="flight-notes"
+                  rows={4}
+                  value={formData.notes}
+                  onChange={(e) => handleChange('notes', e.target.value)}
+                  placeholder="Describe your logistics needs and timeline."
+                />
               </div>
-
-              <button type="submit" className="search-btn">
-                <i className="fas fa-search"></i>
-                Search Flights
+              <button type="submit" className="flights-btn flights-btn--cta flights-btn--full">
+                Submit Consulting Inquiry
               </button>
             </form>
           </div>
         </div>
       </section>
 
-      {/* Emergency Section */}
-      <section id="emergency" className="emergency-section">
-        <div className="container">
-          <h2 className="section-title">Emergency Travel Services</h2>
-          <div className="emergency-grid">
-            <div className="emergency-card">
-              <div className="card-icon">
-                <i className="fas fa-phone-alt"></i>
-              </div>
-              <h3>24/7 Emergency Hotline</h3>
-              <p>Call our emergency hotline for immediate assistance with urgent travel needs.</p>
-              <a href="tel:+1-800-URGENT" className="emergency-btn">Call Now</a>
-            </div>
-            <div className="emergency-card">
-              <div className="card-icon">
-                <i className="fas fa-user-md"></i>
-              </div>
-              <h3>Medical Emergency</h3>
-              <p>Specialized services for medical emergencies requiring immediate travel.</p>
-              <button type="button" className="emergency-btn">Get Help</button>
-            </div>
-            <div className="emergency-card">
-              <div className="card-icon">
-                <i className="fas fa-heart"></i>
-              </div>
-              <h3>Family Emergency</h3>
-              <p>Compassionate support for family emergencies and bereavement travel.</p>
-              <button type="button" className="emergency-btn">Contact Us</button>
-            </div>
-            <div className="emergency-card">
-              <div className="card-icon">
-                <i className="fas fa-briefcase"></i>
-              </div>
-              <h3>Business Emergency</h3>
-              <p>Rapid deployment for critical business meetings and urgent corporate travel.</p>
-              <button type="button" className="emergency-btn">Book Now</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section className="features-section">
-        <div className="container">
-          <h2 className="section-title">Why Choose The Final Seat?</h2>
-          <div className="features-grid">
-            <div className="feature-item">
-              <i className="fas fa-clock"></i>
-              <h3>24/7 Availability</h3>
-              <p>Book flights anytime, anywhere with our round-the-clock service.</p>
-            </div>
-            <div className="feature-item">
-              <i className="fas fa-bolt"></i>
-              <h3>Lightning Fast</h3>
-              <p>Find and book flights in minutes, not hours.</p>
-            </div>
-            <div className="feature-item">
-              <i className="fas fa-dollar-sign"></i>
-              <h3>Best Prices</h3>
-              <p>Competitive pricing with exclusive discounts for urgent bookings.</p>
-            </div>
-            <div className="feature-item">
-              <i className="fas fa-shield-alt"></i>
-              <h3>Secure Booking</h3>
-              <p>Your data and payments are protected with industry-leading security.</p>
-            </div>
-          </div>
-        </div>
-      </section>
+      <CustomerReviews reviews={flightReviews} variant="flights" />
     </div>
   );
 }

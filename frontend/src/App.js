@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import Home from './pages/Home';
@@ -17,6 +17,7 @@ import ContactInfo from './pages/ContactInfo';
 import './App.css';
 import PrivacyPolicy from './pages/privacypolicy';
 import RefundPolicy from './pages/refundpolicy';
+import AmtrakAssistance from './pages/AmtrakAssistance';
 
 function App() {
   return (
@@ -26,6 +27,8 @@ function App() {
         <main className="main">
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/amtrak-assistance" element={<AmtrakAssistance />} />
+            <Route path="/amtrak-assisstance" element={<Navigate to="/amtrak-assistance" replace />} />
             <Route path="/search" element={<SearchResults />} />
             <Route path="/booking" element={<Booking />} />
             <Route path="/signin" element={<SignIn />} />

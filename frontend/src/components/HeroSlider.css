@@ -1,0 +1,232 @@
+.hero-slider {
+  position: relative;
+  min-height: min(520px, 85vh);
+  color: #fff;
+  overflow: hidden;
+}
+
+.hero-slider--flights {
+  --hero-accent: #8b1538;
+  --hero-gradient: linear-gradient(135deg, #8b1538 0%, #6b0f2a 55%, #7a1838 100%);
+}
+
+.hero-slider--rail {
+  --hero-accent: #1e3a5f;
+  --hero-gradient: linear-gradient(135deg, #1e3a5f 0%, #0f2744 55%, #1a4d7a 100%);
+}
+
+.hero-slider__slides {
+  position: absolute;
+  inset: 0;
+}
+
+.hero-slider__slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.65s ease, visibility 0.65s ease;
+}
+
+.hero-slider__slide--active {
+  opacity: 1;
+  visibility: visible;
+  z-index: 1;
+}
+
+.hero-slider__slide-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.hero-slider__slide-bg--gradient {
+  width: 100%;
+  height: 100%;
+  background: var(--hero-gradient);
+}
+
+.hero-slider__slide-bg--overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(15, 23, 42, 0.72) 0%,
+    rgba(15, 23, 42, 0.45) 50%,
+    rgba(15, 23, 42, 0.65) 100%
+  );
+}
+
+.hero-slider--flights .hero-slider__slide-bg--overlay {
+  background: linear-gradient(
+    135deg,
+    rgba(107, 15, 42, 0.78) 0%,
+    rgba(139, 21, 56, 0.45) 50%,
+    rgba(15, 23, 42, 0.6) 100%
+  );
+}
+
+.hero-slider--rail .hero-slider__slide-bg--overlay {
+  background: linear-gradient(
+    135deg,
+    rgba(15, 39, 68, 0.82) 0%,
+    rgba(30, 58, 95, 0.5) 50%,
+    rgba(15, 23, 42, 0.62) 100%
+  );
+}
+
+.hero-slider__slide-caption {
+  display: none;
+}
+
+.hero-slider__ui {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-height: min(520px, 85vh);
+  padding: 2rem 0 2.5rem;
+  box-sizing: border-box;
+}
+
+.hero-slider__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+.hero-slider__content {
+  max-width: 720px;
+  animation: heroContentIn 0.5s ease;
+}
+
+.hero-slider__content--image {
+  max-width: 560px;
+}
+
+@keyframes heroContentIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-slider__eyebrow {
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.88;
+  margin-bottom: 0.75rem;
+}
+
+.hero-slider__content h1 {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  line-height: 1.2;
+  margin-bottom: 1rem;
+  font-weight: 700;
+}
+
+.hero-slider__image-title {
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+.hero-slider__lead {
+  font-size: 1.1rem;
+  line-height: 1.65;
+  opacity: 0.92;
+  margin-bottom: 1.5rem;
+}
+
+.hero-slider__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.hero-slider__controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
+}
+
+.hero-slider__arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.hero-slider__arrow:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.hero-slider__dots {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hero-slider__dot {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.hero-slider__dot--active {
+  background: #fff;
+  transform: scale(1.2);
+}
+
+@media (max-width: 640px) {
+  .hero-slider {
+    min-height: 480px;
+  }
+
+  .hero-slider__ui {
+    min-height: 480px;
+    padding: 1.5rem 0 2rem;
+  }
+
+  .hero-slider__actions {
+    flex-direction: column;
+  }
+
+  .hero-slider__actions .flights-btn,
+  .hero-slider__actions .amtrak-btn {
+    width: 100%;
+  }
+
+  .hero-slider__arrow {
+    width: 42px;
+    height: 42px;
+  }
+}
