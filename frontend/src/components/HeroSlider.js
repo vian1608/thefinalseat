@@ -28,6 +28,15 @@ function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry
     return () => clearInterval(timer);
   }, [count, isPaused]);
 
+  useEffect(() => {
+    slides.forEach((item) => {
+      if (item.type === 'image' && item.image) {
+        const img = new Image();
+        img.src = item.image;
+      }
+    });
+  }, [slides]);
+
   if (count === 0) return null;
 
   const slide = slides[current];
@@ -58,7 +67,8 @@ function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry
                   src={item.image}
                   alt={item.alt}
                   className="hero-slider__slide-img"
-                  loading={index === 0 ? 'eager' : 'lazy'}
+                  loading="eager"
+                  decoding="async"
                 />
                 <div className="hero-slider__slide-bg hero-slider__slide-bg--overlay" />
                 {item.caption && (
@@ -75,7 +85,7 @@ function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry
 
         <div className="hero-slider__main">
           {slide.type === 'content' ? (
-            <div className="hero-slider__content">
+            <div key={slide.id} className="hero-slider__content">
               <p className="hero-slider__eyebrow">{slide.eyebrow}</p>
               <h1>{slide.title}</h1>
               <p className="hero-slider__lead">{slide.lead}</p>
@@ -92,7 +102,7 @@ function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry
               )}
             </div>
           ) : (
-            <div className="hero-slider__content hero-slider__content--image">
+            <div key={slide.id} className="hero-slider__content hero-slider__content--image">
               <h2 className="hero-slider__image-title">{slide.caption}</h2>
             </div>
           )}

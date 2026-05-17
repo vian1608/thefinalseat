@@ -78,6 +78,14 @@ export const paymentAPI = {
   },
 };
 
+// Consulting inquiry API
+export const inquiryAPI = {
+  submitConsulting: async (payload) => {
+    const response = await api.post('/inquiries/consulting', payload);
+    return response.data;
+  },
+};
+
 // Admin API
 export const adminAPI = {
   login: async (credentials) => {
