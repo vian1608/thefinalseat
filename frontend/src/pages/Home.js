@@ -50,8 +50,13 @@ function Home() {
       if (error.response?.data?.error) {
         setSubmitMessage(error.response.data.error);
       } else if (error.code === 'ERR_NETWORK' || !error.response) {
+        const isLocal =
+          window.location.hostname === 'localhost' ||
+          window.location.hostname === '127.0.0.1';
         setSubmitMessage(
-          'Unable to reach the server. If testing locally, ensure the backend is running on port 5001, then refresh and try again.'
+          isLocal
+            ? 'Unable to reach the server. Start the backend on port 5001 (cd backend && npm run dev), restart the frontend, then try again.'
+            : 'Unable to reach our servers. Hard-refresh the page (Cmd+Shift+R) and try again, or email support@thefinalseat.com.'
         );
       } else {
         setSubmitMessage(

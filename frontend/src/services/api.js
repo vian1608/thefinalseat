@@ -1,6 +1,19 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
+/** Use same-origin /api in production even if a Vercel env var points at localhost. */
+function resolveApiBaseUrl() {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const isLocal = host === 'localhost' || host === '127.0.0.1';
+    if (!isLocal) {
+      return '/api';
+    }
+    return process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+  }
+  return process.env.REACT_APP_API_URL || '/api';
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 const api = axios.create({
   baseURL: API_BASE_URL,
