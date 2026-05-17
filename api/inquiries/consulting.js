@@ -1,9 +1,7 @@
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const DEFAULT_RECIPIENTS = [
-  'support@thefinalseat.com',
-  'viansaini1608@gmail.com',
-];
+// Until thefinalseat.com is verified in Resend, only the account email can receive mail.
+const DEFAULT_RECIPIENTS = ['viansaini1608@gmail.com'];
 
 function getRecipients() {
   const fromEnv = process.env.INQUIRY_NOTIFY_EMAILS;
@@ -90,7 +88,8 @@ async function sendViaResend({ to, subject, textBody, htmlBody, replyTo }) {
 async function emailInquiry(inquiry) {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) {
-    return { emailed: false };
+    console.error('RESEND_API_KEY is not set — add it in Vercel Environment Variables');
+    return { emailed: false, emailStatus: 'missing_api_key', failures: [] };
   }
 
   const recipients = getRecipients();
@@ -103,6 +102,7 @@ async function emailInquiry(inquiry) {
   const subject = `${subjectLabel} — ${inquiry.name}`;
 
   const sentTo = [];
+  const failures = [];
   for (const to of recipients) {
     try {
       await sendViaResend({
@@ -114,11 +114,21 @@ async function emailInquiry(inquiry) {
       });
       sentTo.push(to);
     } catch (err) {
+      failures.push({ to, error: err.message });
       console.error(`Resend failed for ${to}:`, err.message);
     }
   }
 
-  return { emailed: sentTo.length > 0, sentTo };
+  if (sentTo.length > 0) {
+    return { emailed: true, emailStatus: 'sent', sentTo, failures };
+  }
+
+  return {
+    emailed: false,
+    emailStatus: failures.length > 0 ? 'send_failed' : 'no_recipients',
+    sentTo,
+    failures,
+  };
 }
 
 module.exports = async (req, res) => {
@@ -186,7 +196,8 @@ module.exports = async (req, res) => {
       notes: notes?.trim() || '',
     };
 
-    const { emailed } = await emailInquiry(inquiry);
+    const emailResult = await emailInquiry(inquiry);
+    const { emailed } = emailResult;
 
     const customerMessage = emailed
       ? 'Thank you! Your consulting inquiry was submitted. Our team will contact you shortly.'
@@ -196,6 +207,7 @@ module.exports = async (req, res) => {
       success: true,
       message: customerMessage,
       emailed,
+      emailStatus: emailResult.emailStatus,
     });
   } catch (error) {
     console.error('Consulting inquiry error:', error);
