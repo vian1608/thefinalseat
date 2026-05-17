@@ -163,6 +163,49 @@
   }
 }
 
+.hero-slider__offer {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(6px);
+  font-size: 0.85rem;
+  line-height: 1.3;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.hero-slider__offer-label {
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.hero-slider--flights .hero-slider__offer-label {
+  background: rgba(255, 220, 180, 0.35);
+}
+
+.hero-slider--rail .hero-slider__offer-label {
+  background: rgba(180, 210, 255, 0.35);
+}
+
+.hero-slider__offer-highlight {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.hero-slider__offer-detail {
+  opacity: 0.92;
+}
+
 .hero-slider__eyebrow {
   font-size: 0.9rem;
   letter-spacing: 0.04em;
@@ -277,6 +320,15 @@
   .hero-slider__actions .flights-btn,
   .hero-slider__actions .amtrak-btn {
     width: 100%;
+  }
+
+  .hero-slider__offer {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.7rem;
+  }
+
+  .hero-slider__offer-highlight {
+    font-size: 0.88rem;
   }
 
   .hero-slider__arrow {

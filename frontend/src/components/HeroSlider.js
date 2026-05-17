@@ -105,6 +105,13 @@ function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry
         <div className="hero-slider__main">
           {slide.type === 'content' ? (
             <div key={slide.id} className="hero-slider__content">
+              {slide.offerTag && (
+                <div className="hero-slider__offer" role="note">
+                  <span className="hero-slider__offer-label">{slide.offerTag.label}</span>
+                  <span className="hero-slider__offer-highlight">{slide.offerTag.highlight}</span>
+                  <span className="hero-slider__offer-detail">{slide.offerTag.detail}</span>
+                </div>
+              )}
               <p className="hero-slider__eyebrow">{slide.eyebrow}</p>
               <h1>{slide.title}</h1>
               <p className="hero-slider__lead">{slide.lead}</p>
