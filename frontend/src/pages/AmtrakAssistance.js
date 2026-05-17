@@ -1,44 +1,54 @@
 import React, { useState } from 'react';
 import HeroSlider from '../components/HeroSlider';
 import CustomerReviews from '../components/CustomerReviews';
+import { inquiryAPI } from '../services/api';
 import { railReviews } from '../data/customerReviews';
 import { railHeroSlides } from '../data/heroSlides';
 import './AmtrakAssistance.css';
 
+const initialFormData = {
+  name: '',
+  email: '',
+  phone: '',
+  origin: '',
+  destination: '',
+  travelDate: '',
+  passengers: '1',
+  notes: '',
+};
+
 function AmtrakAssistance() {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    origin: '',
-    destination: '',
-    travelDate: '',
-    passengers: '1',
-    notes: '',
-  });
+  const [formData, setFormData] = useState(initialFormData);
+  const [submitStatus, setSubmitStatus] = useState('idle');
+  const [submitMessage, setSubmitMessage] = useState('');
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const body = [
-      `Name: ${formData.name}`,
-      `Email: ${formData.email}`,
-      `Phone: ${formData.phone || 'Not provided'}`,
-      `Origin station/region: ${formData.origin}`,
-      `Destination station/region: ${formData.destination}`,
-      `Preferred travel date: ${formData.travelDate || 'Flexible'}`,
-      `Passengers: ${formData.passengers}`,
-      '',
-      'Advisory notes:',
-      formData.notes || 'None',
-    ].join('\n');
+    setSubmitStatus('submitting');
+    setSubmitMessage('');
 
-    const subject = encodeURIComponent('Amtrak Logistics Advisory — Consulting Inquiry');
-    const mailBody = encodeURIComponent(body);
-    window.location.href = `mailto:support@thefinalseat.com?subject=${subject}&body=${mailBody}`;
+    try {
+      const result = await inquiryAPI.submitConsulting({
+        serviceType: 'rail',
+        ...formData,
+      });
+      setSubmitStatus('success');
+      setSubmitMessage(
+        result.message ||
+          'Thank you. Your inquiry was submitted and our team will contact you shortly.'
+      );
+      setFormData(initialFormData);
+    } catch (error) {
+      setSubmitStatus('error');
+      setSubmitMessage(
+        error.response?.data?.error ||
+          'Unable to submit right now. Please call us or email support@thefinalseat.com.'
+      );
+    }
   };
 
   return (
@@ -50,69 +60,7 @@ function AmtrakAssistance() {
         inquiryHref="#inquiry"
       />
 
-      <section className="amtrak-section">
-        <div className="container">
-          <h2 className="amtrak-section__title">Logistics Advisory Services</h2>
-          <div className="amtrak-grid">
-            <article className="amtrak-card">
-              <i className="fas fa-route" aria-hidden="true" />
-              <h3>Itinerary Optimization</h3>
-              <p>
-                Multi-segment rail planning with realistic connection windows and backup routing
-                when schedules shift.
-              </p>
-            </article>
-            <article className="amtrak-card">
-              <i className="fas fa-clock" aria-hidden="true" />
-              <h3>Urgent Rail Logistics</h3>
-              <p>
-                Time-sensitive advisory for family, medical, and business travel requiring same-week
-                or next-available rail options.
-              </p>
-            </article>
-            <article className="amtrak-card">
-              <i className="fas fa-map-marked-alt" aria-hidden="true" />
-              <h3>Connection Strategy</h3>
-              <p>
-                Station transfer planning, overnight positioning, and coordinated ground-to-rail
-                logistics where needed.
-              </p>
-            </article>
-            <article className="amtrak-card">
-              <i className="fas fa-headset" aria-hidden="true" />
-              <h3>24/7 Advisory Desk</h3>
-              <p>
-                Direct access to consultants for disruption response, re-routing guidance, and
-                escalation support.
-              </p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section className="amtrak-section amtrak-section--muted">
-        <div className="container">
-          <h2 className="amtrak-section__title">How Consulting Works</h2>
-          <ol className="amtrak-steps">
-            <li>
-              <strong>Consulting inquiry</strong> — Share origin, destination, dates, and urgency.
-            </li>
-            <li>
-              <strong>Logistics strategy</strong> — We evaluate routes, classes, and connection risk.
-            </li>
-            <li>
-              <strong>Advisory delivery</strong> — You receive a structured plan and fulfillment
-              coordination through authorized third-party providers.
-            </li>
-          </ol>
-          <p className="amtrak-disclaimer">
-            The Final Seat LLC is an independent logistics consultancy and does not issue tickets
-            directly. Rail transport is fulfilled subject to carrier and third-party provider terms.
-          </p>
-        </div>
-      </section>
-
-      <section id="inquiry" className="amtrak-section">
+<section id="inquiry" className="amtrak-section">
         <div className="container">
           <div className="amtrak-inquiry-card">
             <h2>Consulting Inquiry</h2>
@@ -216,15 +164,94 @@ function AmtrakAssistance() {
                   placeholder="Describe your logistics needs and timeline."
                 />
               </div>
-              <button type="submit" className="amtrak-btn amtrak-btn--cta amtrak-btn--full">
-                Submit Consulting Inquiry
+              {submitMessage && (
+                <p
+                  className={`inquiry-form__message ${
+                    submitStatus === 'success'
+                      ? 'inquiry-form__message--success'
+                      : 'inquiry-form__message--error'
+                  }`}
+                  role="alert"
+                >
+                  {submitMessage}
+                </p>
+              )}
+              <button
+                type="submit"
+                className="amtrak-btn amtrak-btn--cta amtrak-btn--full"
+                disabled={submitStatus === 'submitting'}
+              >
+                {submitStatus === 'submitting' ? 'Submitting…' : 'Submit Consulting Inquiry'}
               </button>
             </form>
           </div>
         </div>
       </section>
 
-      <CustomerReviews reviews={railReviews} variant="rail" />
+
+      <section className="amtrak-section amtrak-section--muted">
+        <div className="container">
+          <h2 className="amtrak-section__title">Logistics Advisory Services</h2>
+          <div className="amtrak-grid">
+            <article className="amtrak-card">
+              <i className="fas fa-route" aria-hidden="true" />
+              <h3>Itinerary Optimization</h3>
+              <p>
+                Multi-segment rail planning with realistic connection windows and backup routing
+                when schedules shift.
+              </p>
+            </article>
+            <article className="amtrak-card">
+              <i className="fas fa-clock" aria-hidden="true" />
+              <h3>Urgent Rail Logistics</h3>
+              <p>
+                Time-sensitive advisory for family, medical, and business travel requiring same-week
+                or next-available rail options.
+              </p>
+            </article>
+            <article className="amtrak-card">
+              <i className="fas fa-map-marked-alt" aria-hidden="true" />
+              <h3>Connection Strategy</h3>
+              <p>
+                Station transfer planning, overnight positioning, and coordinated ground-to-rail
+                logistics where needed.
+              </p>
+            </article>
+            <article className="amtrak-card">
+              <i className="fas fa-headset" aria-hidden="true" />
+              <h3>24/7 Advisory Desk</h3>
+              <p>
+                Direct access to consultants for disruption response, re-routing guidance, and
+                escalation support.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section className="amtrak-section">
+        <div className="container">
+          <h2 className="amtrak-section__title">How Consulting Works</h2>
+          <ol className="amtrak-steps">
+            <li>
+              <strong>Consulting inquiry</strong> — Share origin, destination, dates, and urgency.
+            </li>
+            <li>
+              <strong>Logistics strategy</strong> — We evaluate routes, classes, and connection risk.
+            </li>
+            <li>
+              <strong>Advisory delivery</strong> — You receive a structured plan and fulfillment
+              coordination through authorized third-party providers.
+            </li>
+          </ol>
+          <p className="amtrak-disclaimer">
+            The Final Seat LLC is an independent logistics consultancy and does not issue tickets
+            directly. Rail transport is fulfilled subject to carrier and third-party provider terms.
+          </p>
+        </div>
+      </section>
+
+            <CustomerReviews reviews={railReviews} variant="rail" />
     </div>
   );
 }
