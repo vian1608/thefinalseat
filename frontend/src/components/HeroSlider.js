@@ -30,9 +30,10 @@ function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry
 
   useEffect(() => {
     slides.forEach((item) => {
-      if (item.type === 'image' && item.image) {
+      const src = item.image || item.backgroundImage;
+      if (src) {
         const img = new Image();
-        img.src = item.image;
+        img.src = src;
       }
     });
   }, [slides]);
@@ -60,7 +61,25 @@ function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry
             aria-hidden={index !== current}
           >
             {item.type === 'content' ? (
-              <div className="hero-slider__slide-bg hero-slider__slide-bg--gradient" />
+              <>
+                {item.backgroundImage ? (
+                  <img
+                    src={item.backgroundImage}
+                    alt=""
+                    className="hero-slider__slide-img hero-slider__slide-img--intro"
+                    loading="eager"
+                    decoding="async"
+                    aria-hidden="true"
+                  />
+                ) : null}
+                <div
+                  className={
+                    item.backgroundImage
+                      ? 'hero-slider__slide-bg hero-slider__slide-bg--intro'
+                      : 'hero-slider__slide-bg hero-slider__slide-bg--gradient'
+                  }
+                />
+              </>
             ) : (
               <>
                 <img
@@ -95,7 +114,7 @@ function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry
                     Request a Quote
                   </a>
                   <a href="tel:+18083015460" className={`${btnPrefix}-btn ${btnPrefix}-btn--outline`}>
-                    <i className="fas fa-phone-alt" aria-hidden="true" />
+                    <i className="fas fa-phone" aria-hidden="true" />
                     Customer Support
                   </a>
                 </div>

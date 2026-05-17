@@ -59,6 +59,38 @@
   background: var(--hero-gradient);
 }
 
+/* Intro slide: photo visible through softened brand overlay */
+.hero-slider__slide-img--intro {
+  opacity: 0.55;
+}
+
+.hero-slider__slide-bg--intro {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--hero-gradient);
+  opacity: 0.78;
+}
+
+.hero-slider--flights .hero-slider__slide-bg--intro {
+  background: linear-gradient(
+    135deg,
+    rgba(155, 45, 75, 0.88) 0%,
+    rgba(125, 30, 58, 0.8) 50%,
+    rgba(80, 25, 45, 0.85) 100%
+  );
+}
+
+.hero-slider--rail .hero-slider__slide-bg--intro {
+  background: linear-gradient(
+    135deg,
+    rgba(45, 85, 130, 0.88) 0%,
+    rgba(30, 58, 95, 0.8) 50%,
+    rgba(20, 45, 75, 0.85) 100%
+  );
+}
+
 .hero-slider__slide-bg--overlay {
   position: absolute;
   inset: 0;

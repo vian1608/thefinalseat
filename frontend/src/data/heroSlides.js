@@ -4,6 +4,7 @@ export const flightHeroSlides = [
   {
     id: 'flight-intro',
     type: 'content',
+    backgroundImage: heroImage('flight-slide.jpg'),
     eyebrow: 'The Final Seat LLC — Air Logistics',
     title: 'Urgent & Complex Air Travel Logistics Advisory',
     lead:
@@ -37,6 +38,7 @@ export const railHeroSlides = [
   {
     id: 'rail-intro',
     type: 'content',
+    backgroundImage: heroImage('rail-slide.jpg'),
     eyebrow: 'The Final Seat LLC — Rail Logistics',
     title: 'Amtrak & National Rail Logistics Advisory',
     lead:
