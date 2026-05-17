@@ -47,10 +47,17 @@ function Home() {
       setFormData(initialFormData);
     } catch (error) {
       setSubmitStatus('error');
-      setSubmitMessage(
-        error.response?.data?.error ||
+      if (error.response?.data?.error) {
+        setSubmitMessage(error.response.data.error);
+      } else if (error.code === 'ERR_NETWORK' || !error.response) {
+        setSubmitMessage(
+          'Unable to reach the server. If testing locally, ensure the backend is running on port 5001, then refresh and try again.'
+        );
+      } else {
+        setSubmitMessage(
           'Unable to submit right now. Please call us or email support@thefinalseat.com.'
-      );
+        );
+      }
     }
   };
 
