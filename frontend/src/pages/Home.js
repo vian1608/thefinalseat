@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import HeroSlider from '../components/HeroSlider';
+import InquiryLocationSelect from '../components/InquiryLocationSelect';
+import { flightAirportSelectGroups } from '../data/flightAirports';
 import CustomerReviews from '../components/CustomerReviews';
 import { inquiryAPI } from '../services/api';
 import { flightReviews } from '../data/customerReviews';
@@ -137,24 +139,24 @@ function Home() {
               </div>
               <div className="flights-form__row">
                 <div className="flights-form__group">
-                  <label htmlFor="flight-origin">Origin city or airport</label>
-                  <input
+                  <InquiryLocationSelect
                     id="flight-origin"
-                    type="text"
+                    label="Origin airport"
                     value={formData.origin}
-                    onChange={(e) => handleChange('origin', e.target.value)}
-                    placeholder="e.g. Los Angeles (LAX)"
+                    onChange={(value) => handleChange('origin', value)}
+                    groups={flightAirportSelectGroups}
+                    placeholder="Select origin airport"
                     required
                   />
                 </div>
                 <div className="flights-form__group">
-                  <label htmlFor="flight-destination">Destination city or airport</label>
-                  <input
+                  <InquiryLocationSelect
                     id="flight-destination"
-                    type="text"
+                    label="Destination airport"
                     value={formData.destination}
-                    onChange={(e) => handleChange('destination', e.target.value)}
-                    placeholder="e.g. New York (JFK)"
+                    onChange={(value) => handleChange('destination', value)}
+                    groups={flightAirportSelectGroups}
+                    placeholder="Select destination airport"
                     required
                   />
                 </div>

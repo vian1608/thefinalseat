@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import HeroSlider from '../components/HeroSlider';
+import InquiryLocationSelect from '../components/InquiryLocationSelect';
+import { amtrakStationSelectGroups } from '../data/amtrakStations';
 import CustomerReviews from '../components/CustomerReviews';
 import { inquiryAPI } from '../services/api';
 import { railReviews } from '../data/customerReviews';
@@ -134,24 +136,24 @@ function AmtrakAssistance() {
               </div>
               <div className="amtrak-form__row">
                 <div className="amtrak-form__group">
-                  <label htmlFor="amtrak-origin">Origin station or region</label>
-                  <input
+                  <InquiryLocationSelect
                     id="amtrak-origin"
-                    type="text"
+                    label="Origin station"
                     value={formData.origin}
-                    onChange={(e) => handleChange('origin', e.target.value)}
-                    placeholder="e.g. Chicago Union Station"
+                    onChange={(value) => handleChange('origin', value)}
+                    groups={amtrakStationSelectGroups}
+                    placeholder="Select origin station"
                     required
                   />
                 </div>
                 <div className="amtrak-form__group">
-                  <label htmlFor="amtrak-destination">Destination station or region</label>
-                  <input
+                  <InquiryLocationSelect
                     id="amtrak-destination"
-                    type="text"
+                    label="Destination station"
                     value={formData.destination}
-                    onChange={(e) => handleChange('destination', e.target.value)}
-                    placeholder="e.g. Washington, DC"
+                    onChange={(value) => handleChange('destination', value)}
+                    groups={amtrakStationSelectGroups}
+                    placeholder="Select destination station"
                     required
                   />
                 </div>
