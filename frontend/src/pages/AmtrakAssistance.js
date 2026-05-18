@@ -3,7 +3,7 @@ import HeroSlider from '../components/HeroSlider';
 import CustomerReviews from '../components/CustomerReviews';
 import { inquiryAPI } from '../services/api';
 import { railReviews } from '../data/customerReviews';
-import { railHeroSlides } from '../data/heroSlides';
+import { railHeroSlides, heroOfferTag } from '../data/heroSlides';
 import './AmtrakAssistance.css';
 
 const initialFormData = {
@@ -70,6 +70,7 @@ function AmtrakAssistance() {
         variant="rail"
         serviceNavActive="rail"
         inquiryHref="#inquiry"
+        offerTag={heroOfferTag}
       />
 
 <section id="inquiry" className="amtrak-section">

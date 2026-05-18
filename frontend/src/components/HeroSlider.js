@@ -4,7 +4,7 @@ import './HeroSlider.css';
 
 const ROTATE_MS = 5000;
 
-function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry' }) {
+function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry', offerTag }) {
   const [current, setCurrent] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const count = slides.length;
@@ -44,6 +44,7 @@ function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry
   const btnPrefix = variant === 'rail' ? 'amtrak' : 'flights';
 
   return (
+    <div className="hero-stack">
     <section
       className={`hero-slider hero-slider--${variant}`}
       aria-roledescription="carousel"
@@ -107,13 +108,6 @@ function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry
         <div className="hero-slider__main">
           {slide.type === 'content' ? (
             <div key={slide.id} className="hero-slider__content">
-              {slide.offerTag && (
-                <div className="hero-slider__offer" role="note">
-                  <span className="hero-slider__offer-label">{slide.offerTag.label}</span>
-                  <span className="hero-slider__offer-highlight">{slide.offerTag.highlight}</span>
-                  <span className="hero-slider__offer-detail">{slide.offerTag.detail}</span>
-                </div>
-              )}
               <p className="hero-slider__eyebrow">{slide.eyebrow}</p>
               <h1>{slide.title}</h1>
               <p className="hero-slider__lead">{slide.lead}</p>
@@ -169,6 +163,19 @@ function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry
         </div>
       </div>
     </section>
+
+    {offerTag && (
+      <aside className={`hero-offer-bar hero-offer-bar--${variant}`} aria-label="Current offer">
+        <div className="container hero-offer-bar__inner">
+          <div className="hero-offer-bar__tag" role="note">
+            <span className="hero-offer-bar__label">{offerTag.label}</span>
+            <span className="hero-offer-bar__highlight">{offerTag.highlight}</span>
+            <span className="hero-offer-bar__detail">{offerTag.detail}</span>
+          </div>
+        </div>
+      </aside>
+    )}
+    </div>
   );
 }
 

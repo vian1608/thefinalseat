@@ -1,15 +1,16 @@
 const heroImage = (filename) => `${process.env.PUBLIC_URL}/images/hero/${filename}`;
 
+export const heroOfferTag = {
+  label: 'Limited Offer',
+  highlight: 'Up to 30% off',
+  detail: 'on travel within 3 days',
+};
+
 export const flightHeroSlides = [
   {
     id: 'flight-intro',
     type: 'content',
     backgroundImage: heroImage('flight-slide.jpg'),
-    offerTag: {
-      label: 'Limited Offer',
-      highlight: 'Up to 30% off',
-      detail: 'on travel within 3 days',
-    },
     eyebrow: 'The Final Seat LLC — Air Logistics',
     title: 'Urgent & Complex Air Travel Logistics Advisory',
     lead:
@@ -44,11 +45,6 @@ export const railHeroSlides = [
     id: 'rail-intro',
     type: 'content',
     backgroundImage: heroImage('rail-slide.jpg'),
-    offerTag: {
-      label: 'Limited Offer',
-      highlight: 'Up to 30% off',
-      detail: 'on travel within 3 days',
-    },
     eyebrow: 'The Final Seat LLC — Rail Logistics',
     title: 'Amtrak & National Rail Logistics Advisory',
     lead:

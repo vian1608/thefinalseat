@@ -3,7 +3,7 @@ import HeroSlider from '../components/HeroSlider';
 import CustomerReviews from '../components/CustomerReviews';
 import { inquiryAPI } from '../services/api';
 import { flightReviews } from '../data/customerReviews';
-import { flightHeroSlides } from '../data/heroSlides';
+import { flightHeroSlides, heroOfferTag } from '../data/heroSlides';
 import './Home.css';
 
 const initialFormData = {
@@ -73,6 +73,7 @@ function Home() {
         variant="flights"
         serviceNavActive="flights"
         inquiryHref="#inquiry"
+        offerTag={heroOfferTag}
       />
 
 <section id="inquiry" className="flights-section">
