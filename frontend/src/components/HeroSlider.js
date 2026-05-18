@@ -57,7 +57,9 @@ function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry
         {slides.map((item, index) => (
           <div
             key={item.id}
-            className={`hero-slider__slide ${index === current ? 'hero-slider__slide--active' : ''}`}
+            className={`hero-slider__slide${item.type === 'image' ? ' hero-slider__slide--photo' : ''}${
+              index === current ? ' hero-slider__slide--active' : ''
+            }`}
             aria-hidden={index !== current}
           >
             {item.type === 'content' ? (

@@ -270,6 +270,10 @@
 }
 
 @media (max-width: 640px) {
+  .flights-section {
+    padding: 2rem 0;
+  }
+
   .flights-hero {
     padding: 1.75rem 0 2.5rem;
   }
@@ -279,7 +283,7 @@
   }
 
   .flights-inquiry-card {
-    padding: 1.25rem;
+    padding: 1.25rem 1rem;
   }
 
   .flights-hero__actions {

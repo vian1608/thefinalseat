@@ -272,6 +272,10 @@
 }
 
 @media (max-width: 640px) {
+  .amtrak-section {
+    padding: 2rem 0;
+  }
+
   .amtrak-hero {
     padding: 1.75rem 0 2.5rem;
   }
@@ -281,7 +285,7 @@
   }
 
   .amtrak-inquiry-card {
-    padding: 1.25rem;
+    padding: 1.25rem 1rem;
   }
 
   .amtrak-hero__actions {

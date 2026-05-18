@@ -53,6 +53,10 @@
   display: block;
 }
 
+.hero-slider__slide--photo .hero-slider__slide-img {
+  opacity: 0.82;
+}
+
 .hero-slider__slide-bg--gradient {
   width: 100%;
   height: 100%;
@@ -96,27 +100,27 @@
   inset: 0;
   background: linear-gradient(
     135deg,
-    rgba(15, 23, 42, 0.55) 0%,
-    rgba(15, 23, 42, 0.35) 50%,
-    rgba(15, 23, 42, 0.5) 100%
+    rgba(15, 23, 42, 0.62) 0%,
+    rgba(15, 23, 42, 0.42) 50%,
+    rgba(15, 23, 42, 0.58) 100%
   );
 }
 
 .hero-slider--flights .hero-slider__slide-bg--overlay {
   background: linear-gradient(
     135deg,
-    rgba(107, 15, 42, 0.55) 0%,
-    rgba(139, 21, 56, 0.3) 50%,
-    rgba(15, 23, 42, 0.45) 100%
+    rgba(107, 15, 42, 0.62) 0%,
+    rgba(139, 21, 56, 0.38) 50%,
+    rgba(15, 23, 42, 0.52) 100%
   );
 }
 
 .hero-slider--rail .hero-slider__slide-bg--overlay {
   background: linear-gradient(
     135deg,
-    rgba(15, 39, 68, 0.58) 0%,
-    rgba(30, 58, 95, 0.35) 50%,
-    rgba(15, 23, 42, 0.48) 100%
+    rgba(15, 39, 68, 0.65) 0%,
+    rgba(30, 58, 95, 0.42) 50%,
+    rgba(15, 23, 42, 0.55) 100%
   );
 }
 
@@ -131,7 +135,9 @@
   flex-direction: column;
   gap: 1.5rem;
   min-height: min(520px, 85vh);
-  padding: 2rem 0 2.5rem;
+  /* Use block padding only — shorthand padding: Y 0 wipes .container horizontal padding */
+  padding-top: 2rem;
+  padding-bottom: 2.5rem;
   box-sizing: border-box;
 }
 
@@ -149,7 +155,7 @@
 }
 
 .hero-slider__content--image {
-  max-width: 560px;
+  max-width: 680px;
 }
 
 @keyframes heroContentIn {
@@ -222,11 +228,15 @@
 }
 
 .hero-slider__image-title {
-  font-size: clamp(1.25rem, 3vw, 1.75rem);
-  font-weight: 600;
-  line-height: 1.35;
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(1.5rem, 4.5vw, 2.35rem);
+  font-weight: 700;
+  line-height: 1.28;
+  letter-spacing: -0.02em;
   margin: 0;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  text-shadow:
+    0 2px 16px rgba(0, 0, 0, 0.45),
+    0 4px 32px rgba(0, 0, 0, 0.35);
 }
 
 .hero-slider__lead {
@@ -310,7 +320,17 @@
 
   .hero-slider__ui {
     min-height: 480px;
-    padding: 1.5rem 0 2rem;
+    padding-top: 1.25rem;
+    padding-bottom: 1.75rem;
+  }
+
+  .hero-slider__content--image {
+    max-width: 100%;
+  }
+
+  .hero-slider__image-title {
+    font-size: clamp(1.35rem, 5.5vw, 1.85rem);
+    line-height: 1.32;
   }
 
   .hero-slider__actions {
