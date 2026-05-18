@@ -30,7 +30,9 @@ function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/amtrak-assistance" element={<AmtrakAssistance />} />
+              <Route path="/amtrak-assitance" element={<Navigate to="/amtrak-assistance" replace />} />
               <Route path="/amtrak-assisstance" element={<Navigate to="/amtrak-assistance" replace />} />
+              <Route path="/amtrak-asistance" element={<Navigate to="/amtrak-assistance" replace />} />
               <Route path="/search" element={<SearchResults />} />
               <Route path="/booking" element={<Booking />} />
               <Route path="/signin" element={<SignIn />} />
