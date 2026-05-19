@@ -28,7 +28,7 @@ function ContactInfo() {
             <div className="contact-item">
               <h2>Phone</h2>
               <p>
-                <a href="tel:+18083015460">+1 808 301 5460</a>
+                <a href="tel:+12139659227">+1 213 965 9227</a>
               </p>
             </div>
 
