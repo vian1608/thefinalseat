@@ -31,7 +31,7 @@ function Footer() {
             <h4>Contact</h4>
             <ul>
               <li><a href="mailto:support@thefinalseat.com">support@thefinalseat.com</a></li>
-              <li><a href="tel:+12139659227">+1 213 965 9227</a></li>
+              <li><a href="tel:+12139659727">+1 213 965 9727</a></li>
               <li>5830 E 2nd St, Ste 7000, Casper, WY 82609</li>
             </ul>
           </div>

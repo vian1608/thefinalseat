@@ -116,7 +116,7 @@ function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry
                   <a href={inquiryHref} className={`${btnPrefix}-btn ${btnPrefix}-btn--primary`}>
                     Request a Quote
                   </a>
-                  <a href="tel:+12139659227" className={`${btnPrefix}-btn ${btnPrefix}-btn--outline`}>
+                  <a href="tel:+12139659727" className={`${btnPrefix}-btn ${btnPrefix}-btn--outline`}>
                     <i className="fas fa-phone" aria-hidden="true" />
                     Customer Support
                   </a>
