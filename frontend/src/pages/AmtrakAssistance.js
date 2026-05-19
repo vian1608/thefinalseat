@@ -44,6 +44,14 @@ function AmtrakAssistance() {
           'Thank you. Your inquiry was submitted and our team will contact you shortly.'
       );
       setFormData(initialFormData);
+
+      // Fire Google Ads conversion event
+      if (typeof window !== 'undefined' && window.gtag) {
+        window.gtag('event', 'conversion', {
+            'send_to': 'AW-18166581434/W9aXCMPzpq8cELqRwNZD',
+            'transaction_id': ''
+        });
+      }
     } catch (error) {
       setSubmitStatus('error');
       if (error.response?.data?.error) {

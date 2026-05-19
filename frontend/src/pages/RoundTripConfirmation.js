@@ -8,6 +8,14 @@ function RoundTripConfirmation() {
   useEffect(() => {
     const ref = sessionStorage.getItem('bookingReference');
     setBookingRef(ref || 'N/A');
+
+    // Fire Google Ads conversion event
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'conversion', {
+          'send_to': 'AW-18166581434/W9aXCMPzpq8cELqRwNZD',
+          'transaction_id': ref || ''
+      });
+    }
   }, []);
 
   return (
