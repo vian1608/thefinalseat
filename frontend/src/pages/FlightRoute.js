@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
+import { useLocation } from 'react-router-dom';
 import { inquiryAPI } from '../services/api';
 import './FlightRoute.css';
 
@@ -16,6 +17,8 @@ const FlightRoute = ({ title, metaTitle, metaDescription, keywords }) => {
   });
   const [submitStatus, setSubmitStatus] = useState('idle');
   const [submitMessage, setSubmitMessage] = useState('');
+  const location = useLocation();
+  const canonicalUrl = `https://thefinalseat.com${location.pathname}`;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -57,6 +60,10 @@ const FlightRoute = ({ title, metaTitle, metaDescription, keywords }) => {
         <title>{metaTitle}</title>
         <meta name="description" content={metaDescription} />
         <meta name="keywords" content={keywords} />
+        <meta property="og:title" content={metaTitle} />
+        <meta property="og:description" content={metaDescription} />
+        <meta property="og:url" content={canonicalUrl} />
+        <link rel="canonical" href={canonicalUrl} />
       </Helmet>
 
       <section className="flight-route-hero">
