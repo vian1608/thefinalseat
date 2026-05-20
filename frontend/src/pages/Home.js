@@ -94,8 +94,8 @@ function Home() {
         <div className="container">
           <div className="inquiry-split-layout">
             <div className="inquiry-left-panel">
-              <h2>Consulting Inquiry</h2>
-              <p>Submit your air logistics details, or call us directly to book faster.</p>
+              <h2 style={{ fontSize: '1.8rem', color: '#1e293b', marginBottom: '1rem' }}>Need Immediate Support?</h2>
+              <p>Skip the form and call us directly to secure your air logistics immediately.</p>
               
               <a href="tel:+12139659727" className="call-btn flights-btn flights-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#8b1538', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
                 <i className="fas fa-phone-alt"></i> Call Now To Book Directly
@@ -118,8 +118,9 @@ function Home() {
 
             <div className="inquiry-right-panel">
               <div className="flights-inquiry-card" style={{ margin: 0 }}>
+                <h2 style={{ marginBottom: '0.5rem', color: '#1e293b', fontSize: '1.75rem' }}>Consulting Inquiry</h2>
                 <p className="flights-inquiry__intro">
-                  Fill out the form below and a consultant will respond with advisory options and a quote outline.
+                  Submit your air logistics details. A consultant will respond with advisory options and a quote outline.
                 </p>
             <form className="flights-form" onSubmit={handleSubmit}>
               <div className="flights-form__row">
