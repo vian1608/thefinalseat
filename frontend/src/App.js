@@ -46,8 +46,12 @@ function App() {
               <Route path="/contact" element={<ContactInfo />} />
               <Route path="/privacy-policy" element={<PrivacyPolicy />} />
               <Route path="/refund-policy" element={<RefundPolicy />} />
-              <Route path="/privacypolicy" element={<PrivacyPolicy />} />
-              <Route path="/refundpolicy" element={<RefundPolicy />} />
+              
+              {/* Common Aliases / Shortcuts */}
+              <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
+              <Route path="/privacypolicy" element={<Navigate to="/privacy-policy" replace />} />
+              <Route path="/refund" element={<Navigate to="/refund-policy" replace />} />
+              <Route path="/refundpolicy" element={<Navigate to="/refund-policy" replace />} />
             </Routes>
           </PageTransition>
         </main>
