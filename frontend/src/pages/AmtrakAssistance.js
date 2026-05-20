@@ -8,7 +8,19 @@ import CustomerReviews from '../components/CustomerReviews';
 import { inquiryAPI } from '../services/api';
 import { railReviews } from '../data/customerReviews';
 import { railHeroSlides, heroOfferTag } from '../data/heroSlides';
+import RouteSlider from '../components/RouteSlider';
 import './AmtrakAssistance.css';
+
+const trainRoutesData = [
+  { title: 'NYC to Washington, D.C.', path: '/train-nyc-to-dc', image: '/images/train_route_1.png', desc: 'Direct Northeast Corridor Service' },
+  { title: 'Washington, D.C. to NYC', path: '/train-dc-to-nyc', image: '/images/train_route_2.png', desc: 'High-speed business class available' },
+  { title: 'Philadelphia to NYC', path: '/train-philly-to-nyc', image: '/images/train_route_1.png', desc: 'Fast, reliable Northeast Regional' },
+  { title: 'Boston to NYC', path: '/train-boston-to-nyc', image: '/images/train_route_2.png', desc: 'Scenic coastal views on the Acela' },
+  { title: 'Chicago to St. Louis', path: '/train-chicago-to-stlouis', image: '/images/train_route_1.png', desc: 'Lincoln Service through the Midwest' },
+  { title: 'LA to San Diego', path: '/train-la-to-sandiego', image: '/images/train_route_2.png', desc: 'Pacific Surfliner ocean views' },
+  { title: 'Seattle to Portland', path: '/train-seattle-to-portland', image: '/images/train_route_1.png', desc: 'Amtrak Cascades beautiful greenery' },
+  { title: 'NYC to Albany', path: '/train-nyc-to-albany', image: '/images/train_route_2.png', desc: 'Empire Service up the Hudson River' }
+];
 
 const initialFormData = {
   name: '',
@@ -248,28 +260,8 @@ function AmtrakAssistance() {
       </section>
 
       <section className="amtrak-section">
-        <div className="container">
-          <h2 className="amtrak-section__title">Famous Routes</h2>
-          <div className="amtrak-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '2rem' }}>
-            <article className="amtrak-card" style={{ textAlign: 'center' }}>
-              <i className="fas fa-train" aria-hidden="true" style={{ fontSize: '2rem', color: '#8b1538', marginBottom: '1rem' }} />
-              <h3>NYC to Washington, D.C.</h3>
-              <p>Direct Northeast Corridor Service</p>
-              <Link to="/train-nyc-to-dc" className="amtrak-btn amtrak-btn--cta" style={{ marginTop: '1rem', display: 'inline-block', width: '100%' }}>Book Now</Link>
-            </article>
-            <article className="amtrak-card" style={{ textAlign: 'center' }}>
-              <i className="fas fa-train" aria-hidden="true" style={{ fontSize: '2rem', color: '#8b1538', marginBottom: '1rem' }} />
-              <h3>Washington, D.C. to NYC</h3>
-              <p>Fast Business Routing</p>
-              <Link to="/train-dc-to-nyc" className="amtrak-btn amtrak-btn--cta" style={{ marginTop: '1rem', display: 'inline-block', width: '100%' }}>Book Now</Link>
-            </article>
-            <article className="amtrak-card" style={{ textAlign: 'center' }}>
-              <i className="fas fa-subway" aria-hidden="true" style={{ fontSize: '2rem', color: '#8b1538', marginBottom: '1rem' }} />
-              <h3>Philadelphia to NYC</h3>
-              <p>Regional Commuter Support</p>
-              <Link to="/train-philly-to-nyc" className="amtrak-btn amtrak-btn--cta" style={{ marginTop: '1rem', display: 'inline-block', width: '100%' }}>Book Now</Link>
-            </article>
-          </div>
+        <div className="container" style={{ overflow: 'hidden' }}>
+          <RouteSlider routes={trainRoutesData} btnClassPrefix="amtrak" />
         </div>
       </section>
 

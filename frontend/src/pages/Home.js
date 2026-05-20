@@ -8,7 +8,19 @@ import CustomerReviews from '../components/CustomerReviews';
 import { inquiryAPI } from '../services/api';
 import { flightReviews } from '../data/customerReviews';
 import { flightHeroSlides, heroOfferTag } from '../data/heroSlides';
+import RouteSlider from '../components/RouteSlider';
 import './Home.css';
+
+const flightRoutesData = [
+  { title: 'NYC to London (LHR)', path: '/flight-nyc-to-lon', image: '/images/flight_route_1.png', desc: 'Direct transatlantic routes available.' },
+  { title: 'LAX to Tokyo (NRT)', path: '/flight-lax-to-tokyo', image: '/images/flight_route_2.png', desc: 'Premium cabins on direct Pacific flights.' },
+  { title: 'Miami to Paris (CDG)', path: '/flight-mia-to-paris', image: '/images/flight_route_1.png', desc: 'Non-stop flights to Charles de Gaulle.' },
+  { title: 'Chicago to Frankfurt', path: '/flight-ord-to-fra', image: '/images/flight_route_2.png', desc: 'Direct access to the heart of Europe.' },
+  { title: 'SFO to Sydney', path: '/flight-sfo-to-syd', image: '/images/flight_route_1.png', desc: 'Transpacific routes with lie-flat seating.' },
+  { title: 'JFK to Dubai', path: '/flight-jfk-to-dxb', image: '/images/flight_route_2.png', desc: 'Ultimate luxury to the Middle East.' },
+  { title: 'Dallas to London', path: '/flight-dfw-to-lhr', image: '/images/flight_route_1.png', desc: 'Non-stop from Texas to the UK.' },
+  { title: 'Boston to Dublin', path: '/flight-bos-to-dub', image: '/images/flight_route_2.png', desc: 'Fastest route to Ireland.' }
+];
 
 const initialFormData = {
   name: '',
@@ -285,28 +297,8 @@ function Home() {
       </section>
 
       <section className="flights-section">
-        <div className="container">
-          <h2 className="flights-section__title">Famous Routes</h2>
-          <div className="flights-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '2rem' }}>
-            <article className="flights-card" style={{ textAlign: 'center' }}>
-              <i className="fas fa-plane-departure" aria-hidden="true" style={{ fontSize: '2rem', color: '#8b1538', marginBottom: '1rem' }} />
-              <h3>NYC to London (LHR)</h3>
-              <p>Premium Transatlantic Routing</p>
-              <Link to="/flight-nyc-to-lon" className="flights-btn flights-btn--cta" style={{ marginTop: '1rem', display: 'inline-block', width: '100%' }}>Book Now</Link>
-            </article>
-            <article className="flights-card" style={{ textAlign: 'center' }}>
-              <i className="fas fa-plane-departure" aria-hidden="true" style={{ fontSize: '2rem', color: '#8b1538', marginBottom: '1rem' }} />
-              <h3>LAX to Tokyo (NRT)</h3>
-              <p>Transpacific Executive Travel</p>
-              <Link to="/flight-lax-to-tokyo" className="flights-btn flights-btn--cta" style={{ marginTop: '1rem', display: 'inline-block', width: '100%' }}>Book Now</Link>
-            </article>
-            <article className="flights-card" style={{ textAlign: 'center' }}>
-              <i className="fas fa-plane-departure" aria-hidden="true" style={{ fontSize: '2rem', color: '#8b1538', marginBottom: '1rem' }} />
-              <h3>Miami to Paris (CDG)</h3>
-              <p>European Gateway Routing</p>
-              <Link to="/flight-mia-to-paris" className="flights-btn flights-btn--cta" style={{ marginTop: '1rem', display: 'inline-block', width: '100%' }}>Book Now</Link>
-            </article>
-          </div>
+        <div className="container" style={{ overflow: 'hidden' }}>
+          <RouteSlider routes={flightRoutesData} btnClassPrefix="flights" />
         </div>
       </section>
 

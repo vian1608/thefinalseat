@@ -56,6 +56,45 @@ function App() {
                   metaTitle="Train from Philly to NYC | Fast Passenger Routing | The Final Seat"
                   metaDescription="Coordination and support for train travel from Philadelphia to NYC. Book your Amtrak or regional commuter seats instantly."
                   keywords="train from philly to nyc, train from nyc to philadelphia, buy train tickets, amtrak tickets"
+              } />
+              <Route path="/train-boston-to-nyc" element={
+                <TrainRoute 
+                  title="Train from Boston to NYC" 
+                  metaTitle="Train from Boston to NYC | Premium Tickets | The Final Seat"
+                  metaDescription="Expert logistics for Northeast Corridor rail from Boston to New York City."
+                  keywords="boston to nyc train, train to new york from boston, amtrak boston to nyc"
+                />
+              } />
+              <Route path="/train-chicago-to-stlouis" element={
+                <TrainRoute 
+                  title="Train from Chicago to St. Louis" 
+                  metaTitle="Train from Chicago to St. Louis | The Final Seat"
+                  metaDescription="Book your train travel from Chicago to St. Louis easily with our premium rail advisory."
+                  keywords="train from chicago to st louis, amtrak chicago to st louis"
+                />
+              } />
+              <Route path="/train-la-to-sandiego" element={
+                <TrainRoute 
+                  title="Train from Los Angeles to San Diego" 
+                  metaTitle="Train from LA to San Diego | The Final Seat"
+                  metaDescription="Enjoy the scenic Pacific Surfliner route with premium bookings from LA to San Diego."
+                  keywords="train from la to san diego, los angeles to san diego train, amtrak la to san diego"
+                />
+              } />
+              <Route path="/train-seattle-to-portland" element={
+                <TrainRoute 
+                  title="Train from Seattle to Portland" 
+                  metaTitle="Train from Seattle to Portland | Cascades Route | The Final Seat"
+                  metaDescription="Travel the scenic Pacific Northwest on the Cascades route from Seattle to Portland."
+                  keywords="train from seattle to portland, amtrak cascades, seattle to portland train"
+                />
+              } />
+              <Route path="/train-nyc-to-albany" element={
+                <TrainRoute 
+                  title="Train from NYC to Albany" 
+                  metaTitle="Train from NYC to Albany | The Final Seat"
+                  metaDescription="Fast and reliable train bookings from New York City to Albany."
+                  keywords="train from nyc to albany, amtrak nyc to albany"
                 />
               } />
 
@@ -82,6 +121,45 @@ function App() {
                   metaTitle="Flights from Miami to Paris | The Final Seat"
                   metaDescription="Expert logistics and premium bookings for flights from Miami to Paris Charles de Gaulle."
                   keywords="flights from miami to paris, mia to cdg, miami to paris flights"
+              } />
+              <Route path="/flight-ord-to-fra" element={
+                <FlightRoute 
+                  title="Flights from Chicago (ORD) to Frankfurt (FRA)" 
+                  metaTitle="Flights from Chicago to Frankfurt | The Final Seat"
+                  metaDescription="Premium international flight logistics from Chicago O'Hare to Frankfurt."
+                  keywords="flights from chicago to frankfurt, ord to fra, chicago to germany flights"
+                />
+              } />
+              <Route path="/flight-sfo-to-syd" element={
+                <FlightRoute 
+                  title="Flights from San Francisco (SFO) to Sydney (SYD)" 
+                  metaTitle="Flights from SFO to Sydney | The Final Seat"
+                  metaDescription="Expert booking support for transpacific flights from San Francisco to Sydney."
+                  keywords="flights from san francisco to sydney, sfo to syd, sfo to sydney flights"
+                />
+              } />
+              <Route path="/flight-jfk-to-dxb" element={
+                <FlightRoute 
+                  title="Flights from New York (JFK) to Dubai (DXB)" 
+                  metaTitle="Flights from JFK to Dubai | The Final Seat"
+                  metaDescription="Luxury flight arrangements and logistics from New York JFK to Dubai."
+                  keywords="flights from new york to dubai, jfk to dxb, new york to dubai flights"
+                />
+              } />
+              <Route path="/flight-dfw-to-lhr" element={
+                <FlightRoute 
+                  title="Flights from Dallas (DFW) to London (LHR)" 
+                  metaTitle="Flights from Dallas to London | The Final Seat"
+                  metaDescription="Premium flight bookings from Dallas Fort Worth to London Heathrow."
+                  keywords="flights from dallas to london, dfw to lhr, dallas to london flights"
+                />
+              } />
+              <Route path="/flight-bos-to-dub" element={
+                <FlightRoute 
+                  title="Flights from Boston (BOS) to Dublin (DUB)" 
+                  metaTitle="Flights from Boston to Dublin | The Final Seat"
+                  metaDescription="Seamless premium flight bookings from Boston to Dublin, Ireland."
+                  keywords="flights from boston to dublin, bos to dub, boston to ireland flights"
                 />
               } />
 
