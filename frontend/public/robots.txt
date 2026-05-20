@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /confirmation/
+Disallow: /booking
+Disallow: /search
+Disallow: /return-flight
+
+Sitemap: https://thefinalseat.com/sitemap.xml
