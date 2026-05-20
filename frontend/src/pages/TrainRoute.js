@@ -151,7 +151,7 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords }) => {
               </div>
 
               {submitMessage && (
-                <p className={\`form-message \${submitStatus === 'success' ? 'success' : 'error'}\`}>
+                <p className={`form-message ${submitStatus === 'success' ? 'success' : 'error'}`}>
                   {submitMessage}
                 </p>
               )}
