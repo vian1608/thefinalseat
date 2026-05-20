@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import HeroSlider from '../components/HeroSlider';
 import InquiryLocationSelect from '../components/InquiryLocationSelect';
 import { flightAirportSelectGroups } from '../data/flightAirports';
@@ -78,6 +79,25 @@ function Home() {
 
   return (
     <div className="flights-page">
+      <Helmet>
+        <script type="application/ld+json">
+          {`
+            {
+              "@context": "https://schema.org",
+              "@type": "TravelAgency",
+              "name": "The Final Seat - Travel Logistics Advisory",
+              "description": "Expert travel logistics and transportation routing services for flights.",
+              "url": "https://thefinalseat.com/",
+              "serviceType": "Air Travel Reservation and Transportation Routing Service",
+              "areaServed": "Global",
+              "provider": {
+                "@type": "Organization",
+                "name": "The Final Seat LLC"
+              }
+            }
+          `}
+        </script>
+      </Helmet>
       <HeroSlider
         slides={flightHeroSlides}
         variant="flights"

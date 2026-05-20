@@ -80,6 +80,23 @@ function AmtrakAssistance() {
         <title>Amtrak Assistance & Auto Train Tickets | The Final Seat</title>
         <meta name="keywords" content="buy train tickets, amtrak tickets, amtrak schedule, amtrak student discount, amtrak auto train, autotrain, train car transport, train vehicle transport, move car by train, car transport by train charges, train car carrier, car transport through train, train to new york, train new york washington, train from nyc to dc, train from philly to nyc, train from nyc to philadelphia, train to new york from dc, new york to dc train, new york to boston train, nyc to boston train, boston to nyc train" />
         <meta name="description" content="Expert assistance for booking Amtrak, Auto Train, and vehicle transport. Discover schedules and buy train tickets from NYC, DC, Boston, Philadelphia, and more." />
+        <script type="application/ld+json">
+          {`
+            {
+              "@context": "https://schema.org",
+              "@type": "TravelAgency",
+              "name": "The Final Seat - Amtrak & Auto Train Routing Service",
+              "description": "Expert assistance for booking Amtrak, Auto Train, and vehicle transport.",
+              "url": "https://thefinalseat.com/amtrak-assistance",
+              "serviceType": "Train Reservation and Vehicle Transport Routing Service",
+              "areaServed": "US",
+              "provider": {
+                "@type": "Organization",
+                "name": "The Final Seat LLC"
+              }
+            }
+          `}
+        </script>
       </Helmet>
       <HeroSlider
         slides={railHeroSlides}
