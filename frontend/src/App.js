@@ -56,6 +56,7 @@ function App() {
                   metaTitle="Train from Philly to NYC | Fast Passenger Routing | The Final Seat"
                   metaDescription="Coordination and support for train travel from Philadelphia to NYC. Book your Amtrak or regional commuter seats instantly."
                   keywords="train from philly to nyc, train from nyc to philadelphia, buy train tickets, amtrak tickets"
+                />
               } />
               <Route path="/train-boston-to-nyc" element={
                 <TrainRoute 
@@ -121,6 +122,7 @@ function App() {
                   metaTitle="Flights from Miami to Paris | The Final Seat"
                   metaDescription="Expert logistics and premium bookings for flights from Miami to Paris Charles de Gaulle."
                   keywords="flights from miami to paris, mia to cdg, miami to paris flights"
+                />
               } />
               <Route path="/flight-ord-to-fra" element={
                 <FlightRoute 

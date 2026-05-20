@@ -12,13 +12,13 @@ import RouteSlider from '../components/RouteSlider';
 import './Home.css';
 
 const flightRoutesData = [
-  { title: 'NYC to London (LHR)', path: '/flight-nyc-to-lon', image: '/images/flight_route_1.png', desc: 'Direct transatlantic routes available.' },
-  { title: 'LAX to Tokyo (NRT)', path: '/flight-lax-to-tokyo', image: '/images/flight_route_2.png', desc: 'Premium cabins on direct Pacific flights.' },
-  { title: 'Miami to Paris (CDG)', path: '/flight-mia-to-paris', image: '/images/flight_route_1.png', desc: 'Non-stop flights to Charles de Gaulle.' },
-  { title: 'Chicago to Frankfurt', path: '/flight-ord-to-fra', image: '/images/flight_route_2.png', desc: 'Direct access to the heart of Europe.' },
-  { title: 'SFO to Sydney', path: '/flight-sfo-to-syd', image: '/images/flight_route_1.png', desc: 'Transpacific routes with lie-flat seating.' },
-  { title: 'JFK to Dubai', path: '/flight-jfk-to-dxb', image: '/images/flight_route_2.png', desc: 'Ultimate luxury to the Middle East.' },
-  { title: 'Dallas to London', path: '/flight-dfw-to-lhr', image: '/images/flight_route_1.png', desc: 'Non-stop from Texas to the UK.' },
+  { title: 'NYC to London (LHR)', path: '/flight-nyc-to-lon', image: '/images/london_lhr.png', desc: 'Direct transatlantic routes available.' },
+  { title: 'LAX to Tokyo (NRT)', path: '/flight-lax-to-tokyo', image: '/images/tokyo_nrt.png', desc: 'Premium cabins on direct Pacific flights.' },
+  { title: 'Miami to Paris (CDG)', path: '/flight-mia-to-paris', image: '/images/paris_cdg.png', desc: 'Non-stop flights to Charles de Gaulle.' },
+  { title: 'Chicago to Frankfurt', path: '/flight-ord-to-fra', image: '/images/frankfurt_fra.png', desc: 'Direct access to the heart of Europe.' },
+  { title: 'SFO to Sydney', path: '/flight-sfo-to-syd', image: '/images/sydney_syd.png', desc: 'Transpacific routes with lie-flat seating.' },
+  { title: 'JFK to Dubai', path: '/flight-jfk-to-dxb', image: '/images/dubai_dxb.png', desc: 'Ultimate luxury to the Middle East.' },
+  { title: 'Dallas to London', path: '/flight-dfw-to-lhr', image: '/images/london_lhr.png', desc: 'Non-stop from Texas to the UK.' },
   { title: 'Boston to Dublin', path: '/flight-bos-to-dub', image: '/images/flight_route_2.png', desc: 'Fastest route to Ireland.' }
 ];
 
