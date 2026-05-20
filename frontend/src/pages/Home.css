@@ -115,6 +115,33 @@
   background: #faf5f7;
 }
 
+.inquiry-split-layout {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 3rem;
+  align-items: start;
+}
+
+.inquiry-left-panel h2 {
+  font-size: 2rem;
+  color: #1e293b;
+  margin-bottom: 1rem;
+}
+
+.inquiry-left-panel p {
+  color: #475569;
+  font-size: 1.1rem;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 900px) {
+  .inquiry-split-layout {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+}
+
 .flights-section__title {
   text-align: center;
   color: #1e293b;

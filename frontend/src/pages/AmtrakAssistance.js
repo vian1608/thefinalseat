@@ -92,12 +92,35 @@ function AmtrakAssistance() {
 
 <section id="inquiry" className="amtrak-section">
         <div className="container">
-          <div className="amtrak-inquiry-card">
-            <h2>Consulting Inquiry</h2>
-            <p className="amtrak-inquiry__intro">
-              Submit your rail logistics details. A consultant will respond with advisory options and
-              a quote outline.
-            </p>
+          <div className="inquiry-split-layout">
+            <div className="inquiry-left-panel">
+              <h2>Consulting Inquiry</h2>
+              <p>Submit your rail logistics details, or call us directly to book faster.</p>
+              
+              <a href="tel:+12139659727" className="call-btn amtrak-btn amtrak-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#8b1538', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
+                <i className="fas fa-phone-alt"></i> Call Now To Book Directly
+              </a>
+              
+              <div className="benefits-list">
+                <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', color: '#1e293b' }}>Benefits for booking with us:</h3>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                  <li style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', alignItems: 'start' }}>
+                    <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.25rem' }}></i>
+                    <span>Includes free 24/7 support till date of travel.</span>
+                  </li>
+                  <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start' }}>
+                    <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.25rem' }}></i>
+                    <span>No need to wait on long holds like with Amtrak.</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="inquiry-right-panel">
+              <div className="amtrak-inquiry-card" style={{ margin: 0 }}>
+                <p className="amtrak-inquiry__intro">
+                  Fill out the form below and a consultant will respond with advisory options and a quote outline.
+                </p>
             <form className="amtrak-form" onSubmit={handleSubmit}>
               <div className="amtrak-form__row">
                 <div className="amtrak-form__group">
@@ -217,6 +240,8 @@ function AmtrakAssistance() {
                 {submitStatus === 'submitting' ? 'Submitting…' : 'Submit Consulting Inquiry'}
               </button>
             </form>
+          </div>
+            </div>
           </div>
         </div>
       </section>
