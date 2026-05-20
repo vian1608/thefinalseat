@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import HeroSlider from '../components/HeroSlider';
 import InquiryLocationSelect from '../components/InquiryLocationSelect';
 import { amtrakStationSelectGroups } from '../data/amtrakStations';
@@ -75,6 +76,11 @@ function AmtrakAssistance() {
 
   return (
     <div className="amtrak-page">
+      <Helmet>
+        <title>Amtrak Assistance & Auto Train Tickets | The Final Seat</title>
+        <meta name="keywords" content="buy train tickets, amtrak tickets, amtrak schedule, amtrak student discount, amtrak auto train, autotrain, train car transport, train vehicle transport, move car by train, car transport by train charges, train car carrier, car transport through train, train to new york, train new york washington, train from nyc to dc, train from philly to nyc, train from nyc to philadelphia, train to new york from dc, new york to dc train, new york to boston train, nyc to boston train, boston to nyc train" />
+        <meta name="description" content="Expert assistance for booking Amtrak, Auto Train, and vehicle transport. Discover schedules and buy train tickets from NYC, DC, Boston, Philadelphia, and more." />
+      </Helmet>
       <HeroSlider
         slides={railHeroSlides}
         variant="rail"
