@@ -20,6 +20,8 @@ import PrivacyPolicy from './pages/privacypolicy';
 import RefundPolicy from './pages/refundpolicy';
 import AmtrakAssistance from './pages/AmtrakAssistance';
 
+import TrainRoute from './pages/TrainRoute';
+
 function App() {
   return (
     <Router>
@@ -30,6 +32,33 @@ function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/amtrak-assistance" element={<AmtrakAssistance />} />
+              
+              {/* New Optimized Train Routes */}
+              <Route path="/train-nyc-to-dc" element={
+                <TrainRoute 
+                  title="Train from NYC to Washington, D.C." 
+                  metaTitle="Train from NYC to DC | Book Tickets & Schedules | The Final Seat"
+                  metaDescription="Need a train from NYC to Washington DC? Get optimized schedules, seat selections, and seamless ticketing assistance on the Northeast Corridor."
+                  keywords="train from nyc to dc, train new york washington, new york to washington dc train, train to new york"
+                />
+              } />
+              <Route path="/train-dc-to-nyc" element={
+                <TrainRoute 
+                  title="Train from D.C. to New York City" 
+                  metaTitle="Train from DC to NYC | Schedules & Easy Booking | The Final Seat"
+                  metaDescription="Find the fastest train routes from Washington DC to New York City. Plan your Northeast Corridor travel with zero hassle or booking stress."
+                  keywords="train from dc to nyc, train to new york from dc, new york to dc train, boston to nyc train"
+                />
+              } />
+              <Route path="/train-philly-to-nyc" element={
+                <TrainRoute 
+                  title="Train from Philadelphia to NYC" 
+                  metaTitle="Train from Philly to NYC | Fast Passenger Routing | The Final Seat"
+                  metaDescription="Coordination and support for train travel from Philadelphia to NYC. Book your Amtrak or regional commuter seats instantly."
+                  keywords="train from philly to nyc, train from nyc to philadelphia, buy train tickets, amtrak tickets"
+                />
+              } />
+
               <Route path="/amtrak-assitance" element={<Navigate to="/amtrak-assistance" replace />} />
               <Route path="/amtrak-assisstance" element={<Navigate to="/amtrak-assistance" replace />} />
               <Route path="/amtrak-asistance" element={<Navigate to="/amtrak-assistance" replace />} />
