@@ -19,8 +19,8 @@ import './App.css';
 import PrivacyPolicy from './pages/privacypolicy';
 import RefundPolicy from './pages/refundpolicy';
 import AmtrakAssistance from './pages/AmtrakAssistance';
-
 import TrainRoute from './pages/TrainRoute';
+import FlightRoute from './pages/FlightRoute';
 
 function App() {
   return (
@@ -56,6 +56,32 @@ function App() {
                   metaTitle="Train from Philly to NYC | Fast Passenger Routing | The Final Seat"
                   metaDescription="Coordination and support for train travel from Philadelphia to NYC. Book your Amtrak or regional commuter seats instantly."
                   keywords="train from philly to nyc, train from nyc to philadelphia, buy train tickets, amtrak tickets"
+                />
+              } />
+
+              {/* New Optimized Flight Routes */}
+              <Route path="/flight-nyc-to-lon" element={
+                <FlightRoute 
+                  title="Flights from New York (JFK) to London (LHR)" 
+                  metaTitle="Flights from New York to London | The Final Seat"
+                  metaDescription="Book premium routing and travel logistics for flights from New York JFK to London Heathrow."
+                  keywords="flights from new york to london, jfk to lhr, new york to london flights"
+                />
+              } />
+              <Route path="/flight-lax-to-tokyo" element={
+                <FlightRoute 
+                  title="Flights from Los Angeles (LAX) to Tokyo (NRT/HND)" 
+                  metaTitle="Flights from LAX to Tokyo | The Final Seat"
+                  metaDescription="Seamless premium flight bookings from Los Angeles to Tokyo Narita or Haneda."
+                  keywords="flights from los angeles to tokyo, lax to nrt, lax to tokyo flights"
+                />
+              } />
+              <Route path="/flight-mia-to-paris" element={
+                <FlightRoute 
+                  title="Flights from Miami (MIA) to Paris (CDG)" 
+                  metaTitle="Flights from Miami to Paris | The Final Seat"
+                  metaDescription="Expert logistics and premium bookings for flights from Miami to Paris Charles de Gaulle."
+                  keywords="flights from miami to paris, mia to cdg, miami to paris flights"
                 />
               } />
 

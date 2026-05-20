@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import HeroSlider from '../components/HeroSlider';
 import InquiryLocationSelect from '../components/InquiryLocationSelect';
@@ -220,6 +221,31 @@ function AmtrakAssistance() {
         </div>
       </section>
 
+      <section className="amtrak-section">
+        <div className="container">
+          <h2 className="amtrak-section__title">Famous Routes</h2>
+          <div className="amtrak-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '2rem' }}>
+            <article className="amtrak-card" style={{ textAlign: 'center' }}>
+              <i className="fas fa-train" aria-hidden="true" style={{ fontSize: '2rem', color: '#8b1538', marginBottom: '1rem' }} />
+              <h3>NYC to Washington, D.C.</h3>
+              <p>Direct Northeast Corridor Service</p>
+              <Link to="/train-nyc-to-dc" className="amtrak-btn amtrak-btn--cta" style={{ marginTop: '1rem', display: 'inline-block', width: '100%' }}>Book Now</Link>
+            </article>
+            <article className="amtrak-card" style={{ textAlign: 'center' }}>
+              <i className="fas fa-train" aria-hidden="true" style={{ fontSize: '2rem', color: '#8b1538', marginBottom: '1rem' }} />
+              <h3>Washington, D.C. to NYC</h3>
+              <p>Fast Business Routing</p>
+              <Link to="/train-dc-to-nyc" className="amtrak-btn amtrak-btn--cta" style={{ marginTop: '1rem', display: 'inline-block', width: '100%' }}>Book Now</Link>
+            </article>
+            <article className="amtrak-card" style={{ textAlign: 'center' }}>
+              <i className="fas fa-subway" aria-hidden="true" style={{ fontSize: '2rem', color: '#8b1538', marginBottom: '1rem' }} />
+              <h3>Philadelphia to NYC</h3>
+              <p>Regional Commuter Support</p>
+              <Link to="/train-philly-to-nyc" className="amtrak-btn amtrak-btn--cta" style={{ marginTop: '1rem', display: 'inline-block', width: '100%' }}>Book Now</Link>
+            </article>
+          </div>
+        </div>
+      </section>
 
       <section className="amtrak-section amtrak-section--muted">
         <div className="container">
@@ -261,27 +287,7 @@ function AmtrakAssistance() {
         </div>
       </section>
 
-      <section className="amtrak-section">
-        <div className="container">
-          <h2 className="amtrak-section__title">How Consulting Works</h2>
-          <ol className="amtrak-steps">
-            <li>
-              <strong>Consulting inquiry</strong> — Share origin, destination, dates, and urgency.
-            </li>
-            <li>
-              <strong>Logistics strategy</strong> — We evaluate routes, classes, and connection risk.
-            </li>
-            <li>
-              <strong>Advisory delivery</strong> — You receive a structured plan and fulfillment
-              coordination through authorized third-party providers.
-            </li>
-          </ol>
-          <p className="amtrak-disclaimer">
-            The Final Seat LLC is an independent logistics consultancy and does not issue tickets
-            directly. Rail transport is fulfilled subject to carrier and third-party provider terms.
-          </p>
-        </div>
-      </section>
+
 
             <CustomerReviews reviews={railReviews} variant="rail" />
     </div>

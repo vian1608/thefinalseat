@@ -28,14 +28,6 @@ function Footer() {
             </ul>
           </div>
           <div className="footer-section">
-            <h4>Popular Travel Routes</h4>
-            <ul>
-              <li><Link to="/train-nyc-to-dc">Train from NYC to Washington, D.C.</Link></li>
-              <li><Link to="/train-dc-to-nyc">Train from D.C. to New York City</Link></li>
-              <li><Link to="/train-philly-to-nyc">Train from Philadelphia to NYC</Link></li>
-            </ul>
-          </div>
-          <div className="footer-section">
             <h4>Contact</h4>
             <ul>
               <li><a href="mailto:support@thefinalseat.com">support@thefinalseat.com</a></li>
