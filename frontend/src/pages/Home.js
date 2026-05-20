@@ -239,6 +239,9 @@ function Home() {
                   {submitMessage}
                 </p>
               )}
+              <p className="sms-disclaimer" style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '1rem', lineHeight: '1.4' }}>
+                By providing a telephone number and submitting this form you are consenting to be contacted by SMS text message. Message &amp; data rates may apply. You can reply STOP to opt-out of further messaging.
+              </p>
               <button
                 type="submit"
                 className="flights-btn flights-btn--cta flights-btn--full"
