@@ -37,6 +37,15 @@ const PrivacyPolicy = () => {
               tokenization and do not store full credit card numbers on our servers at any time.
             </p>
           </section>
+          <section>
+            <h2>4. Privacy Policy for Mobile Information</h2>
+            <p>
+              The Final Seat LLC is committed to protecting your privacy. We do not sell, rent, or lease our customer lists to third parties. 
+            </p>
+            <p>
+              No mobile information, phone numbers, or text messaging originator opt-in data will be shared with third parties, affiliates, or partners for marketing, promotional, or lead generation purposes. All other categories of personal data exclude text messaging originator opt-in data and consent; this information will not be shared with or sold to any third parties for any reason whatsoever.
+            </p>
+          </section>
         </article>
       </div>
     </section>
