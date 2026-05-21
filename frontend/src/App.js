@@ -21,7 +21,7 @@ import RefundPolicy from './pages/refundpolicy';
 import AmtrakAssistance from './pages/AmtrakAssistance';
 import TrainRoute from './pages/TrainRoute';
 import FlightRoute from './pages/FlightRoute';
-
+import AirlineRoute from './pages/AirlineRoute';
 function App() {
   return (
     <Router>
@@ -164,6 +164,9 @@ function App() {
                   keywords="flights from boston to dublin, bos to dub, boston to ireland flights"
                 />
               } />
+              
+              {/* Dynamic Airline SEO Routes */}
+              <Route path="/airlines/:airlineSlug" element={<AirlineRoute />} />
 
               <Route path="/amtrak-assitance" element={<Navigate to="/amtrak-assistance" replace />} />
               <Route path="/amtrak-assisstance" element={<Navigate to="/amtrak-assistance" replace />} />

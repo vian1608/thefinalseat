@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import airlinesData from '../data/airlinesData.json';
 import './Footer.css';
 
 function Footer() {
@@ -17,6 +18,14 @@ function Footer() {
               <li><Link to="/">Flights</Link></li>
               <li><Link to="/amtrak-assistance">Amtrak Assistance</Link></li>
               <li><Link to="/contact">Contact Information</Link></li>
+            </ul>
+          </div>
+          <div className="footer-section footer-airlines">
+            <h4>Airlines</h4>
+            <ul className="airlines-list">
+              {airlinesData.map(airline => (
+                <li key={airline.slug}><Link to={`/airlines/${airline.slug}`}>{airline.name}</Link></li>
+              ))}
             </ul>
           </div>
           <div className="footer-section">
