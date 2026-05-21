@@ -1,4 +1,7 @@
 .train-route-page {
+  --primary-color: #1e3a5f;
+  --primary-dark: #0f1d30;
+  --text-color: #1e293b;
   padding-top: 80px;
   min-height: 100vh;
   background-color: #f8fafc;

@@ -20,6 +20,7 @@ const AirlineRoute = () => {
   });
   const [submitStatus, setSubmitStatus] = useState('idle');
   const [submitMessage, setSubmitMessage] = useState('');
+  const [showFullDisclosure, setShowFullDisclosure] = useState(false);
 
   // If slug doesn't exist, redirect to home or 404
   if (!airline) {
@@ -222,7 +223,33 @@ const AirlineRoute = () => {
                   style={{ marginTop: '0.25rem', cursor: 'pointer', padding: '0.75rem' }}
                 />
                 <label htmlFor="smsOptIn" style={{ fontSize: '0.75rem', color: '#475569', lineHeight: '1.625', cursor: 'pointer' }}>
-                  By checking this box and clicking 'Submit Flight Query', I provide my express written consent to receive automated flight updates, travel quotes, and booking notifications via SMS from The Final Seat LLC at the number provided. <strong>Consent is not a condition of purchase. Message frequency varies based on booking activity (up to 4 messages per month).</strong> Message and data rates may apply. Text STOP to cancel at any time, or HELP for assistance. View our <a href="/privacy-policy" style={{ color: '#4f46e5', textDecoration: 'underline' }}>Privacy Policy</a> and <a href="/terms" style={{ color: '#4f46e5', textDecoration: 'underline' }}>Terms of Service</a>.
+                  By checking this box and clicking 'Submit Flight Query', I provide my express written consent to receive automated flight updates, travel quotes, and booking notifications via SMS from The Final Seat LLC at the number provided.
+                  {showFullDisclosure ? (
+                    <>
+                      {' '}<strong>Consent is not a condition of purchase. Message frequency varies based on booking activity (up to 4 messages per month).</strong> Message and data rates may apply. Text STOP to cancel at any time, or HELP for assistance. View our <a href="/privacy-policy" style={{ color: '#4f46e5', textDecoration: 'underline' }}>Privacy Policy</a> and <a href="/terms" style={{ color: '#4f46e5', textDecoration: 'underline' }}>Terms of Service</a>.
+                    </>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setShowFullDisclosure(!showFullDisclosure);
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#4f46e5',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                      fontSize: '0.75rem',
+                      fontWeight: '600',
+                      padding: 0,
+                      marginLeft: '0.25rem',
+                      display: 'inline'
+                    }}
+                  >
+                    {showFullDisclosure ? 'Read Less' : 'Read More'}
+                  </button>
                 </label>
               </div>
             </div>
