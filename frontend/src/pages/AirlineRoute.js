@@ -13,6 +13,7 @@ const AirlineRoute = () => {
   const [formData, setFormData] = useState({
     passengerName: '',
     passengerEmail: '',
+    passengerPhone: '',
     originCity: '',
     destinationCity: '',
     passengerCount: '1',
@@ -41,6 +42,7 @@ const AirlineRoute = () => {
       const payload = {
         name: formData.passengerName,
         email: formData.passengerEmail || 'route-inquiry@thefinalseat.com',
+        phone: formData.passengerPhone,
         origin: formData.originCity,
         destination: formData.destinationCity,
         passengers: formData.passengerCount,
@@ -53,7 +55,7 @@ const AirlineRoute = () => {
       setSubmitMessage(
         result.message || 'Flight query received. Our team will reach out with itinerary quotes shortly.'
       );
-      setFormData({ passengerName: '', passengerEmail: '', originCity: '', destinationCity: '', passengerCount: '1' });
+      setFormData({ passengerName: '', passengerEmail: '', passengerPhone: '', originCity: '', destinationCity: '', passengerCount: '1' });
     } catch (error) {
       setSubmitStatus('error');
       setSubmitMessage('Unable to submit your request right now. Please call us directly.');
@@ -157,6 +159,18 @@ const AirlineRoute = () => {
                 />
               </div>
               <div className="form-group">
+                <label htmlFor="passengerPhone">Phone Number</label>
+                <input 
+                  type="tel" 
+                  id="passengerPhone"
+                  name="passengerPhone" 
+                  value={formData.passengerPhone}
+                  onChange={handleChange}
+                  required 
+                  placeholder="+1 555 123 4567" 
+                />
+              </div>
+              <div className="form-group">
                 <label htmlFor="originCity">Origin City</label>
                 <input 
                   type="text" 
@@ -202,9 +216,27 @@ const AirlineRoute = () => {
               </p>
             )}
 
-            <button type="submit" className="submit-btn" disabled={submitStatus === 'submitting'}>
-              {submitStatus === 'submitting' ? 'Submitting...' : 'Submit Flight Query'}
-            </button>
+            {/* SMS OPT-IN COMPLIANCE DISCLOSURE BLOCK */}
+            <div className="md:col-span-2 mt-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
+              <div className="flex items-start gap-3">
+                <input 
+                  type="checkbox" 
+                  id="smsOptIn" 
+                  name="smsOptIn" 
+                  required 
+                  className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <label htmlFor="smsOptIn" className="text-xs text-slate-600 leading-relaxed">
+                  By checking this box and submitting this request, I provide my express written consent to receive automated flight updates, travel quotes, and booking notifications via SMS from The Final Seat LLC at the number provided. <strong>Consent is not a condition of purchase. Message frequency varies based on booking activity (up to 4 messages per month).</strong> Message and data rates may apply. Text STOP to cancel at any time, or HELP for assistance. View our <a href="/privacy-policy" className="text-indigo-600 underline hover:text-indigo-800">Privacy Policy</a> and <a href="/terms" className="text-indigo-600 underline hover:text-indigo-800">Terms of Service</a>.
+                </label>
+              </div>
+            </div>
+
+            <div className="md:col-span-2 mt-2">
+              <button type="submit" className="w-full p-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition duration-150 ease-in-out text-sm shadow-sm" disabled={submitStatus === 'submitting'}>
+                {submitStatus === 'submitting' ? 'Submitting...' : 'Submit Flight Query'}
+              </button>
+            </div>
           </form>
         </div>
 
