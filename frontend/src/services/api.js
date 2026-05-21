@@ -93,7 +93,10 @@ export const paymentAPI = {
 
 // Consulting inquiry API
 export const inquiryAPI = {
-  submitConsulting: async (payload) => {
+  submitConsulting: async (payload, serviceType) => {
+    if (serviceType) {
+      payload.serviceType = serviceType;
+    }
     const response = await api.post('/inquiries/consulting', payload);
     return response.data;
   },

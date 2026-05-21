@@ -75,9 +75,34 @@ const FlightRoute = ({ title, metaTitle, metaDescription, keywords }) => {
 
       <section className="flight-route-form-section">
         <div className="container">
-          <div className="flight-route-card">
-            <h2>Check Route Availability</h2>
-            <form className="flight-route-form" onSubmit={handleSubmit}>
+          <div className="inquiry-split-layout">
+            <div className="inquiry-left-panel">
+              <h2>Need Immediate Support?</h2>
+              <p>Skip the form and call us directly to secure your air logistics immediately.</p>
+              
+              <a href="tel:+12139659727" className="call-btn flights-btn flights-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#1e293b', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
+                <i className="fas fa-phone-alt"></i> Call Now To Book Directly
+              </a>
+              
+              <div className="benefits-list">
+                <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', color: '#1e293b' }}>Benefits for booking with us:</h3>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                  <li style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', alignItems: 'start' }}>
+                    <i className="fas fa-check-circle" style={{ color: '#3b82f6', marginTop: '0.25rem' }}></i>
+                    <span>Includes free 24/7 support till date of travel.</span>
+                  </li>
+                  <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start' }}>
+                    <i className="fas fa-check-circle" style={{ color: '#3b82f6', marginTop: '0.25rem' }}></i>
+                    <span>No need to wait on long holds like with the airline.</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="inquiry-right-panel">
+              <div className="flight-route-card" style={{ margin: 0 }}>
+                <h2>Check Route Availability</h2>
+                <form className="flight-route-form" onSubmit={handleSubmit}>
               <div className="form-group">
                 <label htmlFor="fullName">Full Name</label>
                 <input
@@ -191,6 +216,8 @@ const FlightRoute = ({ title, metaTitle, metaDescription, keywords }) => {
                 {submitStatus === 'submitting' ? 'Checking...' : 'Check Availability'}
               </button>
             </form>
+              </div>
+            </div>
           </div>
         </div>
       </section>
