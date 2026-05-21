@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useParams, Navigate, useLocation } from 'react-router-dom';
 import airlinesData from '../data/airlinesData.json';
+import airlineKeywords from '../data/airline-keywords.json';
 import { inquiryAPI } from '../services/api';
 import './AirlineRoute.css';
 
@@ -21,6 +22,16 @@ const AirlineRoute = () => {
   const [submitStatus, setSubmitStatus] = useState('idle');
   const [submitMessage, setSubmitMessage] = useState('');
   const [showFullDisclosure, setShowFullDisclosure] = useState(false);
+  
+  // Get SEO keywords for the active airline
+  const activeKeywords = airline ? (airlineKeywords[airline.slug] || []) : [];
+  const topThreeKeywords = activeKeywords.slice(0, 3);
+  
+  // Helper to capitalize words naturally for SEO headlines
+  const capitalizeWords = (str) => {
+    if (!str) return '';
+    return str.replace(/\b\w/g, (char) => char.toUpperCase());
+  };
 
   // If slug doesn't exist, redirect to home or 404
   if (!airline) {
@@ -68,7 +79,7 @@ const AirlineRoute = () => {
       <Helmet>
         <title>{airline.h1} | The Final Seat</title>
         <meta name="description" content={`Secure low fares and book ${airline.name} flights now with zero lag. Get instant route confirmation, real-time ticket availability, and dedicated premium support.`} />
-        <meta name="keywords" content={airline.keyword} />
+        <meta name="keywords" content={activeKeywords.length > 0 ? activeKeywords.join(', ') : airline.keyword} />
         <meta property="og:title" content={`${airline.h1} | The Final Seat`} />
         <meta property="og:description" content={`Secure low fares and book ${airline.name} flights now with zero lag. Get instant route confirmation, real-time ticket availability, and dedicated premium support.`} />
         <meta property="og:url" content={canonicalUrl} />
@@ -115,6 +126,9 @@ const AirlineRoute = () => {
         </div>
 
         {/* POPULAR ROUTE CARDS GRID */}
+        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#0f172a', marginBottom: '1rem', marginTop: '2rem' }}>
+          Carrier Routes & {capitalizeWords(topThreeKeywords[0]) || 'Reservation Support'}
+        </h2>
         <div className="routes-grid">
           <div className="route-card">
             <span className="route-tag">Popular Direct Route</span>
@@ -130,7 +144,7 @@ const AirlineRoute = () => {
 
         {/* INSTANT BOOKING QUERY LEAD CAPTURE FORM */}
         <div className="airline-card form-card">
-          <h2>Submit an Instant Booking Request</h2>
+          <h2>Submit an Instant {capitalizeWords(topThreeKeywords[1]) || 'Booking Inquiry Request'}</h2>
           <p className="form-subtitle">Can't find your ideal route online? Submit a direct query and our ticketing team will secure your confirmation routing manually.</p>
           
           <form onSubmit={handleSubmit} className="airline-form">
@@ -278,7 +292,7 @@ const AirlineRoute = () => {
             <p>{airline.baggage}</p>
           </div>
           <div className="faq-item">
-            <h4>How do I verify or modify my online ticket confirmation?</h4>
+            <h4>How do I verify, modify, or get {capitalizeWords(topThreeKeywords[2]) || 'Ticket Assistance Online'}?</h4>
             <p>All tickets issued through our platform generate immediate electronic confirmations. Changes can be handled live via our automated support line or by filling out our instant tracking query form above.</p>
           </div>
         </div>
