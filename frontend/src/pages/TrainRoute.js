@@ -80,7 +80,7 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords }) => {
               <p>Skip the form and call us directly to secure your rail logistics immediately.</p>
               
               <a href="tel:+12139659727" className="call-btn amtrak-btn amtrak-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#1e3a5f', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
-                <i className="fas fa-phone-alt"></i> Call Now To Book Directly
+                <i className="fas fa-phone"></i> Call Now To Book Directly
               </a>
               
               <div className="benefits-list">
@@ -143,9 +143,9 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords }) => {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label htmlFor="travelDateTime">Date/Time of Travel</label>
+                  <label htmlFor="travelDateTime">Date of Travel</label>
                   <input
-                    type="datetime-local"
+                    type="date"
                     id="travelDateTime"
                     name="travelDateTime"
                     required

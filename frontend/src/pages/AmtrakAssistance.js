@@ -110,7 +110,7 @@ function AmtrakAssistance() {
               <p>Skip the form and call us directly to secure your rail logistics immediately.</p>
               
               <a href="tel:+12139659727" className="call-btn amtrak-btn amtrak-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#8b1538', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
-                <i className="fas fa-phone-alt"></i> Call Now To Book Directly
+                <i className="fas fa-phone"></i> Call Now To Book Directly
               </a>
               
               <div className="benefits-list">
