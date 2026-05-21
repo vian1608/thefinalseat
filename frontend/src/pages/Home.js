@@ -267,18 +267,7 @@ function Home() {
                   placeholder="Describe your logistics needs and timeline."
                 />
               </div>
-              {submitMessage && (
-                <p
-                  className={`inquiry-form__message ${
-                    submitStatus === 'success'
-                      ? 'inquiry-form__message--success'
-                      : 'inquiry-form__message--error'
-                  }`}
-                  role="alert"
-                >
-                  {submitMessage}
-                </p>
-              )}
+
               {/* SMS OPT-IN COMPLIANCE DISCLOSURE BLOCK */}
               <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', marginBottom: '1rem', width: '100%' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
@@ -301,6 +290,19 @@ function Home() {
               >
                 {submitStatus === 'submitting' ? 'Submitting…' : 'Submit Consulting Inquiry'}
               </button>
+              {submitMessage && (
+                <p
+                  className={`inquiry-form__message ${
+                    submitStatus === 'success'
+                      ? 'inquiry-form__message--success'
+                      : 'inquiry-form__message--error'
+                  }`}
+                  role="alert"
+                  style={{ marginTop: '1rem' }}
+                >
+                  {submitMessage}
+                </p>
+              )}
             </form>
           </div>
             </div>

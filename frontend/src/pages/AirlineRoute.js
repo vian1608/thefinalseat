@@ -210,11 +210,6 @@ const AirlineRoute = () => {
               </div>
             </div>
 
-            {submitMessage && (
-              <p className={`form-message ${submitStatus === 'success' ? 'success' : 'error'}`}>
-                {submitMessage}
-              </p>
-            )}
 
             {/* SMS OPT-IN COMPLIANCE DISCLOSURE BLOCK */}
             <div className="md:col-span-2 mt-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
@@ -237,6 +232,14 @@ const AirlineRoute = () => {
                 {submitStatus === 'submitting' ? 'Submitting...' : 'Submit Flight Query'}
               </button>
             </div>
+
+            {submitMessage && (
+              <div className="md:col-span-2 mt-2">
+                <p className={`form-message ${submitStatus === 'success' ? 'success' : 'error'}`}>
+                  {submitMessage}
+                </p>
+              </div>
+            )}
           </form>
         </div>
 

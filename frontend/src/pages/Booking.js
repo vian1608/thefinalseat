@@ -216,9 +216,21 @@ function Booking() {
                 </select>
               </div>
 
-              <p className="sms-disclaimer" style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '1rem', lineHeight: '1.4' }}>
-                By providing a telephone number and submitting this form you are consenting to be contacted by SMS text message. Message &amp; data rates may apply. You can reply STOP to opt-out of further messaging.
-              </p>
+              {/* SMS OPT-IN COMPLIANCE DISCLOSURE BLOCK */}
+              <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', marginBottom: '1rem', width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                  <input 
+                    type="checkbox" 
+                    id="smsOptIn" 
+                    name="smsOptIn" 
+                    required 
+                    style={{ marginTop: '0.25rem', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="smsOptIn" style={{ fontSize: '0.75rem', color: '#475569', lineHeight: '1.625', cursor: 'pointer' }}>
+                    By checking this box and submitting this request, I provide my express written consent to receive automated flight updates, travel quotes, and booking notifications via SMS from The Final Seat LLC at the number provided. <strong>Consent is not a condition of purchase. Message frequency varies based on booking activity (up to 4 messages per month).</strong> Message and data rates may apply. Text STOP to cancel at any time, or HELP for assistance. View our <a href="/privacy-policy" style={{ color: '#4f46e5', textDecoration: 'underline' }}>Privacy Policy</a> and <a href="/terms" style={{ color: '#4f46e5', textDecoration: 'underline' }}>Terms of Service</a>.
+                  </label>
+                </div>
+              </div>
 
               <button type="submit" className="btn-primary" disabled={loading}>
                 {loading ? 'Processing...' : 'Complete Booking'}
