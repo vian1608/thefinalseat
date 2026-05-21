@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Header from './components/Header';
 import Footer from './components/Footer';
 import PageTransition from './components/PageTransition';
+import ScrollToTop from './components/ScrollToTop';
 import Home from './pages/Home';
 import SearchResults from './pages/SearchResults';
 import Booking from './pages/Booking';
@@ -25,6 +26,7 @@ import AirlineRoute from './pages/AirlineRoute';
 function App() {
   return (
     <Router>
+      <ScrollToTop />
       <div className="App">
         <Header />
         <main className="main">
