@@ -115,30 +115,16 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords }) => {
                 />
               </div>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="phone">Phone Number</label>
-                  <input
-                    type="tel"
-                    id="phone"
-                    name="phone"
-                    required
-                    value={formData.phone}
-                    onChange={handleChange}
-                    placeholder="+1 555 123 4567"
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="email">Email Address</label>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="john@example.com"
-                  />
-                </div>
+              <div className="form-group">
+                <label htmlFor="email">Email Address</label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="john@example.com"
+                />
               </div>
 
               <div className="form-row">
@@ -183,24 +169,38 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords }) => {
               </div>
 
 
+              <div className="form-group">
+                <label htmlFor="phone">Phone Number</label>
+                <input
+                  type="tel"
+                  id="phone"
+                  name="phone"
+                  required
+                  value={formData.phone}
+                  onChange={handleChange}
+                  placeholder="+1 555 123 4567"
+                />
+              </div>
+
+
               {/* SMS OPT-IN COMPLIANCE DISCLOSURE BLOCK */}
-              <div className="md:col-span-2 mt-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
-                <div className="flex items-start gap-3">
+              <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', marginBottom: '1rem', width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
                   <input 
                     type="checkbox" 
                     id="smsOptIn" 
                     name="smsOptIn" 
                     required 
-                    className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    style={{ marginTop: '0.25rem', cursor: 'pointer' }}
                   />
-                  <label htmlFor="smsOptIn" className="text-xs text-slate-600 leading-relaxed">
-                    By checking this box and submitting this request, I provide my express written consent to receive automated flight updates, travel quotes, and booking notifications via SMS from The Final Seat LLC at the number provided. <strong>Consent is not a condition of purchase. Message frequency varies based on booking activity (up to 4 messages per month).</strong> Message and data rates may apply. Text STOP to cancel at any time, or HELP for assistance. View our <a href="/privacy-policy" className="text-indigo-600 underline hover:text-indigo-800">Privacy Policy</a> and <a href="/terms" className="text-indigo-600 underline hover:text-indigo-800">Terms of Service</a>.
+                  <label htmlFor="smsOptIn" style={{ fontSize: '0.75rem', color: '#475569', lineHeight: '1.625', cursor: 'pointer' }}>
+                    By checking this box and clicking 'Check Availability', I provide my express written consent to receive automated train updates, travel quotes, and booking notifications via SMS from The Final Seat LLC at the number provided. <strong>Consent is not a condition of purchase. Message frequency varies based on booking activity (up to 4 messages per month).</strong> Message and data rates may apply. Text STOP to cancel at any time, or HELP for assistance. View our <a href="/privacy-policy" style={{ color: '#4f46e5', textDecoration: 'underline' }}>Privacy Policy</a> and <a href="/terms" style={{ color: '#4f46e5', textDecoration: 'underline' }}>Terms of Service</a>.
                   </label>
                 </div>
               </div>
 
               <div className="md:col-span-2 mt-2">
-                <button type="submit" className="w-full p-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition duration-150 ease-in-out text-sm shadow-sm train-route-submit-btn" disabled={submitStatus === 'submitting'}>
+                <button type="submit" className="train-route-submit-btn" disabled={submitStatus === 'submitting'}>
                   {submitStatus === 'submitting' ? 'Checking...' : 'Check Availability'}
                 </button>
               </div>
