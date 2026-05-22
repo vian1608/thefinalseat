@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import PageTransition from './components/PageTransition';
@@ -20,10 +20,16 @@ import './App.css';
 import PrivacyPolicy from './pages/privacypolicy';
 import RefundPolicy from './pages/refundpolicy';
 import AmtrakAssistance from './pages/AmtrakAssistance';
+import AmtrakLanding from './pages/AmtrakLanding';
 import TrainRoute from './pages/TrainRoute';
 import FlightRoute from './pages/FlightRoute';
-import AirlineRoute from './pages/AirlineRoute';
+import AirlineActionPage from './pages/AirlineActionPage';
 import RouteDispatcher from './pages/RouteDispatcher';
+
+function LegacyAirlineRedirect() {
+  const { airlineSlug } = useParams();
+  return <Navigate to={`/book/${airlineSlug}`} replace />;
+}
 
 function App() {
   return (
@@ -35,6 +41,7 @@ function App() {
           <PageTransition>
             <Routes>
               <Route path="/" element={<Home />} />
+              <Route path="/amtrak" element={<AmtrakLanding />} />
               <Route path="/amtrak-assistance" element={<AmtrakAssistance />} />
               
               {/* New Optimized Train Routes */}
@@ -236,8 +243,13 @@ function App() {
               {/* Dynamic Route Pages */}
               <Route path="/routes/:slug" element={<RouteDispatcher />} />
 
-              {/* Dynamic Airline SEO Routes */}
-              <Route path="/airlines/:airlineSlug" element={<AirlineRoute />} />
+              {/* Intent-based airline landing pages (Google Ads) */}
+              <Route path="/book/:airline" element={<AirlineActionPage action="book" />} />
+              <Route path="/changes/:airline" element={<AirlineActionPage action="changes" />} />
+              <Route path="/cancellation/:airline" element={<AirlineActionPage action="cancellation" />} />
+
+              {/* Legacy airline URLs → book intent */}
+              <Route path="/airlines/:airlineSlug" element={<LegacyAirlineRedirect />} />
 
               <Route path="/amtrak-assitance" element={<Navigate to="/amtrak-assistance" replace />} />
               <Route path="/amtrak-assisstance" element={<Navigate to="/amtrak-assistance" replace />} />

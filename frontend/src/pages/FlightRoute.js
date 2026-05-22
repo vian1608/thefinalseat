@@ -131,7 +131,7 @@ const FlightRoute = ({ title, metaTitle, metaDescription, keywords, originCity, 
               <h2>Need Immediate Support for {capitalizeWords(topThreeKeywords[0])}?</h2>
               <p>Skip the form and call us directly to secure your air logistics immediately.</p>
               
-              <a href="tel:+12139659727" className="call-btn flights-btn flights-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#1e293b', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
+              <a href="tel:+12139659227" className="call-btn flights-btn flights-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#1e293b', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
                 <i className="fas fa-phone"></i> Call Now To Book Directly
               </a>
               

@@ -9,18 +9,9 @@ import { inquiryAPI } from '../services/api';
 import { railReviews } from '../data/customerReviews';
 import { railHeroSlides, heroOfferTag } from '../data/heroSlides';
 import RouteSlider from '../components/RouteSlider';
+import { trainFamousRoutes } from '../data/famousRoutes';
+import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../constants/supportContact';
 import './AmtrakAssistance.css';
-
-const trainRoutesData = [
-  { title: 'NYC to Washington, D.C.', path: '/train-nyc-to-dc', image: '/images/train_route_1.png', desc: 'Direct Northeast Corridor Service' },
-  { title: 'Washington, D.C. to NYC', path: '/train-dc-to-nyc', image: '/images/train_route_2.png', desc: 'High-speed business class available' },
-  { title: 'Philadelphia to NYC', path: '/train-philly-to-nyc', image: '/images/train_route_1.png', desc: 'Fast, reliable Northeast Regional' },
-  { title: 'Boston to NYC', path: '/train-boston-to-nyc', image: '/images/train_route_2.png', desc: 'Scenic coastal views on the Acela' },
-  { title: 'Chicago to St. Louis', path: '/train-chicago-to-stlouis', image: '/images/train_route_1.png', desc: 'Lincoln Service through the Midwest' },
-  { title: 'LA to San Diego', path: '/train-la-to-sandiego', image: '/images/train_route_2.png', desc: 'Pacific Surfliner ocean views' },
-  { title: 'Seattle to Portland', path: '/train-seattle-to-portland', image: '/images/train_route_1.png', desc: 'Amtrak Cascades beautiful greenery' },
-  { title: 'NYC to Albany', path: '/train-nyc-to-albany', image: '/images/train_route_2.png', desc: 'Empire Service up the Hudson River' }
-];
 
 const initialFormData = {
   name: '',
@@ -102,6 +93,70 @@ function AmtrakAssistance() {
         offerTag={heroOfferTag}
       />
 
+      {/* Express Booking Engine reference banner */}
+      <div className="container" style={{ marginTop: '2rem', marginBottom: '-1rem' }}>
+        <div style={{
+          background: 'linear-gradient(135deg, #0a192f 0%, #1e3a5f 100%)',
+          padding: '1.5rem 2rem',
+          borderRadius: '12px',
+          borderLeft: '5px solid #D12630',
+          boxShadow: '0 8px 24px rgba(15, 39, 68, 0.12)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem'
+        }}>
+          <div style={{ flex: '1', minWidth: '280px' }}>
+            <span style={{
+              display: 'inline-block',
+              backgroundColor: '#D12630',
+              color: '#ffffff',
+              fontSize: '0.7rem',
+              fontWeight: '800',
+              padding: '0.2rem 0.6rem',
+              borderRadius: '4px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              marginBottom: '0.5rem'
+            }}>NEW EXPRESS PORTAL</span>
+            <h3 style={{ margin: 0, color: '#ffffff', fontSize: '1.2rem', fontWeight: '800' }}>
+              Want to skip the line? Use our new Fast-Booking engine!
+            </h3>
+            <p style={{ margin: '0.25rem 0 0 0', color: '#cbd5e1', fontSize: '0.9rem' }}>
+              Direct telephone integration, live agent dispatch, and premium auto/sleeper cabin holds.
+            </p>
+          </div>
+          <Link to="/amtrak" style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            backgroundColor: '#D12630',
+            color: '#ffffff',
+            padding: '0.8rem 1.5rem',
+            borderRadius: '6px',
+            textDecoration: 'none',
+            fontWeight: '700',
+            fontSize: '0.95rem',
+            boxShadow: '0 4px 12px rgba(209, 38, 48, 0.3)',
+            transition: 'all 0.25s ease',
+            border: '1.5px solid #ffffff'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.backgroundColor = '#b21e26';
+            e.currentTarget.style.transform = 'translateY(-1px)';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.backgroundColor = '#D12630';
+            e.currentTarget.style.transform = 'none';
+          }}
+          >
+            <span>Express Booking Engine</span>
+            <i className="fas fa-arrow-right"></i>
+          </Link>
+        </div>
+      </div>
+
 <section id="inquiry" className="amtrak-section">
         <div className="container">
           <div className="inquiry-split-layout">
@@ -109,8 +164,8 @@ function AmtrakAssistance() {
               <h2 style={{ fontSize: '1.8rem', color: '#1e3a5f', marginBottom: '1rem' }}>Need Immediate Support?</h2>
               <p>Skip the form and call us directly to secure your rail logistics immediately.</p>
               
-              <a href="tel:+12139659727" className="call-btn amtrak-btn amtrak-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#8b1538', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
-                <i className="fas fa-phone"></i> Call Now To Book Directly
+              <a href={SUPPORT_PHONE_HREF} className="call-btn amtrak-btn amtrak-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#8b1538', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
+                <i className="fas fa-phone"></i> Call {SUPPORT_PHONE_DISPLAY}
               </a>
               
               <div className="benefits-list">
@@ -274,8 +329,8 @@ function AmtrakAssistance() {
       </section>
 
       <section className="amtrak-section">
-        <div className="container" style={{ overflow: 'hidden' }}>
-          <RouteSlider routes={trainRoutesData} btnClassPrefix="amtrak" />
+        <div className="container route-slider-section">
+          <RouteSlider routes={trainFamousRoutes} btnClassPrefix="amtrak" />
         </div>
       </section>
 

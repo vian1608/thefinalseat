@@ -1,0 +1,815 @@
+/* Amtrak Express Landing Page Styles */
+
+.amtrak-landing-page {
+  background-color: #f8fafc;
+  font-family: 'Inter', sans-serif;
+  color: #1e293b;
+  overflow-x: hidden;
+}
+
+/* Hero Section with Sleek Gradient */
+.amtrak-landing-hero {
+  background: linear-gradient(135deg, #0a192f 0%, #0f2744 50%, #1e3a5f 100%);
+  color: #ffffff;
+  padding: 5rem 0 6rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.amtrak-landing-hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 80% 20%, rgba(212, 175, 55, 0.12) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.amtrak-landing-hero .container {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 1100px;
+}
+
+.amtrak-landing-hero h1 {
+  font-size: clamp(2.2rem, 5vw, 3.5rem);
+  font-weight: 800;
+  line-height: 1.15;
+  margin-bottom: 1.25rem;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #ffffff 40%, #e2e8f0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.amtrak-landing-hero .hero-lead {
+  font-size: clamp(1.1rem, 2.5vw, 1.35rem);
+  line-height: 1.6;
+  opacity: 0.9;
+  max-width: 800px;
+  margin-bottom: 3rem;
+  font-weight: 400;
+}
+
+/* Floating Booking Engine Card */
+.booking-engine-card {
+  background-color: #f1f5f9;
+  border-radius: 16px;
+  padding: 1.75rem;
+  width: 100%;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  text-align: left;
+  margin-bottom: -11rem; /* Pull down overlap effect */
+  position: relative;
+  z-index: 10;
+}
+
+/* Authentic Amtrak Header Brand Logo at Top of Hero */
+.amtrak-official-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.5rem 1.25rem;
+  border-radius: 9999px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  margin-bottom: 2.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.amtrak-official-header svg {
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
+}
+
+.amtrak-logo-text {
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  color: #ffffff;
+  font-family: 'Outfit', 'Inter', sans-serif;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.amtrak-partner-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #D4AF37 0%, #AA7C11 100%);
+  color: #0c182c;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  letter-spacing: 0.05em;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* Twin Heavy Action Buttons Layout */
+.booking-two-actions {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
+/* Core CTA 1: Safety-Red Heavy Hotline Button */
+.booking-call-cta-heavy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #e52e39 0%, #D12630 100%);
+  color: #ffffff;
+  padding: 2.25rem 2rem;
+  border-radius: 12px;
+  text-decoration: none;
+  border: 3px solid #ffffff;
+  box-shadow: 0 15px 35px rgba(209, 38, 48, 0.45);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  text-align: center;
+}
+
+.booking-call-cta-heavy:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 20px 45px rgba(209, 38, 48, 0.55);
+  border-color: #ffd2d5;
+}
+
+.booking-call-cta-heavy:active {
+  transform: translateY(-1px) scale(1.005);
+}
+
+.booking-cta-pulse {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #ffffff;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.booking-call-cta-heavy:hover .booking-cta-pulse {
+  opacity: 0.08;
+}
+
+.booking-active-badge-heavy {
+  font-size: 0.72rem;
+  font-weight: 900;
+  background-color: rgba(0, 0, 0, 0.3);
+  color: #ffffff;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  animation: blink-active 1.5s infinite ease-in-out;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.booking-cta-title-heavy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  font-weight: 900;
+  font-size: clamp(1.4rem, 3.5vw, 1.95rem);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  margin-bottom: 0.5rem;
+  line-height: 1.2;
+}
+
+.booking-cta-title-heavy i {
+  font-size: 1.55rem;
+  animation: phone-shake 2.3s infinite ease-in-out;
+}
+
+@keyframes phone-shake {
+  0% { transform: rotate(0); }
+  8% { transform: rotate(-15deg); }
+  15% { transform: rotate(15deg); }
+  22% { transform: rotate(-15deg); }
+  30% { transform: rotate(15deg); }
+  38% { transform: rotate(0); }
+  100% { transform: rotate(0); }
+}
+
+.booking-cta-subtext-heavy {
+  font-size: 0.98rem;
+  font-weight: 500;
+  opacity: 0.95;
+  line-height: 1.4;
+  max-width: 480px;
+}
+
+/* Core CTA 2: Deep Navy/Blue Consulting Button */
+.booking-consulting-cta-heavy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0f2744 0%, #061222 100%);
+  color: #ffffff;
+  padding: 2.25rem 2rem;
+  border-radius: 12px;
+  border: 3px solid #0076A5;
+  box-shadow: 0 15px 35px rgba(15, 39, 72, 0.35);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  text-align: center;
+  width: 100%;
+  font-family: inherit;
+}
+
+.booking-consulting-cta-heavy:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 20px 45px rgba(15, 39, 72, 0.45);
+  border-color: #009be0;
+}
+
+.booking-consulting-cta-heavy:active {
+  transform: translateY(-1px) scale(1.005);
+}
+
+.booking-active-badge-secondary {
+  font-size: 0.72rem;
+  font-weight: 900;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.booking-cta-title-heavy-sec {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  font-weight: 900;
+  font-size: clamp(1.25rem, 3vw, 1.7rem);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  margin-bottom: 0.5rem;
+  line-height: 1.2;
+}
+
+.booking-cta-title-heavy-sec i {
+  font-size: 1.4rem;
+  color: #0076A5;
+  transition: transform 0.3s ease;
+}
+
+.booking-consulting-cta-heavy:hover .booking-cta-title-heavy-sec i {
+  color: #009be0;
+  transform: scale(1.15) rotate(-5deg);
+}
+
+.booking-cta-subtext-heavy-sec {
+  font-size: 0.98rem;
+  font-weight: 500;
+  color: #cbd5e1;
+  line-height: 1.4;
+  max-width: 420px;
+}
+
+@keyframes blink-active {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+/* Offset spacer to account for overlapping CTA card */
+.amtrak-landing-content-offset {
+  padding-top: 13rem;
+}
+
+/* Landing Marketing Section */
+.amtrak-landing-marketing {
+  padding: 5rem 0;
+  background-color: #ffffff;
+}
+
+.marketing-heading {
+  text-align: center;
+  max-width: 700px;
+  margin: 0 auto 4rem;
+}
+
+.marketing-heading h2 {
+  font-size: 2.2rem;
+  color: #0f2744;
+  font-weight: 800;
+  margin-bottom: 0.75rem;
+}
+
+.marketing-heading p {
+  color: #64748b;
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+.marketing-features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+}
+
+.marketing-feature-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 2.25rem;
+  transition: transform 0.3s, box-shadow 0.3s, border-color 0.3s;
+  position: relative;
+}
+
+.marketing-feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(15, 39, 68, 0.06);
+  border-color: #b21e26;
+}
+
+.feature-icon-wrapper {
+  width: 54px;
+  height: 54px;
+  border-radius: 10px;
+  background-color: #eef2f7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  color: #0f2744;
+  font-size: 1.35rem;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.marketing-feature-card:hover .feature-icon-wrapper {
+  background-color: #D12630;
+  color: #ffffff;
+}
+
+.marketing-feature-card h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #0f2744;
+  margin-bottom: 0.75rem;
+}
+
+.marketing-feature-card p {
+  color: #475569;
+  line-height: 1.6;
+  font-size: 0.95rem;
+}
+
+/* Step by Step Breakdown Section */
+.amtrak-landing-steps {
+  padding: 5rem 0;
+  background-color: #f1f5f9;
+}
+
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2.5rem;
+  position: relative;
+}
+
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+}
+
+.step-number {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: #0f2744;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 8px 16px rgba(15, 39, 68, 0.2);
+  border: 4px solid #ffffff;
+}
+
+.step-item h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f2744;
+  margin-bottom: 0.75rem;
+}
+
+.step-item p {
+  color: #475569;
+  line-height: 1.55;
+  font-size: 0.95rem;
+  max-width: 280px;
+}
+
+/* Call Hotline Banner Section */
+.amtrak-landing-hotline {
+  background: linear-gradient(135deg, #b21e26 0%, #D12630 100%);
+  color: #ffffff;
+  padding: 4.5rem 0;
+  text-align: center;
+  position: relative;
+}
+
+.amtrak-landing-hotline .container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.amtrak-landing-hotline h2 {
+  font-size: 2.2rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+  letter-spacing: -0.02em;
+}
+
+.amtrak-landing-hotline p {
+  font-size: 1.2rem;
+  opacity: 0.95;
+  margin-bottom: 2rem;
+  max-width: 650px;
+}
+
+.hotline-phone-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  background-color: #ffffff;
+  color: #D12630;
+  font-size: 1.5rem;
+  font-weight: 900;
+  padding: 1.25rem 2.5rem;
+  border-radius: 9999px;
+  text-decoration: none;
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
+  transition: transform 0.25s, box-shadow 0.25s;
+}
+
+.hotline-phone-btn:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.hotline-phone-btn i {
+  font-size: 1.6rem;
+}
+
+/* Form Section styled like Qatar Airways inspired cards */
+.amtrak-landing-form-sec {
+  padding: 6rem 0;
+  background-color: #ffffff;
+}
+
+.inquiry-split-layout {
+  display: grid;
+  grid-template-columns: 0.82fr 1.18fr;
+  gap: 3.5rem;
+  align-items: start;
+}
+
+.inquiry-left-panel h2 {
+  font-size: 2rem;
+  color: #0f2744;
+  margin-bottom: 1.25rem;
+  font-weight: 800;
+}
+
+.inquiry-left-panel p {
+  color: #475569;
+  font-size: 1.05rem;
+  line-height: 1.65;
+  margin-bottom: 2rem;
+}
+
+.benefits-list h3 {
+  font-size: 1.2rem;
+  color: #0f2744;
+  margin-bottom: 1.25rem;
+}
+
+.benefits-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.benefits-list li {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+  color: #475569;
+  font-size: 0.98rem;
+  line-height: 1.5;
+}
+
+.benefits-list li i {
+  color: #D12630;
+  font-size: 1.1rem;
+  margin-top: 0.15rem;
+}
+
+.amtrak-landing-form-card {
+  background-color: #ffffff;
+  border-radius: 16px;
+  padding: 2.5rem;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+  border: 1px solid #e2e8f0;
+}
+
+.amtrak-landing-form-card h2 {
+  font-size: 1.75rem;
+  color: #0f2744;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+}
+
+.amtrak-landing-form-card p {
+  color: #64748b;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-bottom: 2rem;
+}
+
+.amtrak-landing-form-card input,
+.amtrak-landing-form-card select,
+.amtrak-landing-form-card textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.75rem 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+  box-sizing: border-box;
+  background-color: #ffffff;
+  color: #1e293b;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.amtrak-landing-form-card input:focus,
+.amtrak-landing-form-card select:focus,
+.amtrak-landing-form-card textarea:focus {
+  border-color: #0f2744;
+  box-shadow: 0 0 0 3px rgba(15, 39, 68, 0.12);
+}
+
+.amtrak-landing-form-card textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.form-group-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.form-field-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.form-field-wrapper label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.submit-inquiry-btn {
+  width: 100%;
+  min-height: 52px;
+  background: linear-gradient(135deg, #0f2744 0%, #1e3a5f 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 16px rgba(15, 39, 68, 0.25);
+  transition: all 0.25s ease;
+}
+
+.submit-inquiry-btn:hover {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2a5f94 100%);
+  box-shadow: 0 12px 24px rgba(15, 39, 68, 0.35);
+  transform: translateY(-1px);
+}
+
+.submit-inquiry-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* Amtrak Route & Train Showcase Gallery */
+.amtrak-gallery-section {
+  padding: 6rem 0;
+  background-color: #ffffff;
+}
+
+.amtrak-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2.5rem;
+  margin-top: 1rem;
+}
+
+.amtrak-gallery-card {
+  background: #ffffff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(15, 39, 72, 0.05);
+  border: 1px solid #e2e8f0;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.amtrak-gallery-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 40px rgba(15, 39, 72, 0.12);
+  border-color: #cbd5e1;
+}
+
+.gallery-image-wrapper {
+  position: relative;
+  width: 100%;
+  padding-top: 62%; /* Aesthetic aspect ratio */
+  overflow: hidden;
+  background-color: #f1f5f9;
+}
+
+.gallery-image-wrapper img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.amtrak-gallery-card:hover .gallery-image-wrapper img {
+  transform: scale(1.06);
+}
+
+.gallery-tag {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  background: rgba(15, 39, 68, 0.85);
+  backdrop-filter: blur(8px);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  z-index: 2;
+}
+
+.gallery-info {
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.gallery-info h3 {
+  font-size: 1.25rem;
+  color: #0f2744;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  line-height: 1.3;
+}
+
+.gallery-info p {
+  color: #475569;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Responsive Styling Rules */
+@media (max-width: 1024px) {
+  .amtrak-gallery-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.75rem;
+  }
+  .booking-two-actions {
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 1rem;
+  }
+  .marketing-features {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .booking-two-actions {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+  .booking-engine-card {
+    margin-bottom: -15rem;
+  }
+  .amtrak-landing-content-offset {
+    padding-top: 17rem;
+  }
+  .inquiry-split-layout {
+    grid-template-columns: 1fr;
+    gap: 3rem;
+  }
+  .steps-grid {
+    grid-template-columns: 1fr;
+    gap: 3rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .booking-call-cta-heavy, .booking-consulting-cta-heavy {
+    padding: 1.75rem 1.25rem;
+  }
+  .booking-engine-card {
+    padding: 1.25rem;
+    margin-bottom: -16rem;
+  }
+  .amtrak-landing-content-offset {
+    padding-top: 18.5rem;
+  }
+  .amtrak-gallery-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  .amtrak-gallery-section {
+    padding: 4.5rem 0;
+  }
+  .marketing-features {
+    grid-template-columns: 1fr;
+  }
+  .form-group-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  .amtrak-landing-form-card {
+    padding: 1.5rem;
+  }
+  .amtrak-landing-hero {
+    padding: 3.5rem 0 5rem;
+  }
+  .amtrak-official-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    border-radius: 20px;
+    padding: 1rem;
+    gap: 0.5rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
