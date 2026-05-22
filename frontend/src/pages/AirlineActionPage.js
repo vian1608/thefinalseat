@@ -102,7 +102,7 @@ function AirlineActionPage({ action }) {
           </div>
 
           <a href={SUPPORT_PHONE_HREF} className="airline-action-call-cta">
-            <i className="fas fa-phone-alt" aria-hidden="true" />
+            <i className="fas fa-phone" aria-hidden="true" />
             <span>{config.callLabel}</span>
             <strong>{SUPPORT_PHONE_DISPLAY}</strong>
           </a>

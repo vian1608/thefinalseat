@@ -47,13 +47,30 @@
 .airline-action-hero__top {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.25rem;
-  align-items: flex-start;
+  gap: 1.5rem;
+  align-items: center;
   margin-bottom: 1.25rem;
 }
 
 .airline-action-hero__logo {
   flex-shrink: 0;
+}
+
+.airline-action-hero__logo .airline-logo-img {
+  max-height: 140px;
+  max-width: min(280px, 42vw);
+  min-width: 160px;
+  width: auto;
+}
+
+.airline-action-hero__logo .airline-logo-fallback {
+  min-width: 180px;
+  min-height: 100px;
+  padding: 1rem 1.25rem;
+}
+
+.airline-action-hero__logo .airline-logo-fallback__text {
+  font-size: 1.15rem;
 }
 
 .airline-action-hero h1 {
@@ -81,23 +98,23 @@
   min-height: 52px;
   padding: 0.85rem 1.25rem;
   border-radius: 12px;
-  background: linear-gradient(135deg, #8b1538 0%, #6b0f2a 100%);
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: #fff;
   text-decoration: none;
   font-weight: 600;
-  box-shadow: 0 6px 18px rgba(139, 21, 56, 0.35);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.airline-action-page--changes .airline-action-call-cta,
-.airline-action-page--cancellation .airline-action-call-cta {
-  background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%);
-  box-shadow: 0 6px 18px rgba(30, 58, 95, 0.35);
+  box-shadow: 0 6px 18px rgba(5, 150, 105, 0.35);
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .airline-action-call-cta:hover {
   transform: translateY(-1px);
   color: #fff;
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 8px 22px rgba(4, 120, 87, 0.4);
+}
+
+.airline-action-call-cta .fa-phone {
+  font-size: 1.15rem;
 }
 
 .airline-action-call-cta strong {
@@ -218,8 +235,25 @@
     grid-template-columns: 1fr;
   }
 
+  .airline-action-hero__top {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .airline-action-hero__logo .airline-logo-img {
+    max-height: 120px;
+    max-width: 75vw;
+  }
+
   .airline-action-call-cta {
     flex-direction: column;
     text-align: center;
+  }
+}
+
+@media (min-width: 768px) {
+  .airline-action-hero__logo .airline-logo-img {
+    max-height: 160px;
+    max-width: 300px;
   }
 }
