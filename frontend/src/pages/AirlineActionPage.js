@@ -1,29 +1,21 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link, useParams, Navigate } from 'react-router-dom';
 import AirlineLogo from '../components/AirlineLogo';
+import AirlineFaq from '../components/AirlineFaq';
 import { AIRLINE_ACTIONS } from '../config/airlineActionContent';
 import { getAirlineFromSlug, getAirlineDisplayName } from '../utils/airlineDisplay';
-import { inquiryAPI } from '../services/api';
+import { getAirlineFaqs } from '../utils/getAirlineFaqs';
 import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../constants/supportContact';
+import airlinesData from '../data/airlinesData.json';
 import './AirlineActionPage.css';
+
+const baggageBySlug = Object.fromEntries(airlinesData.map((a) => [a.slug, a.baggage]));
 
 function AirlineActionPage({ action }) {
   const { airline: airlineSlug } = useParams();
   const config = AIRLINE_ACTIONS[action];
   const airline = getAirlineFromSlug(airlineSlug);
-
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    origin: '',
-    destination: '',
-    passengers: '1',
-    notes: '',
-  });
-  const [submitStatus, setSubmitStatus] = useState('idle');
-  const [submitMessage, setSubmitMessage] = useState('');
 
   if (!config || !airlineSlug) {
     return <Navigate to="/" replace />;
@@ -31,46 +23,7 @@ function AirlineActionPage({ action }) {
 
   const airlineName = getAirlineDisplayName(airlineSlug);
   const canonicalUrl = `https://thefinalseat.com/${action}/${airline.slug}`;
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSubmitStatus('submitting');
-    setSubmitMessage('');
-
-    try {
-      const result = await inquiryAPI.submitConsulting(
-        {
-          ...formData,
-          notes: [formData.notes, `${config.breadcrumbRoot} — ${airlineName}`].filter(Boolean).join(' | '),
-        },
-        config.serviceType
-      );
-      setSubmitStatus('success');
-      setSubmitMessage(
-        result.message || 'Thank you. Your inquiry was submitted and our team will contact you shortly.'
-      );
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        origin: '',
-        destination: '',
-        passengers: '1',
-        notes: '',
-      });
-    } catch (error) {
-      setSubmitStatus('error');
-      setSubmitMessage(
-        error.response?.data?.error ||
-          `Unable to submit right now. Please call ${SUPPORT_PHONE_DISPLAY} for immediate assistance.`
-      );
-    }
-  };
+  const faqs = getAirlineFaqs(airline.slug, airlineName, baggageBySlug[airline.slug]);
 
   return (
     <div className={`airline-action-page airline-action-page--${action}`}>
@@ -78,7 +31,7 @@ function AirlineActionPage({ action }) {
         <title>{config.h1(airlineName)} | The Final Seat LLC</title>
         <meta
           name="description"
-          content={`${config.subtext} Speak with The Final Seat LLC for ${airlineName} logistics advisory.`}
+          content={`${config.subtext} ${airlineName} FAQ: booking, changes, cancellations, and baggage.`}
         />
         <link rel="canonical" href={canonicalUrl} />
       </Helmet>
@@ -108,115 +61,10 @@ function AirlineActionPage({ action }) {
           </a>
         </section>
 
-        <section className="airline-action-form-card">
-          <h2>{config.formTitle}</h2>
-          <p>{config.formIntro}</p>
-
-          <form className="airline-action-form" onSubmit={handleSubmit}>
-            <div className="airline-action-form__row">
-              <div className="airline-action-form__group">
-                <label htmlFor="aa-name">Full name</label>
-                <input
-                  id="aa-name"
-                  name="name"
-                  type="text"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className="airline-action-form__group">
-                <label htmlFor="aa-email">Email</label>
-                <input
-                  id="aa-email"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-            <div className="airline-action-form__row">
-              <div className="airline-action-form__group">
-                <label htmlFor="aa-phone">Phone</label>
-                <input
-                  id="aa-phone"
-                  name="phone"
-                  type="tel"
-                  value={formData.phone}
-                  onChange={handleChange}
-                />
-              </div>
-              <div className="airline-action-form__group">
-                <label htmlFor="aa-passengers">Passengers</label>
-                <select
-                  id="aa-passengers"
-                  name="passengers"
-                  value={formData.passengers}
-                  onChange={handleChange}
-                >
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                  <option value="4">4</option>
-                  <option value="5+">5+</option>
-                </select>
-              </div>
-            </div>
-            <div className="airline-action-form__row">
-              <div className="airline-action-form__group">
-                <label htmlFor="aa-origin">Origin</label>
-                <input
-                  id="aa-origin"
-                  name="origin"
-                  type="text"
-                  value={formData.origin}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className="airline-action-form__group">
-                <label htmlFor="aa-destination">Destination</label>
-                <input
-                  id="aa-destination"
-                  name="destination"
-                  type="text"
-                  value={formData.destination}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-            <div className="airline-action-form__group">
-              <label htmlFor="aa-notes">Advisory notes</label>
-              <textarea
-                id="aa-notes"
-                name="notes"
-                rows={4}
-                value={formData.notes}
-                onChange={handleChange}
-                placeholder="Confirmation number, travel dates, or urgency details"
-              />
-            </div>
-
-            {submitMessage && (
-              <p
-                className={`airline-action-form__message airline-action-form__message--${submitStatus}`}
-                role="alert"
-              >
-                {submitMessage}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              className="airline-action-form__submit"
-              disabled={submitStatus === 'submitting'}
-            >
-              {submitStatus === 'submitting' ? 'Submitting…' : 'Request a Quote'}
-            </button>
-          </form>
+        <section className="airline-action-faq-card">
+          <h2>{config.faqTitle(airlineName)}</h2>
+          <p>{config.faqIntro}</p>
+          <AirlineFaq airlineName={airlineName} faqs={faqs} />
         </section>
 
         <p className="airline-action-disclaimer">

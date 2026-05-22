@@ -7,8 +7,9 @@ export const AIRLINE_ACTIONS = {
     subtext:
       'Check real-time seating inventory and book your new flight with an agent today.',
     callLabel: 'Call Booking Support',
-    formTitle: 'Secure Flight Inquiry',
-    formIntro: 'Submit your route details. A logistics advisor will respond with options.',
+    faqTitle: (name) => `${name} Travel FAQ`,
+    faqIntro:
+      'Baggage, change, and cancellation policies for this carrier—plus how our advisors can help.',
     serviceType: 'flights',
   },
   changes: {
@@ -19,8 +20,9 @@ export const AIRLINE_ACTIONS = {
     subtext:
       'Modify travel dates, upgrade cabin seats, or change flight routes instantly.',
     callLabel: 'Call Change Support',
-    formTitle: 'Reservation Change Inquiry',
-    formIntro: 'Tell us what you need to change and our team will assist right away.',
+    faqTitle: (name) => `${name} Travel FAQ`,
+    faqIntro:
+      'Baggage, change, and cancellation policies for this carrier—plus how our advisors can help.',
     serviceType: 'flights',
   },
   cancellation: {
@@ -31,8 +33,9 @@ export const AIRLINE_ACTIONS = {
     subtext:
       'Need to void a ticket or cancel your itinerary? Speak with an agent for immediate help.',
     callLabel: 'Call Cancellation Support',
-    formTitle: 'Cancellation Assistance Inquiry',
-    formIntro: 'Share your confirmation details for priority cancellation support.',
+    faqTitle: (name) => `${name} Travel FAQ`,
+    faqIntro:
+      'Baggage, change, and cancellation policies for this carrier—plus how our advisors can help.',
     serviceType: 'flights',
   },
 };

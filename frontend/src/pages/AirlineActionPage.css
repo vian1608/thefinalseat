@@ -121,7 +121,7 @@
   font-weight: 700;
 }
 
-.airline-action-form-card {
+.airline-action-faq-card {
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 16px;
@@ -129,97 +129,16 @@
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
 }
 
-.airline-action-form-card h2 {
+.airline-action-faq-card h2 {
   margin: 0 0 0.5rem;
   color: #0f172a;
   font-size: 1.35rem;
 }
 
-.airline-action-form-card > p {
+.airline-action-faq-card > p {
   margin: 0 0 1.25rem;
   color: #64748b;
   line-height: 1.55;
-}
-
-.airline-action-form__row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.airline-action-form__group {
-  margin-bottom: 1rem;
-}
-
-.airline-action-form__group label {
-  display: block;
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #334155;
-  margin-bottom: 0.35rem;
-}
-
-.airline-action-form__group input,
-.airline-action-form__group select,
-.airline-action-form__group textarea {
-  width: 100%;
-  min-height: 48px;
-  padding: 0.65rem 0.85rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  font-size: 1rem;
-  font-family: inherit;
-  box-sizing: border-box;
-}
-
-.airline-action-form__group textarea {
-  min-height: 110px;
-  resize: vertical;
-}
-
-.airline-action-form__group input:focus,
-.airline-action-form__group select:focus,
-.airline-action-form__group textarea:focus {
-  outline: none;
-  border-color: #8b1538;
-  box-shadow: 0 0 0 3px rgba(139, 21, 56, 0.12);
-}
-
-.airline-action-form__submit {
-  width: 100%;
-  min-height: 52px;
-  margin-top: 0.5rem;
-  border: none;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #8b1538 0%, #6b0f2a 100%);
-  color: #fff;
-  font-size: 1.05rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.airline-action-form__submit:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.airline-action-form__message {
-  margin: 0 0 0.75rem;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  font-size: 0.95rem;
-}
-
-.airline-action-form__message--success {
-  background: #ecfdf5;
-  color: #065f46;
-  border: 1px solid #a7f3d0;
-}
-
-.airline-action-form__message--error {
-  background: #fef2f2;
-  color: #991b1b;
-  border: 1px solid #fecaca;
 }
 
 .airline-action-disclaimer {
@@ -231,10 +150,6 @@
 }
 
 @media (max-width: 640px) {
-  .airline-action-form__row {
-    grid-template-columns: 1fr;
-  }
-
   .airline-action-hero__top {
     flex-direction: column;
     text-align: center;
