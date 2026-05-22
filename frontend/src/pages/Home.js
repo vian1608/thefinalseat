@@ -9,6 +9,7 @@ import { inquiryAPI } from '../services/api';
 import { flightReviews } from '../data/customerReviews';
 import { flightHeroSlides, heroOfferTag } from '../data/heroSlides';
 import RouteSlider from '../components/RouteSlider';
+import SeamlessAdvisorySection from '../components/SeamlessAdvisorySection';
 import { flightFamousRoutes } from '../data/famousRoutes';
 import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../constants/supportContact';
 import './Home.css';
@@ -307,45 +308,7 @@ function Home() {
         </div>
       </section>
 
-      <section className="flights-section flights-section--muted">
-        <div className="container">
-          <h2 className="flights-section__title">Logistics Advisory Services</h2>
-          <div className="flights-grid">
-            <article className="flights-card">
-              <i className="fas fa-route" aria-hidden="true" />
-              <h3>Itinerary Optimization</h3>
-              <p>
-                Multi-leg routing with realistic connection windows, backup options, and
-                carrier-specific guidance when schedules change.
-              </p>
-            </article>
-            <article className="flights-card">
-              <i className="fas fa-clock" aria-hidden="true" />
-              <h3>Urgent Air Logistics</h3>
-              <p>
-                Same-week and emergency advisory for family, medical, and business travel
-                requiring fast, workable options.
-              </p>
-            </article>
-            <article className="flights-card">
-              <i className="fas fa-globe-americas" aria-hidden="true" />
-              <h3>International Strategy</h3>
-              <p>
-                Cross-border routing, document timing, and coordinated connections for complex
-                global itineraries.
-              </p>
-            </article>
-            <article className="flights-card">
-              <i className="fas fa-headset" aria-hidden="true" />
-              <h3>24/7 Advisory Desk</h3>
-              <p>
-                Direct consultant access for cancellations, re-routing, and escalation support
-                when plans shift unexpectedly.
-              </p>
-            </article>
-          </div>
-        </div>
-      </section>
+      <SeamlessAdvisorySection variant="flight" />
 
 
 

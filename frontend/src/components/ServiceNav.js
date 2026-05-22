@@ -13,7 +13,7 @@ function ServiceNav({ active }) {
         <span>Flights</span>
       </Link>
       <Link
-        to="/amtrak-assistance"
+        to="/amtrak"
         className={`service-nav__item ${active === 'rail' ? 'service-nav__item--active' : ''}`}
       >
         <i className="fas fa-train" aria-hidden="true" />

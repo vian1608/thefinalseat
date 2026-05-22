@@ -20,7 +20,6 @@ import './App.css';
 import PrivacyPolicy from './pages/privacypolicy';
 import RefundPolicy from './pages/refundpolicy';
 import AmtrakAssistance from './pages/AmtrakAssistance';
-import AmtrakLanding from './pages/AmtrakLanding';
 import TrainRoute from './pages/TrainRoute';
 import FlightRoute from './pages/FlightRoute';
 import AirlineActionPage from './pages/AirlineActionPage';
@@ -41,8 +40,8 @@ function App() {
           <PageTransition>
             <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/amtrak" element={<AmtrakLanding />} />
-              <Route path="/amtrak-assistance" element={<AmtrakAssistance />} />
+              <Route path="/amtrak" element={<AmtrakAssistance />} />
+              <Route path="/amtrak-assistance" element={<Navigate to="/amtrak" replace />} />
               
               {/* New Optimized Train Routes */}
               <Route path="/train-nyc-to-dc" element={
@@ -251,9 +250,9 @@ function App() {
               {/* Legacy airline URLs → book intent */}
               <Route path="/airlines/:airlineSlug" element={<LegacyAirlineRedirect />} />
 
-              <Route path="/amtrak-assitance" element={<Navigate to="/amtrak-assistance" replace />} />
-              <Route path="/amtrak-assisstance" element={<Navigate to="/amtrak-assistance" replace />} />
-              <Route path="/amtrak-asistance" element={<Navigate to="/amtrak-assistance" replace />} />
+              <Route path="/amtrak-assitance" element={<Navigate to="/amtrak" replace />} />
+              <Route path="/amtrak-assisstance" element={<Navigate to="/amtrak" replace />} />
+              <Route path="/amtrak-asistance" element={<Navigate to="/amtrak" replace />} />
               <Route path="/search" element={<SearchResults />} />
               <Route path="/booking" element={<Booking />} />
               <Route path="/signin" element={<SignIn />} />

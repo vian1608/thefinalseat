@@ -9,6 +9,7 @@ import { inquiryAPI } from '../services/api';
 import { railReviews } from '../data/customerReviews';
 import { railHeroSlides, heroOfferTag } from '../data/heroSlides';
 import RouteSlider from '../components/RouteSlider';
+import SeamlessAdvisorySection from '../components/SeamlessAdvisorySection';
 import { trainFamousRoutes } from '../data/famousRoutes';
 import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../constants/supportContact';
 import './AmtrakAssistance.css';
@@ -84,6 +85,7 @@ function AmtrakAssistance() {
         <title>Amtrak Assistance & Auto Train Tickets | The Final Seat</title>
         <meta name="keywords" content="buy train tickets, amtrak tickets, amtrak schedule, amtrak student discount, amtrak auto train, autotrain, train car transport, train vehicle transport, move car by train, car transport by train charges, train car carrier, car transport through train, train to new york, train new york washington, train from nyc to dc, train from philly to nyc, train from nyc to philadelphia, train to new york from dc, new york to dc train, new york to boston train, nyc to boston train, boston to nyc train" />
         <meta name="description" content="Expert assistance for booking Amtrak, Auto Train, and vehicle transport. Discover schedules and buy train tickets from NYC, DC, Boston, Philadelphia, and more." />
+        <link rel="canonical" href="https://thefinalseat.com/amtrak" />
       </Helmet>
       <HeroSlider
         slides={railHeroSlides}
@@ -92,70 +94,6 @@ function AmtrakAssistance() {
         inquiryHref="#inquiry"
         offerTag={heroOfferTag}
       />
-
-      {/* Express Booking Engine reference banner */}
-      <div className="container" style={{ marginTop: '2rem', marginBottom: '-1rem' }}>
-        <div style={{
-          background: 'linear-gradient(135deg, #0a192f 0%, #1e3a5f 100%)',
-          padding: '1.5rem 2rem',
-          borderRadius: '12px',
-          borderLeft: '5px solid #D12630',
-          boxShadow: '0 8px 24px rgba(15, 39, 68, 0.12)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '1rem'
-        }}>
-          <div style={{ flex: '1', minWidth: '280px' }}>
-            <span style={{
-              display: 'inline-block',
-              backgroundColor: '#D12630',
-              color: '#ffffff',
-              fontSize: '0.7rem',
-              fontWeight: '800',
-              padding: '0.2rem 0.6rem',
-              borderRadius: '4px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '0.5rem'
-            }}>NEW EXPRESS PORTAL</span>
-            <h3 style={{ margin: 0, color: '#ffffff', fontSize: '1.2rem', fontWeight: '800' }}>
-              Want to skip the line? Use our new Fast-Booking engine!
-            </h3>
-            <p style={{ margin: '0.25rem 0 0 0', color: '#cbd5e1', fontSize: '0.9rem' }}>
-              Direct telephone integration, live agent dispatch, and premium auto/sleeper cabin holds.
-            </p>
-          </div>
-          <Link to="/amtrak" style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            backgroundColor: '#D12630',
-            color: '#ffffff',
-            padding: '0.8rem 1.5rem',
-            borderRadius: '6px',
-            textDecoration: 'none',
-            fontWeight: '700',
-            fontSize: '0.95rem',
-            boxShadow: '0 4px 12px rgba(209, 38, 48, 0.3)',
-            transition: 'all 0.25s ease',
-            border: '1.5px solid #ffffff'
-          }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.backgroundColor = '#b21e26';
-            e.currentTarget.style.transform = 'translateY(-1px)';
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.backgroundColor = '#D12630';
-            e.currentTarget.style.transform = 'none';
-          }}
-          >
-            <span>Express Booking Engine</span>
-            <i className="fas fa-arrow-right"></i>
-          </Link>
-        </div>
-      </div>
 
 <section id="inquiry" className="amtrak-section">
         <div className="container">
@@ -334,45 +272,7 @@ function AmtrakAssistance() {
         </div>
       </section>
 
-      <section className="amtrak-section amtrak-section--muted">
-        <div className="container">
-          <h2 className="amtrak-section__title">Logistics Advisory Services</h2>
-          <div className="amtrak-grid">
-            <article className="amtrak-card">
-              <i className="fas fa-route" aria-hidden="true" />
-              <h3>Itinerary Optimization</h3>
-              <p>
-                Multi-segment rail planning with realistic connection windows and backup routing
-                when schedules shift.
-              </p>
-            </article>
-            <article className="amtrak-card">
-              <i className="fas fa-clock" aria-hidden="true" />
-              <h3>Urgent Rail Logistics</h3>
-              <p>
-                Time-sensitive advisory for family, medical, and business travel requiring same-week
-                or next-available rail options.
-              </p>
-            </article>
-            <article className="amtrak-card">
-              <i className="fas fa-map-marked-alt" aria-hidden="true" />
-              <h3>Connection Strategy</h3>
-              <p>
-                Station transfer planning, overnight positioning, and coordinated ground-to-rail
-                logistics where needed.
-              </p>
-            </article>
-            <article className="amtrak-card">
-              <i className="fas fa-headset" aria-hidden="true" />
-              <h3>24/7 Advisory Desk</h3>
-              <p>
-                Direct access to consultants for disruption response, re-routing guidance, and
-                escalation support.
-              </p>
-            </article>
-          </div>
-        </div>
-      </section>
+      <SeamlessAdvisorySection variant="rail" />
 
 
 

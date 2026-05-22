@@ -89,7 +89,7 @@ function Header() {
               Flights
             </Link>
             <Link
-              to="/amtrak-assistance"
+              to="/amtrak"
               className={`header-nav-link ${isRailActive ? 'header-nav-link--active' : ''}`}
             >
               Rail (Amtrak)

@@ -1,6 +1,6 @@
 User-agent: *
 Allow: /
-Allow: /amtrak-assistance
+Allow: /amtrak
 Disallow: /admin/
 Disallow: /confirmation/
 Disallow: /booking
