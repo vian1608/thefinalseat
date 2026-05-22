@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../constants/supportContact';
 import './Footer.css';
 
 function Footer() {
@@ -32,7 +33,7 @@ function Footer() {
             <h4>Contact</h4>
             <ul>
               <li><a href="mailto:support@thefinalseat.com">support@thefinalseat.com</a></li>
-              <li><a href="tel:+12139659227">+1 (213) 965-9227</a></li>
+              <li><a href={SUPPORT_PHONE_HREF}>{SUPPORT_PHONE_DISPLAY}</a></li>
               <li>5830 E 2nd St, Ste 7000, Casper, WY 82609</li>
             </ul>
           </div>

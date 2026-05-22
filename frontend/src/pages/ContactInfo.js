@@ -1,4 +1,5 @@
 import React from 'react';
+import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../constants/supportContact';
 import './InfoPages.css';
 
 function ContactInfo() {
@@ -28,7 +29,7 @@ function ContactInfo() {
             <div className="contact-item">
               <h2>Phone</h2>
               <p>
-                <a href="tel:+12139659227">+1 (213) 965-9227</a>
+                <a href={SUPPORT_PHONE_HREF}>{SUPPORT_PHONE_DISPLAY}</a>
               </p>
             </div>
 

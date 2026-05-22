@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ServiceNav from './ServiceNav';
+import { SUPPORT_PHONE_HREF } from '../constants/supportContact';
 import './HeroSlider.css';
 
 const ROTATE_MS = 5000;
@@ -116,7 +117,7 @@ function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry
                   <a href={inquiryHref} className={`${btnPrefix}-btn ${btnPrefix}-btn--primary`}>
                     Request a Quote
                   </a>
-                  <a href="tel:+12139659227" className={`${btnPrefix}-btn ${btnPrefix}-btn--outline`}>
+                  <a href={SUPPORT_PHONE_HREF} className={`${btnPrefix}-btn ${btnPrefix}-btn--outline`}>
                     <i className="fas fa-phone" aria-hidden="true" />
                     Customer Support
                   </a>

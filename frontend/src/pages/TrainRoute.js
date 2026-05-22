@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useLocation } from 'react-router-dom';
 import { inquiryAPI } from '../services/api';
+import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../constants/supportContact';
 import './TrainRoute.css';
 
 const TrainRoute = ({ title, metaTitle, metaDescription, keywords, originCity, destinationCity, originCode, destinationCode }) => {
@@ -132,8 +133,8 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords, originCity, d
               <h2>Need Immediate Support for {capitalizeWords(topThreeKeywords[0])}?</h2>
               <p>Skip the form and call us directly to secure your rail logistics immediately.</p>
               
-              <a href="tel:+12139659227" className="call-btn amtrak-btn amtrak-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#1e3a5f', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
-                <i className="fas fa-phone"></i> Call Now To Book Directly
+              <a href={SUPPORT_PHONE_HREF} className="call-btn amtrak-btn amtrak-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#1e3a5f', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
+                <i className="fas fa-phone"></i> Call {SUPPORT_PHONE_DISPLAY}
               </a>
               
               <div className="benefits-list">
