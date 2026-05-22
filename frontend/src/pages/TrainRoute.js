@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { inquiryAPI } from '../services/api';
 import './TrainRoute.css';
 
-const TrainRoute = ({ title, metaTitle, metaDescription, keywords }) => {
+const TrainRoute = ({ title, metaTitle, metaDescription, keywords, originCity, destinationCity, originCode, destinationCode }) => {
   const [formData, setFormData] = useState({
     fullName: '',
     travelDateTime: '',
@@ -18,6 +18,58 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords }) => {
   const [showFullDisclosure, setShowFullDisclosure] = useState(false);
   const location = useLocation();
   const canonicalUrl = `https://thefinalseat.com${location.pathname}`;
+
+  // Helper to extract route parts if props are omitted
+  const getFallbackParts = (routeTitle) => {
+    try {
+      const match = routeTitle.match(/from\s+([^to]+)\s+to\s+(.+)$/i);
+      if (match) {
+        const origin = match[1].trim();
+        const dest = match[2].trim();
+        return {
+          originCity: origin,
+          originCode: origin,
+          destinationCity: dest,
+          destinationCode: dest,
+        };
+      }
+    } catch (e) {
+      // ignore fallback parsing errors
+    }
+    return {
+      originCity: 'New York City',
+      originCode: 'NYC',
+      destinationCity: 'Washington, D.C.',
+      destinationCode: 'DC',
+    };
+  };
+
+  const oCity = originCity || getFallbackParts(title).originCity;
+  const dCity = destinationCity || getFallbackParts(title).destinationCity;
+  const oCode = originCode || getFallbackParts(title).originCode;
+  const dCode = destinationCode || getFallbackParts(title).destinationCode;
+
+  // Cursor template logic for dynamic route SEO
+  const generateTrainKeywords = (originCity, destinationCity, originCode, destinationCode) => {
+    return [
+      `trains from ${originCity} to ${destinationCity}`,
+      `book train from ${originCode} to ${destinationCode}`,
+      `cheap trains from ${originCity} to ${destinationCity}`,
+      `last minute train inquiry ${originCity} to ${destinationCity}`,
+      `direct trains from ${originCity} to ${destinationCity}`,
+      `train routes from ${originCode} to ${destinationCode}`,
+      `multi city train booking ${originCity} to ${destinationCity} support`
+    ];
+  };
+
+  const activeKeywords = generateTrainKeywords(oCity, dCity, oCode, dCode);
+  const topThreeKeywords = activeKeywords.slice(0, 3);
+
+  // Helper to capitalize words naturally for SEO headlines
+  const capitalizeWords = (str) => {
+    if (!str) return '';
+    return str.replace(/\b\w/g, (char) => char.toUpperCase());
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -38,7 +90,7 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords }) => {
         destination: title,
         travelDate: formData.travelDateTime,
         passengers: formData.paxCount,
-        notes: formData.specialRequests,
+        notes: `${formData.specialRequests ? formData.specialRequests + '. ' : ''}SEO Context Keywords: ${activeKeywords.slice(0, 3).join(', ')}`,
       };
 
       const result = await inquiryAPI.submitConsulting(payload, 'rail');
@@ -59,7 +111,7 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords }) => {
       <Helmet>
         <title>{metaTitle}</title>
         <meta name="description" content={metaDescription} />
-        <meta name="keywords" content={keywords} />
+        <meta name="keywords" content={activeKeywords.join(', ')} />
         <meta property="og:title" content={metaTitle} />
         <meta property="og:description" content={metaDescription} />
         <meta property="og:url" content={canonicalUrl} />
@@ -77,7 +129,7 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords }) => {
         <div className="container">
           <div className="inquiry-split-layout">
             <div className="inquiry-left-panel">
-              <h2>Need Immediate Support?</h2>
+              <h2>Need Immediate Support for {capitalizeWords(topThreeKeywords[0])}?</h2>
               <p>Skip the form and call us directly to secure your rail logistics immediately.</p>
               
               <a href="tel:+12139659727" className="call-btn amtrak-btn amtrak-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#1e3a5f', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
@@ -85,7 +137,7 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords }) => {
               </a>
               
               <div className="benefits-list">
-                <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', color: '#1e3a5f' }}>Benefits for booking with us:</h3>
+                <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', color: '#1e3a5f' }}>Premium Service & {capitalizeWords(topThreeKeywords[2])} Benefits:</h3>
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                   <li style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', alignItems: 'start' }}>
                     <i className="fas fa-check-circle" style={{ color: '#0ea5e9', marginTop: '0.25rem' }}></i>
@@ -101,7 +153,10 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords }) => {
 
             <div className="inquiry-right-panel">
               <div className="train-route-card" style={{ margin: 0 }}>
-                <h2>Check Route Availability</h2>
+                <h2>Check Availability: {capitalizeWords(topThreeKeywords[1])}</h2>
+                <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1.5rem', marginTop: '-0.5rem', lineHeight: '1.5' }}>
+                  Looking for {activeKeywords[6]}? Submit your details to check real-time availability instantly.
+                </p>
                 <form className="train-route-form" onSubmit={handleSubmit}>
               <div className="form-group">
                 <label htmlFor="fullName">Full Name</label>

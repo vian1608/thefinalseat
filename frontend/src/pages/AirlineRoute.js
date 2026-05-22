@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { useParams, Navigate, useLocation } from 'react-router-dom';
+import { useParams, Navigate } from 'react-router-dom';
 import airlinesData from '../data/airlinesData.json';
 import airlineKeywords from '../data/airline-keywords.json';
 import { inquiryAPI } from '../services/api';
@@ -8,7 +8,6 @@ import './AirlineRoute.css';
 
 const AirlineRoute = () => {
   const { airlineSlug } = useParams();
-  const location = useLocation();
   const airline = airlinesData.find((a) => a.slug === airlineSlug);
 
   const [formData, setFormData] = useState({

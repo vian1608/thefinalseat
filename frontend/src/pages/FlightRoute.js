@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { inquiryAPI } from '../services/api';
 import './FlightRoute.css';
 
-const FlightRoute = ({ title, metaTitle, metaDescription, keywords }) => {
+const FlightRoute = ({ title, metaTitle, metaDescription, keywords, originCity, destinationCity, originCode, destinationCode }) => {
   const [formData, setFormData] = useState({
     fullName: '',
     travelDateTime: '',
@@ -20,6 +20,56 @@ const FlightRoute = ({ title, metaTitle, metaDescription, keywords }) => {
   const [showFullDisclosure, setShowFullDisclosure] = useState(false);
   const location = useLocation();
   const canonicalUrl = `https://thefinalseat.com${location.pathname}`;
+
+  // Helper to extract route parts if props are omitted
+  const getFallbackParts = (routeTitle) => {
+    try {
+      const match = routeTitle.match(/from\s+([^(]+)\s*\(([^)]+)\)\s+to\s+([^(]+)\s*\(([^)]+)\)/i);
+      if (match) {
+        return {
+          originCity: match[1].trim(),
+          originCode: match[2].trim(),
+          destinationCity: match[3].trim(),
+          destinationCode: match[4].trim(),
+        };
+      }
+    } catch (e) {
+      // ignore fallback parsing errors
+    }
+    return {
+      originCity: 'New York',
+      originCode: 'JFK',
+      destinationCity: 'London',
+      destinationCode: 'LHR',
+    };
+  };
+
+  const oCity = originCity || getFallbackParts(title).originCity;
+  const dCity = destinationCity || getFallbackParts(title).destinationCity;
+  const oCode = originCode || getFallbackParts(title).originCode;
+  const dCode = destinationCode || getFallbackParts(title).destinationCode;
+
+  // Cursor template logic for dynamic route SEO
+  const generateRouteKeywords = (originCity, destinationCity, originCode, destinationCode) => {
+    return [
+      `flights from ${originCity} to ${destinationCity}`,
+      `book flights from ${originCode} to ${destinationCode}`,
+      `cheap flights from ${originCity} to ${destinationCity}`,
+      `last minute flight inquiry ${originCity} to ${destinationCity}`,
+      `direct flights from ${originCity} to ${destinationCity}`,
+      `flight routes from ${originCode} to ${destinationCode}`,
+      `multi city flight booking ${originCity} to ${destinationCity} support`
+    ];
+  };
+
+  const activeKeywords = generateRouteKeywords(oCity, dCity, oCode, dCode);
+  const topThreeKeywords = activeKeywords.slice(0, 3);
+
+  // Helper to capitalize words naturally for SEO headlines
+  const capitalizeWords = (str) => {
+    if (!str) return '';
+    return str.replace(/\b\w/g, (char) => char.toUpperCase());
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -39,7 +89,7 @@ const FlightRoute = ({ title, metaTitle, metaDescription, keywords }) => {
         destination: title,
         travelDate: formData.travelDateTime,
         passengers: formData.paxCount,
-        notes: `Cabin: ${formData.cabinClass}, Trip: ${formData.tripType}. ${formData.specialRequests}`,
+        notes: `Cabin: ${formData.cabinClass}, Trip: ${formData.tripType}. ${formData.specialRequests}. SEO Context Keywords: ${activeKeywords.slice(0, 3).join(', ')}`,
       };
 
       const result = await inquiryAPI.submitConsulting(payload, 'flights');
@@ -60,7 +110,7 @@ const FlightRoute = ({ title, metaTitle, metaDescription, keywords }) => {
       <Helmet>
         <title>{metaTitle}</title>
         <meta name="description" content={metaDescription} />
-        <meta name="keywords" content={keywords} />
+        <meta name="keywords" content={activeKeywords.join(', ')} />
         <meta property="og:title" content={metaTitle} />
         <meta property="og:description" content={metaDescription} />
         <meta property="og:url" content={canonicalUrl} />
@@ -78,7 +128,7 @@ const FlightRoute = ({ title, metaTitle, metaDescription, keywords }) => {
         <div className="container">
           <div className="inquiry-split-layout">
             <div className="inquiry-left-panel">
-              <h2>Need Immediate Support?</h2>
+              <h2>Need Immediate Support for {capitalizeWords(topThreeKeywords[0])}?</h2>
               <p>Skip the form and call us directly to secure your air logistics immediately.</p>
               
               <a href="tel:+12139659727" className="call-btn flights-btn flights-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#1e293b', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
@@ -86,7 +136,7 @@ const FlightRoute = ({ title, metaTitle, metaDescription, keywords }) => {
               </a>
               
               <div className="benefits-list">
-                <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', color: '#1e293b' }}>Benefits for booking with us:</h3>
+                <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', color: '#1e293b' }}>Premium Service & {capitalizeWords(topThreeKeywords[2])} Benefits:</h3>
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                   <li style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', alignItems: 'start' }}>
                     <i className="fas fa-check-circle" style={{ color: '#3b82f6', marginTop: '0.25rem' }}></i>
@@ -102,7 +152,10 @@ const FlightRoute = ({ title, metaTitle, metaDescription, keywords }) => {
 
             <div className="inquiry-right-panel">
               <div className="flight-route-card" style={{ margin: 0 }}>
-                <h2>Check Route Availability</h2>
+                <h2>Check Availability: {capitalizeWords(topThreeKeywords[1])}</h2>
+                <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1.5rem', marginTop: '-0.5rem', lineHeight: '1.5' }}>
+                  Looking for {activeKeywords[6]}? Submit your details to check real-time availability instantly.
+                </p>
                 <form className="flight-route-form" onSubmit={handleSubmit}>
               <div className="form-group">
                 <label htmlFor="fullName">Full Name</label>
