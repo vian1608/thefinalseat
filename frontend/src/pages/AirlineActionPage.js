@@ -6,7 +6,9 @@ import AirlineFaq from '../components/AirlineFaq';
 import { AIRLINE_ACTIONS } from '../config/airlineActionContent';
 import { getAirlineFromSlug, getAirlineDisplayName } from '../utils/airlineDisplay';
 import { getAirlineFaqs } from '../utils/getAirlineFaqs';
+import { getAirlineMetaDescription } from '../utils/airlineMeta';
 import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../constants/supportContact';
+import AirlineLegalFinePrint from '../components/AirlineLegalFinePrint';
 import airlinesData from '../data/airlinesData.json';
 import './AirlineActionPage.css';
 
@@ -24,15 +26,15 @@ function AirlineActionPage({ action }) {
   const airlineName = getAirlineDisplayName(airlineSlug);
   const canonicalUrl = `https://thefinalseat.com/${action}/${airline.slug}`;
   const faqs = getAirlineFaqs(airline.slug, airlineName, baggageBySlug[airline.slug]);
+  const metaDescription = getAirlineMetaDescription(airlineName);
 
   return (
     <div className={`airline-action-page airline-action-page--${action}`}>
       <Helmet>
         <title>{config.h1(airlineName)} | The Final Seat LLC</title>
-        <meta
-          name="description"
-          content={`${config.subtext} ${airlineName} FAQ: booking, changes, cancellations, and baggage.`}
-        />
+        <meta name="description" content={metaDescription} />
+        <meta property="og:description" content={metaDescription} />
+        <meta name="twitter:description" content={metaDescription} />
         <link rel="canonical" href={canonicalUrl} />
       </Helmet>
 
@@ -67,10 +69,7 @@ function AirlineActionPage({ action }) {
           <AirlineFaq airlineName={airlineName} faqs={faqs} />
         </section>
 
-        <p className="airline-action-disclaimer">
-          The Final Seat LLC is an independent logistics consultancy and does not issue tickets
-          directly. All airline names and logos are trademarks of their respective owners.
-        </p>
+        <AirlineLegalFinePrint />
       </div>
     </div>
   );

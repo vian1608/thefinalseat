@@ -5,7 +5,7 @@
  */
 
 const advisory =
-  'The Final Seat LLC is an independent logistics consultancy and does not issue tickets directly. Call our desk above for booking, change, or cancellation assistance.';
+  'Call our desk above for live concierge booking, routing assistance, and urgent itinerary support.';
 
 /** @type {Record<string, { baggage: string; change: string; cancel: string; credits?: string }>} */
 const airlinePolicies = {
