@@ -24,7 +24,36 @@ function ConsultingPayment() {
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
 
+  const [couponInput, setCouponInput] = useState('');
+  const [couponApplied, setCouponApplied] = useState(false);
+  const [couponMessage, setCouponMessage] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState('');
+
   const selected = consultingServices.find((s) => s.id === selectedId) || consultingServices[1];
+
+  const applyCoupon = () => {
+    if (couponInput.trim().toLowerCase() === 'welcome') {
+      setCouponApplied(true);
+      setAppliedCoupon('WELCOME');
+      setCouponMessage('Coupon code applied successfully! 99% off your plan.');
+    } else {
+      setCouponMessage('Invalid coupon code.');
+      setCouponApplied(false);
+    }
+  };
+
+  const getPlanPrice = () => {
+    const originalPrice = selected.price;
+    const discount = couponApplied ? originalPrice * 0.99 : 0;
+    const finalPrice = originalPrice - discount;
+    return {
+      original: originalPrice.toFixed(2),
+      discount: discount.toFixed(2),
+      final: finalPrice.toFixed(2),
+    };
+  };
+
+  const planPrice = getPlanPrice();
 
   const handleChange = (field, value) => {
     setBilling((prev) => ({ ...prev, [field]: value }));
@@ -48,7 +77,7 @@ function ConsultingPayment() {
       const response = await paymentAPI.createStripeSession({
         type: 'consulting',
         email: billing.email,
-        amount: selected.price,
+        amount: parseFloat(planPrice.final),
         name: billing.fullName,
         phone: billing.phone,
         origin: billing.city,
@@ -251,14 +280,47 @@ function ConsultingPayment() {
                 </div>
               </fieldset>
 
+              <fieldset className="consulting-payment-fieldset">
+                <legend>Promo Code</legend>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.35rem' }}>
+                  <input
+                    type="text"
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value)}
+                    placeholder="e.g. WELCOME"
+                    disabled={couponApplied}
+                    style={{ flex: 1, minHeight: '38px', padding: '0.25rem 0.75rem', fontSize: '0.88rem', border: '1px solid #cbd5e1', borderRadius: '6px', textTransform: 'uppercase', boxSizing: 'border-box' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={applyCoupon}
+                    disabled={couponApplied}
+                    style={{ background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '6px', padding: '0 1.25rem', fontSize: '0.88rem', fontWeight: '700', cursor: 'pointer', opacity: couponApplied ? 0.6 : 1 }}
+                  >
+                    Apply
+                  </button>
+                </div>
+                {couponMessage && (
+                  <span style={{ display: 'block', fontSize: '0.78rem', marginTop: '0.35rem', fontWeight: '600', color: couponApplied ? '#059669' : '#ef4444' }}>
+                    {couponMessage}
+                  </span>
+                )}
+              </fieldset>
+
               <div className="consulting-payment-order-summary">
                 <div>
                   <span>{selected.name}</span>
-                  <strong>${selected.price.toFixed(2)}</strong>
+                  <strong>${planPrice.original}</strong>
                 </div>
+                {couponApplied && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#059669', fontWeight: 'bold', fontSize: '0.92rem', marginBottom: '0.5rem' }}>
+                    <span>Promo ({appliedCoupon}) - 99% Off</span>
+                    <span>-${planPrice.discount}</span>
+                  </div>
+                )}
                 <div className="consulting-payment-order-summary__total">
                   <span>Total due today</span>
-                  <strong>${selected.price.toFixed(2)} USD</strong>
+                  <strong>${planPrice.final} USD</strong>
                 </div>
               </div>
 

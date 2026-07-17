@@ -11,6 +11,11 @@ function Booking() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
+  const [couponCode, setCouponCode] = useState('');
+  const [couponApplied, setCouponApplied] = useState(false);
+  const [couponMessage, setCouponMessage] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState('');
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -40,15 +45,30 @@ function Booking() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleApplyCoupon = () => {
+    if (couponCode.trim().toLowerCase() === 'welcome') {
+      setCouponApplied(true);
+      setAppliedCoupon('WELCOME');
+      setCouponMessage('Coupon code applied successfully! 99% off your total.');
+    } else {
+      setCouponMessage('Invalid coupon code.');
+      setCouponApplied(false);
+    }
+  };
+
   const calculateTotal = () => {
     const basePrice = parseFloat(flight?.price?.total || 0);
     const taxes = basePrice * 0.15; // 15% taxes
     const serviceFee = 25.00; // Standard processing fee
+    const sub = basePrice + taxes + serviceFee;
+    const discount = couponApplied ? sub * 0.99 : 0;
+    const finalTotal = sub - discount;
     return {
       subtotal: basePrice.toFixed(2),
       taxes: taxes.toFixed(2),
       serviceFee: serviceFee.toFixed(2),
-      total: (basePrice + taxes + serviceFee).toFixed(2)
+      discount: discount.toFixed(2),
+      total: finalTotal.toFixed(2)
     };
   };
 
@@ -415,10 +435,48 @@ function Booking() {
                   <span>${pricing.serviceFee}</span>
                 </div>
                 
+                {couponApplied && (
+                  <div className="price-row discount-row" style={{ color: '#059669', fontWeight: 'bold' }}>
+                    <span>Promo ({appliedCoupon}) - 99% Off</span>
+                    <span>-${pricing.discount}</span>
+                  </div>
+                )}
+                
                 <div className="price-total-row">
                   <span>Total Amount Due</span>
                   <strong>${pricing.total} USD</strong>
                 </div>
+              </div>
+
+              {/* Coupon Code Section */}
+              <div className="booking-coupon-box" style={{ marginTop: '1.25rem', borderTop: '1px solid #f1f5f9', paddingTop: '1.25rem' }}>
+                <label htmlFor="couponInput" style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '0.5rem' }}>
+                  Have a promo code?
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="text"
+                    id="couponInput"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                    placeholder="e.g. WELCOME"
+                    disabled={couponApplied}
+                    style={{ flex: 1, minHeight: '36px', padding: '0.25rem 0.75rem', fontSize: '0.88rem', border: '1px solid #cbd5e1', borderRadius: '6px', textTransform: 'uppercase' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    disabled={couponApplied}
+                    style={{ background: '#0f172a', color: '#fff', border: 'none', borderRadius: '6px', padding: '0 1rem', fontSize: '0.85rem', fontWeight: '700', cursor: 'pointer', opacity: couponApplied ? 0.6 : 1 }}
+                  >
+                    Apply
+                  </button>
+                </div>
+                {couponMessage && (
+                  <span style={{ display: 'block', fontSize: '0.78rem', marginTop: '0.35rem', fontWeight: '600', color: couponApplied ? '#059669' : '#ef4444' }}>
+                    {couponMessage}
+                  </span>
+                )}
               </div>
 
               <div className="summary-help-block">
