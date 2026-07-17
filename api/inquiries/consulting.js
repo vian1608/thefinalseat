@@ -13,6 +13,32 @@ function getRecipients() {
 
 function buildInquiryText(inquiry) {
   const isFlights = inquiry.serviceType === 'flights';
+  const isPayment = inquiry.serviceType === 'consulting-payment';
+
+  if (isPayment) {
+    return [
+      `NEW SECURE CONSULTING PAYMENT RECEIVED`,
+      `The Final Seat LLC`,
+      `======================================`,
+      ``,
+      `CONTACT`,
+      `=======`,
+      `Name: ${inquiry.name}`,
+      `Email: ${inquiry.email}`,
+      `Phone: ${inquiry.phone || 'Not provided'}`,
+      ``,
+      `BILLING DETAILS`,
+      `===============`,
+      `City/State: ${inquiry.origin}, ${inquiry.destination}`,
+      `Payment details & notes:`,
+      inquiry.notes || 'None',
+      ``,
+      `Submitted: ${new Date().toLocaleString()}`,
+      `Source: Secure Online Checkout`,
+      `======================================`
+    ].join('\n');
+  }
+
   const lines = [
     `NEW ${isFlights ? 'AIR' : 'RAIL'} LOGISTICS CONSULTING INQUIRY`,
     'The Final Seat LLC',
@@ -94,9 +120,13 @@ async function emailInquiry(inquiry) {
 
   const recipients = getRecipients();
   const isFlights = inquiry.serviceType === 'flights';
-  const subjectLabel = isFlights
-    ? 'Air Logistics Advisory'
-    : 'Amtrak / Rail Logistics Advisory';
+  const isPayment = inquiry.serviceType === 'consulting-payment';
+
+  const subjectLabel = isPayment
+    ? 'Secure Consulting Payment'
+    : isFlights
+      ? 'Air Logistics Advisory'
+      : 'Amtrak / Rail Logistics Advisory';
   const textBody = buildInquiryText(inquiry);
   const htmlBody = `<div style="font-family: Arial, sans-serif; line-height: 1.6;">${textBody.replace(/\n/g, '<br>')}</div>`;
   const subject = `${subjectLabel} — ${inquiry.name}`;
@@ -160,10 +190,10 @@ module.exports = async (req, res) => {
       notes,
     } = req.body || {};
 
-    if (!serviceType || !['flights', 'rail'].includes(serviceType)) {
+    if (!serviceType || !['flights', 'rail', 'consulting-payment'].includes(serviceType)) {
       return res.status(400).json({
         success: false,
-        error: 'serviceType must be "flights" or "rail".',
+        error: 'serviceType must be "flights", "rail", or "consulting-payment".',
       });
     }
 
