@@ -22,10 +22,10 @@ router.post('/consulting', async (req, res) => {
       notes,
     } = req.body;
 
-    if (!serviceType || !['flights', 'rail'].includes(serviceType)) {
+    if (!serviceType || !['flights', 'rail', 'consulting-payment'].includes(serviceType)) {
       return res.status(400).json({
         success: false,
-        error: 'serviceType must be "flights" or "rail".',
+        error: 'serviceType must be "flights", "rail", or "consulting-payment".',
       });
     }
 

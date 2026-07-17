@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { bookingAPI, paymentAPI } from '../services/api';
+import { useNavigate, Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+import { paymentAPI } from '../services/api';
+import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../constants/supportContact';
 import './Booking.css';
 
 function Booking() {
   const navigate = useNavigate();
   const [flight, setFlight] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -19,9 +24,8 @@ function Booking() {
     emergencyName: '',
     emergencyPhone: '',
     emergencyRelationship: '',
-    paymentMethod: 'creditCard'
+    agreeTerms: false,
   });
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const flightData = JSON.parse(sessionStorage.getItem('selectedFlight') || 'null');
@@ -39,239 +43,399 @@ function Booking() {
   const calculateTotal = () => {
     const basePrice = parseFloat(flight?.price?.total || 0);
     const taxes = basePrice * 0.15; // 15% taxes
+    const serviceFee = 25.00; // Standard processing fee
     return {
       subtotal: basePrice.toFixed(2),
       taxes: taxes.toFixed(2),
-      total: (basePrice + taxes).toFixed(2)
+      serviceFee: serviceFee.toFixed(2),
+      total: (basePrice + taxes + serviceFee).toFixed(2)
     };
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.agreeTerms) {
+      setError('You must agree to the Terms of Service, Privacy Policy, and Refund Policy to proceed.');
+      return;
+    }
+
     setLoading(true);
+    setError('');
+
+    // Save current details in sessionStorage so they can be restored/queried on the success page
+    sessionStorage.setItem('pendingPassenger', JSON.stringify(formData));
 
     try {
       const pricing = calculateTotal();
-      const bookingData = {
-        ...formData,
-        flight,
-        subtotal: `$${pricing.subtotal}`,
-        taxes: `$${pricing.taxes}`,
-        total: `$${pricing.total}`,
-        paymentStatus: 'pending'
-      };
-
-      // Process payment if credit card
-      if (formData.paymentMethod === 'creditCard') {
-        // Create Razorpay order
-        await paymentAPI.createRazorpayOrder(
-          parseFloat(pricing.total),
-          'USD'
-        );
-        
-        // In a real app, you would integrate Razorpay SDK here
-        // For now, we'll proceed with booking
-      }
-
-      // Create booking
-      const response = await bookingAPI.create(bookingData);
       
-      if (response.success) {
-        sessionStorage.setItem('bookingReference', response.data.bookingReference);
-        const searchType = sessionStorage.getItem('searchType') || 'oneway';
-        navigate(searchType === 'roundtrip' ? '/confirmation/round-trip' : '/confirmation/one-way');
+      const response = await paymentAPI.createStripeSession({
+        type: 'booking',
+        email: formData.email,
+        amount: parseFloat(pricing.total),
+        flight: flight,
+        passenger: formData,
+      });
+
+      if (response.success && response.url) {
+        // Redirect to secure Stripe Checkout page
+        window.location.href = response.url;
+      } else {
+        throw new Error('No checkout URL received from server');
       }
-    } catch (error) {
-      console.error('Booking error:', error);
-      alert('Failed to complete booking. Please try again.');
-    } finally {
+    } catch (err) {
+      console.error('Checkout error:', err);
+      setError(
+        err.response?.data?.error || 
+        'Unable to initiate secure checkout. Please try again or call support.'
+      );
       setLoading(false);
     }
   };
 
   if (!flight) {
-    return <div>Loading...</div>;
+    return (
+      <div className="booking-loading-container">
+        <i className="fas fa-spinner fa-spin"></i>
+        <p>Loading itinerary details...</p>
+      </div>
+    );
   }
 
   const pricing = calculateTotal();
 
   return (
-    <div className="booking-page">
-      <div className="container">
-        <h2>Complete Your Booking</h2>
-        
-        <div className="booking-content">
-          <div className="booking-form-section">
-            <form id="bookingForm" onSubmit={handleSubmit}>
-              <div className="form-section">
-                <h3>Passenger Information</h3>
-                <div className="form-row">
-                  <input
-                    type="text"
-                    placeholder="First Name"
-                    value={formData.firstName}
-                    onChange={(e) => handleInputChange('firstName', e.target.value)}
-                    required
-                  />
-                  <input
-                    type="text"
-                    placeholder="Last Name"
-                    value={formData.lastName}
-                    onChange={(e) => handleInputChange('lastName', e.target.value)}
-                    required
-                  />
-                </div>
-                <input
-                  type="email"
-                  placeholder="Email"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  required
-                />
-                <input
-                  type="tel"
-                  placeholder="Phone"
-                  value={formData.phone}
-                  onChange={(e) => handleInputChange('phone', e.target.value)}
-                  required
-                />
-                <div className="form-row">
-                  <input
-                    type="date"
-                    placeholder="Date of Birth"
-                    value={formData.dateOfBirth}
-                    onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
-                    required
-                  />
-                  <select
-                    value={formData.gender}
-                    onChange={(e) => handleInputChange('gender', e.target.value)}
-                    required
-                  >
-                    <option value="">Gender</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Nationality"
-                  value={formData.nationality}
-                  onChange={(e) => handleInputChange('nationality', e.target.value)}
-                  required
-                />
-                <div className="form-row">
-                  <input
-                    type="text"
-                    placeholder="Passport Number"
-                    value={formData.passportNumber}
-                    onChange={(e) => handleInputChange('passportNumber', e.target.value)}
-                    required
-                  />
-                  <input
-                    type="date"
-                    placeholder="Passport Expiry"
-                    value={formData.passportExpiry}
-                    onChange={(e) => handleInputChange('passportExpiry', e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
+    <div className="booking-page-container">
+      <Helmet>
+        <title>Secure Booking Checkout | The Final Seat</title>
+        <meta name="description" content="Complete your flight booking securely. Enter passenger info and complete secure payment processing." />
+      </Helmet>
 
-              <div className="form-section">
-                <h3>Emergency Contact</h3>
-                <input
-                  type="text"
-                  placeholder="Emergency Contact Name"
-                  value={formData.emergencyName}
-                  onChange={(e) => handleInputChange('emergencyName', e.target.value)}
-                  required
-                />
-                <input
-                  type="tel"
-                  placeholder="Emergency Contact Phone"
-                  value={formData.emergencyPhone}
-                  onChange={(e) => handleInputChange('emergencyPhone', e.target.value)}
-                  required
-                />
-                <input
-                  type="text"
-                  placeholder="Relationship"
-                  value={formData.emergencyRelationship}
-                  onChange={(e) => handleInputChange('emergencyRelationship', e.target.value)}
-                  required
-                />
-              </div>
+      <div className="booking-inner-container">
+        <header className="booking-page-header">
+          <h1>Secure Booking Checkout</h1>
+          <p>Provide passenger details and complete your reservation via secure payment gateway.</p>
+        </header>
 
-              <div className="form-section">
-                <h3>Payment Method</h3>
-                <select
-                  value={formData.paymentMethod}
-                  onChange={(e) => handleInputChange('paymentMethod', e.target.value)}
-                  required
-                >
-                  <option value="creditCard">Credit Card</option>
-                  <option value="paypal">PayPal</option>
-                </select>
-              </div>
+        {error && (
+          <div className="booking-error-alert" role="alert">
+            <i className="fas fa-exclamation-circle"></i>
+            <span>{error}</span>
+          </div>
+        )}
 
-              {/* SMS OPT-IN COMPLIANCE DISCLOSURE BLOCK */}
-              <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', marginBottom: '1rem', width: '100%' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                  <input 
-                    type="checkbox" 
-                    id="smsOptIn" 
-                    name="smsOptIn" 
-                    required 
-                    style={{ marginTop: '0.25rem', cursor: 'pointer' }}
-                  />
-                  <label htmlFor="smsOptIn" style={{ fontSize: '0.75rem', color: '#475569', lineHeight: '1.625', cursor: 'pointer' }}>
-                    By checking this box and submitting this request, I provide my express written consent to receive automated flight updates, travel quotes, and booking notifications via SMS from The Final Seat LLC at the number provided. <strong>Consent is not a condition of purchase. Message frequency varies based on booking activity (up to 4 messages per month).</strong> Message and data rates may apply. Text STOP to cancel at any time, or HELP for assistance. View our <a href="/privacy-policy" style={{ color: '#4f46e5', textDecoration: 'underline' }}>Privacy Policy</a> and <a href="/terms" style={{ color: '#4f46e5', textDecoration: 'underline' }}>Terms of Service</a>.
+        <div className="booking-checkout-layout">
+          {/* Main Checkout Form */}
+          <div className="booking-main-content">
+            <form onSubmit={handleSubmit} className="booking-form-element">
+              
+              {/* Passenger Info */}
+              <section className="booking-form-section">
+                <div className="section-title-wrapper">
+                  <span className="step-badge">1</span>
+                  <h2>Passenger Information</h2>
+                </div>
+                
+                <div className="booking-form-grid">
+                  <label className="booking-form-field">
+                    First Name (as on passport)
+                    <input
+                      type="text"
+                      value={formData.firstName}
+                      onChange={(e) => handleInputChange('firstName', e.target.value)}
+                      required
+                      placeholder="e.g. John"
+                    />
+                  </label>
+                  <label className="booking-form-field">
+                    Last Name (as on passport)
+                    <input
+                      type="text"
+                      value={formData.lastName}
+                      onChange={(e) => handleInputChange('lastName', e.target.value)}
+                      required
+                      placeholder="e.g. Doe"
+                    />
                   </label>
                 </div>
-              </div>
 
-              <button type="submit" className="btn-primary" disabled={loading}>
-                {loading ? 'Processing...' : 'Complete Booking'}
-              </button>
+                <div className="booking-form-grid">
+                  <label className="booking-form-field">
+                    Email Address
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => handleInputChange('email', e.target.value)}
+                      required
+                      placeholder="e.g. john.doe@example.com"
+                    />
+                  </label>
+                  <label className="booking-form-field">
+                    Phone Number
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => handleInputChange('phone', e.target.value)}
+                      required
+                      placeholder="e.g. +1 (555) 000-0000"
+                    />
+                  </label>
+                </div>
+
+                <div className="booking-form-grid">
+                  <label className="booking-form-field">
+                    Date of Birth
+                    <input
+                      type="date"
+                      value={formData.dateOfBirth}
+                      onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
+                      required
+                    />
+                  </label>
+                  <label className="booking-form-field">
+                    Gender
+                    <select
+                      value={formData.gender}
+                      onChange={(e) => handleInputChange('gender', e.target.value)}
+                      required
+                    >
+                      <option value="">Select Gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="booking-form-grid">
+                  <label className="booking-form-field">
+                    Nationality
+                    <input
+                      type="text"
+                      value={formData.nationality}
+                      onChange={(e) => handleInputChange('nationality', e.target.value)}
+                      required
+                      placeholder="e.g. United States"
+                    />
+                  </label>
+                  <label className="booking-form-field">
+                    Passport Number
+                    <input
+                      type="text"
+                      value={formData.passportNumber}
+                      onChange={(e) => handleInputChange('passportNumber', e.target.value)}
+                      required
+                      placeholder="Passport Number"
+                    />
+                  </label>
+                </div>
+
+                <div className="booking-form-grid">
+                  <label className="booking-form-field">
+                    Passport Expiry Date
+                    <input
+                      type="date"
+                      value={formData.passportExpiry}
+                      onChange={(e) => handleInputChange('passportExpiry', e.target.value)}
+                      required
+                    />
+                  </label>
+                </div>
+              </section>
+
+              {/* Emergency Contact */}
+              <section className="booking-form-section">
+                <div className="section-title-wrapper">
+                  <span className="step-badge">2</span>
+                  <h2>Emergency Contact</h2>
+                </div>
+
+                <div className="booking-form-grid">
+                  <label className="booking-form-field">
+                    Contact Full Name
+                    <input
+                      type="text"
+                      value={formData.emergencyName}
+                      onChange={(e) => handleInputChange('emergencyName', e.target.value)}
+                      required
+                      placeholder="Contact Name"
+                    />
+                  </label>
+                  <label className="booking-form-field">
+                    Contact Phone Number
+                    <input
+                      type="tel"
+                      value={formData.emergencyPhone}
+                      onChange={(e) => handleInputChange('emergencyPhone', e.target.value)}
+                      required
+                      placeholder="Contact Phone"
+                    />
+                  </label>
+                </div>
+
+                <div className="booking-form-grid">
+                  <label className="booking-form-field">
+                    Relationship to Passenger
+                    <input
+                      type="text"
+                      value={formData.emergencyRelationship}
+                      onChange={(e) => handleInputChange('emergencyRelationship', e.target.value)}
+                      required
+                      placeholder="e.g. Spouse, Parent, Friend"
+                    />
+                  </label>
+                </div>
+              </section>
+
+              {/* Secure Payment Agreement */}
+              <section className="booking-form-section">
+                <div className="section-title-wrapper">
+                  <span className="step-badge">3</span>
+                  <h2>Secure Payment Gateway</h2>
+                </div>
+
+                <div className="payment-gateway-info-box">
+                  <div className="secure-badge-row">
+                    <span className="stripe-secure-text">
+                      <i className="fas fa-lock"></i> SSL Secured checkout
+                    </span>
+                    <div className="card-brand-icons">
+                      <i className="fab fa-cc-visa" title="Visa"></i>
+                      <i className="fab fa-cc-mastercard" title="Mastercard"></i>
+                      <i className="fab fa-cc-amex" title="American Express"></i>
+                      <i className="fab fa-cc-discover" title="Discover"></i>
+                    </div>
+                  </div>
+                  <p className="payment-redirect-notice">
+                    You will be redirected to <strong>Stripe Checkout</strong> to enter your card details securely. 
+                    The Final Seat LLC is a PCI-DSS compliant advisor and does not store your card details on our servers.
+                  </p>
+                </div>
+
+                {/* SMS Consent (Opt-in) compliance */}
+                <div className="sms-compliance-block">
+                  <div className="checkbox-wrapper">
+                    <input 
+                      type="checkbox" 
+                      id="bookingSmsOptIn" 
+                      name="bookingSmsOptIn" 
+                      required 
+                    />
+                    <label htmlFor="bookingSmsOptIn" className="checkbox-label">
+                      By checking this box and submitting this request, I provide my express written consent to receive automated updates, travel quotes, and booking notifications via SMS from The Final Seat LLC at the number provided. Consent is not a condition of purchase. Message and data rates may apply. Text STOP to cancel.
+                    </label>
+                  </div>
+                </div>
+
+                {/* Terms Agreement Checkbox */}
+                <div className="terms-checkbox-block">
+                  <div className="checkbox-wrapper">
+                    <input
+                      type="checkbox"
+                      id="agreeTerms"
+                      checked={formData.agreeTerms}
+                      onChange={(e) => handleInputChange('agreeTerms', e.target.checked)}
+                      required
+                    />
+                    <label htmlFor="agreeTerms" className="checkbox-label">
+                      I agree to the{' '}
+                      <Link to="/terms" target="_blank" rel="noopener noreferrer">Terms & Conditions</Link>,{' '}
+                      <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>, and{' '}
+                      <Link to="/refund-policy" target="_blank" rel="noopener noreferrer">Refund Policy</Link>. 
+                      I verify that the passenger information provided above matches my passport exactly.
+                    </label>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="booking-submit-button"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin"></i> Redirecting to Stripe Secure Checkout...
+                    </>
+                  ) : (
+                    `Proceed to Payment — $${pricing.total}`
+                  )}
+                </button>
+              </section>
+
             </form>
           </div>
 
-          <div className="booking-summary">
-            <h3>Flight Summary</h3>
-            <div className="summary-card">
-              <div className="summary-item">
-                <span>Airline:</span>
-                <span>{flight.airline}</span>
+          {/* Side Summary Card */}
+          <aside className="booking-summary-sidebar">
+            <div className="summary-sticky-card">
+              <h3>Flight Summary</h3>
+              
+              <div className="itinerary-quick-details">
+                <div className="summary-airline-row">
+                  <strong>{flight.airline}</strong>
+                  <span className="flight-num-badge">{flight.flightNumber}</span>
+                </div>
+                
+                <div className="summary-route-timeline">
+                  <div className="timeline-point">
+                    <span className="timeline-time">{flight.departure?.time}</span>
+                    <span className="timeline-airport">{flight.departure?.airport}</span>
+                    <span className="timeline-date">{flight.departure?.date}</span>
+                  </div>
+                  
+                  <div className="timeline-arrow">
+                    <i className="fas fa-long-arrow-alt-down"></i>
+                    <span className="timeline-duration">{flight.duration}</span>
+                  </div>
+
+                  <div className="timeline-point">
+                    <span className="timeline-time">{flight.arrival?.time}</span>
+                    <span className="timeline-airport">{flight.arrival?.airport}</span>
+                    <span className="timeline-date">{flight.arrival?.date}</span>
+                  </div>
+                </div>
+
+                <div className="summary-flight-meta">
+                  <span><i className="fas fa-chair"></i> {flight.class || 'Economy'}</span>
+                  <span><i className="fas fa-plane"></i> {flight.stops === 0 ? 'Nonstop' : `${flight.stops} stop(s)`}</span>
+                </div>
               </div>
-              <div className="summary-item">
-                <span>Route:</span>
-                <span>{flight.departure?.airport} → {flight.arrival?.airport}</span>
+
+              <div className="price-breakdown-section">
+                <h4>Price Details</h4>
+                <div className="price-row">
+                  <span>Base Ticket Fare</span>
+                  <span>${pricing.subtotal}</span>
+                </div>
+                <div className="price-row">
+                  <span>Taxes & Carrier Fees (15%)</span>
+                  <span>${pricing.taxes}</span>
+                </div>
+                <div className="price-row">
+                  <span>Advisory & Processing Fee</span>
+                  <span>${pricing.serviceFee}</span>
+                </div>
+                
+                <div className="price-total-row">
+                  <span>Total Amount Due</span>
+                  <strong>${pricing.total} USD</strong>
+                </div>
               </div>
-              <div className="summary-item">
-                <span>Departure:</span>
-                <span>{flight.departure?.date} {flight.departure?.time}</span>
-              </div>
-              <div className="summary-item">
-                <span>Arrival:</span>
-                <span>{flight.arrival?.date} {flight.arrival?.time}</span>
-              </div>
-              <div className="summary-divider"></div>
-              <div className="summary-item">
-                <span>Subtotal:</span>
-                <span>${pricing.subtotal}</span>
-              </div>
-              <div className="summary-item">
-                <span>Taxes:</span>
-                <span>${pricing.taxes}</span>
-              </div>
-              <div className="summary-item total">
-                <span>Total:</span>
-                <span>${pricing.total}</span>
+
+              <div className="summary-help-block">
+                <p>Need help with your booking?</p>
+                <a href={SUPPORT_PHONE_HREF} className="summary-phone-link">
+                  <i className="fas fa-phone-alt"></i> {SUPPORT_PHONE_DISPLAY}
+                </a>
               </div>
             </div>
-          </div>
+          </aside>
+        </div>
+
+        <div className="booking-footer-business">
+          <p>
+            <strong>The Final Seat LLC</strong> · 5830 E 2nd St, Ste 7000, Casper, WY 82609 ·{' '}
+            {SUPPORT_PHONE_DISPLAY} · support@thefinalseat.com
+          </p>
         </div>
       </div>
     </div>

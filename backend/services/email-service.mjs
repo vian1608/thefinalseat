@@ -49,18 +49,45 @@ function getTransporter() {
 
 function buildConsultingInquiryText(inquiry) {
   const isFlights = inquiry.serviceType === 'flights';
+  const isRail = inquiry.serviceType === 'rail';
+  const isPayment = inquiry.serviceType === 'consulting-payment';
+
+  if (isPayment) {
+    return [
+      `NEW SECURE CONSULTING PAYMENT RECEIVED`,
+      `The Final Seat LLC`,
+      `======================================`,
+      ``,
+      `CONTACT`,
+      `=======`,
+      `Name: ${inquiry.name}`,
+      `Email: ${inquiry.email}`,
+      `Phone: ${inquiry.phone || 'Not provided'}`,
+      ``,
+      `BILLING DETAILS`,
+      `===============`,
+      `City/State: ${inquiry.origin}, ${inquiry.destination}`,
+      `Payment details & notes:`,
+      inquiry.notes || 'None',
+      ``,
+      `Submitted: ${new Date().toLocaleString()}`,
+      `Source: Secure Online Checkout`,
+      `======================================`
+    ].join('\n');
+  }
+
   const lines = [
     `NEW ${isFlights ? 'AIR' : 'RAIL'} LOGISTICS CONSULTING INQUIRY`,
-    'The Final Seat LLC',
-    '',
-    'CONTACT',
-    '=======',
+    `The Final Seat LLC`,
+    ``,
+    `CONTACT`,
+    `=======`,
     `Name: ${inquiry.name}`,
     `Email: ${inquiry.email}`,
     `Phone: ${inquiry.phone || 'Not provided'}`,
-    '',
-    'ITINERARY',
-    '=========',
+    ``,
+    `ITINERARY`,
+    `=========`,
     `Origin: ${inquiry.origin}`,
     `Destination: ${inquiry.destination}`,
   ];
@@ -80,11 +107,11 @@ function buildConsultingInquiryText(inquiry) {
 
   lines.push(
     `Passengers: ${inquiry.passengers || '1'}`,
-    '',
-    'ADVISORY NOTES',
-    '==============',
+    ``,
+    `ADVISORY NOTES`,
+    `==============`,
     inquiry.notes || 'None',
-    '',
+    ``,
     `Submitted: ${new Date().toLocaleString()}`,
     `Source: ${isFlights ? 'Flights landing page' : 'Amtrak / Rail landing page'}`,
   );
@@ -184,9 +211,13 @@ export async function saveInquiryToFile(inquiry) {
 export async function sendConsultingInquiry(inquiry) {
   const recipients = getInquiryRecipients();
   const isFlights = inquiry.serviceType === 'flights';
-  const subjectLabel = isFlights
-    ? 'Air Logistics Advisory'
-    : 'Amtrak / Rail Logistics Advisory';
+  const isPayment = inquiry.serviceType === 'consulting-payment';
+
+  const subjectLabel = isPayment
+    ? 'Secure Consulting Payment'
+    : isFlights
+      ? 'Air Logistics Advisory'
+      : 'Amtrak / Rail Logistics Advisory';
   const textBody = buildConsultingInquiryText(inquiry);
   const htmlBody = textBody.replace(/\n/g, '<br>');
   const subject = `${subjectLabel} — ${inquiry.name}`;

@@ -89,6 +89,14 @@ export const paymentAPI = {
     const response = await api.post('/payments/razorpay/verify', paymentData);
     return response.data;
   },
+  createStripeSession: async (payload) => {
+    const response = await api.post('/payments/stripe/create-checkout-session', payload);
+    return response.data;
+  },
+  getStripeSessionStatus: async (sessionId) => {
+    const response = await api.get('/payments/stripe/session-status', { params: { session_id: sessionId } });
+    return response.data;
+  },
 };
 
 // Consulting inquiry API

@@ -95,6 +95,12 @@ function Header() {
               Rail (Amtrak)
             </Link>
             <Link
+              to="/payment"
+              className={`header-nav-link ${location.pathname === '/payment' ? 'header-nav-link--active' : ''}`}
+            >
+              Pricing & Payments
+            </Link>
+            <Link
               to="/contact"
               className={`header-nav-link ${isContactActive ? 'header-nav-link--active' : ''}`}
             >

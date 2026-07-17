@@ -6,7 +6,6 @@ import PageTransition from './components/PageTransition';
 import ScrollToTop from './components/ScrollToTop';
 import Home from './pages/Home';
 import SearchResults from './pages/SearchResults';
-import Booking from './pages/Booking';
 import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
 import AdminLogin from './pages/AdminLogin';
@@ -23,7 +22,11 @@ import AmtrakAssistance from './pages/AmtrakAssistance';
 import TrainRoute from './pages/TrainRoute';
 import FlightRoute from './pages/FlightRoute';
 import AirlineActionPage from './pages/AirlineActionPage';
+import ConsultingPayment from './pages/ConsultingPayment';
 import RouteDispatcher from './pages/RouteDispatcher';
+import Booking from './pages/Booking';
+import PaymentSuccess from './pages/PaymentSuccess';
+
 
 function LegacyAirlineRedirect() {
   const { airlineSlug } = useParams();
@@ -253,10 +256,13 @@ function App() {
               <Route path="/amtrak-assitance" element={<Navigate to="/amtrak" replace />} />
               <Route path="/amtrak-assisstance" element={<Navigate to="/amtrak" replace />} />
               <Route path="/amtrak-asistance" element={<Navigate to="/amtrak" replace />} />
-              <Route path="/search" element={<SearchResults />} />
-              <Route path="/booking" element={<Booking />} />
-              <Route path="/signin" element={<SignIn />} />
-              <Route path="/signup" element={<SignUp />} />
+               <Route path="/search" element={<SearchResults />} />
+               <Route path="/payment" element={<ConsultingPayment />} />
+               <Route path="/pay" element={<Navigate to="/payment" replace />} />
+               <Route path="/booking" element={<Booking />} />
+               <Route path="/confirmation/success" element={<PaymentSuccess />} />
+               <Route path="/signin" element={<SignIn />} />
+               <Route path="/signup" element={<SignUp />} />
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/confirmation/one-way" element={<OneWayConfirmation />} />
