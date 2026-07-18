@@ -117,9 +117,11 @@
 
 .inquiry-split-layout {
   display: grid;
-  grid-template-columns: 0.8fr 1.2fr;
-  gap: 3rem;
-  align-items: start;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  align-items: stretch;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .inquiry-left-panel h2 {
@@ -139,6 +141,7 @@
   .inquiry-split-layout {
     grid-template-columns: 1fr;
     gap: 2rem;
+    align-items: start;
   }
 }
 
@@ -207,13 +210,13 @@
 }
 
 .flights-inquiry-card {
-  max-width: 720px;
-  margin: 0 auto;
+  width: 100%;
   background: #fff;
   border-radius: 16px;
   padding: 2rem;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
   border: 1px solid #e2e8f0;
+  box-sizing: border-box;
 }
 
 .flights-inquiry-card h2 {
@@ -362,15 +365,25 @@
 /* Secondary Meta Row (Trip type, Cabin class, Passenger count, Currency) */
 .search-meta-row {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  margin-bottom: 1.25rem;
-  background-color: #f8fafc;
-  padding: 8px 12px;
-  border-radius: 10px;
-  border: 1px dashed #cbd5e1;
+  margin-bottom: 1.5rem;
   position: relative;
+  width: 100%;
+}
+
+.search-meta-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.search-meta-right {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
 }
 
 .search-meta-group {
@@ -395,24 +408,29 @@
   background-color: #e2e8f0;
 }
 
-/* Passenger popup button */
+/* Passenger popup button styled to match custom select triggers */
 .passenger-trigger-btn {
-  border: none;
-  background: transparent;
-  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 38px;
+  padding: 0 12px;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
   font-weight: 600;
   font-size: 0.875rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  outline: none;
+  color: #475569;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease-in-out;
 }
 
-.passenger-trigger-btn:hover {
-  background-color: #e2e8f0;
+.passenger-trigger-btn:hover,
+.passenger-trigger-btn.active {
+  border-color: #94a3b8;
+  background-color: #f8fafc;
 }
 
 /* Passenger Selector Popover */

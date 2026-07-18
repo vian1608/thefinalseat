@@ -15,6 +15,8 @@ import RouteSlider from '../components/RouteSlider';
 import SeamlessAdvisorySection from '../components/SeamlessAdvisorySection';
 import { flightFamousRoutes } from '../data/famousRoutes';
 import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../constants/supportContact';
+import EmailInput from '../components/EmailInput';
+import InternationalPhoneInput from '../components/InternationalPhoneInput';
 import './Home.css';
 
 const initialFormData = {
@@ -233,25 +235,37 @@ function Home() {
         <div className="container">
           <div className="inquiry-split-layout">
             <div className="inquiry-left-panel">
-              <h2 style={{ fontSize: '1.8rem', color: '#1e293b', marginBottom: '1rem' }}>Need Immediate Support?</h2>
-              <p>Skip the form and call us directly to secure your air logistics immediately.</p>
-              
-              <a href={SUPPORT_PHONE_HREF} className="call-btn flights-btn flights-btn--cta">
-                <i className="fas fa-phone"></i> Call {SUPPORT_PHONE_DISPLAY}
-              </a>
-              
-              <div className="benefits-list">
-                <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', color: '#1e293b' }}>Benefits for booking with us:</h3>
-                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                  <li style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', alignItems: 'start' }}>
-                    <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.25rem' }}></i>
-                    <span>Includes free 24/7 support till date of travel.</span>
-                  </li>
-                  <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start' }}>
-                    <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.25rem' }}></i>
-                    <span>No need to wait on long holds like with the airline.</span>
-                  </li>
-                </ul>
+              <div className="flights-inquiry-card support-inquiry-card" style={{ height: '100%', margin: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.6rem', color: '#1e293b', marginBottom: '0.75rem', fontWeight: 800 }}>Need Immediate Support?</h2>
+                  <p style={{ color: '#475569', fontSize: '0.98rem', lineHeight: '1.6', marginBottom: '1.5rem' }}>
+                    Skip the form and call our expert travel desk directly to secure your air logistics and private routes immediately.
+                  </p>
+                  
+                  <div className="benefits-list" style={{ marginTop: '1.5rem' }}>
+                    <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 700 }}>Benefits of booking with us:</h3>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                      <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
+                        <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
+                        <span>Includes free 24/7 priority support till date of travel.</span>
+                      </li>
+                      <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
+                        <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
+                        <span>No need to wait on long holds like with traditional airlines.</span>
+                      </li>
+                      <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
+                        <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
+                        <span>Instant ticketing and custom route optimization.</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+                
+                <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+                  <a href={SUPPORT_PHONE_HREF} className="call-btn flights-btn flights-btn--cta" style={{ width: '100%', margin: 0, minHeight: '48px', height: '48px' }}>
+                    <i className="fas fa-phone"></i> Call {SUPPORT_PHONE_DISPLAY}
+                  </a>
+                </div>
               </div>
             </div>
 
@@ -287,97 +301,98 @@ function Home() {
                       
                       {/* Meta selections row (Trip type, Cabin class, Passenger popup, Currency) */}
                       <div className="search-meta-row">
-                        <CustomSelect 
-                          id="search-trip-type"
-                          value={searchData.tripType} 
-                          onChange={(val) => handleSearchChange('tripType', val)}
-                          options={[
-                            { value: 'roundtrip', label: 'Round Trip' },
-                            { value: 'oneway', label: 'One Way' }
-                          ]}
-                          icon="fas fa-route"
-                          className="search-meta-select-wrapper"
-                        />
-                        
-                        <CustomSelect 
-                          id="search-travel-class"
-                          value={searchData.travelClass} 
-                          onChange={(val) => handleSearchChange('travelClass', val)}
-                          options={[
-                            { value: 'economy', label: 'Economy' },
-                            { value: 'premium', label: 'Premium Economy' },
-                            { value: 'business', label: 'Business' },
-                            { value: 'first', label: 'First Class' }
-                          ]}
-                          icon="fas fa-chair"
-                          className="search-meta-select-wrapper"
-                        />
+                        <div className="search-meta-left">
+                          <CustomSelect 
+                            id="search-trip-type"
+                            value={searchData.tripType} 
+                            onChange={(val) => handleSearchChange('tripType', val)}
+                            options={[
+                              { value: 'roundtrip', label: 'Round Trip' },
+                              { value: 'oneway', label: 'One Way' }
+                            ]}
+                            icon="fas fa-route"
+                          />
+                          
+                          <CustomSelect 
+                            id="search-travel-class"
+                            value={searchData.travelClass} 
+                            onChange={(val) => handleSearchChange('travelClass', val)}
+                            options={[
+                              { value: 'economy', label: 'Economy' },
+                              { value: 'premium', label: 'Premium Economy' },
+                              { value: 'business', label: 'Business' },
+                              { value: 'first', label: 'First Class' }
+                            ]}
+                            icon="fas fa-chair"
+                          />
 
-                        <CustomSelect 
-                          id="search-currency"
-                          value={searchData.currency} 
-                          onChange={(val) => handleSearchChange('currency', val)}
-                          options={[
-                            { value: 'USD', label: 'USD ($)' },
-                            { value: 'EUR', label: 'EUR (€)' },
-                            { value: 'GBP', label: 'GBP (£)' },
-                            { value: 'CAD', label: 'CAD (C$)' }
-                          ]}
-                          icon="fas fa-dollar-sign"
-                          className="search-meta-select-wrapper"
-                        />
+                          <div className="search-meta-group" style={{ position: 'relative' }} ref={passengerRef} onKeyDown={handlePassengerKeyDown}>
+                            <button 
+                              type="button" 
+                              className={`passenger-trigger-btn ${showPassengerPopup ? 'active' : ''}`}
+                              onClick={() => setShowPassengerPopup(!showPassengerPopup)}
+                              aria-haspopup="dialog"
+                              aria-expanded={showPassengerPopup}
+                            >
+                              <i className="fas fa-user-friends" style={{ color: '#64748b' }}></i>
+                              <span>{searchData.adults + searchData.children + searchData.infants} Traveler(s)</span>
+                              <i className={`fas fa-chevron-${showPassengerPopup ? 'up' : 'down'}`} style={{ fontSize: '0.7rem' }}></i>
+                            </button>
 
-                        <div className="search-meta-group" style={{ position: 'relative' }} ref={passengerRef} onKeyDown={handlePassengerKeyDown}>
-                          <button 
-                            type="button" 
-                            className={`passenger-trigger-btn ${showPassengerPopup ? 'active' : ''}`}
-                            onClick={() => setShowPassengerPopup(!showPassengerPopup)}
-                            aria-haspopup="dialog"
-                            aria-expanded={showPassengerPopup}
-                          >
-                            <i className="fas fa-user-friends" style={{ color: '#64748b' }}></i>
-                            <span>{searchData.adults + searchData.children + searchData.infants} Traveler(s)</span>
-                            <i className={`fas fa-chevron-${showPassengerPopup ? 'up' : 'down'}`} style={{ fontSize: '0.7rem' }}></i>
-                          </button>
+                            {showPassengerPopup && (
+                              <div className="passenger-popover" role="dialog" aria-label="Traveler selector">
+                                <div className="passenger-row">
+                                  <div className="passenger-label">
+                                    <span className="passenger-type">Adults</span>
+                                    <span className="passenger-age-desc">Age 18+</span>
+                                  </div>
+                                  <div className="passenger-counters">
+                                    <button type="button" className="counter-btn" onClick={() => decrementPassenger('adults')} disabled={searchData.adults <= 1}>-</button>
+                                    <span className="counter-value">{searchData.adults}</span>
+                                    <button type="button" className="counter-btn" onClick={() => incrementPassenger('adults')}>+</button>
+                                  </div>
+                                </div>
+                                <div className="passenger-row">
+                                  <div className="passenger-label">
+                                    <span className="passenger-type">Children</span>
+                                    <span className="passenger-age-desc">Age 2-17</span>
+                                  </div>
+                                  <div className="passenger-counters">
+                                    <button type="button" className="counter-btn" onClick={() => decrementPassenger('children')} disabled={searchData.children <= 0}>-</button>
+                                    <span className="counter-value">{searchData.children}</span>
+                                    <button type="button" className="counter-btn" onClick={() => incrementPassenger('children')}>+</button>
+                                  </div>
+                                </div>
+                                <div className="passenger-row">
+                                  <div className="passenger-label">
+                                    <span className="passenger-type">Infants</span>
+                                    <span className="passenger-age-desc">Under 2 (lap)</span>
+                                  </div>
+                                  <div className="passenger-counters">
+                                    <button type="button" className="counter-btn" onClick={() => decrementPassenger('infants')} disabled={searchData.infants <= 0}>-</button>
+                                    <span className="counter-value">{searchData.infants}</span>
+                                    <button type="button" className="counter-btn" onClick={() => incrementPassenger('infants')}>+</button>
+                                  </div>
+                                </div>
+                                <button type="button" className="passenger-popup-close" onClick={() => setShowPassengerPopup(false)}>Done</button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
 
-                          {showPassengerPopup && (
-                            <div className="passenger-popover" role="dialog" aria-label="Traveler selector">
-                              <div className="passenger-row">
-                                <div className="passenger-label">
-                                  <span className="passenger-type">Adults</span>
-                                  <span className="passenger-age-desc">Age 18+</span>
-                                </div>
-                                <div className="passenger-counters">
-                                  <button type="button" className="counter-btn" onClick={() => decrementPassenger('adults')} disabled={searchData.adults <= 1}>-</button>
-                                  <span className="counter-value">{searchData.adults}</span>
-                                  <button type="button" className="counter-btn" onClick={() => incrementPassenger('adults')}>+</button>
-                                </div>
-                              </div>
-                              <div className="passenger-row">
-                                <div className="passenger-label">
-                                  <span className="passenger-type">Children</span>
-                                  <span className="passenger-age-desc">Age 2-17</span>
-                                </div>
-                                <div className="passenger-counters">
-                                  <button type="button" className="counter-btn" onClick={() => decrementPassenger('children')} disabled={searchData.children <= 0}>-</button>
-                                  <span className="counter-value">{searchData.children}</span>
-                                  <button type="button" className="counter-btn" onClick={() => incrementPassenger('children')}>+</button>
-                                </div>
-                              </div>
-                              <div className="passenger-row">
-                                <div className="passenger-label">
-                                  <span className="passenger-type">Infants</span>
-                                  <span className="passenger-age-desc">Under 2 (lap)</span>
-                                </div>
-                                <div className="passenger-counters">
-                                  <button type="button" className="counter-btn" onClick={() => decrementPassenger('infants')} disabled={searchData.infants <= 0}>-</button>
-                                  <span className="counter-value">{searchData.infants}</span>
-                                  <button type="button" className="counter-btn" onClick={() => incrementPassenger('infants')}>+</button>
-                                </div>
-                              </div>
-                              <button type="button" className="passenger-popup-close" onClick={() => setShowPassengerPopup(false)}>Done</button>
-                            </div>
-                          )}
+                        <div className="search-meta-right">
+                          <CustomSelect 
+                            id="search-currency"
+                            value={searchData.currency} 
+                            onChange={(val) => handleSearchChange('currency', val)}
+                            options={[
+                              { value: 'USD', label: 'USD ($)' },
+                              { value: 'EUR', label: 'EUR (€)' },
+                              { value: 'GBP', label: 'GBP (£)' },
+                              { value: 'CAD', label: 'CAD (C$)' }
+                            ]}
+                            icon="fas fa-dollar-sign"
+                          />
                         </div>
                       </div>
 
@@ -477,26 +492,22 @@ function Home() {
                           />
                         </div>
                         <div className="flights-form__group">
-                          <label htmlFor="flight-email">Email</label>
-                          <input
+                          <EmailInput
                             id="flight-email"
-                            type="email"
+                            label="Email"
                             value={formData.email}
-                            onChange={(e) => handleChange('email', e.target.value)}
+                            onChange={(val) => handleChange('email', val)}
                             required
-                            autoComplete="email"
                           />
                         </div>
                       </div>
                       <div className="flights-form__row">
                         <div className="flights-form__group">
                           <label htmlFor="flight-phone">Phone (optional)</label>
-                          <input
+                          <InternationalPhoneInput
                             id="flight-phone"
-                            type="tel"
                             value={formData.phone}
-                            onChange={(e) => handleChange('phone', e.target.value)}
-                            autoComplete="tel"
+                            onChange={(val) => handleChange('phone', val)}
                           />
                         </div>
                         <div className="flights-form__group">
