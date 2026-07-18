@@ -77,6 +77,18 @@ export const bookingAPI = {
     const response = await api.get(`/bookings/${reference}`);
     return response.data;
   },
+  search: async (query) => {
+    const response = await api.get('/bookings/search', { params: { query } });
+    return response.data;
+  },
+  saveAbandoned: async (data) => {
+    const response = await api.post('/bookings/abandoned', data);
+    return response.data;
+  },
+  deleteAbandoned: async (sessionKey) => {
+    const response = await api.delete(`/bookings/abandoned/${sessionKey}`);
+    return response.data;
+  },
 };
 
 // Payment API

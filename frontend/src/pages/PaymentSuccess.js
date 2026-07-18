@@ -15,6 +15,7 @@ function PaymentSuccess() {
   const [sessionDetails, setSessionDetails] = useState(null);
   const [bookingRef, setBookingRef] = useState('');
   const [isProcessingRecord, setIsProcessingRecord] = useState(false);
+  const [bookingDataFromDb, setBookingDataFromDb] = useState(null);
 
   useEffect(() => {
     if (!sessionId) {
@@ -31,7 +32,7 @@ function PaymentSuccess() {
           if (data.status === 'paid' || data.status === 'no_payment_required') {
             setSessionDetails(data);
             // Process the transaction record (once)
-            processRecord(data);
+            await processRecord(data);
           } else {
             setError('Payment was not completed successfully. Current status: ' + data.status);
             setLoading(false);
@@ -50,6 +51,23 @@ function PaymentSuccess() {
     fetchSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, type]);
+
+  // Fetch full details from database once confirmation code is available
+  useEffect(() => {
+    if (bookingRef) {
+      const fetchBookingFromDb = async () => {
+        try {
+          const res = await bookingAPI.getByReference(bookingRef);
+          if (res.success) {
+            setBookingDataFromDb(res.data);
+          }
+        } catch (err) {
+          console.error('Failed to fetch detailed booking from database:', err);
+        }
+      };
+      fetchBookingFromDb();
+    }
+  }, [bookingRef]);
 
   const processRecord = async (session) => {
     if (isProcessingRecord) return;
@@ -90,6 +108,9 @@ function PaymentSuccess() {
           const originalOut = parseFloat(flightData.price?.originalApiPrice || 0);
           const originalRet = returnFlightData ? parseFloat(returnFlightData.price?.originalApiPrice || 0) : 0;
 
+          const pricingTotalStr = sessionStorage.getItem('pricingTotal');
+          const displayedPrice = pricingTotalStr ? parseFloat(pricingTotalStr) : session.amount_total;
+
           bookingData = {
             customerName,
             email: pendingData.primaryContact.email,
@@ -97,9 +118,11 @@ function PaymentSuccess() {
             passengers: pendingData.passengers,
             flight: flightObj,
             originalApiPrice: (originalOut + originalRet).toFixed(2),
-            displayedWebsitePrice: session.amount_total.toFixed(2),
+            displayedWebsitePrice: displayedPrice.toFixed(2),
             paymentStatus: 'paid',
-            transactionId: sessionId
+            transactionId: sessionId,
+            currency: 'USD',
+            status: 'PENDING'
           };
         } else {
           // Fallback to legacy metadata for single traveler if sessionStorage is cleared
@@ -138,14 +161,16 @@ function PaymentSuccess() {
             originalApiPrice: (session.amount_total * 1.11).toFixed(2), // generic fallback estimation
             displayedWebsitePrice: session.amount_total.toFixed(2),
             paymentStatus: 'paid',
-            transactionId: sessionId
+            transactionId: sessionId,
+            currency: 'USD',
+            status: 'PENDING'
           };
         }
 
         // Create booking in the backend
         const res = await bookingAPI.create(bookingData);
         if (res.success) {
-          const ref = res.data.bookingReference;
+          const ref = res.data.confirmation_code || res.data.bookingReference;
           setBookingRef(ref);
           sessionStorage.setItem(storageKey, ref);
         } else {
@@ -168,8 +193,6 @@ function PaymentSuccess() {
       }
     } catch (err) {
       console.error('Record writing failed:', err);
-      // We don't fail the success page rendering since payment was confirmed by Stripe, 
-      // but we log it and proceed so the user gets their receipt.
     } finally {
       setLoading(false);
     }
@@ -198,13 +221,16 @@ function PaymentSuccess() {
         <p>{error}</p>
         <div className="action-buttons no-print">
           <Link to="/" className="btn-secondary">Go to Homepage</Link>
-          <Link to="/payment" className="btn-primary">Try Payment Again</Link>
+          <Link to="/booking" className="btn-primary">Try Payment Again</Link>
         </div>
       </div>
     );
   }
 
   const { metadata, amount_total } = sessionDetails;
+  
+  // Choose the price from DB or Stripe session total
+  const displayedPrice = bookingDataFromDb ? parseFloat(bookingDataFromDb.amount) : amount_total;
 
   return (
     <div className="payment-success-page">
@@ -217,7 +243,7 @@ function PaymentSuccess() {
         {/* Print-friendly Invoice Header */}
         <div className="invoice-print-header">
           <h2>The Final Seat LLC</h2>
-          <p>Invoice & Receipt of Payment</p>
+          <p>Temporary Booking Confirmation Receipt</p>
           <small>5830 E 2nd St, Ste 7000, Casper, WY 82609 · support@thefinalseat.com</small>
         </div>
 
@@ -236,7 +262,7 @@ function PaymentSuccess() {
           <div className="booking-status-badge-container" style={{ margin: '1.5rem 0' }}>
             <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.05em' }}>Booking Status</span>
             <strong style={{ fontSize: '1.15rem', color: '#d97706', display: 'inline-block', padding: '6px 20px', backgroundColor: '#fef3c7', borderRadius: '30px', border: '1px solid #fcd34d', marginTop: '6px', fontWeight: '700' }}>
-              Pending Confirmation
+              {bookingDataFromDb?.status === 'DONE' ? 'Confirmed & Done' : 'Pending Confirmation'}
             </strong>
           </div>
         </div>
@@ -251,7 +277,7 @@ function PaymentSuccess() {
           <div className="receipt-details-grid">
             <div className="details-item">
               <span className="details-label">Amount Charged</span>
-              <strong className="amount-highlight">${amount_total.toFixed(2)} USD</strong>
+              <strong className="amount-highlight">${displayedPrice.toFixed(2)} USD</strong>
             </div>
             <div className="details-item">
               <span className="details-label">Payment Gateway</span>
@@ -259,35 +285,37 @@ function PaymentSuccess() {
             </div>
             <div className="details-item">
               <span className="details-label">Transaction Reference</span>
-              <span className="ref-code">{sessionId.substring(12, 32)}...</span>
+              <span className="ref-code">{sessionId.substring(0, 20)}...</span>
             </div>
             <div className="details-item">
               <span className="details-label">Billing Name</span>
-              <span>{type === 'booking' ? `${metadata.firstName} ${metadata.lastName}` : metadata.name}</span>
+              <span>{bookingDataFromDb?.passenger_name || (type === 'booking' ? `${metadata.firstName} ${metadata.lastName}` : metadata.name)}</span>
             </div>
           </div>
 
-          {/* Conditional view: Flight Booking */}
+          {/* Conditional view: Flight Booking Temporary Confirmation Ticket */}
           {type === 'booking' && (() => {
-            const isAmtrak = metadata.flight_airline?.toLowerCase().includes('amtrak');
+            const isAmtrak = (bookingDataFromDb?.flight_details?.airline || metadata.flight_airline || '').toLowerCase().includes('amtrak');
+            const passengers = bookingDataFromDb?.traveller_details || [];
+            
             return (
               <div className="receipt-item-details-box">
-                <div className="receipt-sub-header">
-                  <i className={`fas ${isAmtrak ? 'fa-train' : 'fa-ticket-alt'}`}></i> {isAmtrak ? 'Amtrak Train Transit Pass' : 'Flight Booking Pass'}
+                <div className="ticket-label-overlay">
+                  TEMPORARY BOOKING CONFIRMATION
                 </div>
                 
                 <div className="boarding-pass-visual">
                   <div className="boarding-pass-header" style={{ borderBottom: isAmtrak ? '2px dashed #8b1538' : '2px dashed #1e3a5f' }}>
-                    <span>{isAmtrak ? 'Operator' : 'Carrier'}: <strong>{metadata.flight_airline}</strong></span>
-                    <span>{isAmtrak ? 'Train' : 'Flight'}: <strong>{metadata.flight_number}</strong></span>
-                    {bookingRef && <span className="ref-tag">Ref: <strong>{bookingRef}</strong></span>}
+                    <span>{isAmtrak ? 'Operator' : 'Carrier'}: <strong>{bookingDataFromDb?.flight_details?.airline || metadata.flight_airline}</strong></span>
+                    <span>{isAmtrak ? 'Train' : 'Flight'}: <strong>{bookingDataFromDb?.flight_details?.flightNumber || metadata.flight_number}</strong></span>
+                    {bookingRef && <span className="ref-tag">Confirmation Code: <strong>{bookingRef}</strong></span>}
                   </div>
                   
                   <div className="boarding-pass-route">
                     <div className="route-terminal">
-                      <h4>{metadata.flight_route.split(' to ')[0]}</h4>
+                      <h4>{bookingDataFromDb?.flight_details?.departure?.airport || metadata.flight_route?.split(' to ')[0]}</h4>
                       <span>Departure</span>
-                      <small>{metadata.flight_dep_time}</small>
+                      <small>{bookingDataFromDb?.flight_details?.departure?.date} {bookingDataFromDb?.flight_details?.departure?.time || metadata.flight_dep_time}</small>
                     </div>
                     
                     <div className="route-flight-symbol">
@@ -296,33 +324,71 @@ function PaymentSuccess() {
                     </div>
   
                     <div className="route-terminal">
-                      <h4>{metadata.flight_route.split(' to ')[1]}</h4>
+                      <h4>{bookingDataFromDb?.flight_details?.arrival?.airport || metadata.flight_route?.split(' to ')[1]}</h4>
                       <span>Arrival</span>
-                      <small>{metadata.flight_arr_time}</small>
+                      <small>{bookingDataFromDb?.flight_details?.arrival?.date} {bookingDataFromDb?.flight_details?.arrival?.time || metadata.flight_arr_time}</small>
                     </div>
                   </div>
 
                   <div className="boarding-pass-passenger">
                     <div>
-                      <span>Passenger</span>
-                      <strong>{metadata.firstName} {metadata.lastName}</strong>
+                      <span>Primary Contact</span>
+                      <strong>{bookingDataFromDb?.passenger_name || `${metadata.firstName} ${metadata.lastName}`}</strong>
+                    </div>
+                    <div>
+                      <span>Contact Info</span>
+                      <strong style={{ fontSize: '0.85rem' }}>
+                        {bookingDataFromDb?.email || metadata.email}<br/>
+                        {bookingDataFromDb?.phone || metadata.phone}
+                      </strong>
                     </div>
                     <div>
                       <span>{isAmtrak ? 'Seat Class' : 'Cabin Class'}</span>
-                      <strong>{metadata.flight_class}</strong>
+                      <strong>{bookingDataFromDb?.flight_details?.class || metadata.flight_class}</strong>
                     </div>
                     <div>
-                      <span>{isAmtrak ? 'Transit Stops' : 'Stops'}</span>
-                      <strong>{metadata.flight_stops === '0' ? 'Direct' : `${metadata.flight_stops} stop(s)`}</strong>
+                      <span>Travelers</span>
+                      <strong>{passengers.length || 1}</strong>
                     </div>
                   </div>
+
+                  {passengers.length > 0 && (
+                    <div className="boarding-pass-manifest">
+                      <div className="manifest-header">Passenger Manifest</div>
+                      <table className="manifest-table">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>DOB</th>
+                            <th>Gender</th>
+                            <th>Passport</th>
+                            <th>Nationality</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {passengers.map((p, idx) => (
+                            <tr key={idx}>
+                              <td>{idx + 1}</td>
+                              <td><strong>{p.firstName} {p.middleName || ''} {p.lastName}</strong></td>
+                              <td>{p.dateOfBirth}</td>
+                              <td style={{ textTransform: 'capitalize' }}>{p.gender}</td>
+                              <td>{p.passportNumber || 'N/A'}</td>
+                              <td>{p.nationality || 'N/A'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
                 <div className="next-steps-info">
-                  <strong>Next Steps:</strong>
+                  <strong>Notice of Reservation:</strong>
                   <ul>
                     <li>Your {isAmtrak ? 'train transit reservation' : 'flight reservation'} is registered under reference <strong>{bookingRef || 'Pending'}</strong>.</li>
-                    <li>A detailed confirmation itinerary and {isAmtrak ? 'train ticket receipt' : 'flight e-ticket'} has been sent to <strong>{metadata.email}</strong>.</li>
+                    <li>This is a temporary confirmation showing details recorded after successful checkout. Your final airline ticket is being issued.</li>
+                    <li>A detailed confirmation itinerary and {isAmtrak ? 'train ticket receipt' : 'flight e-ticket'} has been sent to <strong>{bookingDataFromDb?.email || metadata.email}</strong>.</li>
                     <li>For support or changes, call us anytime at {SUPPORT_PHONE_DISPLAY}.</li>
                   </ul>
                 </div>
@@ -367,8 +433,11 @@ function PaymentSuccess() {
         {/* Buttons */}
         <div className="action-buttons-wrapper no-print">
           <button onClick={handlePrint} className="success-btn success-btn-secondary">
-            <i className="fas fa-print"></i> Print Receipt / Save PDF
+            <i className="fas fa-print"></i> View / Download Temporary Ticket
           </button>
+          <Link to="/my-bookings" className="success-btn success-btn-accent">
+            <i className="fas fa-calendar-check"></i> Go to My Bookings
+          </Link>
           <Link to="/" className="success-btn success-btn-primary">
             Go to Homepage
           </Link>

@@ -26,6 +26,7 @@ import ConsultingPayment from './pages/ConsultingPayment';
 import RouteDispatcher from './pages/RouteDispatcher';
 import Booking from './pages/Booking';
 import PaymentSuccess from './pages/PaymentSuccess';
+import MyBookings from './pages/MyBookings';
 
 
 function LegacyAirlineRedirect() {
@@ -261,6 +262,7 @@ function App() {
                <Route path="/pay" element={<Navigate to="/payment" replace />} />
                <Route path="/booking" element={<Booking />} />
                <Route path="/confirmation/success" element={<PaymentSuccess />} />
+               <Route path="/my-bookings" element={<MyBookings />} />
                <Route path="/signin" element={<SignIn />} />
                <Route path="/signup" element={<SignUp />} />
               <Route path="/admin/login" element={<AdminLogin />} />

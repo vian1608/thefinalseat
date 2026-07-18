@@ -282,9 +282,20 @@ export async function sendConsultingInquiry(inquiry) {
 // Send booking confirmation email (Sends both Customer E-receipt and Admin Booking Alert)
 export async function sendBookingConfirmation(booking) {
   try {
-    const flight = booking.flight || {};
-    const passengers = Array.isArray(booking.passengers) ? booking.passengers : JSON.parse(booking.passengers || '[]');
+    const flight = booking.flight || booking.flight_details || {};
+    const rawPassengers = booking.passengers || booking.traveller_details;
+    const passengers = Array.isArray(rawPassengers) ? rawPassengers : JSON.parse(rawPassengers || '[]');
     
+    const customerName = booking.customerName || booking.passenger_name || 'Customer';
+    const bookingReference = booking.bookingReference || booking.confirmation_code || 'Pending';
+    const displayedWebsitePrice = booking.displayedWebsitePrice || booking.amount || 0;
+    const transactionId = booking.transactionId || booking.payment_reference || 'Offline Verified';
+    const bookingDate = booking.bookingDate || booking.created_at || new Date();
+    const originalApiPrice = booking.originalApiPrice || booking.amount || 0;
+    const paymentStatus = booking.paymentStatus || 'paid';
+    const email = booking.email || '';
+    const phone = booking.phone || '';
+
     // Format passenger rows for text
     const passengerTextLines = passengers.map((p, i) => {
       const passportInfo = p.passportNumber ? `, Passport: ${p.passportNumber} (${p.nationality || 'N/A'})` : '';
@@ -299,7 +310,7 @@ export async function sendBookingConfirmation(booking) {
 
     // 1. CUSTOMER EMAIL BODY
     const customerEmailBody = `
-Dear ${booking.customerName},
+Dear ${customerName},
 
 Thank you! Your flight reservation request has been received successfully. 
 
@@ -308,11 +319,11 @@ Our travel specialists will verify your itinerary details and manually issue you
 ====================================================
 RESERVATION RECEIPT
 ====================================================
-Booking Reference: ${booking.bookingReference}
+Booking Reference: ${bookingReference}
 Booking Status: Pending Confirmation
-Amount Charged: $${parseFloat(booking.displayedWebsitePrice).toFixed(2)} USD
-Transaction ID: ${booking.transactionId || 'Offline Verified'}
-Booking Date: ${new Date(booking.bookingDate).toLocaleString()}
+Amount Charged: $${parseFloat(displayedWebsitePrice).toFixed(2)} USD
+Transaction ID: ${transactionId}
+Booking Date: ${new Date(bookingDate).toLocaleString()}
 
 TRAVELERS:
 ${passengerTextLines}
@@ -337,22 +348,22 @@ The Final Seat LLC
     const adminEmailBody = `
 ⚠️ NEW FLIGHT BOOKING REQUEST - MANUAL TICKETING REQUIRED
 ====================================================
-Booking Reference: ${booking.bookingReference}
+Booking Reference: ${bookingReference}
 Booking Status: Pending Confirmation
-Booking Date: ${new Date(booking.bookingDate).toLocaleString()}
+Booking Date: ${new Date(bookingDate).toLocaleString()}
 
 PRICING & VERIFICATION:
 -----------------------
-Original API Price: $${parseFloat(booking.originalApiPrice).toFixed(2)} USD
-Website Displayed Price: $${parseFloat(booking.displayedWebsitePrice).toFixed(2)} USD (90% markup rule verified)
-Stripe Payment Status: ${booking.paymentStatus}
-Transaction Reference: ${booking.transactionId}
+Original API Price: $${parseFloat(originalApiPrice).toFixed(2)} USD
+Website Displayed Price: $${parseFloat(displayedWebsitePrice).toFixed(2)} USD (90% markup rule verified)
+Stripe Payment Status: ${paymentStatus}
+Transaction Reference: ${transactionId}
 
 PRIMARY CONTACT:
 ----------------
-Name: ${booking.customerName}
-Email: ${booking.email}
-Phone: ${booking.phone}
+Name: ${customerName}
+Email: ${email}
+Phone: ${phone}
 
 TRAVELERS DETAILS:
 ------------------
@@ -381,25 +392,25 @@ Please review traveler credentials, verify original fares, issue the ticket manu
       // Send to Customer
       await transporter.sendMail({
         from: process.env.EMAIL_USER,
-        to: booking.email,
-        subject: `Flight Booking Received - Ref: ${booking.bookingReference}`,
+        to: email,
+        subject: `Flight Booking Received - Ref: ${bookingReference}`,
         text: customerEmailBody,
         html: customerEmailBody.replace(/\n/g, '<br>')
       });
 
       // Send to Admins
       const adminEmails = getInquiryRecipients();
-      for (const email of adminEmails) {
+      for (const emailAddress of adminEmails) {
         await transporter.sendMail({
           from: process.env.EMAIL_USER,
-          to: email,
-          subject: `🚨 [Manual Ticket Needed] New Booking Ref: ${booking.bookingReference}`,
+          to: emailAddress,
+          subject: `🚨 [Manual Ticket Needed] New Booking Ref: ${bookingReference}`,
           text: adminEmailBody,
           html: adminEmailBody.replace(/\n/g, '<br>')
         });
       }
       
-      console.log(`✅ Success/Admin notification emails sent for ${booking.bookingReference}`);
+      console.log(`✅ Success/Admin notification emails sent for ${bookingReference}`);
       return { success: true };
     }
 

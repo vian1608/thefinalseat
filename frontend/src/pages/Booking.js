@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { paymentAPI } from '../services/api';
+import { paymentAPI, bookingAPI } from '../services/api';
 
 import AccordionSection from '../components/AccordionSection';
 import ItineraryCard from '../components/ItineraryCard';
@@ -22,6 +22,15 @@ function Booking() {
   const [returnFlight, setReturnFlight] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Unique session key for abandoned booking tracking
+  const abandonedSessionKey = useRef(
+    sessionStorage.getItem('abandonedSessionKey') ||
+    `ab_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+  );
+  useEffect(() => {
+    sessionStorage.setItem('abandonedSessionKey', abandonedSessionKey.current);
+  }, []);
 
   // Accordion state
   const [openSections, setOpenSections] = useState({ travellers: true, contact: false, requests: false, payment: false });
@@ -92,6 +101,16 @@ function Booking() {
       initialList.push(createPassenger('infant'));
     }
     setPassengersList(initialList);
+
+    // Save abandoned booking snapshot to Supabase
+    bookingAPI.saveAbandoned({
+      sessionKey: abandonedSessionKey.current,
+      selectedFlight: flightData,
+      returnFlight: returnFlightData,
+      travellerInfo: null,
+      contactInfo: null,
+      currentStep: 'travellers',
+    }).catch(() => {/* non-blocking */});
   }, [navigate]);
 
   function createPassenger(role) {
@@ -217,6 +236,11 @@ function Booking() {
         specialRequests,
         passengers: passengersList,
       }));
+      sessionStorage.setItem('pricingTotal', pricing.total.toString());
+
+      // Delete abandoned booking record now that payment is proceeding
+      bookingAPI.deleteAbandoned(abandonedSessionKey.current).catch(() => {});
+      sessionStorage.removeItem('abandonedSessionKey');
 
       const response = await paymentAPI.createStripeSession({
         type: 'booking',

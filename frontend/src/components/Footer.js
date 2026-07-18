@@ -17,7 +17,7 @@ function Footer() {
             <ul>
               <li><Link to="/">Flights</Link></li>
               <li><Link to="/amtrak">Amtrak Assistance</Link></li>
-              <li><Link to="/payment">Secure Payment</Link></li>
+              <li><Link to="/my-bookings">My Bookings</Link></li>
               <li><Link to="/contact">Contact Information</Link></li>
             </ul>
           </div>
