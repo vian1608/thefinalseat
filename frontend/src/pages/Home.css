@@ -116,27 +116,31 @@
 }
 
 #inquiry .container {
-  max-width: 1260px;
-  width: 100%;
-  padding: 0 2rem;
+  width: 100% !important;
+  max-width: 1260px !important;
+  margin: 0 auto !important;
+  padding: 0 2rem !important;
+  box-sizing: border-box !important;
 }
 
 .inquiry-split-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  gap: 2rem;
-  align-items: stretch;
-  width: 100%;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 380px !important;
+  gap: 2rem !important;
+  align-items: start !important;
+  width: 100% !important;
 }
 
 .inquiry-main-panel {
   display: flex;
   flex-direction: column;
+  min-width: 0 !important;
 }
 
 .inquiry-side-panel {
   display: flex;
   flex-direction: column;
+  min-width: 0 !important;
 }
 
 .support-inquiry-card {

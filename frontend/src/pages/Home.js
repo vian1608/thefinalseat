@@ -633,7 +633,7 @@ function Home() {
             </div>
 
             <div className="inquiry-side-panel">
-              <div className="flights-inquiry-card support-inquiry-card" style={{ height: '100%', margin: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div className="flights-inquiry-card support-inquiry-card" style={{ height: 'auto', margin: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
                   <h2 style={{ fontSize: '1.6rem', color: '#1e293b', marginBottom: '0.75rem', fontWeight: 800 }}>Need Immediate Support?</h2>
                   <p style={{ color: '#475569', fontSize: '0.98rem', lineHeight: '1.6', marginBottom: '1.5rem' }}>
