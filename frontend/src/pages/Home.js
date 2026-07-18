@@ -5,7 +5,7 @@ import HeroSlider from '../components/HeroSlider';
 import AirportAutocomplete from '../components/AirportAutocomplete';
 import InquiryLocationSelect from '../components/InquiryLocationSelect';
 import CustomSelect from '../components/CustomSelect';
-import DatePicker from '../components/DatePicker';
+import TravelDatePicker from '../components/TravelDatePicker';
 import { flightAirportSelectGroups } from '../data/flightAirports';
 import CustomerReviews from '../components/CustomerReviews';
 import { inquiryAPI } from '../services/api';
@@ -416,7 +416,7 @@ function Home() {
                       {/* Dates Row */}
                       <div className="flights-form__row" style={{ gap: '1.25rem', marginTop: '1.25rem' }}>
                         <div className="flights-form__group" style={{ margin: 0 }}>
-                          <DatePicker
+                          <TravelDatePicker
                             id="search-departure-date"
                             label="Departure Date"
                             value={searchData.departure}
@@ -426,7 +426,7 @@ function Home() {
                           />
                         </div>
                         <div className="flights-form__group" style={{ margin: 0, opacity: searchData.tripType === 'oneway' ? 0.5 : 1 }}>
-                          <DatePicker
+                          <TravelDatePicker
                             id="search-return-date"
                             label="Return Date"
                             value={searchData.returnDate}
@@ -569,7 +569,7 @@ function Home() {
                       </div>
                       <div className="flights-form__row">
                         <div className="flights-form__group">
-                          <DatePicker
+                          <TravelDatePicker
                             id="flight-date"
                             label="Departure date"
                             value={formData.travelDate}
@@ -579,7 +579,7 @@ function Home() {
                         </div>
                         {formData.tripType === 'roundtrip' && (
                           <div className="flights-form__group">
-                            <DatePicker
+                            <TravelDatePicker
                               id="flight-return"
                               label="Return date"
                               value={formData.returnDate}

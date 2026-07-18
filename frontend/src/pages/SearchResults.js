@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { flightAPI } from '../services/api';
 import './SearchResults.css';
+import FlightResultRow, { normalizeFlight } from '../components/FlightResultRow';
 
 // Helper to convert duration string (e.g. "3h 15m") to minutes
 function durationToMinutes(durationStr) {
@@ -22,41 +23,6 @@ function getTimePeriod(timeStr) {
   return 'evening';
 }
 
-// Helper to get initials for fallback logo
-function getInitials(name) {
-  if (!name) return 'FL';
-  const parts = name.split(' ').filter(Boolean);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
-  return name.substring(0, 2).toUpperCase();
-}
-
-// Sub-component to handle broken airline logos safely
-function AirlineLogo({ logoUrl, name }) {
-  const [error, setError] = useState(!logoUrl);
-
-  useEffect(() => {
-    setError(!logoUrl);
-  }, [logoUrl]);
-
-  if (error) {
-    return (
-      <div className="carrier-logo-fallback" title={name}>
-        {getInitials(name)}
-      </div>
-    );
-  }
-
-  return (
-    <img 
-      src={logoUrl} 
-      alt={name} 
-      className="carrier-logo"
-      onError={() => setError(true)}
-    />
-  );
-}
 
 function SearchResults() {
   const location = useLocation();
@@ -76,10 +42,29 @@ function SearchResults() {
   const [arrTimeFilter, setArrTimeFilter] = useState('all');
   const [maxDuration, setMaxDuration] = useState(1440); // in minutes
   const [sliderDuration, setSliderDuration] = useState(1440);
-  const [sortBy, setSortBy] = useState('cheapest');
+  const [sortBy, setSortBy] = useState('best');
+
+  // Accordion Expand State
+  const [expandedFlightId, setExpandedFlightId] = useState(null);
+
+  // Top Filter Popover State
+  const [activeFilterPopover, setActiveFilterPopover] = useState(null);
 
   // Mobile Filter Drawer State
   const [showFiltersDrawer, setShowFiltersDrawer] = useState(false);
+
+  const popoverRef = useRef(null);
+
+  // Close popover on click outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (popoverRef.current && !popoverRef.current.contains(event.target)) {
+        setActiveFilterPopover(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const params = location.state?.searchParams || JSON.parse(sessionStorage.getItem('searchParams') || '{}');
@@ -98,6 +83,7 @@ function SearchResults() {
       setError('Missing flight search parameters.');
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location]);
 
   const searchTrains = (params) => {
@@ -265,39 +251,7 @@ function SearchResults() {
     setSelectedStops(prev => ({ ...prev, [stopType]: !prev[stopType] }));
   };
 
-  // Safe data normalization for cards rendering
-  const normalizeFlight = (flight, idx) => {
-    if (!flight) return null;
-    const parsedPrice = parseFloat(flight.price?.total || 0);
-    return {
-      id: flight.id || `normalized-flight-${idx}-${Math.random()}`,
-      airline: flight.airline || 'Unknown Airline',
-      airline_logo: flight.airline_logo || '',
-      flightNumber: flight.flightNumber || 'N/A',
-      price: {
-        total: parsedPrice,
-        formatted: flight.price?.formatted || `$${parsedPrice.toFixed(2)}`
-      },
-      departure: {
-        airport: flight.departure?.airport || 'N/A',
-        city: flight.departure?.city || 'Origin',
-        time: flight.departure?.time || 'N/A',
-        date: flight.departure?.date || 'N/A'
-      },
-      arrival: {
-        airport: flight.arrival?.airport || 'N/A',
-        city: flight.arrival?.city || 'Destination',
-        time: flight.arrival?.time || 'N/A',
-        date: flight.arrival?.date || 'N/A'
-      },
-      duration: flight.duration || 'N/A',
-      stops: typeof flight.stops === 'number' ? flight.stops : 0,
-      class: flight.class || 'Economy',
-      aircraft: flight.aircraft || '',
-      layovers: Array.isArray(flight.layovers) ? flight.layovers : [],
-      isTrain: !!flight.isTrain
-    };
-  };
+
 
   // 1. FILTERING
   const filteredFlights = flights
@@ -343,6 +297,11 @@ function SearchResults() {
     if (sortBy === 'latest') {
       return (b.departure.time || '').localeCompare(a.departure.time || '');
     }
+    if (sortBy === 'best') {
+      const scoreA = a.price.total + (durationToMinutes(a.duration) * 1.25) + (a.stops * 150);
+      const scoreB = b.price.total + (durationToMinutes(b.duration) * 1.25) + (b.stops * 150);
+      return scoreA - scoreB;
+    }
     return 0;
   });
 
@@ -366,6 +325,12 @@ function SearchResults() {
     setSliderDuration(maxDuration);
     setSelectedAirlines(uniqueAirlines);
   };
+
+  const toggleExpandFlight = (flightId) => {
+    setExpandedFlightId(prev => (prev === flightId ? null : flightId));
+  };
+
+
 
   // Rendering Loading Skeletons
   if (loading) {
@@ -423,7 +388,7 @@ function SearchResults() {
     );
   }
 
-  // Render Sidebar Content (Shared between desktop aside and mobile modal drawer)
+  // Render Sidebar Filters Content
   const renderSidebarFilters = () => (
     <>
       <div className="sidebar-header-row">
@@ -567,22 +532,183 @@ function SearchResults() {
         {/* RESULTS SECTION */}
         <div className="results-main-panel">
           
-          {/* Sorting & Stats bar */}
-          <div className="results-toolbar">
-            <div className="results-meta-text">
-              <h2>{isRail ? 'Amtrak Train Schedules' : 'Flight Search Results'}</h2>
-              <div className="meta-sub-row">
-                <span className="results-count">{sortedFlights.length} option(s) matching criteria</span>
+          {/* Top Bar with Route, Dates, and Outlined filter chips */}
+          <div className="results-toolbar-row">
+            <div className="results-meta-header-row">
+              <div className="route-dates-summary">
+                <span className="summary-route">
+                  {searchParams?.from?.split('(')[0]?.trim() || 'Origin'} <i className="fas fa-arrow-right route-arrow-icon"></i> {searchParams?.to?.split('(')[0]?.trim() || 'Destination'}
+                </span>
+                <span className="summary-date-separator">·</span>
+                <span className="summary-date">
+                  {searchParams?.departure ? new Date(searchParams.departure + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Departure'}
+                  {searchParams?.returnDate && ` – ${new Date(searchParams.returnDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                </span>
+              </div>
+              <span className="results-count-badge">{sortedFlights.length} result(s)</span>
+            </div>
+
+            {/* Outlined Filter Chips */}
+            <div className="filter-chips-container" ref={popoverRef}>
+              {/* Stops chip */}
+              <div className="filter-chip-wrapper">
                 <button 
                   type="button" 
-                  className="mobile-filter-trigger" 
-                  onClick={() => setShowFiltersDrawer(true)}
+                  className={`filter-chip ${!selectedStops.nonstop || !selectedStops.oneStop || !selectedStops.twoPlusStops ? 'selected' : ''}`}
+                  onClick={() => setActiveFilterPopover(prev => (prev === 'stops' ? null : 'stops'))}
                 >
-                  <i className="fas fa-filter"></i> Filters 
-                  {activeFiltersCount > 0 && <span className="filter-badge-count">{activeFiltersCount}</span>}
+                  <span>Stops</span>
+                  <i className="fas fa-chevron-down chip-chevron"></i>
                 </button>
+                {activeFilterPopover === 'stops' && (
+                  <div className="filter-chip-popover">
+                    <label className="checkbox-filter-row">
+                      <input type="checkbox" checked={selectedStops.nonstop} onChange={() => toggleStop('nonstop')} />
+                      <span className="custom-checkbox"></span>
+                      <span>Nonstop</span>
+                    </label>
+                    <label className="checkbox-filter-row">
+                      <input type="checkbox" checked={selectedStops.oneStop} onChange={() => toggleStop('oneStop')} />
+                      <span className="custom-checkbox"></span>
+                      <span>1 Stop</span>
+                    </label>
+                    <label className="checkbox-filter-row">
+                      <input type="checkbox" checked={selectedStops.twoPlusStops} onChange={() => toggleStop('twoPlusStops')} />
+                      <span className="custom-checkbox"></span>
+                      <span>2+ Stops</span>
+                    </label>
+                  </div>
+                )}
               </div>
+
+              {/* Airlines chip */}
+              <div className="filter-chip-wrapper">
+                <button 
+                  type="button" 
+                  className={`filter-chip ${selectedAirlines.length < uniqueAirlines.length ? 'selected' : ''}`}
+                  onClick={() => setActiveFilterPopover(prev => (prev === 'airlines' ? null : 'airlines'))}
+                >
+                  <span>Airlines</span>
+                  <i className="fas fa-chevron-down chip-chevron"></i>
+                </button>
+                {activeFilterPopover === 'airlines' && (
+                  <div className="filter-chip-popover max-height-popover">
+                    {uniqueAirlines.map(airline => (
+                      <label key={airline} className="checkbox-filter-row">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedAirlines.includes(airline)} 
+                          onChange={() => toggleAirline(airline)} 
+                        />
+                        <span className="custom-checkbox"></span>
+                        <span className="truncate">{airline}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Price chip */}
+              <div className="filter-chip-wrapper">
+                <button 
+                  type="button" 
+                  className={`filter-chip ${sliderPrice < maxPrice ? 'selected' : ''}`}
+                  onClick={() => setActiveFilterPopover(prev => (prev === 'price' ? null : 'price'))}
+                >
+                  <span>Price: Under ${sliderPrice}</span>
+                  <i className="fas fa-chevron-down chip-chevron"></i>
+                </button>
+                {activeFilterPopover === 'price' && (
+                  <div className="filter-chip-popover slider-popover">
+                    <label className="filter-label">Max Price: <strong>${sliderPrice}</strong></label>
+                    <input 
+                      type="range" 
+                      min={flights.length > 0 ? Math.min(...flights.map(f => parseFloat(f.price?.total || 0))) : 0}
+                      max={maxPrice || 3000}
+                      value={sliderPrice} 
+                      onChange={(e) => setSliderPrice(parseFloat(e.target.value))}
+                      className="filter-slider"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Times chip */}
+              <div className="filter-chip-wrapper">
+                <button 
+                  type="button" 
+                  className={`filter-chip ${depTimeFilter !== 'all' || arrTimeFilter !== 'all' ? 'selected' : ''}`}
+                  onClick={() => setActiveFilterPopover(prev => (prev === 'times' ? null : 'times'))}
+                >
+                  <span>Times</span>
+                  <i className="fas fa-chevron-down chip-chevron"></i>
+                </button>
+                {activeFilterPopover === 'times' && (
+                  <div className="filter-chip-popover dropdown-popover">
+                    <span className="popover-section-title">Departure</span>
+                    <select value={depTimeFilter} onChange={(e) => setDepTimeFilter(e.target.value)} className="filter-select popover-select">
+                      <option value="all">Any Departure Time</option>
+                      <option value="morning">Morning (5 AM - 12 PM)</option>
+                      <option value="afternoon">Afternoon (12 PM - 6 PM)</option>
+                      <option value="evening">Evening (6 PM - 5 AM)</option>
+                    </select>
+
+                    <span className="popover-section-title" style={{ marginTop: '10px', display: 'block' }}>Arrival</span>
+                    <select value={arrTimeFilter} onChange={(e) => setArrTimeFilter(e.target.value)} className="filter-select popover-select">
+                      <option value="all">Any Arrival Time</option>
+                      <option value="morning">Morning (5 AM - 12 PM)</option>
+                      <option value="afternoon">Afternoon (12 PM - 6 PM)</option>
+                      <option value="evening">Evening (6 PM - 5 AM)</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Duration chip */}
+              <div className="filter-chip-wrapper">
+                <button 
+                  type="button" 
+                  className={`filter-chip ${sliderDuration < maxDuration ? 'selected' : ''}`}
+                  onClick={() => setActiveFilterPopover(prev => (prev === 'duration' ? null : 'duration'))}
+                >
+                  <span>Duration</span>
+                  <i className="fas fa-chevron-down chip-chevron"></i>
+                </button>
+                {activeFilterPopover === 'duration' && (
+                  <div className="filter-chip-popover slider-popover">
+                    <label className="filter-label">Max Travel Time: <strong>{Math.floor(sliderDuration / 60)}h {sliderDuration % 60}m</strong></label>
+                    <input 
+                      type="range" 
+                      min={30}
+                      max={maxDuration || 1440}
+                      value={sliderDuration} 
+                      onChange={(e) => setSliderDuration(parseInt(e.target.value, 10))}
+                      className="filter-slider"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <button 
+                type="button" 
+                className="mobile-filter-trigger-chip" 
+                onClick={() => setShowFiltersDrawer(true)}
+              >
+                <i className="fas fa-sliders-h"></i> All Filters 
+                {activeFiltersCount > 0 && <span className="badge">{activeFiltersCount}</span>}
+              </button>
+
+              {activeFiltersCount > 0 && (
+                <button type="button" className="clear-all-chips-btn" onClick={handleClearAllFilters}>
+                  Reset
+                </button>
+              )}
             </div>
+          </div>
+
+          {/* Results Toolbar with Heading & Sort dropdown */}
+          <div className="results-toolbar-comparison">
+            <h3 className="results-heading-google">{isRail ? 'Departing Trains' : 'Departing Flights'}</h3>
             
             <div className="sorting-group">
               <label htmlFor="results-sort-select">Sort by:</label>
@@ -593,6 +719,7 @@ function SearchResults() {
                   onChange={(e) => setSortBy(e.target.value)} 
                   className="sort-select"
                 >
+                  <option value="best">Best Flights</option>
                   <option value="cheapest">Cheapest Price</option>
                   <option value="fastest">Shortest Duration</option>
                   <option value="earliest">Earliest Departure</option>
@@ -603,8 +730,8 @@ function SearchResults() {
             </div>
           </div>
 
-          {/* Card list */}
-          <div className="flight-results">
+          {/* Flight comparison rows */}
+          <div className="flight-results-rows-container">
             {sortedFlights.length === 0 ? (
               <div className="no-results-card">
                 <div className="no-results-icon-circle">
@@ -632,81 +759,16 @@ function SearchResults() {
               </div>
             ) : (
               sortedFlights.map((flight) => (
-                <div key={flight.id} className={`flight-card ${isRail ? 'flight-card--rail' : ''}`}>
-                  <div className="flight-header">
-                    <div className="airline-info">
-                      <div className="carrier-logo-wrapper">
-                        <AirlineLogo logoUrl={flight.airline_logo} name={flight.airline} />
-                      </div>
-                      <div>
-                        <h4>{flight.airline}</h4>
-                        <span className="flight-number">{flight.flightNumber}</span>
-                      </div>
-                    </div>
-                    <div className="flight-price">
-                      <span className="price">{flight.price.formatted}</span>
-                      <small className="website-price-notice">Web Fare Only</small>
-                    </div>
-                  </div>
-                  <div className="flight-details">
-                    <div className="flight-route">
-                      <div className="route-item">
-                        <span className="time">{flight.departure.time}</span>
-                        <span className="airport">{flight.departure.airport}</span>
-                        <span className="date">{flight.departure.date}</span>
-                      </div>
-                      <div className="route-arrow">
-                        <span className="duration">{flight.duration}</span>
-                        <div className="arrow-line">
-                          <span className="dot start"></span>
-                          <span className="line"></span>
-                          <i className="fas fa-plane arrow-plane-icon"></i>
-                          <span className="dot end"></span>
-                        </div>
-                        <span className="stop-count">
-                          {flight.stops === 0 ? 'Nonstop' : `${flight.stops} stop(s)`}
-                        </span>
-                      </div>
-                      <div className="route-item">
-                        <span className="time">{flight.arrival.time}</span>
-                        <span className="airport">{flight.arrival.airport}</span>
-                        <span className="date">{flight.arrival.date}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="flight-info-row">
-                      <div className="flight-info-tags">
-                        <span className="info-tag"><i className="fas fa-chair"></i> {flight.class}</span>
-                        <span className="info-tag"><i className={`fas ${isRail ? 'fa-subway' : 'fa-plane'}`}></i> {flight.stops === 0 ? 'Direct / Nonstop' : `${flight.stops} Stop(s)`}</span>
-                        {flight.aircraft && <span className="info-tag"><i className="fas fa-info-circle"></i> {flight.aircraft}</span>}
-                      </div>
-
-                      {/* Layovers detail */}
-                      {flight.layovers && flight.layovers.length > 0 && (
-                        <div className="flight-layovers-bar">
-                          <span className="layover-title">Layover:</span>
-                          <div className="layover-tags-list">
-                            {flight.layovers.map((l, lIdx) => (
-                              <span key={lIdx} className="layover-tag">
-                                {l.airportCode} ({Math.floor(l.duration / 60)}h {l.duration % 60}m)
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="flight-actions">
-                    <button 
-                      className="book-btn"
-                      onClick={() => handleBookFlight(flight)}
-                    >
-                      <span>Select Flight</span>
-                      <i className="fas fa-chevron-right select-btn-chevron"></i>
-                    </button>
-                  </div>
-                </div>
+                <FlightResultRow
+                  key={flight.id}
+                  flight={flight}
+                  isExpanded={expandedFlightId === flight.id}
+                  onToggleExpand={() => toggleExpandFlight(flight.id)}
+                  onSelect={handleBookFlight}
+                  actionLabel="Select Flight"
+                  isRail={isRail}
+                  travelersCount={parseInt(searchParams?.adults || 1, 10)}
+                />
               ))
             )}
           </div>

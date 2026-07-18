@@ -1,32 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { flightAPI } from '../services/api';
+import FlightResultRow, { normalizeFlight } from '../components/FlightResultRow';
 import './SearchResults.css';
 
 function ReturnFlightSelection() {
   const navigate = useNavigate();
   const [flights, setFlights] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchParams, setSearchParams] = useState(null);
+
+  // Accordion Expand State
+  const [expandedFlightId, setExpandedFlightId] = useState(null);
 
   useEffect(() => {
     const outboundFlight = JSON.parse(sessionStorage.getItem('selectedFlight') || 'null');
-    const searchParams = JSON.parse(sessionStorage.getItem('searchParams') || '{}');
+    const params = JSON.parse(sessionStorage.getItem('searchParams') || '{}');
     
-    if (!outboundFlight || !searchParams.returnDate) {
+    if (!outboundFlight || !params.returnDate) {
       navigate('/');
       return;
     }
 
+    setSearchParams(params);
+
     // Set search return parameter: reverse route
     searchReturnFlights({
-      from: searchParams.to,
-      to: searchParams.from,
-      departure: searchParams.returnDate,
-      adults: searchParams.adults || 1,
-      children: searchParams.children || 0,
-      infants: searchParams.infants || 0,
-      travelClass: searchParams.travelClass || 'economy',
-      currency: searchParams.currency || 'USD'
+      from: params.to,
+      to: params.from,
+      departure: params.returnDate,
+      adults: params.adults || 1,
+      children: params.children || 0,
+      infants: params.infants || 0,
+      travelClass: params.travelClass || 'economy',
+      currency: params.currency || 'USD'
     });
   }, [navigate]);
 
@@ -47,13 +54,40 @@ function ReturnFlightSelection() {
     navigate('/booking');
   };
 
+  const toggleExpandFlight = (flightId) => {
+    setExpandedFlightId(prev => (prev === flightId ? null : flightId));
+  };
+
+  const normalizedFlights = flights
+    .map((f, idx) => normalizeFlight(f, idx))
+    .filter(Boolean);
+
+  // Rendering Loading Skeletons for a modern feel
   if (loading) {
     return (
       <div className="search-results-page">
-        <div className="container">
-          <div className="loading-spinner">
-            <i className="fas fa-spinner fa-spin"></i>
-            <p>Searching for return flight options...</p>
+        <div className="container" style={{ maxWidth: '1000px', margin: '0 auto' }}>
+          <div className="results-toolbar-comparison" style={{ marginBottom: '20px' }}>
+            <div className="skeleton-line-title pulsing"></div>
+          </div>
+
+          <div className="flight-results-rows-container">
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="flight-card skeleton-card">
+                <div className="flight-header skeleton-flex">
+                  <div className="skeleton-circle pulsing"></div>
+                  <div className="skeleton-lines">
+                    <div className="skeleton-line-heading pulsing"></div>
+                    <div className="skeleton-line-sub pulsing"></div>
+                  </div>
+                  <div className="skeleton-price-block pulsing"></div>
+                </div>
+                <div className="flight-details skeleton">
+                  <div className="skeleton-route-bar pulsing"></div>
+                  <div className="skeleton-info-tags pulsing"></div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -64,90 +98,42 @@ function ReturnFlightSelection() {
     <div className="search-results-page">
       <div className="container" style={{ maxWidth: '1000px', margin: '0 auto' }}>
         
-        <div className="results-toolbar" style={{ marginBottom: '20px' }}>
+        {/* Results Toolbar */}
+        <div className="results-toolbar-comparison" style={{ marginBottom: '20px' }}>
           <div className="results-meta-text">
-            <h2>Select Return Flight</h2>
-            <p>Choose your returning flight schedule to complete your round-trip booking</p>
+            <h2 style={{ fontSize: '1.4rem', color: '#1e293b', fontWeight: 700, margin: '0 0 4px 0' }}>Select Return Flight</h2>
+            <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0, fontWeight: 500 }}>
+              Choose your returning flight from {searchParams?.to?.split('(')[0]?.trim()} to {searchParams?.from?.split('(')[0]?.trim()} to complete your round-trip booking
+            </p>
           </div>
         </div>
 
-        <div className="flight-results">
-          {flights.length === 0 ? (
-            <div className="no-results">
-              <i className="fas fa-plane-departure"></i>
-              <p>No return flights found matching dates and destinations.</p>
-              <button onClick={() => navigate('/')} className="btn-primary">Back to Home</button>
+        {/* Flight results list */}
+        <div className="flight-results-rows-container">
+          {normalizedFlights.length === 0 ? (
+            <div className="no-results-card">
+              <div className="no-results-icon-circle">
+                <i className="fas fa-plane-departure"></i>
+              </div>
+              <h3>No return flights found</h3>
+              <p>No return flights match your outbound selection, date, and routes. Try modifying your travel criteria.</p>
+              <button onClick={() => navigate('/')} className="btn-outline-modify">Back to Home</button>
             </div>
           ) : (
-            flights.map((flight, index) => (
-              <div key={flight.id || index} className="flight-card">
-                <div className="flight-header">
-                  <div className="airline-info">
-                    <div className="carrier-logo-wrapper">
-                      <img 
-                        src={flight.airline_logo || 'https://www.gstatic.com/flights/airline_logos/70px/airline.png'} 
-                        alt={flight.airline} 
-                        className="carrier-logo"
-                        onError={(e) => { e.target.src = 'https://www.gstatic.com/flights/airline_logos/70px/airline.png'; }}
-                      />
-                    </div>
-                    <div>
-                      <h4>{flight.airline}</h4>
-                      <span className="flight-number">{flight.flightNumber}</span>
-                    </div>
-                  </div>
-                  <div className="flight-price">
-                    <span className="price">{flight.price?.formatted || '$0.00'}</span>
-                    <small className="website-price-notice">Web Fare Only</small>
-                  </div>
-                </div>
-                <div className="flight-details">
-                  <div className="flight-route">
-                    <div className="route-item">
-                      <span className="time">{flight.departure?.time || 'N/A'}</span>
-                      <span className="airport">{flight.departure?.airport || 'N/A'}</span>
-                      <span className="date">{flight.departure?.date || 'N/A'}</span>
-                    </div>
-                    <div className="route-arrow">
-                      <i className="fas fa-arrow-right"></i>
-                      <span className="duration">{flight.duration || 'N/A'}</span>
-                    </div>
-                    <div className="route-item">
-                      <span className="time">{flight.arrival?.time || 'N/A'}</span>
-                      <span className="airport">{flight.arrival?.airport || 'N/A'}</span>
-                      <span className="date">{flight.arrival?.date || 'N/A'}</span>
-                    </div>
-                  </div>
-                  <div className="flight-info">
-                    <span><i className="fas fa-chair"></i> {flight.class || 'Economy'}</span>
-                    <span><i className="fas fa-plane"></i> {flight.stops === 0 ? 'Direct / Nonstop' : `${flight.stops} stop(s)`}</span>
-                    {flight.aircraft && <span><i className="fas fa-info-circle"></i> {flight.aircraft}</span>}
-                  </div>
-
-                  {/* Layovers */}
-                  {flight.layovers && flight.layovers.length > 0 && (
-                    <div className="flight-layovers-bar">
-                      <span>Layover:</span>
-                      {flight.layovers.map((l, lIdx) => (
-                        <span key={lIdx} className="layover-tag">
-                          {l.airportCode} ({Math.floor(l.duration / 60)}h {l.duration % 60}m)
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flight-actions">
-                  <button 
-                    className="book-btn"
-                    onClick={() => handleSelectReturnFlight(flight)}
-                  >
-                    Select Return Flight <i className="fas fa-chevron-right" style={{ fontSize: '0.8rem', marginLeft: '6px' }}></i>
-                  </button>
-                </div>
-              </div>
+            normalizedFlights.map((flight) => (
+              <FlightResultRow
+                key={flight.id}
+                flight={flight}
+                isExpanded={expandedFlightId === flight.id}
+                onToggleExpand={() => toggleExpandFlight(flight.id)}
+                onSelect={handleSelectReturnFlight}
+                actionLabel="Select Return Flight"
+                travelersCount={parseInt(searchParams?.adults || 1, 10)}
+              />
             ))
           )}
         </div>
+
       </div>
     </div>
   );
