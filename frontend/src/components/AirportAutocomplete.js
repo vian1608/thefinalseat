@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import { airportAPI } from '../services/api';
 import './AirportAutocomplete.css';
 
-function AirportAutocomplete({ label, id, value, onChange, placeholder, required = false }) {
+function AirportAutocomplete({ label, id, value, onChange, placeholder, excludeCode, required = false }) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef(null);
   const debounceTimer = useRef(null);
 
-  // Sync display query with external value (e.g., if set from parent or sessionStorage)
+  // Sync display query with external value (e.g. from parent/sessionStorage)
   useEffect(() => {
     if (value) {
       setQuery(value);
@@ -38,12 +39,13 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, required
     }
 
     setLoading(true);
-    const backendUrl = process.env.REACT_APP_API_URL || '';
-    
-    axios.get(`${backendUrl}/api/airports/search`, { params: { q: searchVal } })
+    airportAPI.search(searchVal)
       .then(response => {
-        if (response.data && response.data.success) {
-          setSuggestions(response.data.data || []);
+        if (response && response.success) {
+          const list = response.data || [];
+          // Filter out excluded code
+          const filtered = list.filter(item => item.code !== excludeCode);
+          setSuggestions(filtered);
         }
       })
       .catch(err => {
@@ -51,13 +53,14 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, required
       })
       .finally(() => {
         setLoading(false);
+        setActiveIndex(-1);
       });
   };
 
   const handleInputChange = (e) => {
     const val = e.target.value;
     setQuery(val);
-    onChange(val); // Update parent state immediately so required validation works
+    onChange(val, null); // Clear parent object representation until fully selected
     setShowSuggestions(true);
 
     if (debounceTimer.current) {
@@ -72,9 +75,64 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, required
   const handleSelectSuggestion = (suggestion) => {
     const selectedText = `${suggestion.city} (${suggestion.code})`;
     setQuery(selectedText);
-    onChange(selectedText);
+    onChange(selectedText, suggestion);
     setShowSuggestions(false);
   };
+
+  // Keyboard navigation
+  const handleKeyDown = (e) => {
+    if (!showSuggestions) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        setShowSuggestions(true);
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case 'Escape':
+        e.preventDefault();
+        setShowSuggestions(false);
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        setActiveIndex(prev => (prev + 1) % (suggestions.length || 1));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setActiveIndex(prev => (prev - 1 + (suggestions.length || 1)) % (suggestions.length || 1));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (activeIndex >= 0 && activeIndex < suggestions.length) {
+          handleSelectSuggestion(suggestions[activeIndex]);
+        } else if (suggestions.length > 0) {
+          // If activeIndex is -1, enter selects the first result
+          handleSelectSuggestion(suggestions[0]);
+        }
+        break;
+      case 'Tab':
+        setShowSuggestions(false);
+        break;
+      default:
+        break;
+    }
+  };
+
+  // Helper to highlight matching characters
+  const highlightMatch = (text, queryText) => {
+    if (!text || !queryText) return text;
+    // Clean query text for regex compatibility
+    const cleanQuery = queryText.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const parts = text.split(new RegExp(`(${cleanQuery})`, 'gi'));
+    return parts.map((part, index) => 
+      part.toLowerCase() === queryText.toLowerCase() 
+        ? <strong key={index} className="autocomplete-highlight">{part}</strong> 
+        : part
+    );
+  };
+
+  const hasSuggestions = suggestions.length > 0;
+  const showEmptyMessage = showSuggestions && !loading && query.length >= 2 && !hasSuggestions;
 
   return (
     <div className="airport-autocomplete-container" ref={containerRef}>
@@ -86,6 +144,7 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, required
           id={id}
           value={query}
           onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
           onFocus={() => setShowSuggestions(true)}
           placeholder={placeholder}
           required={required}
@@ -95,24 +154,40 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, required
         {loading && <i className="fas fa-circle-notch fa-spin input-loading-icon"></i>}
       </div>
 
-      {showSuggestions && suggestions.length > 0 && (
-        <ul className="autocomplete-suggestions-list">
-          {suggestions.map((item, idx) => (
-            <li 
-              key={item.code || idx} 
-              onClick={() => handleSelectSuggestion(item)}
-              className="suggestion-item"
-            >
-              <div className="suggestion-icon">
-                <i className="fas fa-plane"></i>
-              </div>
-              <div className="suggestion-details">
-                <span className="suggestion-code">{item.code}</span>
-                <span className="suggestion-name">{item.name}</span>
-                <span className="suggestion-location">{item.city}{item.country ? `, ${item.country}` : ''}</span>
-              </div>
+      {showSuggestions && (hasSuggestions || showEmptyMessage) && (
+        <ul className="autocomplete-suggestions-list" role="listbox">
+          {hasSuggestions ? (
+            suggestions.map((item, idx) => {
+              const isActive = idx === activeIndex;
+              return (
+                <li 
+                  key={item.code} 
+                  id={`${id}-suggestion-${idx}`}
+                  role="option"
+                  aria-selected={isActive}
+                  onClick={() => handleSelectSuggestion(item)}
+                  onMouseEnter={() => setActiveIndex(idx)}
+                  className={`suggestion-item ${isActive ? 'active' : ''}`}
+                >
+                  <div className="suggestion-icon">
+                    <i className="fas fa-plane"></i>
+                  </div>
+                  <div className="suggestion-details">
+                    <span className="suggestion-name">{highlightMatch(item.name, query)}</span>
+                    <span className="suggestion-location">
+                      <strong>{highlightMatch(item.code, query)}</strong> · {highlightMatch(item.city, query)}
+                      {item.state ? `, ${highlightMatch(item.state, query)}` : ''} · {highlightMatch(item.country, query)}
+                    </span>
+                  </div>
+                </li>
+              );
+            })
+          ) : (
+            <li className="suggestion-empty-item">
+              <i className="fas fa-exclamation-circle empty-icon"></i>
+              <span>No airports found</span>
             </li>
-          ))}
+          )}
         </ul>
       )}
     </div>

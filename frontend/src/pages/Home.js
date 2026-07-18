@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import HeroSlider from '../components/HeroSlider';
 import AirportAutocomplete from '../components/AirportAutocomplete';
 import InquiryLocationSelect from '../components/InquiryLocationSelect';
+import CustomSelect from '../components/CustomSelect';
+import DatePicker from '../components/DatePicker';
 import { flightAirportSelectGroups } from '../data/flightAirports';
 import CustomerReviews from '../components/CustomerReviews';
 import { inquiryAPI } from '../services/api';
@@ -52,6 +54,24 @@ function Home() {
   const [searchData, setSearchData] = useState(initialSearchData);
   const [showPassengerPopup, setShowPassengerPopup] = useState(false);
 
+  const passengerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (passengerRef.current && !passengerRef.current.contains(event.target)) {
+        setShowPassengerPopup(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handlePassengerKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      setShowPassengerPopup(false);
+    }
+  };
+
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -82,6 +102,12 @@ function Home() {
     if (!searchData.from || !searchData.to || !searchData.departure) {
       setSubmitStatus('error');
       setSubmitMessage('Please specify Departure, Arrival, and Date fields.');
+      return;
+    }
+
+    if (searchData.fromAirport?.code && searchData.toAirport?.code && searchData.fromAirport.code === searchData.toAirport.code) {
+      setSubmitStatus('error');
+      setSubmitMessage('Origin and destination airports cannot be the same.');
       return;
     }
 
@@ -119,6 +145,12 @@ function Home() {
       return;
     }
 
+    if (formData.origin && formData.destination && formData.origin === formData.destination) {
+      setSubmitStatus('error');
+      setSubmitMessage('Origin and destination airports cannot be the same.');
+      return;
+    }
+
     const searchParams = {
       from: formData.origin,
       to: formData.destination,
@@ -136,6 +168,12 @@ function Home() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (formData.origin && formData.destination && formData.origin === formData.destination) {
+      setSubmitStatus('error');
+      setSubmitMessage('Origin and destination airports cannot be the same.');
+      return;
+    }
+
     setSubmitStatus('submitting');
     setSubmitMessage('');
 
@@ -198,7 +236,7 @@ function Home() {
               <h2 style={{ fontSize: '1.8rem', color: '#1e293b', marginBottom: '1rem' }}>Need Immediate Support?</h2>
               <p>Skip the form and call us directly to secure your air logistics immediately.</p>
               
-              <a href={SUPPORT_PHONE_HREF} className="call-btn flights-btn flights-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#8b1538', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
+              <a href={SUPPORT_PHONE_HREF} className="call-btn flights-btn flights-btn--cta">
                 <i className="fas fa-phone"></i> Call {SUPPORT_PHONE_DISPLAY}
               </a>
               
@@ -249,51 +287,53 @@ function Home() {
                       
                       {/* Meta selections row (Trip type, Cabin class, Passenger popup, Currency) */}
                       <div className="search-meta-row">
-                        <div className="search-meta-group">
-                          <i className="fas fa-route" style={{ color: '#64748b' }}></i>
-                          <select 
-                            value={searchData.tripType} 
-                            onChange={(e) => handleSearchChange('tripType', e.target.value)}
-                            className="search-meta-select"
-                          >
-                            <option value="roundtrip">Round Trip</option>
-                            <option value="oneway">One Way</option>
-                          </select>
-                        </div>
+                        <CustomSelect 
+                          id="search-trip-type"
+                          value={searchData.tripType} 
+                          onChange={(val) => handleSearchChange('tripType', val)}
+                          options={[
+                            { value: 'roundtrip', label: 'Round Trip' },
+                            { value: 'oneway', label: 'One Way' }
+                          ]}
+                          icon="fas fa-route"
+                          className="search-meta-select-wrapper"
+                        />
                         
-                        <div className="search-meta-group">
-                          <i className="fas fa-chair" style={{ color: '#64748b' }}></i>
-                          <select 
-                            value={searchData.travelClass} 
-                            onChange={(e) => handleSearchChange('travelClass', e.target.value)}
-                            className="search-meta-select"
-                          >
-                            <option value="economy">Economy</option>
-                            <option value="premium">Premium Economy</option>
-                            <option value="business">Business</option>
-                            <option value="first">First Class</option>
-                          </select>
-                        </div>
+                        <CustomSelect 
+                          id="search-travel-class"
+                          value={searchData.travelClass} 
+                          onChange={(val) => handleSearchChange('travelClass', val)}
+                          options={[
+                            { value: 'economy', label: 'Economy' },
+                            { value: 'premium', label: 'Premium Economy' },
+                            { value: 'business', label: 'Business' },
+                            { value: 'first', label: 'First Class' }
+                          ]}
+                          icon="fas fa-chair"
+                          className="search-meta-select-wrapper"
+                        />
 
-                        <div className="search-meta-group">
-                          <i className="fas fa-dollar-sign" style={{ color: '#64748b' }}></i>
-                          <select 
-                            value={searchData.currency} 
-                            onChange={(e) => handleSearchChange('currency', e.target.value)}
-                            className="search-meta-select"
-                          >
-                            <option value="USD">USD ($)</option>
-                            <option value="EUR">EUR (€)</option>
-                            <option value="GBP">GBP (£)</option>
-                            <option value="CAD">CAD (C$)</option>
-                          </select>
-                        </div>
+                        <CustomSelect 
+                          id="search-currency"
+                          value={searchData.currency} 
+                          onChange={(val) => handleSearchChange('currency', val)}
+                          options={[
+                            { value: 'USD', label: 'USD ($)' },
+                            { value: 'EUR', label: 'EUR (€)' },
+                            { value: 'GBP', label: 'GBP (£)' },
+                            { value: 'CAD', label: 'CAD (C$)' }
+                          ]}
+                          icon="fas fa-dollar-sign"
+                          className="search-meta-select-wrapper"
+                        />
 
-                        <div className="search-meta-group" style={{ position: 'relative' }}>
+                        <div className="search-meta-group" style={{ position: 'relative' }} ref={passengerRef} onKeyDown={handlePassengerKeyDown}>
                           <button 
                             type="button" 
-                            className="passenger-trigger-btn"
+                            className={`passenger-trigger-btn ${showPassengerPopup ? 'active' : ''}`}
                             onClick={() => setShowPassengerPopup(!showPassengerPopup)}
+                            aria-haspopup="dialog"
+                            aria-expanded={showPassengerPopup}
                           >
                             <i className="fas fa-user-friends" style={{ color: '#64748b' }}></i>
                             <span>{searchData.adults + searchData.children + searchData.infants} Traveler(s)</span>
@@ -301,7 +341,7 @@ function Home() {
                           </button>
 
                           {showPassengerPopup && (
-                            <div className="passenger-popover">
+                            <div className="passenger-popover" role="dialog" aria-label="Traveler selector">
                               <div className="passenger-row">
                                 <div className="passenger-label">
                                   <span className="passenger-type">Adults</span>
@@ -348,7 +388,11 @@ function Home() {
                             label="Origin Airport"
                             id="search-origin"
                             value={searchData.from}
-                            onChange={(val) => handleSearchChange('from', val)}
+                            excludeCode={searchData.toAirport?.code}
+                            onChange={(val, item) => {
+                              handleSearchChange('from', val);
+                              handleSearchChange('fromAirport', item);
+                            }}
                             placeholder="e.g. New York (JFK)"
                             required
                           />
@@ -358,7 +402,11 @@ function Home() {
                             label="Destination Airport"
                             id="search-destination"
                             value={searchData.to}
-                            onChange={(val) => handleSearchChange('to', val)}
+                            excludeCode={searchData.fromAirport?.code}
+                            onChange={(val, item) => {
+                              handleSearchChange('to', val);
+                              handleSearchChange('toAirport', item);
+                            }}
                             placeholder="e.g. Los Angeles (LAX)"
                             required
                           />
@@ -368,26 +416,24 @@ function Home() {
                       {/* Dates Row */}
                       <div className="flights-form__row" style={{ gap: '1.25rem', marginTop: '1.25rem' }}>
                         <div className="flights-form__group" style={{ margin: 0 }}>
-                          <label htmlFor="search-departure-date">Departure Date</label>
-                          <input 
-                            type="date" 
+                          <DatePicker
                             id="search-departure-date"
+                            label="Departure Date"
                             value={searchData.departure}
-                            onChange={(e) => handleSearchChange('departure', e.target.value)}
+                            onChange={(val) => handleSearchChange('departure', val)}
+                            minDate={new Date().toISOString().split('T')[0]}
                             required
-                            style={{ width: '100%', height: '48px', padding: '0 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '1rem' }}
                           />
                         </div>
                         <div className="flights-form__group" style={{ margin: 0, opacity: searchData.tripType === 'oneway' ? 0.5 : 1 }}>
-                          <label htmlFor="search-return-date">Return Date</label>
-                          <input 
-                            type="date" 
+                          <DatePicker
                             id="search-return-date"
+                            label="Return Date"
                             value={searchData.returnDate}
-                            onChange={(e) => handleSearchChange('returnDate', e.target.value)}
+                            onChange={(val) => handleSearchChange('returnDate', val)}
+                            minDate={searchData.departure || new Date().toISOString().split('T')[0]}
                             disabled={searchData.tripType === 'oneway'}
                             required={searchData.tripType === 'roundtrip'}
-                            style={{ width: '100%', height: '48px', padding: '0 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '1rem' }}
                           />
                         </div>
                       </div>
@@ -455,17 +501,18 @@ function Home() {
                         </div>
                         <div className="flights-form__group">
                           <label htmlFor="flight-passengers">Passengers</label>
-                          <select
+                          <CustomSelect
                             id="flight-passengers"
                             value={formData.passengers}
-                            onChange={(e) => handleChange('passengers', e.target.value)}
-                          >
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="3">3</option>
-                            <option value="4">4</option>
-                            <option value="5+">5+</option>
-                          </select>
+                            onChange={(val) => handleChange('passengers', val)}
+                            options={[
+                              { value: '1', label: '1' },
+                              { value: '2', label: '2' },
+                              { value: '3', label: '3' },
+                              { value: '4', label: '4' },
+                              { value: '5+', label: '5+' }
+                            ]}
+                          />
                         </div>
                       </div>
                       <div className="flights-form__row">
@@ -495,47 +542,49 @@ function Home() {
                       <div className="flights-form__row">
                         <div className="flights-form__group">
                           <label htmlFor="flight-trip-type">Trip type</label>
-                          <select
+                          <CustomSelect
                             id="flight-trip-type"
                             value={formData.tripType}
-                            onChange={(e) => handleChange('tripType', e.target.value)}
-                          >
-                            <option value="oneway">One way</option>
-                            <option value="roundtrip">Round trip</option>
-                          </select>
+                            onChange={(val) => handleChange('tripType', val)}
+                            options={[
+                              { value: 'oneway', label: 'One way' },
+                              { value: 'roundtrip', label: 'Round trip' }
+                            ]}
+                          />
                         </div>
                         <div className="flights-form__group">
                           <label htmlFor="flight-cabin">Preferred cabin</label>
-                          <select
+                          <CustomSelect
                             id="flight-cabin"
                             value={formData.cabinClass}
-                            onChange={(e) => handleChange('cabinClass', e.target.value)}
-                          >
-                            <option value="economy">Economy</option>
-                            <option value="premium">Premium economy</option>
-                            <option value="business">Business</option>
-                            <option value="first">First</option>
-                          </select>
+                            onChange={(val) => handleChange('cabinClass', val)}
+                            options={[
+                              { value: 'economy', label: 'Economy' },
+                              { value: 'premium', label: 'Premium economy' },
+                              { value: 'business', label: 'Business' },
+                              { value: 'first', label: 'First' }
+                            ]}
+                          />
                         </div>
                       </div>
                       <div className="flights-form__row">
                         <div className="flights-form__group">
-                          <label htmlFor="flight-date">Departure date</label>
-                          <input
+                          <DatePicker
                             id="flight-date"
-                            type="date"
+                            label="Departure date"
                             value={formData.travelDate}
-                            onChange={(e) => handleChange('travelDate', e.target.value)}
+                            onChange={(val) => handleChange('travelDate', val)}
+                            minDate={new Date().toISOString().split('T')[0]}
                           />
                         </div>
                         {formData.tripType === 'roundtrip' && (
                           <div className="flights-form__group">
-                            <label htmlFor="flight-return">Return date</label>
-                            <input
+                            <DatePicker
                               id="flight-return"
-                              type="date"
+                              label="Return date"
                               value={formData.returnDate}
-                              onChange={(e) => handleChange('returnDate', e.target.value)}
+                              onChange={(val) => handleChange('returnDate', val)}
+                              minDate={formData.travelDate || new Date().toISOString().split('T')[0]}
                             />
                           </div>
                         )}

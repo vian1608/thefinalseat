@@ -514,3 +514,43 @@
 .passenger-popup-close:hover {
   background-color: #12253f;
 }
+
+/* Call support button and CustomSelect wrappers style overrides */
+.search-meta-select-wrapper {
+  margin: 0;
+}
+
+.call-btn {
+  margin-top: 0.5rem;
+  margin-bottom: 2rem;
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 0.5rem 1rem !important;
+  font-size: 0.9rem !important;
+  font-weight: 700;
+  border-radius: 8px !important;
+  width: fit-content !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (min-width: 901px) {
+  .inquiry-left-panel {
+    display: flex;
+    flex-direction: column;
+  }
+  .inquiry-left-panel .call-btn {
+    align-self: flex-end;
+  }
+}
+
+@media (max-width: 900px) {
+  .inquiry-left-panel .call-btn {
+    margin-left: auto;
+    margin-right: auto;
+    display: flex !important;
+    align-self: center;
+  }
+}
+

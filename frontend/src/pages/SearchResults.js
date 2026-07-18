@@ -22,6 +22,42 @@ function getTimePeriod(timeStr) {
   return 'evening';
 }
 
+// Helper to get initials for fallback logo
+function getInitials(name) {
+  if (!name) return 'FL';
+  const parts = name.split(' ').filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+}
+
+// Sub-component to handle broken airline logos safely
+function AirlineLogo({ logoUrl, name }) {
+  const [error, setError] = useState(!logoUrl);
+
+  useEffect(() => {
+    setError(!logoUrl);
+  }, [logoUrl]);
+
+  if (error) {
+    return (
+      <div className="carrier-logo-fallback" title={name}>
+        {getInitials(name)}
+      </div>
+    );
+  }
+
+  return (
+    <img 
+      src={logoUrl} 
+      alt={name} 
+      className="carrier-logo"
+      onError={() => setError(true)}
+    />
+  );
+}
+
 function SearchResults() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -41,6 +77,9 @@ function SearchResults() {
   const [maxDuration, setMaxDuration] = useState(1440); // in minutes
   const [sliderDuration, setSliderDuration] = useState(1440);
   const [sortBy, setSortBy] = useState('cheapest');
+
+  // Mobile Filter Drawer State
+  const [showFiltersDrawer, setShowFiltersDrawer] = useState(false);
 
   useEffect(() => {
     const params = location.state?.searchParams || JSON.parse(sessionStorage.getItem('searchParams') || '{}');
@@ -226,58 +265,144 @@ function SearchResults() {
     setSelectedStops(prev => ({ ...prev, [stopType]: !prev[stopType] }));
   };
 
+  // Safe data normalization for cards rendering
+  const normalizeFlight = (flight, idx) => {
+    if (!flight) return null;
+    const parsedPrice = parseFloat(flight.price?.total || 0);
+    return {
+      id: flight.id || `normalized-flight-${idx}-${Math.random()}`,
+      airline: flight.airline || 'Unknown Airline',
+      airline_logo: flight.airline_logo || '',
+      flightNumber: flight.flightNumber || 'N/A',
+      price: {
+        total: parsedPrice,
+        formatted: flight.price?.formatted || `$${parsedPrice.toFixed(2)}`
+      },
+      departure: {
+        airport: flight.departure?.airport || 'N/A',
+        city: flight.departure?.city || 'Origin',
+        time: flight.departure?.time || 'N/A',
+        date: flight.departure?.date || 'N/A'
+      },
+      arrival: {
+        airport: flight.arrival?.airport || 'N/A',
+        city: flight.arrival?.city || 'Destination',
+        time: flight.arrival?.time || 'N/A',
+        date: flight.arrival?.date || 'N/A'
+      },
+      duration: flight.duration || 'N/A',
+      stops: typeof flight.stops === 'number' ? flight.stops : 0,
+      class: flight.class || 'Economy',
+      aircraft: flight.aircraft || '',
+      layovers: Array.isArray(flight.layovers) ? flight.layovers : [],
+      isTrain: !!flight.isTrain
+    };
+  };
+
   // 1. FILTERING
-  const filteredFlights = flights.filter(flight => {
-    const price = parseFloat(flight.price?.total || 0);
-    if (price > sliderPrice) return false;
+  const filteredFlights = flights
+    .map((f, idx) => normalizeFlight(f, idx))
+    .filter(Boolean)
+    .filter(flight => {
+      if (flight.price.total > sliderPrice) return false;
 
-    // Stops check
-    const stops = flight.stops || 0;
-    if (stops === 0 && !selectedStops.nonstop) return false;
-    if (stops === 1 && !selectedStops.oneStop) return false;
-    if (stops >= 2 && !selectedStops.twoPlusStops) return false;
+      // Stops check
+      const stops = flight.stops;
+      if (stops === 0 && !selectedStops.nonstop) return false;
+      if (stops === 1 && !selectedStops.oneStop) return false;
+      if (stops >= 2 && !selectedStops.twoPlusStops) return false;
 
-    // Airline check
-    if (selectedAirlines.length > 0 && !selectedAirlines.includes(flight.airline)) return false;
+      // Airline check
+      if (selectedAirlines.length > 0 && !selectedAirlines.includes(flight.airline)) return false;
 
-    // Time ranges check
-    const depPeriod = getTimePeriod(flight.departure?.time);
-    if (depTimeFilter !== 'all' && depPeriod !== depTimeFilter) return false;
+      // Time ranges check
+      const depPeriod = getTimePeriod(flight.departure.time);
+      if (depTimeFilter !== 'all' && depPeriod !== depTimeFilter) return false;
 
-    const arrPeriod = getTimePeriod(flight.arrival?.time);
-    if (arrTimeFilter !== 'all' && arrPeriod !== arrTimeFilter) return false;
+      const arrPeriod = getTimePeriod(flight.arrival.time);
+      if (arrTimeFilter !== 'all' && arrPeriod !== arrTimeFilter) return false;
 
-    // Duration check
-    const durationMin = durationToMinutes(flight.duration);
-    if (durationMin > sliderDuration) return false;
+      // Duration check
+      const durationMin = durationToMinutes(flight.duration);
+      if (durationMin > sliderDuration) return false;
 
-    return true;
-  });
+      return true;
+    });
 
   // 2. SORTING
   const sortedFlights = [...filteredFlights].sort((a, b) => {
     if (sortBy === 'cheapest') {
-      return parseFloat(a.price?.total || 0) - parseFloat(b.price?.total || 0);
+      return a.price.total - b.price.total;
     }
     if (sortBy === 'fastest') {
       return durationToMinutes(a.duration) - durationToMinutes(b.duration);
     }
     if (sortBy === 'earliest') {
-      return (a.departure?.time || '').localeCompare(b.departure?.time || '');
+      return (a.departure.time || '').localeCompare(b.departure.time || '');
     }
     if (sortBy === 'latest') {
-      return (b.departure?.time || '').localeCompare(a.departure?.time || '');
+      return (b.departure.time || '').localeCompare(a.departure.time || '');
     }
     return 0;
   });
 
+  const isRail = searchType === 'rail';
+  const uniqueAirlines = [...new Set(flights.map(f => f.airline))];
+
+  // Active filters calculation
+  let activeFiltersCount = 0;
+  if (sliderPrice < maxPrice) activeFiltersCount++;
+  if (!selectedStops.nonstop || !selectedStops.oneStop || !selectedStops.twoPlusStops) activeFiltersCount++;
+  if (depTimeFilter !== 'all') activeFiltersCount++;
+  if (arrTimeFilter !== 'all') activeFiltersCount++;
+  if (sliderDuration < maxDuration) activeFiltersCount++;
+  if (selectedAirlines.length < uniqueAirlines.length) activeFiltersCount++;
+
+  const handleClearAllFilters = () => {
+    setSliderPrice(maxPrice);
+    setSelectedStops({ nonstop: true, oneStop: true, twoPlusStops: true });
+    setDepTimeFilter('all');
+    setArrTimeFilter('all');
+    setSliderDuration(maxDuration);
+    setSelectedAirlines(uniqueAirlines);
+  };
+
+  // Rendering Loading Skeletons
   if (loading) {
     return (
       <div className="search-results-page">
-        <div className="container">
-          <div className="loading-spinner">
-            <i className={`fas ${searchType === 'rail' ? 'fa-train fa-spin-slow' : 'fa-spinner fa-spin'}`}></i>
-            <p>Searching for {searchType === 'rail' ? 'Amtrak train schedules' : 'flights'}...</p>
+        <div className="container search-layout-container">
+          <aside className="filters-sidebar skeleton-loader">
+            <div className="skeleton-title pulsing"></div>
+            <div className="skeleton-group pulsing"></div>
+            <div className="skeleton-group pulsing"></div>
+            <div className="skeleton-group pulsing"></div>
+          </aside>
+
+          <div className="results-main-panel">
+            <div className="results-toolbar skeleton-loader pulsing-fast">
+              <div className="skeleton-line-title"></div>
+              <div className="skeleton-line-sort"></div>
+            </div>
+
+            <div className="flight-results">
+              {[1, 2, 3].map((n) => (
+                <div key={n} className="flight-card skeleton-card">
+                  <div className="flight-header skeleton-flex">
+                    <div className="skeleton-circle pulsing"></div>
+                    <div className="skeleton-lines">
+                      <div className="skeleton-line-heading pulsing"></div>
+                      <div className="skeleton-line-sub pulsing"></div>
+                    </div>
+                    <div className="skeleton-price-block pulsing"></div>
+                  </div>
+                  <div className="flight-details skeleton">
+                    <div className="skeleton-route-bar pulsing"></div>
+                    <div className="skeleton-info-tags pulsing"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -291,106 +416,153 @@ function SearchResults() {
           <div className="error-message">
             <i className="fas fa-exclamation-triangle"></i>
             <p>{error}</p>
-            <button onClick={() => navigate(searchType === 'rail' ? '/amtrak' : '/')} className="btn-primary">Go Back</button>
+            <button onClick={() => navigate(isRail ? '/amtrak' : '/')} className="btn-primary">Go Back</button>
           </div>
         </div>
       </div>
     );
   }
 
-  const isRail = searchType === 'rail';
-  const uniqueAirlines = [...new Set(flights.map(f => f.airline))];
+  // Render Sidebar Content (Shared between desktop aside and mobile modal drawer)
+  const renderSidebarFilters = () => (
+    <>
+      <div className="sidebar-header-row">
+        <h3>Filter {isRail ? 'Trains' : 'Flights'}</h3>
+        {activeFiltersCount > 0 && (
+          <button 
+            type="button" 
+            className="clear-filters-action" 
+            onClick={handleClearAllFilters}
+          >
+            Clear All ({activeFiltersCount})
+          </button>
+        )}
+      </div>
+      
+      {/* Price Filter */}
+      <div className="filter-group">
+        <label className="filter-label">
+          <span>Max Price:</span>
+          <strong>${sliderPrice}</strong>
+        </label>
+        <input 
+          type="range" 
+          min={flights.length > 0 ? Math.min(...flights.map(f => parseFloat(f.price?.total || 0))) : 0}
+          max={maxPrice || 3000}
+          value={sliderPrice} 
+          onChange={(e) => setSliderPrice(parseFloat(e.target.value))}
+          className="filter-slider"
+        />
+      </div>
+
+      {/* Stops Filter */}
+      <div className="filter-group">
+        <span className="filter-group-title">Stops</span>
+        <label className="checkbox-filter-row">
+          <input type="checkbox" checked={selectedStops.nonstop} onChange={() => toggleStop('nonstop')} />
+          <span className="custom-checkbox"></span>
+          <span>Nonstop / Direct</span>
+        </label>
+        <label className="checkbox-filter-row">
+          <input type="checkbox" checked={selectedStops.oneStop} onChange={() => toggleStop('oneStop')} />
+          <span className="custom-checkbox"></span>
+          <span>1 Stop</span>
+        </label>
+        <label className="checkbox-filter-row">
+          <input type="checkbox" checked={selectedStops.twoPlusStops} onChange={() => toggleStop('twoPlusStops')} />
+          <span className="custom-checkbox"></span>
+          <span>2+ Stops</span>
+        </label>
+      </div>
+
+      {/* Time Filter */}
+      <div className="filter-group">
+        <span className="filter-group-title">Departure Time</span>
+        <select value={depTimeFilter} onChange={(e) => setDepTimeFilter(e.target.value)} className="filter-select">
+          <option value="all">Any Departure Time</option>
+          <option value="morning">Morning (5 AM - 12 PM)</option>
+          <option value="afternoon">Afternoon (12 PM - 6 PM)</option>
+          <option value="evening">Evening (6 PM - 5 AM)</option>
+        </select>
+      </div>
+
+      <div className="filter-group">
+        <span className="filter-group-title">Arrival Time</span>
+        <select value={arrTimeFilter} onChange={(e) => setArrTimeFilter(e.target.value)} className="filter-select">
+          <option value="all">Any Arrival Time</option>
+          <option value="morning">Morning (5 AM - 12 PM)</option>
+          <option value="afternoon">Afternoon (12 PM - 6 PM)</option>
+          <option value="evening">Evening (6 PM - 5 AM)</option>
+        </select>
+      </div>
+
+      {/* Airline Filter */}
+      {uniqueAirlines.length > 0 && (
+        <div className="filter-group">
+          <span className="filter-group-title">{isRail ? 'Train Lines' : 'Airlines'}</span>
+          {uniqueAirlines.map(airline => (
+            <label key={airline} className="checkbox-filter-row">
+              <input 
+                type="checkbox" 
+                checked={selectedAirlines.includes(airline)} 
+                onChange={() => toggleAirline(airline)} 
+              />
+              <span className="custom-checkbox"></span>
+              <span className="truncate">{airline}</span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {/* Duration Filter */}
+      <div className="filter-group">
+        <label className="filter-label">
+          <span>Max Travel Time:</span>
+          <strong>{Math.floor(sliderDuration / 60)}h {sliderDuration % 60}m</strong>
+        </label>
+        <input 
+          type="range" 
+          min={30}
+          max={maxDuration || 1440}
+          value={sliderDuration} 
+          onChange={(e) => setSliderDuration(parseInt(e.target.value, 10))}
+          className="filter-slider"
+        />
+      </div>
+    </>
+  );
 
   return (
     <div className={`search-results-page ${isRail ? 'search-results-page--rail' : ''}`}>
       <div className="container search-layout-container">
         
-        {/* SIDEBAR FILTERS PANEL */}
-        <aside className="filters-sidebar">
-          <h3>Filter {isRail ? 'Trains' : 'Flights'}</h3>
-          
-          {/* Price Filter */}
-          <div className="filter-group">
-            <label className="filter-label">Max Price: <strong>${sliderPrice}</strong></label>
-            <input 
-              type="range" 
-              min={flights.length > 0 ? Math.min(...flights.map(f => parseFloat(f.price?.total || 0))) : 0}
-              max={maxPrice || 3000}
-              value={sliderPrice} 
-              onChange={(e) => setSliderPrice(parseFloat(e.target.value))}
-              className="filter-slider"
-            />
-          </div>
-
-          {/* Stops Filter */}
-          <div className="filter-group">
-            <span className="filter-group-title">Stops</span>
-            <label className="checkbox-filter-row">
-              <input type="checkbox" checked={selectedStops.nonstop} onChange={() => toggleStop('nonstop')} />
-              <span>Nonstop / Direct</span>
-            </label>
-            <label className="checkbox-filter-row">
-              <input type="checkbox" checked={selectedStops.oneStop} onChange={() => toggleStop('oneStop')} />
-              <span>1 Stop</span>
-            </label>
-            <label className="checkbox-filter-row">
-              <input type="checkbox" checked={selectedStops.twoPlusStops} onChange={() => toggleStop('twoPlusStops')} />
-              <span>2+ Stops</span>
-            </label>
-          </div>
-
-          {/* Time Filter */}
-          <div className="filter-group">
-            <span className="filter-group-title">Departure Time</span>
-            <select value={depTimeFilter} onChange={(e) => setDepTimeFilter(e.target.value)} className="filter-select">
-              <option value="all">Any Departure Time</option>
-              <option value="morning">Morning (5 AM - 12 PM)</option>
-              <option value="afternoon">Afternoon (12 PM - 6 PM)</option>
-              <option value="evening">Evening (6 PM - 5 AM)</option>
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <span className="filter-group-title">Arrival Time</span>
-            <select value={arrTimeFilter} onChange={(e) => setArrTimeFilter(e.target.value)} className="filter-select">
-              <option value="all">Any Arrival Time</option>
-              <option value="morning">Morning (5 AM - 12 PM)</option>
-              <option value="afternoon">Afternoon (12 PM - 6 PM)</option>
-              <option value="evening">Evening (6 PM - 5 AM)</option>
-            </select>
-          </div>
-
-          {/* Airline Filter */}
-          {uniqueAirlines.length > 0 && (
-            <div className="filter-group">
-              <span className="filter-group-title">{isRail ? 'Train Lines' : 'Airlines'}</span>
-              {uniqueAirlines.map(airline => (
-                <label key={airline} className="checkbox-filter-row">
-                  <input 
-                    type="checkbox" 
-                    checked={selectedAirlines.includes(airline)} 
-                    onChange={() => toggleAirline(airline)} 
-                  />
-                  <span className="truncate">{airline}</span>
-                </label>
-              ))}
-            </div>
-          )}
-
-          {/* Duration Filter */}
-          <div className="filter-group">
-            <label className="filter-label">Max Travel Time: <strong>{Math.floor(sliderDuration / 60)}h {sliderDuration % 60}m</strong></label>
-            <input 
-              type="range" 
-              min={30}
-              max={maxDuration || 1440}
-              value={sliderDuration} 
-              onChange={(e) => setSliderDuration(parseInt(e.target.value, 10))}
-              className="filter-slider"
-            />
-          </div>
-
+        {/* DESKTOP SIDEBAR FILTERS PANEL */}
+        <aside className="filters-sidebar desktop-only">
+          {renderSidebarFilters()}
         </aside>
+
+        {/* MOBILE SLIDE-OVER DRAWER MODAL */}
+        {showFiltersDrawer && (
+          <>
+            <div className="drawer-backdrop" onClick={() => setShowFiltersDrawer(false)}></div>
+            <aside className="filters-sidebar mobile-drawer animate-slide-in">
+              <div className="drawer-header-row">
+                <h3>Filters</h3>
+                <button type="button" className="drawer-close-btn" onClick={() => setShowFiltersDrawer(false)} aria-label="Close filters">
+                  <i className="fas fa-times"></i>
+                </button>
+              </div>
+              <div className="drawer-body">
+                {renderSidebarFilters()}
+              </div>
+              <div className="drawer-footer">
+                <button type="button" className="drawer-apply-btn" onClick={() => setShowFiltersDrawer(false)}>
+                  Apply Filters {activeFiltersCount > 0 && `(${activeFiltersCount})`}
+                </button>
+              </div>
+            </aside>
+          </>
+        )}
 
         {/* RESULTS SECTION */}
         <div className="results-main-panel">
@@ -399,57 +571,72 @@ function SearchResults() {
           <div className="results-toolbar">
             <div className="results-meta-text">
               <h2>{isRail ? 'Amtrak Train Schedules' : 'Flight Search Results'}</h2>
-              <p>{sortedFlights.length} option(s) matching criteria</p>
+              <div className="meta-sub-row">
+                <span className="results-count">{sortedFlights.length} option(s) matching criteria</span>
+                <button 
+                  type="button" 
+                  className="mobile-filter-trigger" 
+                  onClick={() => setShowFiltersDrawer(true)}
+                >
+                  <i className="fas fa-filter"></i> Filters 
+                  {activeFiltersCount > 0 && <span className="filter-badge-count">{activeFiltersCount}</span>}
+                </button>
+              </div>
             </div>
             
             <div className="sorting-group">
               <label htmlFor="results-sort-select">Sort by:</label>
-              <select 
-                id="results-sort-select"
-                value={sortBy} 
-                onChange={(e) => setSortBy(e.target.value)} 
-                className="sort-select"
-              >
-                <option value="cheapest">Cheapest Price</option>
-                <option value="fastest">Fastest Travel Time</option>
-                <option value="earliest">Earliest Departure</option>
-                <option value="latest">Latest Departure</option>
-              </select>
+              <div className="sort-select-wrapper">
+                <select 
+                  id="results-sort-select"
+                  value={sortBy} 
+                  onChange={(e) => setSortBy(e.target.value)} 
+                  className="sort-select"
+                >
+                  <option value="cheapest">Cheapest Price</option>
+                  <option value="fastest">Shortest Duration</option>
+                  <option value="earliest">Earliest Departure</option>
+                  <option value="latest">Latest Departure</option>
+                </select>
+                <i className="fas fa-chevron-down sort-chevron"></i>
+              </div>
             </div>
           </div>
 
           {/* Card list */}
           <div className="flight-results">
             {sortedFlights.length === 0 ? (
-              <div className="no-results">
-                <i className={`fas ${isRail ? 'fa-train' : 'fa-plane-departure'}`}></i>
-                <p>No results match your filtering selections.</p>
-                <button 
-                  onClick={() => {
-                    setSliderPrice(maxPrice);
-                    setSelectedStops({ nonstop: true, oneStop: true, twoPlusStops: true });
-                    setSelectedAirlines(uniqueAirlines);
-                    setDepTimeFilter('all');
-                    setArrTimeFilter('all');
-                    setSliderDuration(maxDuration);
-                  }} 
-                  className="btn-primary"
-                >
-                  Reset Filters
-                </button>
+              <div className="no-results-card">
+                <div className="no-results-icon-circle">
+                  <i className={`fas ${isRail ? 'fa-train' : 'fa-plane-departure'}`}></i>
+                </div>
+                <h3>No flights match your filters</h3>
+                <p>Try clearing your active filters or modify your search criteria to find available schedules.</p>
+                
+                <div className="no-results-actions">
+                  {activeFiltersCount > 0 && (
+                    <button 
+                      onClick={handleClearAllFilters} 
+                      className="btn-primary-reset"
+                    >
+                      Clear All Filters
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => navigate(isRail ? '/amtrak' : '/')} 
+                    className="btn-outline-modify"
+                  >
+                    Modify Search
+                  </button>
+                </div>
               </div>
             ) : (
-              sortedFlights.map((flight, index) => (
-                <div key={flight.id || index} className={`flight-card ${isRail ? 'flight-card--rail' : ''}`}>
+              sortedFlights.map((flight) => (
+                <div key={flight.id} className={`flight-card ${isRail ? 'flight-card--rail' : ''}`}>
                   <div className="flight-header">
                     <div className="airline-info">
                       <div className="carrier-logo-wrapper">
-                        <img 
-                          src={flight.airline_logo || 'https://www.gstatic.com/flights/airline_logos/70px/airline.png'} 
-                          alt={flight.airline} 
-                          className="carrier-logo"
-                          onError={(e) => { e.target.src = 'https://www.gstatic.com/flights/airline_logos/70px/airline.png'; }}
-                        />
+                        <AirlineLogo logoUrl={flight.airline_logo} name={flight.airline} />
                       </div>
                       <div>
                         <h4>{flight.airline}</h4>
@@ -457,52 +644,66 @@ function SearchResults() {
                       </div>
                     </div>
                     <div className="flight-price">
-                      <span className="price">{flight.price?.formatted || '$0.00'}</span>
+                      <span className="price">{flight.price.formatted}</span>
                       <small className="website-price-notice">Web Fare Only</small>
                     </div>
                   </div>
                   <div className="flight-details">
                     <div className="flight-route">
                       <div className="route-item">
-                        <span className="time">{flight.departure?.time || 'N/A'}</span>
-                        <span className="airport">{flight.departure?.airport || 'N/A'}</span>
-                        <span className="date">{flight.departure?.date || 'N/A'}</span>
+                        <span className="time">{flight.departure.time}</span>
+                        <span className="airport">{flight.departure.airport}</span>
+                        <span className="date">{flight.departure.date}</span>
                       </div>
                       <div className="route-arrow">
-                        <i className="fas fa-arrow-right"></i>
-                        <span className="duration">{flight.duration || 'N/A'}</span>
+                        <span className="duration">{flight.duration}</span>
+                        <div className="arrow-line">
+                          <span className="dot start"></span>
+                          <span className="line"></span>
+                          <i className="fas fa-plane arrow-plane-icon"></i>
+                          <span className="dot end"></span>
+                        </div>
+                        <span className="stop-count">
+                          {flight.stops === 0 ? 'Nonstop' : `${flight.stops} stop(s)`}
+                        </span>
                       </div>
                       <div className="route-item">
-                        <span className="time">{flight.arrival?.time || 'N/A'}</span>
-                        <span className="airport">{flight.arrival?.airport || 'N/A'}</span>
-                        <span className="date">{flight.arrival?.date || 'N/A'}</span>
+                        <span className="time">{flight.arrival.time}</span>
+                        <span className="airport">{flight.arrival.airport}</span>
+                        <span className="date">{flight.arrival.date}</span>
                       </div>
                     </div>
-                    <div className="flight-info">
-                      <span><i className="fas fa-chair"></i> {flight.class || 'Economy'}</span>
-                      <span><i className={`fas ${isRail ? 'fa-subway' : 'fa-plane'}`}></i> {flight.stops === 0 ? 'Direct / Nonstop' : `${flight.stops} stop(s)`}</span>
-                      {flight.aircraft && <span><i className="fas fa-info-circle"></i> {flight.aircraft}</span>}
-                    </div>
+                    
+                    <div className="flight-info-row">
+                      <div className="flight-info-tags">
+                        <span className="info-tag"><i className="fas fa-chair"></i> {flight.class}</span>
+                        <span className="info-tag"><i className={`fas ${isRail ? 'fa-subway' : 'fa-plane'}`}></i> {flight.stops === 0 ? 'Direct / Nonstop' : `${flight.stops} Stop(s)`}</span>
+                        {flight.aircraft && <span className="info-tag"><i className="fas fa-info-circle"></i> {flight.aircraft}</span>}
+                      </div>
 
-                    {/* Layovers detail */}
-                    {flight.layovers && flight.layovers.length > 0 && (
-                      <div className="flight-layovers-bar">
-                        <span>Layover:</span>
-                        {flight.layovers.map((l, lIdx) => (
-                          <span key={lIdx} className="layover-tag">
-                            {l.airportCode} ({Math.floor(l.duration / 60)}h {l.duration % 60}m)
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                      {/* Layovers detail */}
+                      {flight.layovers && flight.layovers.length > 0 && (
+                        <div className="flight-layovers-bar">
+                          <span className="layover-title">Layover:</span>
+                          <div className="layover-tags-list">
+                            {flight.layovers.map((l, lIdx) => (
+                              <span key={lIdx} className="layover-tag">
+                                {l.airportCode} ({Math.floor(l.duration / 60)}h {l.duration % 60}m)
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
+                  
                   <div className="flight-actions">
                     <button 
                       className="book-btn"
                       onClick={() => handleBookFlight(flight)}
-                      style={{ backgroundColor: isRail ? '#8b1538' : '#1e3a5f' }}
                     >
-                      Select Flight <i className="fas fa-chevron-right" style={{ fontSize: '0.8rem', marginLeft: '6px' }}></i>
+                      <span>Select Flight</span>
+                      <i className="fas fa-chevron-right select-btn-chevron"></i>
                     </button>
                   </div>
                 </div>
