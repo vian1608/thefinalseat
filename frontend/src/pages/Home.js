@@ -257,30 +257,16 @@ function Home() {
 
                 {activeTab === 'search' ? (
                   <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <h2 style={{ margin: 0, color: '#1e293b', fontSize: '1.75rem' }}>Search Flights</h2>
-                      <CustomSelect 
-                        id="search-currency"
-                        value={searchData.currency} 
-                        onChange={(val) => handleSearchChange('currency', val)}
-                        options={[
-                          { value: 'USD', label: 'USD ($)' },
-                          { value: 'EUR', label: 'EUR (€)' },
-                          { value: 'GBP', label: 'GBP (£)' },
-                          { value: 'CAD', label: 'CAD (C$)' }
-                        ]}
-                        icon="fas fa-dollar-sign"
-                      />
-                    </div>
+                    <h2 style={{ marginBottom: '0.5rem', color: '#1e293b', fontSize: '1.75rem' }}>Search Flights</h2>
                     <p className="flights-inquiry__intro">
                       Discover flight deals with SerpAPI real-time Google Flights search engine.
                     </p>
                     
                     <form className="flights-form" onSubmit={handleSearchFlights}>
                       
-                      {/* Meta selections row (Trip type, Cabin class, Passenger popup) */}
+                      {/* Meta selections row (Trip type, Cabin class, Passenger popup, Currency) */}
                       <div className="search-meta-row">
-                        <div className="search-meta-left" style={{ width: '100%' }}>
+                        <div className="search-meta-left">
                           <CustomSelect 
                             id="search-trip-type"
                             value={searchData.tripType} 
@@ -357,6 +343,21 @@ function Home() {
                               </div>
                             )}
                           </div>
+                        </div>
+
+                        <div className="search-meta-right">
+                          <CustomSelect 
+                            id="search-currency"
+                            value={searchData.currency} 
+                            onChange={(val) => handleSearchChange('currency', val)}
+                            options={[
+                              { value: 'USD', label: 'USD ($)' },
+                              { value: 'EUR', label: 'EUR (€)' },
+                              { value: 'GBP', label: 'GBP (£)' },
+                              { value: 'CAD', label: 'CAD (C$)' }
+                            ]}
+                            icon="fas fa-dollar-sign"
+                          />
                         </div>
                       </div>
 

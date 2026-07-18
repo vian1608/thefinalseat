@@ -115,12 +115,17 @@
   background: #faf5f7;
 }
 
+#inquiry .container {
+  max-width: 1320px;
+  width: 100%;
+}
+
 .inquiry-split-layout {
   display: grid;
   grid-template-columns: 8fr 2fr;
   gap: 2rem;
   align-items: stretch;
-  max-width: 1280px;
+  max-width: 1320px;
   margin: 0 auto;
 }
 
