@@ -117,10 +117,10 @@
 
 .inquiry-split-layout {
   display: grid;
-  grid-template-columns: 1.6fr 1fr;
+  grid-template-columns: 7.3fr 2.7fr;
   gap: 2rem;
   align-items: stretch;
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
 }
 
@@ -132,6 +132,38 @@
 .inquiry-side-panel {
   display: flex;
   flex-direction: column;
+}
+
+.support-inquiry-card {
+  padding: 1.5rem !important;
+}
+
+.support-inquiry-card h2 {
+  font-size: 1.35rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.support-inquiry-card p {
+  font-size: 0.9rem !important;
+  line-height: 1.5 !important;
+  margin-bottom: 1rem !important;
+}
+
+.support-inquiry-card .benefits-list {
+  margin-top: 1rem !important;
+}
+
+.support-inquiry-card .benefits-list h3 {
+  font-size: 0.95rem !important;
+  margin-bottom: 0.75rem !important;
+}
+
+.support-inquiry-card .benefits-list ul {
+  gap: 0.65rem !important;
+}
+
+.support-inquiry-card .benefits-list li {
+  font-size: 0.85rem !important;
 }
 
 @media (max-width: 900px) {
@@ -374,7 +406,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+@media (max-width: 1024px) {
+  .search-meta-left {
+    flex-wrap: wrap;
+  }
 }
 
 .search-meta-right {
