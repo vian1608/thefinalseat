@@ -116,14 +116,18 @@ export const adminAPI = {
     const response = await api.post('/admin/login', credentials);
     return response.data;
   },
-  getBookings: async () => {
-    const response = await api.get('/admin/bookings');
+  getBookings: async (filters = {}) => {
+    const response = await api.get('/admin/bookings', { params: filters });
     return response.data;
   },
   getStats: async () => {
     const response = await api.get('/admin/stats');
     return response.data;
   },
+  updateBooking: async (id, updateData) => {
+    const response = await api.put(`/admin/bookings/${id}`, updateData);
+    return response.data;
+  }
 };
 
 export default api;

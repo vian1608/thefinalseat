@@ -7,8 +7,9 @@ dotenv.config();
 
 // Import database configuration
 import { testConnection, syncDatabase } from './config/database.mjs';
-// Import User model to sync with database
+// Import models to sync with database
 import User from './models/user/User.mjs';
+import Booking from './models/booking/Booking.mjs';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -50,12 +51,14 @@ const startServer = async () => {
     console.error('\n⚠️  Warning: Database connection failed. Server will start but database features may not work.');
     console.log('Please ensure MySQL is running and credentials in .env file are correct.\n');
   } else {
-    // Sync User model with database (creates table if it doesn't exist)
+    // Sync models with database (creates tables if they don't exist)
     try {
       await User.sync({ alter: process.env.NODE_ENV === 'development' });
       console.log('✅ User model synchronized with database.');
+      await Booking.sync({ alter: process.env.NODE_ENV === 'development' });
+      console.log('✅ Booking model synchronized with database.');
     } catch (error) {
-      console.error('❌ Error syncing User model:', error.message);
+      console.error('❌ Error syncing models:', error.message);
     }
   }
 

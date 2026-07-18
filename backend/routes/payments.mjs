@@ -122,10 +122,21 @@ router.post('/stripe/create-checkout-session', async (req, res) => {
 
       const departureAirport = flight.departure?.airport || 'Origin';
       const arrivalAirport = flight.arrival?.airport || 'Destination';
+      const isRoundTrip = !!req.body.returnFlight;
 
       params.append('line_items[0][price_data][currency]', 'usd');
-      params.append('line_items[0][price_data][product_data][name]', `Flight Ticket: ${departureAirport} to ${arrivalAirport}`);
-      params.append('line_items[0][price_data][product_data][description]', `${flight.airline || 'Carrier'} Flight ${flight.flightNumber || ''} (${flight.class || 'Economy'})`);
+      params.append(
+        'line_items[0][price_data][product_data][name]', 
+        isRoundTrip 
+          ? `Roundtrip Ticket: ${departureAirport} ↔ ${arrivalAirport}` 
+          : `Flight Ticket: ${departureAirport} to ${arrivalAirport}`
+      );
+      params.append(
+        'line_items[0][price_data][product_data][description]', 
+        isRoundTrip 
+          ? `Outbound: ${flight.airline} ${flight.flightNumber} | Return: ${req.body.returnFlight.airline} ${req.body.returnFlight.flightNumber}`
+          : `${flight.airline || 'Carrier'} Flight ${flight.flightNumber || ''} (${flight.class || 'Economy'})`
+      );
       params.append('line_items[0][price_data][unit_amount]', Math.round(amount * 100).toString());
       params.append('line_items[0][quantity]', '1');
 

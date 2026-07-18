@@ -70,44 +70,77 @@ function PaymentSuccess() {
       const metadata = session.metadata;
 
       if (type === 'booking') {
-        // Reconstruct flight and passenger objects from metadata
-        const flightDetails = {
-          airline: metadata.flight_airline,
-          flightNumber: metadata.flight_number,
-          departure: {
-            airport: metadata.flight_route.split(' to ')[0],
-            date: metadata.flight_dep_time.split(' ')[0],
-            time: metadata.flight_dep_time.split(' ')[1]
-          },
-          arrival: {
-            airport: metadata.flight_route.split(' to ')[1],
-            date: metadata.flight_arr_time.split(' ')[0],
-            time: metadata.flight_arr_time.split(' ')[1]
-          },
-          class: metadata.flight_class,
-          stops: parseInt(metadata.flight_stops || '0')
-        };
+        let bookingData = {};
+        const pendingData = JSON.parse(sessionStorage.getItem('pendingPassenger') || 'null');
+        const flightData = JSON.parse(sessionStorage.getItem('selectedFlight') || 'null');
+        const returnFlightData = JSON.parse(sessionStorage.getItem('returnFlight') || 'null');
 
-        const bookingData = {
-          firstName: metadata.firstName,
-          lastName: metadata.lastName,
-          email: metadata.email,
-          phone: metadata.phone,
-          dateOfBirth: metadata.dateOfBirth,
-          gender: metadata.gender,
-          nationality: metadata.nationality,
-          passportNumber: metadata.passportNumber,
-          passportExpiry: metadata.passportExpiry,
-          emergencyName: metadata.emergencyName,
-          emergencyPhone: metadata.emergencyPhone,
-          emergencyRelationship: metadata.emergencyRelationship,
-          flight: flightDetails,
-          subtotal: `$${(session.amount_total - 25.00 - (session.amount_total * 0.15)).toFixed(2)}`,
-          taxes: `$${(session.amount_total * 0.15).toFixed(2)}`,
-          total: `$${session.amount_total.toFixed(2)}`,
-          paymentMethod: 'Stripe Credit Card',
-          paymentStatus: 'paid'
-        };
+        if (pendingData && flightData) {
+          // Reconstruct using rich sessionStorage data (multi-passenger support!)
+          const customerName = `${pendingData.primaryContact.firstName} ${pendingData.primaryContact.lastName}`;
+          
+          // Combine outbound and inbound flights inside flight object
+          const flightObj = {
+            ...flightData,
+            returnFlight: returnFlightData,
+            billingAddress: pendingData.billingAddress,
+            specialRequests: pendingData.specialRequests
+          };
+
+          const originalOut = parseFloat(flightData.price?.originalApiPrice || 0);
+          const originalRet = returnFlightData ? parseFloat(returnFlightData.price?.originalApiPrice || 0) : 0;
+
+          bookingData = {
+            customerName,
+            email: pendingData.primaryContact.email,
+            phone: pendingData.primaryContact.phone,
+            passengers: pendingData.passengers,
+            flight: flightObj,
+            originalApiPrice: (originalOut + originalRet).toFixed(2),
+            displayedWebsitePrice: session.amount_total.toFixed(2),
+            paymentStatus: 'paid',
+            transactionId: sessionId
+          };
+        } else {
+          // Fallback to legacy metadata for single traveler if sessionStorage is cleared
+          const flightDetails = {
+            airline: metadata.flight_airline,
+            flightNumber: metadata.flight_number,
+            departure: {
+              airport: metadata.flight_route.split(' to ')[0],
+              date: metadata.flight_dep_time.split(' ')[0],
+              time: metadata.flight_dep_time.split(' ')[1]
+            },
+            arrival: {
+              airport: metadata.flight_route.split(' to ')[1],
+              date: metadata.flight_arr_time.split(' ')[0],
+              time: metadata.flight_arr_time.split(' ')[1]
+            },
+            class: metadata.flight_class,
+            stops: parseInt(metadata.flight_stops || '0')
+          };
+
+          bookingData = {
+            customerName: `${metadata.firstName} ${metadata.lastName}`,
+            email: metadata.email,
+            phone: metadata.phone,
+            passengers: [{
+              firstName: metadata.firstName,
+              lastName: metadata.lastName,
+              role: 'adult',
+              gender: metadata.gender,
+              dateOfBirth: metadata.dateOfBirth,
+              nationality: metadata.nationality,
+              passportNumber: metadata.passportNumber,
+              passportExpiry: metadata.passportExpiry
+            }],
+            flight: flightDetails,
+            originalApiPrice: (session.amount_total * 1.11).toFixed(2), // generic fallback estimation
+            displayedWebsitePrice: session.amount_total.toFixed(2),
+            paymentStatus: 'paid',
+            transactionId: sessionId
+          };
+        }
 
         // Create booking in the backend
         const res = await bookingAPI.create(bookingData);
@@ -196,8 +229,16 @@ function PaymentSuccess() {
               <path className="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
             </svg>
           </div>
-          <h2>Payment Successful</h2>
-          <p>Thank you. Your transaction has been completed securely.</p>
+          <h2>Thank you!</h2>
+          <p style={{ fontSize: '1.15rem', color: '#1e293b', fontWeight: 'bold', margin: '0.5rem 0' }}>Your reservation request has been received successfully.</p>
+          <p style={{ maxWidth: '600px', margin: '0 auto', color: '#475569' }}>Our travel specialists will verify your itinerary and manually issue your ticket shortly. A confirmation email has been sent.</p>
+          
+          <div className="booking-status-badge-container" style={{ margin: '1.5rem 0' }}>
+            <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.05em' }}>Booking Status</span>
+            <strong style={{ fontSize: '1.15rem', color: '#d97706', display: 'inline-block', padding: '6px 20px', backgroundColor: '#fef3c7', borderRadius: '30px', border: '1px solid #fcd34d', marginTop: '6px', fontWeight: '700' }}>
+              Pending Confirmation
+            </strong>
+          </div>
         </div>
 
         {/* Receipt / Invoice Details */}
@@ -227,64 +268,67 @@ function PaymentSuccess() {
           </div>
 
           {/* Conditional view: Flight Booking */}
-          {type === 'booking' && (
-            <div className="receipt-item-details-box">
-              <div className="receipt-sub-header">
-                <i className="fas fa-ticket-alt"></i> Flight Booking Pass
-              </div>
-              
-              <div className="boarding-pass-visual">
-                <div className="boarding-pass-header">
-                  <span>Carrier: <strong>{metadata.flight_airline}</strong></span>
-                  <span>Flight: <strong>{metadata.flight_number}</strong></span>
-                  {bookingRef && <span className="ref-tag">Ref: <strong>{bookingRef}</strong></span>}
+          {type === 'booking' && (() => {
+            const isAmtrak = metadata.flight_airline?.toLowerCase().includes('amtrak');
+            return (
+              <div className="receipt-item-details-box">
+                <div className="receipt-sub-header">
+                  <i className={`fas ${isAmtrak ? 'fa-train' : 'fa-ticket-alt'}`}></i> {isAmtrak ? 'Amtrak Train Transit Pass' : 'Flight Booking Pass'}
                 </div>
                 
-                <div className="boarding-pass-route">
-                  <div className="route-terminal">
-                    <h4>{metadata.flight_route.split(' to ')[0]}</h4>
-                    <span>Departure</span>
-                    <small>{metadata.flight_dep_time}</small>
+                <div className="boarding-pass-visual">
+                  <div className="boarding-pass-header" style={{ borderBottom: isAmtrak ? '2px dashed #8b1538' : '2px dashed #1e3a5f' }}>
+                    <span>{isAmtrak ? 'Operator' : 'Carrier'}: <strong>{metadata.flight_airline}</strong></span>
+                    <span>{isAmtrak ? 'Train' : 'Flight'}: <strong>{metadata.flight_number}</strong></span>
+                    {bookingRef && <span className="ref-tag">Ref: <strong>{bookingRef}</strong></span>}
                   </div>
                   
-                  <div className="route-flight-symbol">
-                    <i className="fas fa-plane"></i>
-                    <span className="flight-dot-line"></span>
+                  <div className="boarding-pass-route">
+                    <div className="route-terminal">
+                      <h4>{metadata.flight_route.split(' to ')[0]}</h4>
+                      <span>Departure</span>
+                      <small>{metadata.flight_dep_time}</small>
+                    </div>
+                    
+                    <div className="route-flight-symbol">
+                      <i className={`fas ${isAmtrak ? 'fa-subway' : 'fa-plane'}`} style={{ color: isAmtrak ? '#8b1538' : '#1e3a5f' }}></i>
+                      <span className="flight-dot-line"></span>
+                    </div>
+  
+                    <div className="route-terminal">
+                      <h4>{metadata.flight_route.split(' to ')[1]}</h4>
+                      <span>Arrival</span>
+                      <small>{metadata.flight_arr_time}</small>
+                    </div>
                   </div>
 
-                  <div className="route-terminal">
-                    <h4>{metadata.flight_route.split(' to ')[1]}</h4>
-                    <span>Arrival</span>
-                    <small>{metadata.flight_arr_time}</small>
+                  <div className="boarding-pass-passenger">
+                    <div>
+                      <span>Passenger</span>
+                      <strong>{metadata.firstName} {metadata.lastName}</strong>
+                    </div>
+                    <div>
+                      <span>{isAmtrak ? 'Seat Class' : 'Cabin Class'}</span>
+                      <strong>{metadata.flight_class}</strong>
+                    </div>
+                    <div>
+                      <span>{isAmtrak ? 'Transit Stops' : 'Stops'}</span>
+                      <strong>{metadata.flight_stops === '0' ? 'Direct' : `${metadata.flight_stops} stop(s)`}</strong>
+                    </div>
                   </div>
                 </div>
 
-                <div className="boarding-pass-passenger">
-                  <div>
-                    <span>Passenger</span>
-                    <strong>{metadata.firstName} {metadata.lastName}</strong>
-                  </div>
-                  <div>
-                    <span>Cabin Class</span>
-                    <strong>{metadata.flight_class}</strong>
-                  </div>
-                  <div>
-                    <span>Stops</span>
-                    <strong>{metadata.flight_stops === '0' ? 'Nonstop' : `${metadata.flight_stops} stop(s)`}</strong>
-                  </div>
+                <div className="next-steps-info">
+                  <strong>Next Steps:</strong>
+                  <ul>
+                    <li>Your {isAmtrak ? 'train transit reservation' : 'flight reservation'} is registered under reference <strong>{bookingRef || 'Pending'}</strong>.</li>
+                    <li>A detailed confirmation itinerary and {isAmtrak ? 'train ticket receipt' : 'flight e-ticket'} has been sent to <strong>{metadata.email}</strong>.</li>
+                    <li>For support or changes, call us anytime at {SUPPORT_PHONE_DISPLAY}.</li>
+                  </ul>
                 </div>
               </div>
-
-              <div className="next-steps-info">
-                <strong>Next Steps:</strong>
-                <ul>
-                  <li>Your flight reservation is now registered under reference <strong>{bookingRef || 'Pending'}</strong>.</li>
-                  <li>A detailed confirmation itinerary and flight e-ticket has been sent to <strong>{metadata.email}</strong>.</li>
-                  <li>For support or changes, call us anytime at {SUPPORT_PHONE_DISPLAY}.</li>
-                </ul>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Conditional view: Consulting Payment */}
           {type === 'consulting' && (

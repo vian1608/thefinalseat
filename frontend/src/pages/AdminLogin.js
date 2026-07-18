@@ -17,6 +17,7 @@ function AdminLogin() {
     try {
       const response = await adminAPI.login(formData);
       if (response.success) {
+        sessionStorage.setItem('adminSession', JSON.stringify(response.admin));
         navigate('/admin/dashboard');
       }
     } catch (err) {

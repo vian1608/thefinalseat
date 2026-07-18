@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import HeroSlider from '../components/HeroSlider';
 import InquiryLocationSelect from '../components/InquiryLocationSelect';
@@ -26,12 +26,35 @@ const initialFormData = {
 };
 
 function AmtrakAssistance() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState(initialFormData);
   const [submitStatus, setSubmitStatus] = useState('idle');
   const [submitMessage, setSubmitMessage] = useState('');
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSearchSchedules = (e) => {
+    e.preventDefault();
+    if (!formData.origin || !formData.destination || !formData.travelDate) {
+      setSubmitStatus('error');
+      setSubmitMessage('Please fill in Origin, Destination, and Departure Date to search train schedules.');
+      return;
+    }
+
+    const searchParams = {
+      from: formData.origin,
+      to: formData.destination,
+      departure: formData.travelDate,
+      passengers: formData.passengers || '1',
+      serviceType: 'rail'
+    };
+
+    sessionStorage.setItem('searchParams', JSON.stringify(searchParams));
+    sessionStorage.setItem('searchType', 'rail');
+    
+    navigate('/search', { state: { searchParams, searchType: 'rail' } });
   };
 
   const handleSubmit = async (e) => {
@@ -239,13 +262,26 @@ function AmtrakAssistance() {
                   </label>
                 </div>
               </div>
-              <button
-                type="submit"
-                className="amtrak-btn amtrak-btn--cta amtrak-btn--full"
-                disabled={submitStatus === 'submitting'}
-              >
-                {submitStatus === 'submitting' ? 'Submitting…' : 'Submit Consulting Inquiry'}
-              </button>
+              <div className="amtrak-form__actions-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button
+                    type="submit"
+                    className="amtrak-btn amtrak-btn--cta"
+                    style={{ flex: 1 }}
+                    disabled={submitStatus === 'submitting'}
+                  >
+                    {submitStatus === 'submitting' ? 'Submitting…' : 'Request Callback'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSearchSchedules}
+                    className="amtrak-btn"
+                    style={{ flex: 1, backgroundColor: '#0f172a', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    Search Trains
+                  </button>
+                </div>
+              </div>
               {submitMessage && (
                 <p
                   className={`inquiry-form__message ${

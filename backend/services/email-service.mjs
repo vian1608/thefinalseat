@@ -279,84 +279,138 @@ export async function sendConsultingInquiry(inquiry) {
 }
 
 // Send booking confirmation email
-export async function sendBookingConfirmation(bookingData) {
+// Send booking confirmation email (Sends both Customer E-receipt and Admin Booking Alert)
+export async function sendBookingConfirmation(booking) {
   try {
-    const flight = bookingData.flight || {};
+    const flight = booking.flight || {};
+    const passengers = Array.isArray(booking.passengers) ? booking.passengers : JSON.parse(booking.passengers || '[]');
+    
+    // Format passenger rows for text
+    const passengerTextLines = passengers.map((p, i) => {
+      const passportInfo = p.passportNumber ? `, Passport: ${p.passportNumber} (${p.nationality || 'N/A'})` : '';
+      const ktnInfo = p.knownTravelerNumber ? `, KTN: ${p.knownTravelerNumber}` : '';
+      return `${i + 1}. ${p.firstName} ${p.middleName || ''} ${p.lastName} (${p.role || 'Adult'}) - DOB: ${p.dateOfBirth}, Gender: ${p.gender}${passportInfo}${ktnInfo}`;
+    }).join('\n');
 
-    const emailBody = `
-NEW FLIGHT BOOKING - URGENT TRAVEL
+    // Format flight summary segments
+    const flightRouteText = flight.departure && flight.arrival 
+      ? `${flight.departure.city} (${flight.departure.airport}) to ${flight.arrival.city} (${flight.arrival.airport})`
+      : 'Itinerary details';
 
-Booking Reference: ${bookingData.bookingReference}
-Booking Date: ${new Date(bookingData.createdAt).toLocaleString()}
+    // 1. CUSTOMER EMAIL BODY
+    const customerEmailBody = `
+Dear ${booking.customerName},
 
-PASSENGER DETAILS:
-==================
-Name: ${bookingData.firstName} ${bookingData.lastName}
-Email: ${bookingData.email}
-Phone: ${bookingData.phone}
-Date of Birth: ${bookingData.dateOfBirth}
-Gender: ${bookingData.gender}
-Nationality: ${bookingData.nationality}
-Passport Number: ${bookingData.passportNumber}
-Passport Expiry: ${bookingData.passportExpiry}
+Thank you! Your flight reservation request has been received successfully. 
 
-EMERGENCY CONTACT:
-==================
-Name: ${bookingData.emergencyName}
-Phone: ${bookingData.emergencyPhone}
-Relationship: ${bookingData.emergencyRelationship}
+Our travel specialists will verify your itinerary details and manually issue your e-ticket shortly. A secondary email with your ticket number will be dispatched once confirmed.
 
-FLIGHT DETAILS:
-===============
+====================================================
+RESERVATION RECEIPT
+====================================================
+Booking Reference: ${booking.bookingReference}
+Booking Status: Pending Confirmation
+Amount Charged: $${parseFloat(booking.displayedWebsitePrice).toFixed(2)} USD
+Transaction ID: ${booking.transactionId || 'Offline Verified'}
+Booking Date: ${new Date(booking.bookingDate).toLocaleString()}
+
+TRAVELERS:
+${passengerTextLines}
+
+FLIGHT ITINERARY:
 Airline: ${flight.airline}
 Flight Number: ${flight.flightNumber}
-Route: ${flight.departure?.airport} → ${flight.arrival?.airport}
-Departure: ${flight.departure?.time} on ${flight.departure?.date}
-Arrival: ${flight.arrival?.time} on ${flight.arrival?.date}
-Duration: ${flight.duration}
-Class: ${flight.class}
-Stops: ${flight.stops === 0 ? 'Direct' : `${flight.stops} stop(s)`}
+Route: ${flightRouteText}
+Departure: ${flight.departure?.time || ''} on ${flight.departure?.date || ''}
+Arrival: ${flight.arrival?.time || ''} on ${flight.arrival?.date || ''}
+Cabin Class: ${flight.class || 'Economy'}
+Stops: ${flight.stops === 0 ? 'Nonstop' : `${flight.stops} stop(s)`}
 
-PRICING:
-========
-Subtotal: ${bookingData.subtotal || flight.price?.formatted}
-Taxes: ${bookingData.taxes || '$0.00'}
-Total: ${bookingData.total || flight.price?.formatted}
+If you have any questions or need immediate assistance, please reply directly to this email or contact us at support@thefinalseat.com.
 
-PAYMENT:
-========
-Method: ${bookingData.paymentMethod || 'N/A'}
-Status: ${bookingData.paymentStatus || 'Pending'}
-
-SPECIAL NOTES:
-==============
-Urgent Booking: ${flight.isUrgent ? 'Yes' : 'No'}
-Source: Urgent Travel Website
-
----
-This booking was made through the Urgent Travel website.
-Please contact the passenger directly for any queries.
+Best Regards,
+Support Team
+The Final Seat LLC
     `.trim();
 
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: process.env.ADMIN_EMAIL || bookingData.email,
-      subject: `New Flight Booking - ${bookingData.bookingReference}`,
-      text: emailBody,
-      html: emailBody.replace(/\n/g, '<br>'),
-    };
+    // 2. ADMIN NOTIFICATION EMAIL BODY
+    const adminEmailBody = `
+⚠️ NEW FLIGHT BOOKING REQUEST - MANUAL TICKETING REQUIRED
+====================================================
+Booking Reference: ${booking.bookingReference}
+Booking Status: Pending Confirmation
+Booking Date: ${new Date(booking.bookingDate).toLocaleString()}
+
+PRICING & VERIFICATION:
+-----------------------
+Original API Price: $${parseFloat(booking.originalApiPrice).toFixed(2)} USD
+Website Displayed Price: $${parseFloat(booking.displayedWebsitePrice).toFixed(2)} USD (90% markup rule verified)
+Stripe Payment Status: ${booking.paymentStatus}
+Transaction Reference: ${booking.transactionId}
+
+PRIMARY CONTACT:
+----------------
+Name: ${booking.customerName}
+Email: ${booking.email}
+Phone: ${booking.phone}
+
+TRAVELERS DETAILS:
+------------------
+${passengerTextLines}
+
+FLIGHT ITINERARY:
+-----------------
+Airline: ${flight.airline}
+Flight Number: ${flight.flightNumber}
+Route: ${flightRouteText}
+Departure: ${flight.departure?.time || ''} on ${flight.departure?.date || ''}
+Arrival: ${flight.arrival?.time || ''} on ${flight.arrival?.date || ''}
+Cabin Class: ${flight.class || 'Economy'}
+Stops: ${flight.stops === 0 ? 'Nonstop' : `${flight.stops} stop(s)`}
+Aircraft: ${flight.aircraft || 'Unknown'}
+Refundable: ${flight.refundableStatus || 'Unknown'}
+Baggage Allowance: ${flight.baggageAllowance || 'Standard'}
+
+ACTION REQUIRED:
+Please review traveler credentials, verify original fares, issue the ticket manually, and update the booking status to "Confirmed" in the admin dashboard.
+    `.trim();
 
     if (isSmtpConfigured()) {
       const transporter = getTransporter();
-      const info = await transporter.sendMail(mailOptions);
-      console.log('Email sent:', info.messageId);
-      return { success: true, messageId: info.messageId };
+
+      // Send to Customer
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: booking.email,
+        subject: `Flight Booking Received - Ref: ${booking.bookingReference}`,
+        text: customerEmailBody,
+        html: customerEmailBody.replace(/\n/g, '<br>')
+      });
+
+      // Send to Admins
+      const adminEmails = getInquiryRecipients();
+      for (const email of adminEmails) {
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: email,
+          subject: `🚨 [Manual Ticket Needed] New Booking Ref: ${booking.bookingReference}`,
+          text: adminEmailBody,
+          html: adminEmailBody.replace(/\n/g, '<br>')
+        });
+      }
+      
+      console.log(`✅ Success/Admin notification emails sent for ${booking.bookingReference}`);
+      return { success: true };
     }
 
-    console.log('Email not configured, skipping send');
-    return { success: true, message: 'Email not configured' };
+    console.log('⚠️ Nodemailer SMTP not configured. Logged notification templates below:');
+    console.log('------------- CUSTOMER EMAIL -------------');
+    console.log(customerEmailBody);
+    console.log('-------------- ADMIN EMAIL --------------');
+    console.log(adminEmailBody);
+    return { success: true, message: 'SMTP not configured, templates printed to console logs.' };
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error('Error sending booking confirmation email templates:', error);
     throw error;
   }
 }

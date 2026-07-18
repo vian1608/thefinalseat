@@ -325,3 +325,192 @@
 .route-slider-section {
   padding-bottom: 1rem;
 }
+
+/* Tab Buttons Styles */
+.search-tabs-header {
+  display: flex;
+  background-color: #f1f5f9;
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 1.5rem;
+  border: 1px solid #e2e8f0;
+}
+
+.search-tabs-header .tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.search-tabs-header .tab-btn.active {
+  background-color: #ffffff;
+  color: #1e3a5f;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+/* Secondary Meta Row (Trip type, Cabin class, Passenger count, Currency) */
+.search-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 1.25rem;
+  background-color: #f8fafc;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px dashed #cbd5e1;
+  position: relative;
+}
+
+.search-meta-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.search-meta-select {
+  border: none;
+  background: transparent;
+  color: #475569;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  outline: none;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.search-meta-select:focus {
+  background-color: #e2e8f0;
+}
+
+/* Passenger popup button */
+.passenger-trigger-btn {
+  border: none;
+  background: transparent;
+  color: #475569;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  outline: none;
+}
+
+.passenger-trigger-btn:hover {
+  background-color: #e2e8f0;
+}
+
+/* Passenger Selector Popover */
+.passenger-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 1010;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  padding: 16px;
+  width: 250px;
+  margin-top: 6px;
+}
+
+.passenger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.passenger-row:last-child {
+  margin-bottom: 0;
+}
+
+.passenger-label {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.passenger-type {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.passenger-age-desc {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.passenger-counters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.counter-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.15s ease;
+}
+
+.counter-btn:hover:not(:disabled) {
+  background-color: #f1f5f9;
+}
+
+.counter-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.counter-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e293b;
+  min-width: 14px;
+  text-align: center;
+}
+
+.passenger-popup-close {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 6px;
+  border: none;
+  background-color: #1e3a5f;
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.passenger-popup-close:hover {
+  background-color: #12253f;
+}

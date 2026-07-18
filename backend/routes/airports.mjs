@@ -1,31 +1,29 @@
 import express from 'express';
 const router = express.Router();
-import amadeusService from '../services/amadeus-service.mjs';
+import serpapiService from '../services/serpapi-service.mjs';
 
-// Search airports
+// Search airports using SerpAPI Autocomplete
 router.get('/search', async (req, res) => {
   try {
     const { q } = req.query;
 
     if (!q || q.length < 2) {
-      // Return mock suggestions for short queries
-      const mockResults = amadeusService.getMockAirportSuggestions(q || '');
+      const mockResults = serpapiService.getMockAirportSuggestions(q || '');
       return res.json({
         success: true,
         data: mockResults
       });
     }
 
-    const airports = await amadeusService.searchAirports(q);
+    const airports = await serpapiService.autocompleteAirports(q);
     
     res.json({
       success: true,
       data: airports
     });
   } catch (error) {
-    console.error('Airport search error:', error);
-    // Return mock data as fallback
-    const mockResults = amadeusService.getMockAirportSuggestions(req.query.q || '');
+    console.error('Airport search route error:', error);
+    const mockResults = serpapiService.getMockAirportSuggestions(req.query.q || '');
     res.json({
       success: true,
       data: mockResults
