@@ -234,42 +234,7 @@ function Home() {
 <section id="inquiry" className="flights-section">
         <div className="container">
           <div className="inquiry-split-layout">
-            <div className="inquiry-left-panel">
-              <div className="flights-inquiry-card support-inquiry-card" style={{ height: '100%', margin: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                <div>
-                  <h2 style={{ fontSize: '1.6rem', color: '#1e293b', marginBottom: '0.75rem', fontWeight: 800 }}>Need Immediate Support?</h2>
-                  <p style={{ color: '#475569', fontSize: '0.98rem', lineHeight: '1.6', marginBottom: '1.5rem' }}>
-                    Skip the form and call our expert travel desk directly to secure your air logistics and private routes immediately.
-                  </p>
-                  
-                  <div className="benefits-list" style={{ marginTop: '1.5rem' }}>
-                    <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 700 }}>Benefits of booking with us:</h3>
-                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                      <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
-                        <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
-                        <span>Includes free 24/7 priority support till date of travel.</span>
-                      </li>
-                      <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
-                        <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
-                        <span>No need to wait on long holds like with traditional airlines.</span>
-                      </li>
-                      <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
-                        <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
-                        <span>Instant ticketing and custom route optimization.</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-                
-                <div style={{ marginTop: '2rem', textAlign: 'center' }}>
-                  <a href={SUPPORT_PHONE_HREF} className="call-btn flights-btn flights-btn--cta" style={{ width: '100%', margin: 0, minHeight: '48px', height: '48px' }}>
-                    <i className="fas fa-phone"></i> Call {SUPPORT_PHONE_DISPLAY}
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            <div className="inquiry-right-panel">
+            <div className="inquiry-main-panel">
               <div className="flights-inquiry-card" style={{ margin: 0 }}>
                 
                 {/* Search tabs header */}
@@ -558,22 +523,22 @@ function Home() {
                             value={formData.tripType}
                             onChange={(val) => handleChange('tripType', val)}
                             options={[
-                              { value: 'oneway', label: 'One way' },
-                              { value: 'roundtrip', label: 'Round trip' }
+                              { value: 'roundtrip', label: 'Round Trip' },
+                              { value: 'oneway', label: 'One Way' }
                             ]}
                           />
                         </div>
                         <div className="flights-form__group">
-                          <label htmlFor="flight-cabin">Preferred cabin</label>
+                          <label htmlFor="flight-travel-class">Cabin class</label>
                           <CustomSelect
-                            id="flight-cabin"
-                            value={formData.cabinClass}
-                            onChange={(val) => handleChange('cabinClass', val)}
+                            id="flight-travel-class"
+                            value={formData.travelClass}
+                            onChange={(val) => handleChange('travelClass', val)}
                             options={[
                               { value: 'economy', label: 'Economy' },
-                              { value: 'premium', label: 'Premium economy' },
+                              { value: 'premium', label: 'Premium Economy' },
                               { value: 'business', label: 'Business' },
-                              { value: 'first', label: 'First' }
+                              { value: 'first', label: 'First Class' }
                             ]}
                           />
                         </div>
@@ -581,17 +546,18 @@ function Home() {
                       <div className="flights-form__row">
                         <div className="flights-form__group">
                           <TravelDatePicker
-                            id="flight-date"
+                            id="flight-travel-date"
                             label="Departure date"
                             value={formData.travelDate}
                             onChange={(val) => handleChange('travelDate', val)}
                             minDate={new Date().toISOString().split('T')[0]}
+                            required
                           />
                         </div>
                         {formData.tripType === 'roundtrip' && (
                           <div className="flights-form__group">
                             <TravelDatePicker
-                              id="flight-return"
+                              id="flight-return-date"
                               label="Return date"
                               value={formData.returnDate}
                               onChange={(val) => handleChange('returnDate', val)}
@@ -618,33 +584,34 @@ function Home() {
                             type="checkbox" 
                             id="smsOptIn" 
                             name="smsOptIn" 
+                            checked={formData.smsOptIn}
+                            onChange={(e) => handleChange('smsOptIn', e.target.checked)}
                             required 
-                            style={{ marginTop: '0.25rem', cursor: 'pointer' }}
+                            style={{ width: '16px', height: '16px', marginTop: '3px', cursor: 'pointer', accentColor: '#8b1538' }}
                           />
-                          <label htmlFor="smsOptIn" style={{ fontSize: '0.75rem', color: '#475569', lineHeight: '1.625', cursor: 'pointer' }}>
-                            By checking this box and submitting this request, I provide my express written consent to receive automated flight updates, travel quotes, and booking notifications via SMS from The Final Seat LLC at the number provided. <strong>Consent is not a condition of purchase. Message frequency varies based on booking activity (up to 4 messages per month).</strong> Message and data rates may apply. Text STOP to cancel at any time, or HELP for assistance. View our <Link to="/privacy-policy" style={{ color: '#4f46e5', textDecoration: 'underline' }}>Privacy Policy</Link> and <Link to="/terms" style={{ color: '#4f46e5', textDecoration: 'underline' }}>Terms of Service</Link>.
+                          <label htmlFor="smsOptIn" style={{ fontSize: '0.78rem', color: '#475569', lineHeight: '1.4', cursor: 'pointer', fontWeight: '500', userSelect: 'none' }}>
+                            I agree to receive SMS support updates from The Final Seat LLC at the phone number provided. Message & data rates may apply. Reply STOP to opt out at any time. View our <Link to="/privacy" target="_blank" style={{ color: '#8b1538', textDecoration: 'none', fontWeight: 'bold' }}>Privacy Policy</Link> and <Link to="/terms" target="_blank" style={{ color: '#8b1538', textDecoration: 'none', fontWeight: 'bold' }}>Terms of Service</Link>.
                           </label>
                         </div>
                       </div>
-                      <div className="flights-form__actions-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        <div style={{ display: 'flex', gap: '0.75rem' }}>
-                          <button
-                            type="submit"
-                            className="flights-btn flights-btn--cta"
-                            style={{ flex: 1 }}
-                            disabled={submitStatus === 'submitting'}
-                          >
-                            {submitStatus === 'submitting' ? 'Submitting…' : 'Request Callback'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleSearchSchedules}
-                            className="flights-btn"
-                            style={{ flex: 1, backgroundColor: '#0f172a', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
-                          >
-                            Search Flights
-                          </button>
-                        </div>
+                      
+                      <div style={{ display: 'flex', gap: '0.75rem' }}>
+                        <button
+                          type="submit"
+                          className="flights-btn flights-btn--cta"
+                          style={{ flex: 1 }}
+                          disabled={submitStatus === 'submitting'}
+                        >
+                          {submitStatus === 'submitting' ? 'Submitting…' : 'Request Callback'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSearchSchedules}
+                          className="flights-btn"
+                          style={{ flex: 1, backgroundColor: '#0f172a', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                        >
+                          Search Flights
+                        </button>
                       </div>
                       {submitMessage && (
                         <p
@@ -662,6 +629,41 @@ function Home() {
                     </form>
                   </>
                 )}
+              </div>
+            </div>
+
+            <div className="inquiry-side-panel">
+              <div className="flights-inquiry-card support-inquiry-card" style={{ height: '100%', margin: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.6rem', color: '#1e293b', marginBottom: '0.75rem', fontWeight: 800 }}>Need Immediate Support?</h2>
+                  <p style={{ color: '#475569', fontSize: '0.98rem', lineHeight: '1.6', marginBottom: '1.5rem' }}>
+                    Skip the form and call our expert travel desk directly to secure your air logistics and private routes immediately.
+                  </p>
+                  
+                  <div className="benefits-list" style={{ marginTop: '1.5rem' }}>
+                    <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 700 }}>Benefits of booking with us:</h3>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                      <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
+                        <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
+                        <span>Includes free 24/7 priority support till date of travel.</span>
+                      </li>
+                      <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
+                        <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
+                        <span>No need to wait on long holds like with traditional airlines.</span>
+                      </li>
+                      <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
+                        <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
+                        <span>Instant ticketing and custom route optimization.</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+                
+                <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'center' }}>
+                  <a href={SUPPORT_PHONE_HREF} className="call-btn flights-btn flights-btn--cta" style={{ width: 'auto', minWidth: '180px', margin: 0, minHeight: '44px', height: '44px', padding: '0 1.5rem', fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <i className="fas fa-phone"></i> Call {SUPPORT_PHONE_DISPLAY}
+                  </a>
+                </div>
               </div>
             </div>
           </div>
