@@ -262,6 +262,16 @@ function FlightResultRow({ flight, isExpanded, onToggleExpand, onSelect, actionL
             <span className="row-price">{flight.price.formatted}</span>
             <span className="row-fare-badge">Web Fare Only</span>
           </div>
+          <button 
+            type="button" 
+            className="mobile-select-btn" 
+            onClick={(e) => {
+              e.stopPropagation(); // Avoid triggering details toggle
+              onSelect(flight);
+            }}
+          >
+            Select
+          </button>
           <i className={`fas fa-chevron-${isExpanded ? 'up' : 'down'} row-expand-chevron`}></i>
         </div>
       </div>

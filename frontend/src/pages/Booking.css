@@ -477,6 +477,11 @@ input.input-synced:focus {
   font-weight: 800;
 }
 
+/* Mobile summary trigger styles */
+.mobile-summary-toggle-bar {
+  display: none;
+}
+
 /* ═══════════════════════════════════════
    RESPONSIVE BREAKPOINTS
    ═══════════════════════════════════════ */
@@ -495,8 +500,37 @@ input.input-synced:focus {
     grid-template-columns: 1fr;
   }
   .booking-summary-sidebar {
-    position: static;
-    order: -1; /* sidebar on top on mobile */
+    position: static !important;
+    order: 1 !important; /* Move below main form */
+    margin-top: 1.5rem;
+  }
+  .mobile-summary-toggle-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1rem;
+    font-size: 0.95rem;
+    color: #1e3a5f;
+    font-weight: 700;
+    cursor: pointer;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  }
+  .mobile-summary-toggle-bar strong {
+    color: #8b1538;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .summary-sticky-card.mobile-collapsed {
+    display: none;
+  }
+  .summary-sticky-card.mobile-expanded {
+    display: block;
   }
 }
 
@@ -510,7 +544,7 @@ input.input-synced:focus {
     grid-template-columns: 1fr;
   }
   .booking-form-grid-inline {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr !important; /* Keep side-by-side for Expiry and CVV */
   }
 }
 
@@ -519,7 +553,7 @@ input.input-synced:focus {
     padding: 1.25rem 0 2rem;
   }
   .booking-form-grid-inline {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr !important; /* Keep side-by-side for Expiry and CVV on smallest screens too */
   }
   .summary-sticky-card {
     padding: 1rem;

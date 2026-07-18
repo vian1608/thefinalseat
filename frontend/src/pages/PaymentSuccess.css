@@ -720,3 +720,47 @@
   background-color: #720e2b !important;
 }
 
+@media (max-width: 768px) {
+  .manifest-table, 
+  .manifest-table thead, 
+  .manifest-table tbody, 
+  .manifest-table th, 
+  .manifest-table td, 
+  .manifest-table tr { 
+    display: block; 
+    width: 100%;
+  }
+  
+  .manifest-table thead {
+    display: none;
+  }
+  
+  .manifest-table tr {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+  
+  .manifest-table td {
+    border-bottom: none;
+    padding: 6px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    text-align: right;
+  }
+  
+  .manifest-table td::before {
+    content: attr(data-label);
+    font-weight: 700;
+    color: #475569;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    margin-right: 12px;
+    text-align: left;
+  }
+}
+

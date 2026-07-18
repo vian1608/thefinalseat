@@ -424,6 +424,33 @@
   }
 }
 
+@media (max-width: 768px) {
+  .search-meta-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .search-meta-left {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+  }
+  .search-meta-left > div,
+  .search-meta-left .custom-select-container,
+  .search-meta-left .passenger-trigger-btn {
+    width: 100% !important;
+  }
+  .search-meta-right {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+  .search-meta-right > div,
+  .search-meta-right .custom-select-container {
+    width: 100% !important;
+  }
+}
+
 .search-meta-right {
   display: flex;
   align-items: center;
@@ -595,5 +622,19 @@
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .support-inquiry-card {
+    padding: 1.25rem 1rem !important;
+  }
+  .call-btn {
+    width: 100% !important;
+    margin-top: 1rem !important;
+    margin-bottom: 0.5rem !important;
+    min-height: 48px !important;
+    height: 48px !important;
+    font-size: 1rem !important;
+  }
 }
 

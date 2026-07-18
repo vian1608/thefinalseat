@@ -34,6 +34,7 @@ function Booking() {
 
   // Accordion state
   const [openSections, setOpenSections] = useState({ travellers: true, contact: false, requests: false, payment: false });
+  const [showSummaryMobile, setShowSummaryMobile] = useState(false);
 
   const toggleSection = (key) => {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -776,7 +777,15 @@ function Booking() {
           </div>
 
           <aside className="booking-summary-sidebar">
-            <div className="summary-sticky-card">
+            <button 
+              type="button" 
+              className="mobile-summary-toggle-bar"
+              onClick={() => setShowSummaryMobile(!showSummaryMobile)}
+            >
+              <span><i className="fas fa-receipt"></i> {showSummaryMobile ? 'Hide Trip Summary' : 'Show Trip Summary'}</span>
+              <strong>${pricing.total} USD <i className={`fas fa-chevron-${showSummaryMobile ? 'up' : 'down'}`}></i></strong>
+            </button>
+            <div className={`summary-sticky-card ${showSummaryMobile ? 'mobile-expanded' : 'mobile-collapsed'}`}>
               <h3 className="summary-card-title">Itinerary Summary</h3>
 
               <ItineraryCard

@@ -369,12 +369,12 @@ function PaymentSuccess() {
                         <tbody>
                           {passengers.map((p, idx) => (
                             <tr key={idx}>
-                              <td>{idx + 1}</td>
-                              <td><strong>{p.firstName} {p.middleName || ''} {p.lastName}</strong></td>
-                              <td>{p.dateOfBirth}</td>
-                              <td style={{ textTransform: 'capitalize' }}>{p.gender}</td>
-                              <td>{p.passportNumber || 'N/A'}</td>
-                              <td>{p.nationality || 'N/A'}</td>
+                              <td data-label="No.">{idx + 1}</td>
+                              <td data-label="Name"><strong>{p.firstName} {p.middleName || ''} {p.lastName}</strong></td>
+                              <td data-label="DOB">{p.dateOfBirth}</td>
+                              <td data-label="Gender" style={{ textTransform: 'capitalize' }}>{p.gender}</td>
+                              <td data-label="Passport">{p.passportNumber || 'N/A'}</td>
+                              <td data-label="Nationality">{p.nationality || 'N/A'}</td>
                             </tr>
                           ))}
                         </tbody>

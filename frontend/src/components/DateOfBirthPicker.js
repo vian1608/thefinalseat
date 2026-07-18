@@ -42,11 +42,20 @@ function DateOfBirthPicker({ id, value, onChange, label, placeholder = 'MM/DD/YY
         top = rect.top + window.scrollY - popupHeight - 5;
       }
       
+      let left = rect.left + window.scrollX;
+      let width = Math.max(rect.width, 320);
+      if (window.innerWidth < 480) {
+        left = Math.max(10, (window.innerWidth - 300) / 2);
+        width = window.innerWidth - 20;
+      } else if (left + width > window.innerWidth) {
+        left = Math.max(10, window.innerWidth - width - 10);
+      }
+      
       setPopupStyle({
         position: 'absolute',
         top: `${top}px`,
-        left: `${rect.left + window.scrollX}px`,
-        width: `${Math.max(rect.width, 320)}px`,
+        left: `${left}px`,
+        width: `${width}px`,
         zIndex: 9999
       });
     }
