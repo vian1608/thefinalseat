@@ -603,16 +603,16 @@
     justify-content: center;
   }
 
-  /* ── Section padding ── */
+  /* ── Section padding — tighter on mobile ── */
   .flights-section {
-    padding: 1.75rem 0;
+    padding: 1.25rem 0;
   }
 
   /* ── Force single column layout on mobile ── */
   .inquiry-split-layout {
     display: flex !important;
     flex-direction: column !important;
-    gap: 1.25rem !important;
+    gap: 1rem !important;
     width: 100% !important;
   }
 
@@ -637,18 +637,18 @@
   /* ── Form rows: stack to single column ── */
   .flights-form__row {
     grid-template-columns: 1fr !important;
-    gap: 0.75rem !important;
+    gap: 0.65rem !important;
   }
 
   .flights-form__group {
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.65rem;
     width: 100% !important;
   }
 
   .flights-form__group input,
   .flights-form__group select,
   .flights-form__group textarea {
-    min-height: 52px;
+    min-height: 50px;
     font-size: 1rem;
   }
 
@@ -656,14 +656,14 @@
   .search-meta-row {
     flex-direction: column !important;
     align-items: stretch !important;
-    gap: 10px !important;
-    margin-bottom: 1.25rem !important;
+    gap: 8px !important;
+    margin-bottom: 1rem !important;
   }
 
   .search-meta-left {
     flex-direction: column !important;
     align-items: stretch !important;
-    gap: 10px !important;
+    gap: 8px !important;
     width: 100% !important;
   }
 
@@ -709,22 +709,52 @@
     max-width: 100% !important;
   }
 
-  /* ── Support card ── */
+  /* ── COMPACT Support card on mobile ── */
   .support-inquiry-card {
     padding: 1rem !important;
     border-radius: 12px !important;
     width: 100% !important;
   }
 
+  /* Hide the large paragraph and benefits heading on mobile */
+  .support-inquiry-card > div > p,
+  .support-inquiry-card .benefits-list h3 {
+    display: none !important;
+  }
+
+  /* Compact heading */
   .support-inquiry-card h2 {
-    font-size: 1.15rem !important;
+    font-size: 1rem !important;
+    margin-bottom: 0.4rem !important;
+    font-weight: 700 !important;
+  }
+
+  /* Compact benefits list — show as inline chips */
+  .support-inquiry-card .benefits-list {
+    margin-top: 0.5rem !important;
+  }
+
+  .support-inquiry-card .benefits-list ul {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: 0.35rem !important;
+  }
+
+  .support-inquiry-card .benefits-list li {
+    font-size: 0.78rem !important;
+    background: #f1f5f9;
+    border-radius: 20px;
+    padding: 0.2rem 0.6rem;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
   }
 
   .call-btn {
     width: 100% !important;
-    margin-top: 1rem !important;
+    margin-top: 0.75rem !important;
     margin-bottom: 0.25rem !important;
-    min-height: 52px !important;
+    min-height: 48px !important;
     height: auto !important;
     font-size: 1rem !important;
     padding: 0.75rem 1rem !important;
@@ -750,5 +780,45 @@
     font-size: 0.82rem;
     padding: 8px 4px;
     gap: 5px;
+  }
+}
+
+/* ── 480px and below: ultra-compact (iPhone SE, small Android) ── */
+@media (max-width: 480px) {
+  .flights-section {
+    padding: 1rem 0;
+  }
+
+  .flights-section__title {
+    font-size: 1.35rem;
+    margin-bottom: 1.25rem;
+  }
+
+  /* Route slider: reduce section padding */
+  .route-slider-section {
+    padding-bottom: 0;
+  }
+
+  /* Inquiry tabs compact */
+  .search-tabs-header {
+    margin-bottom: 1rem;
+    padding: 3px;
+  }
+
+  .search-tabs-header .tab-btn {
+    font-size: 0.8rem;
+    padding: 7px 4px;
+    gap: 4px;
+    min-height: 36px;
+  }
+
+  /* Search card H2 */
+  .flights-inquiry-card h2 {
+    font-size: 1.35rem !important;
+  }
+
+  .flights-inquiry__intro {
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
   }
 }
