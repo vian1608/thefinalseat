@@ -114,7 +114,30 @@
   font-weight: 600;
 }
 
+
 .custom-select-option .check-icon {
   font-size: 0.75rem;
   color: #8b1538;
+}
+
+/* ─── Mobile: prevent dropdown overflow ─── */
+@media (max-width: 768px) {
+  .custom-select-container {
+    width: 100% !important;
+    min-width: unset !important;
+  }
+
+  .custom-select-trigger {
+    width: 100% !important;
+    height: 48px !important;
+    font-size: 0.95rem !important;
+  }
+
+  .custom-select-dropdown {
+    min-width: unset !important;
+    width: 100% !important;
+    max-width: calc(100vw - 2rem);
+    left: 0 !important;
+    right: 0 !important;
+  }
 }

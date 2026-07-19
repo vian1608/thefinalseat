@@ -435,8 +435,14 @@
 }
 
 @media (max-width: 768px) {
+  .bookings-container {
+    padding: 0 1rem;
+  }
+  .my-bookings-page {
+    padding: 1.75rem 0;
+  }
   .bookings-main-card {
-    padding: 1.5rem;
+    padding: 1.25rem 1rem;
   }
   .search-submit-btn {
     padding: 10px 16px;

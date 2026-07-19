@@ -132,4 +132,18 @@
   .route-slider-card {
     flex: 0 0 85vw;
   }
+
+  /* Hide scroll arrows on mobile — touch swipe handles navigation */
+  .slider-control-btn {
+    display: none !important;
+  }
+
+  .route-slider-header {
+    justify-content: center;
+    margin-bottom: 1.25rem;
+  }
+
+  .route-slider {
+    padding-bottom: 0.5rem;
+  }
 }
