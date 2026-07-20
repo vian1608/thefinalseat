@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "Backend API server for The Final Seat flight booking application",
   "type": "module",
-  "main": "server.mjs",
+  "main": "src/server.mjs",
   "scripts": {
-    "start": "node server.mjs",
-    "dev": "nodemon server.mjs"
+    "start": "node src/server.mjs",
+    "dev": "nodemon src/server.mjs"
   },
   "keywords": [
     "flight",
