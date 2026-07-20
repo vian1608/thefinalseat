@@ -2,7 +2,8 @@ import express from 'express';
 import flightController from './flight.controller.mjs';
 import rateLimit from '../../middleware/rate-limit.mjs';
 
-const router = express.Router();
+const flightRouter = express.Router();
+const airportRouter = express.Router();
 
 const searchRateLimiter = rateLimit({
   windowMs: 60000,
@@ -10,9 +11,12 @@ const searchRateLimiter = rateLimit({
   message: 'Too many search requests. Please wait before searching again.'
 });
 
-router.post('/search', searchRateLimiter, flightController.search);
-router.get('/airports', flightController.searchAirports); // Legacy fallback or separate route
-router.get('/airports/search', flightController.searchAirports); // Matching target routing
+// Mounted under /flights
+flightRouter.post('/search', searchRateLimiter, flightController.search);
 
-export default router;
-export { router as flightRouter };
+// Mounted under /airports
+airportRouter.get('/search', flightController.searchAirports);
+airportRouter.get('/', flightController.searchAirports);
+
+export { flightRouter, airportRouter };
+export default flightRouter;

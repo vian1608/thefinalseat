@@ -8,6 +8,7 @@
     { "source": "/amtrak-asistance", "destination": "/amtrak", "permanent": true }
   ],
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/app.js" },
     { "source": "/((?!api/|static/).*)", "destination": "/index.html" }
   ]
 }

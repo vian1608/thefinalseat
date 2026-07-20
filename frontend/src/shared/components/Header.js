@@ -112,9 +112,6 @@ function Header() {
             <Link to="/signin" className="header-nav-link header-auth__signin">
               Sign In
             </Link>
-            <Link to="/signup" className="header-nav-link header-auth__signup">
-              Sign Up
-            </Link>
           </div>
         </nav>
 

@@ -5,11 +5,15 @@ class SerpApiService {
     this.apiKey = env.serpapiApiKey || '8df31a2da9a24a9565d2fa7d5dcd096a5f5542c1a42e42cf9f5d604e17871498';
   }
 
-  // Helper to extract IATA code from "City Name (IATA)" format
   extractAirportCode(input) {
     if (!input) return '';
-    const match = input.match(/\(([A-Z]{3,4})\)/i);
-    return match ? match[1].toUpperCase() : input.trim().toUpperCase().substring(0, 3);
+    if (typeof input === 'object') {
+      if (input.code) return input.code.toUpperCase();
+      if (input.id) return input.id.toUpperCase();
+    }
+    const inputStr = String(input);
+    const match = inputStr.match(/\(([A-Z]{3,4})\)/i);
+    return match ? match[1].toUpperCase() : inputStr.trim().toUpperCase().substring(0, 3);
   }
 
   // Maps UI Cabin Class to SerpAPI travel_class code
@@ -148,7 +152,10 @@ class SerpApiService {
 
       return this.formatSerpFlightOffers(data, searchParams);
     } catch (error) {
-      console.warn('SerpAPI search failed, falling back to mock flights:', error.message);
+      console.error('[Supplier Error] SerpAPI flight search failed:', error.stack || error.message);
+      if (env.nodeEnv === 'production') {
+        throw new Error('Supplier search failed: live connections offline.');
+      }
       return this.getMockFlightOffers(searchParams);
     }
   }
@@ -296,9 +303,10 @@ class SerpApiService {
         layovers: stops > 0 ? [{ airportCode: 'ORD', airportName: 'Chicago O\'Hare International', duration: 45 }] : [],
         class: travelClass,
         aircraft: 'Boeing 737-800',
-        fareType: 'Standard Cabin Select',
-        refundableStatus: 'Non-Refundable',
-        baggageAllowance: '1 Carry-on bag included'
+        fareType: 'ESTIMATED FARE (Offline Fallback)',
+        refundableStatus: 'Offline Sample (Not Bookable)',
+        baggageAllowance: 'Offline Sample (Not Bookable)',
+        isMock: true
       };
     });
 

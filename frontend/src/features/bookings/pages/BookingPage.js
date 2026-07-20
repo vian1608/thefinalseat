@@ -312,9 +312,18 @@ function Booking() {
           </div>
         )}
 
+        {flight?.isMock && (
+          <div className="booking-error-alert" role="alert" style={{ background: '#fff8e1', borderColor: '#f59e0b', color: '#92400e' }}>
+            <i className="fas fa-exclamation-triangle" style={{ color: '#f59e0b' }}></i>
+            <span>
+              <strong>Offline Estimated Result:</strong> This flight result was generated as an offline sample because live flight data is currently unavailable. Prices are estimated and this ticket <strong>cannot be booked</strong>. Please go back, search again, or contact us for live availability.
+            </span>
+          </div>
+        )}
+
         <div className="booking-checkout-layout">
           <div className="booking-main-content">
-            <form onSubmit={handleSubmit} className="booking-form-element">
+            <form onSubmit={flight?.isMock ? (e) => { e.preventDefault(); setError('This is an offline sample flight and cannot be booked. Please search for live flights.'); } : handleSubmit} className="booking-form-element">
 
               {/* SECTION 1: TRAVELLER INFORMATION */}
               <AccordionSection
