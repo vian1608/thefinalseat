@@ -37,7 +37,13 @@ export const env = {
 
   // Admin
   adminEmail: process.env.ADMIN_EMAIL || 'admin@thefinalseat.com',
-  adminPassword: process.env.ADMIN_PASSWORD || 'admin123'
+  adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
+
+  // PayPal
+  paypalClientId: process.env.PAYPAL_CLIENT_ID || '',
+  paypalClientSecret: process.env.PAYPAL_CLIENT_SECRET || '',
+  paypalEnv: process.env.PAYPAL_ENV || 'sandbox',
+  paypalWebhookId: process.env.PAYPAL_WEBHOOK_ID || ''
 };
 
 export default env;

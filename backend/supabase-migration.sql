@@ -103,16 +103,26 @@ CREATE TABLE IF NOT EXISTS payments (
   payment_provider  VARCHAR(30) NOT NULL DEFAULT 'stripe',
   stripe_session_id VARCHAR(255),
   stripe_payment_id VARCHAR(255),
+  provider_order_id VARCHAR(255) UNIQUE,
+  provider_capture_id VARCHAR(255) UNIQUE,
   payment_amount    DECIMAL(10,2) NOT NULL DEFAULT 0,
+  amount            DECIMAL(10,2),
   currency          VARCHAR(5) NOT NULL DEFAULT 'USD',
   payment_status    VARCHAR(20) NOT NULL DEFAULT 'paid'
                     CHECK (payment_status IN ('paid','pending','failed','refunded')),
   payment_date      TIMESTAMPTZ DEFAULT NOW(),
+  paid_at           TIMESTAMPTZ,
+  failure_reason    TEXT,
+  idempotency_key   VARCHAR(255),
+  payer_email       VARCHAR(255),
+  payer_id          VARCHAR(100),
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_payments_booking ON payments(booking_id);
 CREATE INDEX IF NOT EXISTS idx_payments_session ON payments(stripe_session_id);
+CREATE INDEX IF NOT EXISTS idx_payments_provider_order ON payments(provider_order_id);
+CREATE INDEX IF NOT EXISTS idx_payments_provider_capture ON payments(provider_capture_id);
 
 -- ─────────────────────────────────────────────
 -- 6. ABANDONED BOOKINGS (incomplete flow snapshots)

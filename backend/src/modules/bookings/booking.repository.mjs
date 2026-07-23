@@ -180,6 +180,68 @@ export const bookingRepository = {
       flights: flights.data || [],
       payments: payments.data || []
     };
+  },
+
+  findPaymentByOrderId: async (providerOrderId) => {
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('provider_order_id', providerOrderId)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  findPaymentByCaptureId: async (providerCaptureId) => {
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('provider_capture_id', providerCaptureId)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  updatePaymentByOrderId: async (providerOrderId, updateFields) => {
+    const { data, error } = await supabase
+      .from('payments')
+      .update(updateFields)
+      .eq('provider_order_id', providerOrderId)
+      .select()
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  upsertPayPalPayment: async (paymentRow) => {
+    // Check if payment row already exists for booking
+    const { data: existing } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('booking_id', paymentRow.booking_id)
+      .maybeSingle();
+
+    if (existing) {
+      const { data, error } = await supabase
+        .from('payments')
+        .update(paymentRow)
+        .eq('id', existing.id)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      return data;
+    } else {
+      const { data, error } = await supabase
+        .from('payments')
+        .insert(paymentRow)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      return data;
+    }
   }
 };
 

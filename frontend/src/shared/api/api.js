@@ -120,6 +120,14 @@ export const paymentAPI = {
     const response = await api.get('/payments/stripe/session-status', { params: { session_id: sessionId } });
     return response.data;
   },
+  createPayPalOrder: async (bookingId) => {
+    const response = await api.post('/paypal/create-order', { bookingId });
+    return response.data;
+  },
+  capturePayPalOrder: async (bookingId, paypalOrderId) => {
+    const response = await api.post('/paypal/capture-order', { bookingId, paypalOrderId });
+    return response.data;
+  },
 };
 
 // Consulting inquiry API

@@ -6,7 +6,8 @@
   "main": "src/server.mjs",
   "scripts": {
     "start": "node src/server.mjs",
-    "dev": "nodemon src/server.mjs"
+    "dev": "nodemon src/server.mjs",
+    "test": "node tests/paypal.test.mjs"
   },
   "keywords": [
     "flight",

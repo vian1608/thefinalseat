@@ -17,7 +17,18 @@ function PaymentSuccess() {
   const [isProcessingRecord, setIsProcessingRecord] = useState(false);
   const [bookingDataFromDb, setBookingDataFromDb] = useState(null);
 
+  const bookingIdParam = searchParams.get('booking_id');
+  const codeParam = searchParams.get('code');
+
   useEffect(() => {
+    if (!sessionId && (bookingIdParam || codeParam)) {
+      const ref = codeParam || bookingIdParam;
+      setBookingRef(ref);
+      setSessionDetails({ amount_total: 0, metadata: {} });
+      setLoading(false);
+      return;
+    }
+
     if (!sessionId) {
       setError('Invalid checkout session. Missing session identifier.');
       setLoading(false);
@@ -50,7 +61,7 @@ function PaymentSuccess() {
 
     fetchSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, type]);
+  }, [sessionId, bookingIdParam, codeParam, type]);
 
   // Fetch full details from database once confirmation code is available
   useEffect(() => {

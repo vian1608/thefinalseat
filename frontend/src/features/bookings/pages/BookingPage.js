@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
+import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import { paymentAPI, bookingAPI } from '../../../shared/api/api';
 
 import AccordionSection from '../../../shared/components/AccordionSection';
@@ -16,12 +17,24 @@ import EmailInput from '../../../shared/components/EmailInput';
 
 import './BookingPage.css';
 
+const paypalClientId = (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID)) ||
+  (typeof import.meta !== 'undefined' && import.meta && import.meta.env && import.meta.env.VITE_PAYPAL_CLIENT_ID) ||
+  'test';
+
 function Booking() {
   const navigate = useNavigate();
   const [flight, setFlight] = useState(null);
   const [returnFlight, setReturnFlight] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Payment Method: 'card' (Stripe) or 'paypal'
+  const [paymentMethod, setPaymentMethod] = useState('card');
+  const [paypalError, setPaypalError] = useState('');
+  const [payPalProcessing, setPayPalProcessing] = useState(false);
+
+  const pendingBookingId = useRef(null);
+  const pendingBookingCode = useRef(null);
 
   // Unique session key for abandoned booking tracking
   const abandonedSessionKey = useRef(
@@ -278,6 +291,149 @@ function Booking() {
       );
       setLoading(false);
     }
+  };
+
+  const createPendingBookingRecord = async () => {
+    if (pendingBookingId.current) {
+      return { id: pendingBookingId.current, code: pendingBookingCode.current };
+    }
+
+    const pricing = calculateTotal();
+    const customerName = `${primaryContact.firstName} ${primaryContact.lastName}`;
+    const flightObj = {
+      ...flight,
+      returnFlight: returnFlight,
+      specialRequests: specialRequests
+    };
+    const originalOut = parseFloat(flight?.price?.originalApiPrice || 0);
+    const originalRet = returnFlight ? parseFloat(returnFlight.price?.originalApiPrice || 0) : 0;
+
+    const bookingPayload = {
+      customerName,
+      email: primaryContact.email,
+      phone: primaryContact.phone,
+      passengers: passengersList,
+      flight: flightObj,
+      returnFlight: returnFlight,
+      originalApiPrice: (originalOut + originalRet).toFixed(2),
+      displayedWebsitePrice: pricing.total,
+      paymentStatus: 'pending',
+      currency: 'USD',
+      status: 'PENDING'
+    };
+
+    const res = await bookingAPI.create(bookingPayload);
+    if (res && res.success) {
+      const bId = res.data.id;
+      const bCode = res.data.confirmation_code || res.data.confirmationCode;
+      pendingBookingId.current = bId;
+      pendingBookingCode.current = bCode;
+      return { id: bId, code: bCode };
+    } else {
+      throw new Error('Unable to register pending booking in backend.');
+    }
+  };
+
+  const handlePayPalCreateOrder = async () => {
+    setPayPalProcessing(true);
+    setPaypalError('');
+    setError('');
+
+    // Field validations
+    if (!primaryContact.firstName || !primaryContact.lastName || !primaryContact.email || !primaryContact.phone) {
+      const msg = 'Please fill out all required Primary Contact details before paying with PayPal.';
+      setPaypalError(msg);
+      setPayPalProcessing(false);
+      throw new Error(msg);
+    }
+
+    if (passengersList.some(p => !p.firstName || !p.lastName || !p.gender || !p.dateOfBirth)) {
+      const msg = 'Please fill out all required Traveller Information before paying with PayPal.';
+      setPaypalError(msg);
+      setPayPalProcessing(false);
+      throw new Error(msg);
+    }
+
+    const agreeCheck = document.getElementById('agree-check');
+    if (agreeCheck && !agreeCheck.checked) {
+      const msg = 'Please check the box to agree to the Terms of Service & Privacy Policy.';
+      setPaypalError(msg);
+      setPayPalProcessing(false);
+      throw new Error(msg);
+    }
+
+    try {
+      // 1. Create or get internal pending booking record
+      const { id: bookingId } = await createPendingBookingRecord();
+
+      // 2. Call backend /api/paypal/create-order sending ONLY bookingId
+      const orderRes = await paymentAPI.createPayPalOrder(bookingId);
+      if (orderRes && orderRes.success && orderRes.orderId) {
+        return orderRes.orderId;
+      } else {
+        throw new Error(orderRes?.error?.message || 'Failed to initialize PayPal payment order.');
+      }
+    } catch (err) {
+      console.error('PayPal createOrder execution error:', err);
+      const msg = err.response?.data?.error?.message || err.message || 'PayPal order creation error.';
+      setPaypalError(msg);
+      setPayPalProcessing(false);
+      throw err;
+    }
+  };
+
+  const handlePayPalApprove = async (data) => {
+    setPayPalProcessing(true);
+    setPaypalError('');
+
+    try {
+      const bookingId = pendingBookingId.current;
+      const bookingCode = pendingBookingCode.current;
+      const paypalOrderId = data.orderID;
+
+      // Call backend capture-order
+      const captureRes = await paymentAPI.capturePayPalOrder(bookingId, paypalOrderId);
+
+      if (captureRes && captureRes.success) {
+        // Delete abandoned snapshot
+        bookingAPI.deleteAbandoned(abandonedSessionKey.current).catch(() => {});
+        sessionStorage.removeItem('abandonedSessionKey');
+
+        sessionStorage.setItem('bookingReference', bookingCode);
+        // Redirect to booking confirmation page
+        navigate(`/confirmation/success?type=booking&booking_id=${bookingId}&code=${bookingCode}`);
+      } else {
+        const errMsg = captureRes?.error?.message || 'Payment capture failed. Please try again.';
+        setPaypalError(errMsg);
+      }
+    } catch (err) {
+      console.error('PayPal capture error:', err);
+      const errCode = err.response?.data?.error?.code;
+      let userMsg = err.response?.data?.error?.message || 'An error occurred while verifying PayPal payment.';
+
+      if (errCode === 'PAYMENT_DECLINED') {
+        userMsg = 'Payment was declined by PayPal. Please try another card or payment method.';
+      } else if (errCode === 'CAPTURE_PENDING') {
+        userMsg = 'Payment is pending review by PayPal. Confirmation will be sent once cleared.';
+      } else if (errCode === 'BOOKING_EXPIRED' || errCode === 'BOOKING_ALREADY_PAID') {
+        userMsg = 'Booking session expired or payment has already been completed.';
+      }
+
+      setPaypalError(userMsg);
+    } finally {
+      setPayPalProcessing(false);
+    }
+  };
+
+  const handlePayPalCancel = () => {
+    setPayPalProcessing(false);
+    setPaypalError('Payment process was cancelled. You can try again or select Credit / Debit Card payment.');
+  };
+
+  const handlePayPalError = (err) => {
+    setPayPalProcessing(false);
+    console.error('PayPal SDK error:', err);
+    setPaypalError('An error occurred during PayPal checkout. Please verify account details or choose credit card payment.');
   };
 
   if (!flight) {
@@ -617,148 +773,201 @@ function Booking() {
                 isOpen={openSections.payment}
                 onToggle={() => toggleSection('payment')}
               >
-                <div className="payment-security-notice">
-                  <i className="fas fa-lock"></i>
-                  <span>Your payment is processed securely via Stripe. We never store or access your card information.</span>
+                <div className="payment-method-selector">
+                  <button
+                    type="button"
+                    className={`payment-method-tab ${paymentMethod === 'card' ? 'active' : ''}`}
+                    onClick={() => { setPaymentMethod('card'); setPaypalError(''); }}
+                  >
+                    <i className="fas fa-credit-card"></i> Credit / Debit Card
+                  </button>
+                  <button
+                    type="button"
+                    className={`payment-method-tab ${paymentMethod === 'paypal' ? 'active' : ''}`}
+                    onClick={() => { setPaymentMethod('paypal'); setError(''); }}
+                  >
+                    <i className="fab fa-paypal" style={{ color: '#003087' }}></i> PayPal / Pay Later
+                  </button>
                 </div>
 
-                <div className="payment-card-group">
-                  <h4 className="payment-sub-title">Card Details</h4>
-
-                  <div className="booking-form-grid">
-                    <label className="booking-form-field" style={{ gridColumn: 'span 2' }}>
-                      Name on Card *
-                      <input
-                        type="text"
-                        value={paymentInfo.nameOnCard}
-                        onChange={(e) => handlePaymentChange('nameOnCard', e.target.value)}
-                        required
-                        placeholder="Full name as on card"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="booking-form-grid" style={{ marginTop: '0.85rem' }}>
-                    <div className="booking-form-field">
-                      <label>Card Number *</label>
-                      <CardNumberInput
-                        id="card-number-input"
-                        value={paymentInfo.cardNumber}
-                        onChange={(val) => handlePaymentChange('cardNumber', val)}
-                        onBrandChange={setCardBrand}
-                        required
-                      />
+                {paymentMethod === 'card' ? (
+                  <>
+                    <div className="payment-security-notice">
+                      <i className="fas fa-lock"></i>
+                      <span>Your payment is processed securely via Stripe. We never store or access your card information.</span>
                     </div>
-                    
-                    <div className="booking-form-grid-inline">
-                      <label className="booking-form-field">
-                        Expiry *
-                        <input
-                          type="text"
-                          value={paymentInfo.expiry}
-                          onChange={handleExpiryChange}
-                          required
-                          placeholder="MM/YY"
-                          maxLength={5}
-                          inputMode="numeric"
-                          autoComplete="cc-exp"
-                        />
-                      </label>
-                      <label className="booking-form-field">
-                        {cardBrand === 'amex' ? 'CID *' : 'CVV *'}
-                        <div className="card-input-wrapper">
+
+                    <div className="payment-card-group">
+                      <h4 className="payment-sub-title">Card Details</h4>
+
+                      <div className="booking-form-grid">
+                        <label className="booking-form-field" style={{ gridColumn: 'span 2' }}>
+                          Name on Card *
                           <input
-                            type="password"
-                            value={paymentInfo.cvv}
-                            onChange={handleCvvChange}
-                            required
-                            placeholder={cardBrand === 'amex' ? '••••' : '•••'}
-                            maxLength={cardBrand === 'amex' ? 4 : 3}
-                            inputMode="numeric"
-                            autoComplete="cc-csc"
+                            type="text"
+                            value={paymentInfo.nameOnCard}
+                            onChange={(e) => handlePaymentChange('nameOnCard', e.target.value)}
+                            required={paymentMethod === 'card'}
+                            placeholder="Full name as on card"
                           />
-                          <i className="fas fa-shield-alt" style={{position: 'absolute', right: '0.85rem', color: '#94a3b8', fontSize: '0.95rem'}}></i>
+                        </label>
+                      </div>
+
+                      <div className="booking-form-grid" style={{ marginTop: '0.85rem' }}>
+                        <div className="booking-form-field">
+                          <label>Card Number *</label>
+                          <CardNumberInput
+                            id="card-number-input"
+                            value={paymentInfo.cardNumber}
+                            onChange={(val) => handlePaymentChange('cardNumber', val)}
+                            onBrandChange={setCardBrand}
+                            required={paymentMethod === 'card'}
+                          />
                         </div>
-                      </label>
+                        
+                        <div className="booking-form-grid-inline">
+                          <label className="booking-form-field">
+                            Expiry *
+                            <input
+                              type="text"
+                              value={paymentInfo.expiry}
+                              onChange={handleExpiryChange}
+                              required={paymentMethod === 'card'}
+                              placeholder="MM/YY"
+                              maxLength={5}
+                              inputMode="numeric"
+                              autoComplete="cc-exp"
+                            />
+                          </label>
+                          <label className="booking-form-field">
+                            {cardBrand === 'amex' ? 'CID *' : 'CVV *'}
+                            <div className="card-input-wrapper">
+                              <input
+                                type="password"
+                                value={paymentInfo.cvv}
+                                onChange={handleCvvChange}
+                                required={paymentMethod === 'card'}
+                                placeholder={cardBrand === 'amex' ? '••••' : '•••'}
+                                maxLength={cardBrand === 'amex' ? 4 : 3}
+                                inputMode="numeric"
+                                autoComplete="cc-csc"
+                              />
+                              <i className="fas fa-shield-alt" style={{position: 'absolute', right: '0.85rem', color: '#94a3b8', fontSize: '0.95rem'}}></i>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* Billing Address */}
-                <div className="payment-card-group" style={{ marginTop: '1.5rem' }}>
-                  <h4 className="payment-sub-title">Billing Address</h4>
+                    {/* Billing Address */}
+                    <div className="payment-card-group" style={{ marginTop: '1.5rem' }}>
+                      <h4 className="payment-sub-title">Billing Address</h4>
 
-                  <div className="booking-form-grid">
-                    <div className="booking-form-field" style={{ gridColumn: 'span 2' }}>
-                      <label>Country *</label>
-                      <CountrySelect
-                        id="billing-country"
-                        value={paymentInfo.country}
-                        onChange={(val) => handlePaymentChange('country', val)}
-                        required
-                      />
+                      <div className="booking-form-grid">
+                        <div className="booking-form-field" style={{ gridColumn: 'span 2' }}>
+                          <label>Country *</label>
+                          <CountrySelect
+                            id="billing-country"
+                            value={paymentInfo.country}
+                            onChange={(val) => handlePaymentChange('country', val)}
+                            required={paymentMethod === 'card'}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="booking-form-grid" style={{ marginTop: '0.85rem' }}>
+                        <label className="booking-form-field" style={{ gridColumn: 'span 2' }}>
+                          Address Line 1 *
+                          <input
+                            type="text"
+                            value={paymentInfo.addressLine1}
+                            onChange={(e) => handlePaymentChange('addressLine1', e.target.value)}
+                            required={paymentMethod === 'card'}
+                            placeholder="Street and house number"
+                          />
+                        </label>
+                      </div>
+
+                      <div className="booking-form-grid" style={{ marginTop: '0.85rem' }}>
+                        <label className="booking-form-field" style={{ gridColumn: 'span 2' }}>
+                          Address Line 2
+                          <input
+                            type="text"
+                            value={paymentInfo.addressLine2}
+                            onChange={(e) => handlePaymentChange('addressLine2', e.target.value)}
+                            placeholder="Apartment, suite, etc. (optional)"
+                          />
+                        </label>
+                      </div>
+
+                      <div className="booking-form-grid booking-form-grid--3col" style={{ marginTop: '0.85rem' }}>
+                        <div className="booking-form-field">
+                          <label>City *</label>
+                          <CitySelect
+                            id="billing-city"
+                            value={paymentInfo.city}
+                            onChange={(val) => handlePaymentChange('city', val)}
+                            countryName={paymentInfo.country}
+                            stateName={paymentInfo.state}
+                            required={paymentMethod === 'card'}
+                          />
+                        </div>
+                        <div className="booking-form-field">
+                          <label>State / Province *</label>
+                          <RegionSelect
+                            id="billing-state"
+                            value={paymentInfo.state}
+                            onChange={(val) => handlePaymentChange('state', val)}
+                            countryName={paymentInfo.country}
+                            required={paymentMethod === 'card'}
+                          />
+                        </div>
+                        <label className="booking-form-field">
+                          ZIP / Postal Code *
+                          <input
+                            type="text"
+                            value={paymentInfo.zip}
+                            onChange={(e) => handlePaymentChange('zip', e.target.value)}
+                            required={paymentMethod === 'card'}
+                            placeholder="ZIP Code"
+                          />
+                        </label>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="booking-form-grid" style={{ marginTop: '0.85rem' }}>
-                    <label className="booking-form-field" style={{ gridColumn: 'span 2' }}>
-                      Address Line 1 *
-                      <input
-                        type="text"
-                        value={paymentInfo.addressLine1}
-                        onChange={(e) => handlePaymentChange('addressLine1', e.target.value)}
-                        required
-                        placeholder="Street and house number"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="booking-form-grid" style={{ marginTop: '0.85rem' }}>
-                    <label className="booking-form-field" style={{ gridColumn: 'span 2' }}>
-                      Address Line 2
-                      <input
-                        type="text"
-                        value={paymentInfo.addressLine2}
-                        onChange={(e) => handlePaymentChange('addressLine2', e.target.value)}
-                        placeholder="Apartment, suite, etc. (optional)"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="booking-form-grid booking-form-grid--3col" style={{ marginTop: '0.85rem' }}>
-                    <div className="booking-form-field">
-                      <label>City *</label>
-                      <CitySelect
-                        id="billing-city"
-                        value={paymentInfo.city}
-                        onChange={(val) => handlePaymentChange('city', val)}
-                        countryName={paymentInfo.country}
-                        stateName={paymentInfo.state}
-                        required
-                      />
+                  </>
+                ) : (
+                  <div className="paypal-container">
+                    <div className="paypal-notice">
+                      <i className="fab fa-paypal" style={{ fontSize: '1.25rem' }}></i>
+                      <span>Pay securely with PayPal, Pay in 4, or Credit. You will review your booking before final capture.</span>
                     </div>
-                    <div className="booking-form-field">
-                      <label>State / Province *</label>
-                      <RegionSelect
-                        id="billing-state"
-                        value={paymentInfo.state}
-                        onChange={(val) => handlePaymentChange('state', val)}
-                        countryName={paymentInfo.country}
-                        required
+
+                    {paypalError && (
+                      <div className="paypal-error-notice" role="alert">
+                        <i className="fas fa-exclamation-circle"></i>
+                        <span>{paypalError}</span>
+                      </div>
+                    )}
+
+                    {payPalProcessing && (
+                      <div className="paypal-processing-overlay">
+                        <i className="fas fa-circle-notch fa-spin fa-2x"></i>
+                        <span>Processing secure PayPal checkout...</span>
+                      </div>
+                    )}
+
+                    <PayPalScriptProvider options={{ "client-id": paypalClientId, currency: "USD", intent: "capture" }}>
+                      <PayPalButtons
+                        style={{ layout: "vertical", color: "gold", shape: "rect", label: "paypal" }}
+                        disabled={payPalProcessing}
+                        createOrder={handlePayPalCreateOrder}
+                        onApprove={handlePayPalApprove}
+                        onCancel={handlePayPalCancel}
+                        onError={handlePayPalError}
                       />
-                    </div>
-                    <label className="booking-form-field">
-                      ZIP / Postal Code *
-                      <input
-                        type="text"
-                        value={paymentInfo.zip}
-                        onChange={(e) => handlePaymentChange('zip', e.target.value)}
-                        required
-                        placeholder="ZIP Code"
-                      />
-                    </label>
+                    </PayPalScriptProvider>
                   </div>
-                </div>
+                )}
               </AccordionSection>
 
               <div className="verification-block">
@@ -770,17 +979,19 @@ function Booking() {
                 </div>
               </div>
 
-              <button
-                type="submit"
-                className="booking-submit-button"
-                disabled={loading}
-              >
-                {loading ? (
-                  <span><i className="fas fa-circle-notch fa-spin"></i> Redirecting to Secure Stripe Checkout...</span>
-                ) : (
-                  <span><i className="fas fa-lock"></i> Secure Pay — ${pricing.total} USD</span>
-                )}
-              </button>
+              {paymentMethod === 'card' && (
+                <button
+                  type="submit"
+                  className="booking-submit-button"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <span><i className="fas fa-circle-notch fa-spin"></i> Redirecting to Secure Stripe Checkout...</span>
+                  ) : (
+                    <span><i className="fas fa-lock"></i> Secure Pay — ${pricing.total} USD</span>
+                  )}
+                </button>
+              )}
 
             </form>
           </div>
