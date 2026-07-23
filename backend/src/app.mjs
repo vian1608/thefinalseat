@@ -12,8 +12,9 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Mount central routing registry at /api
+// Mount central routing registry at both /api and / to support Vercel serverless function rewrites
 app.use('/api', rootRouter);
+app.use('/', rootRouter);
 
 // Fallbacks
 app.use(notFound);

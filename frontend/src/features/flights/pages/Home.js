@@ -46,6 +46,16 @@ const initialSearchData = {
   tripType: 'roundtrip'
 };
 
+const extractAirportCode = (input) => {
+  if (!input) return '';
+  if (typeof input === 'object') return (input.code || input.id || '').toUpperCase();
+  const str = String(input).trim();
+  const match = str.match(/\(([A-Z]{3,4})\)/i);
+  if (match) return match[1].toUpperCase();
+  if (/^[A-Z]{3}$/i.test(str)) return str.toUpperCase();
+  return str.toUpperCase().substring(0, 3);
+};
+
 function Home() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState(initialFormData);
@@ -55,6 +65,7 @@ function Home() {
   const [activeTab, setActiveTab] = useState('search'); // 'search' (interactive) or 'inquiry' (original)
   const [searchData, setSearchData] = useState(initialSearchData);
   const [showPassengerPopup, setShowPassengerPopup] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
 
   const passengerRef = useRef(null);
 
@@ -101,13 +112,24 @@ function Home() {
 
   const handleSearchFlights = (e) => {
     e.preventDefault();
+    if (isSearching) return;
+
+    const fromCode = searchData.fromAirport?.code || extractAirportCode(searchData.from);
+    const toCode = searchData.toAirport?.code || extractAirportCode(searchData.to);
+
     if (!searchData.from || !searchData.to || !searchData.departure) {
       setSubmitStatus('error');
-      setSubmitMessage('Please specify Departure, Arrival, and Date fields.');
+      setSubmitMessage('Please specify Origin Airport, Destination Airport, and Departure Date.');
       return;
     }
 
-    if (searchData.fromAirport?.code && searchData.toAirport?.code && searchData.fromAirport.code === searchData.toAirport.code) {
+    if (!fromCode || fromCode.length !== 3 || !toCode || toCode.length !== 3) {
+      setSubmitStatus('error');
+      setSubmitMessage('Please select or enter valid 3-letter IATA airport codes for origin and destination.');
+      return;
+    }
+
+    if (fromCode === toCode) {
       setSubmitStatus('error');
       setSubmitMessage('Origin and destination airports cannot be the same.');
       return;
@@ -127,16 +149,49 @@ function Home() {
 
     setSubmitStatus('idle');
     setSubmitMessage('');
+    setIsSearching(true);
 
-    // Save criteria in sessionStorage
-    sessionStorage.setItem('searchParams', JSON.stringify(searchData));
+    const fromDisplayStr = typeof searchData.from === 'string' ? searchData.from : (searchData.fromAirport?.name ? `${searchData.fromAirport.city || searchData.fromAirport.name} (${fromCode})` : fromCode);
+    const toDisplayStr = typeof searchData.to === 'string' ? searchData.to : (searchData.toAirport?.name ? `${searchData.toAirport.city || searchData.toAirport.name} (${toCode})` : toCode);
+
+    const payload = {
+      ...searchData,
+      from: fromDisplayStr,
+      to: toDisplayStr,
+      fromCode,
+      toCode,
+      fromAirport: searchData.fromAirport || { code: fromCode, name: fromDisplayStr },
+      toAirport: searchData.toAirport || { code: toCode, name: toDisplayStr }
+    };
+
+    // Save criteria in sessionStorage for fallback
+    sessionStorage.setItem('searchParams', JSON.stringify(payload));
     sessionStorage.setItem('searchType', searchData.tripType);
     
     // Clear any previous select values
     sessionStorage.removeItem('selectedFlight');
     sessionStorage.removeItem('returnFlight');
 
-    navigate('/search');
+    // Build URL query parameters so results page works on refresh
+    const params = new URLSearchParams({
+      from: fromCode,
+      to: toCode,
+      fromDisplay: fromDisplayStr,
+      toDisplay: toDisplayStr,
+      departure: searchData.departure,
+      adults: String(searchData.adults || 1),
+      children: String(searchData.children || 0),
+      infants: String(searchData.infants || 0),
+      travelClass: searchData.travelClass || 'economy',
+      currency: searchData.currency || 'USD',
+      tripType: searchData.tripType || 'roundtrip'
+    });
+
+    if (searchData.tripType === 'roundtrip' && searchData.returnDate) {
+      params.append('returnDate', searchData.returnDate);
+    }
+
+    navigate(`/search?${params.toString()}`);
   };
 
   const handleSearchSchedules = (e) => {
@@ -423,9 +478,14 @@ function Home() {
                         <button 
                           type="submit" 
                           className="flights-btn flights-btn--cta" 
-                          style={{ width: '100%', fontSize: '1.1rem', padding: '1rem' }}
+                          disabled={isSearching}
+                          style={{ width: '100%', fontSize: '1.1rem', padding: '1rem', opacity: isSearching ? 0.7 : 1, cursor: isSearching ? 'not-allowed' : 'pointer' }}
                         >
-                          <i className="fas fa-search"></i> Search Flights
+                          {isSearching ? (
+                            <><i className="fas fa-circle-notch fa-spin"></i> Searching Flights...</>
+                          ) : (
+                            <><i className="fas fa-search"></i> Search Flights</>
+                          )}
                         </button>
                       </div>
 

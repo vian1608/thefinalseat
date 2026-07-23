@@ -35,18 +35,20 @@ api.interceptors.request.use((config) => {
 export const flightAPI = {
   search: async (searchParams) => {
     const response = await api.post('/flights/search', searchParams);
-    // Normalize response: if response.data.data is directly the flights array,
-    // transform it to `{ flights: data, meta: meta }` structure for frontend page compatibility
-    if (response.data && Array.isArray(response.data.data)) {
+    const resData = response.data || {};
+    
+    // Normalize response: if backend returns `{ success: true, data: [flight1, flight2...], meta: {...} }`
+    // format to `{ success: true, data: { flights: [...], meta: {...} } }` for SearchResultsPage compatibility
+    if (resData.success && Array.isArray(resData.data)) {
       return {
-        ...response.data,
+        ...resData,
         data: {
-          flights: response.data.data,
-          meta: response.data.meta
+          flights: resData.data,
+          meta: resData.meta || {}
         }
       };
     }
-    return response.data;
+    return resData;
   },
 };
 

@@ -4,11 +4,61 @@ import { flightAPI } from '../../../shared/api/api';
 import './SearchResultsPage.css';
 import FlightResultRow, { normalizeFlight } from '../components/FlightResultRow';
 
+// Helper to safely format error into string
+function getErrorMessage(err) {
+  if (!err) return 'An unexpected error occurred while searching for flights.';
+  if (typeof err === 'string') return err;
+  if (typeof err === 'object') {
+    if (err.message && typeof err.message === 'string') return err.message;
+    if (err.error) return getErrorMessage(err.error);
+    if (err.code) return `Error (${err.code}): Unable to process search.`;
+    try {
+      return JSON.stringify(err);
+    } catch (e) {
+      return 'Unable to process search.';
+    }
+  }
+  return String(err);
+}
+
+// Helper to safely get airport code from string or object
+function getAirportCode(val) {
+  if (!val) return '';
+  if (typeof val === 'object') return (val.code || val.id || '').toUpperCase();
+  const str = String(val).trim();
+  const match = str.match(/\(([A-Z]{3,4})\)/i);
+  if (match) return match[1].toUpperCase();
+  if (/^[A-Z]{3}$/i.test(str)) return str.toUpperCase();
+  return str.toUpperCase().substring(0, 3);
+}
+
+// Helper to safely get display city/name from string or object
+function getAirportName(val) {
+  if (!val) return '';
+  if (typeof val === 'object') return val.city || val.name || val.code || '';
+  const str = String(val).trim();
+  const cityPart = str.split('(')[0].trim();
+  return cityPart || str;
+}
+
+// Helper to safely format dates for display without throwing Invalid Date errors
+function formatDateDisplay(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const cleanDate = dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00`;
+    const d = new Date(cleanDate);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch (e) {
+    return String(dateStr || '');
+  }
+}
+
 // Helper to convert duration string (e.g. "3h 15m") to minutes
 function durationToMinutes(durationStr) {
   if (!durationStr) return 0;
-  const hoursMatch = durationStr.match(/(\d+)\s*h/i);
-  const minutesMatch = durationStr.match(/(\d+)\s*m/i);
+  const hoursMatch = String(durationStr).match(/(\d+)\s*h/i);
+  const minutesMatch = String(durationStr).match(/(\d+)\s*m/i);
   const hours = hoursMatch ? parseInt(hoursMatch[1], 10) : 0;
   const minutes = minutesMatch ? parseInt(minutesMatch[1], 10) : 0;
   return (hours * 60) + minutes;
@@ -17,14 +67,14 @@ function durationToMinutes(durationStr) {
 // Helper to get time period (morning, afternoon, evening) from time string
 function getTimePeriod(timeStr) {
   if (!timeStr || timeStr === 'N/A') return 'other';
-  const hour = parseInt(timeStr.split(':')[0], 10);
+  const hour = parseInt(String(timeStr).split(':')[0], 10);
+  if (isNaN(hour)) return 'other';
   if (hour >= 5 && hour < 12) return 'morning';
   if (hour >= 12 && hour < 18) return 'afternoon';
   return 'evening';
 }
 
-
-function SearchResults() {
+function SearchResultsContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const [flights, setFlights] = useState([]);
@@ -66,23 +116,61 @@ function SearchResults() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const executeSearch = (params, type) => {
+    if (!params || !params.from || !params.to || !params.departure) {
+      setError('Missing or invalid flight search parameters.');
+      setLoading(false);
+      return;
+    }
+    if (type === 'rail') {
+      searchTrains(params);
+    } else {
+      searchFlights(params);
+    }
+  };
+
   useEffect(() => {
-    const params = location.state?.searchParams || JSON.parse(sessionStorage.getItem('searchParams') || '{}');
-    const type = location.state?.searchType || sessionStorage.getItem('searchType') || 'oneway';
-    
+    // 1. Read URL Query Parameters first (allows page refresh & shareable URL)
+    const urlQuery = new URLSearchParams(location.search);
+    const urlFrom = urlQuery.get('from');
+    const urlTo = urlQuery.get('to');
+    const urlDeparture = urlQuery.get('departure');
+
+    let params = null;
+    let type = 'oneway';
+
+    if (urlFrom && urlTo && urlDeparture) {
+      type = urlQuery.get('tripType') || 'oneway';
+      params = {
+        from: urlQuery.get('fromDisplay') || urlFrom,
+        to: urlQuery.get('toDisplay') || urlTo,
+        fromCode: getAirportCode(urlFrom),
+        toCode: getAirportCode(urlTo),
+        departure: urlDeparture,
+        returnDate: urlQuery.get('returnDate') || undefined,
+        adults: parseInt(urlQuery.get('adults') || '1', 10),
+        children: parseInt(urlQuery.get('children') || '0', 10),
+        infants: parseInt(urlQuery.get('infants') || '0', 10),
+        travelClass: urlQuery.get('travelClass') || 'economy',
+        currency: urlQuery.get('currency') || 'USD',
+        tripType: type
+      };
+    } else if (location.state?.searchParams) {
+      params = location.state.searchParams;
+      type = location.state.searchType || 'oneway';
+    } else {
+      try {
+        const stored = sessionStorage.getItem('searchParams');
+        if (stored) params = JSON.parse(stored);
+        type = sessionStorage.getItem('searchType') || 'oneway';
+      } catch (e) {
+        params = null;
+      }
+    }
+
     setSearchType(type);
     setSearchParams(params);
-
-    if (params.from && params.to && params.departure) {
-      if (type === 'rail') {
-        searchTrains(params);
-      } else {
-        searchFlights(params);
-      }
-    } else {
-      setError('Missing flight search parameters.');
-      setLoading(false);
-    }
+    executeSearch(params, type);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location]);
 
@@ -204,30 +292,37 @@ function SearchResults() {
       setLoading(true);
       setError(null);
       const response = await flightAPI.search(params);
-      const flightList = response.data?.flights || [];
+      const list = response?.data?.flights || (Array.isArray(response?.data) ? response.data : []);
+      const flightList = Array.isArray(list) ? list : [];
       setFlights(flightList);
       initFilterLimits(flightList);
     } catch (err) {
       console.error('Error searching flights:', err);
-      setError(err.response?.data?.error || 'Failed to search flights');
+      const errorMsg = getErrorMessage(err.response?.data?.error || err.response?.data?.message || err);
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
   const initFilterLimits = (list) => {
-    if (list.length === 0) return;
-    const prices = list.map(f => parseFloat(f.price?.total || 0));
-    const maxP = Math.max(...prices);
-    setMaxPrice(Math.ceil(maxP));
-    setSliderPrice(Math.ceil(maxP));
+    if (!Array.isArray(list) || list.length === 0) return;
+    const prices = list.map(f => parseFloat(f?.price?.total || 0)).filter(p => !isNaN(p) && p > 0);
+    if (prices.length > 0) {
+      const maxP = Math.max(...prices);
+      setMaxPrice(Math.ceil(maxP));
+      setSliderPrice(Math.ceil(maxP));
+    }
 
-    const durations = list.map(f => durationToMinutes(f.duration));
-    const maxD = Math.max(...durations);
-    setMaxDuration(maxD || 1440);
-    setSliderDuration(maxD || 1440);
+    const durations = list.map(f => durationToMinutes(f?.duration)).filter(d => d > 0);
+    if (durations.length > 0) {
+      const maxD = Math.max(...durations);
+      setMaxDuration(maxD || 1440);
+      setSliderDuration(maxD || 1440);
+    }
 
-    setSelectedAirlines([...new Set(list.map(f => f.airline))]);
+    const validAirlines = [...new Set(list.map(f => f?.airline).filter(Boolean))];
+    setSelectedAirlines(validAirlines);
   };
 
   const handleBookFlight = (flight) => {
@@ -251,14 +346,13 @@ function SearchResults() {
     setSelectedStops(prev => ({ ...prev, [stopType]: !prev[stopType] }));
   };
 
-
-
   // 1. FILTERING
-  const filteredFlights = flights
+  const flightArray = Array.isArray(flights) ? flights : [];
+  const filteredFlights = flightArray
     .map((f, idx) => normalizeFlight(f, idx))
     .filter(Boolean)
     .filter(flight => {
-      if (flight.price.total > sliderPrice) return false;
+      if (flight.price?.total > sliderPrice) return false;
 
       // Stops check
       const stops = flight.stops;
@@ -270,10 +364,10 @@ function SearchResults() {
       if (selectedAirlines.length > 0 && !selectedAirlines.includes(flight.airline)) return false;
 
       // Time ranges check
-      const depPeriod = getTimePeriod(flight.departure.time);
+      const depPeriod = getTimePeriod(flight.departure?.time);
       if (depTimeFilter !== 'all' && depPeriod !== depTimeFilter) return false;
 
-      const arrPeriod = getTimePeriod(flight.arrival.time);
+      const arrPeriod = getTimePeriod(flight.arrival?.time);
       if (arrTimeFilter !== 'all' && arrPeriod !== arrTimeFilter) return false;
 
       // Duration check
@@ -286,27 +380,27 @@ function SearchResults() {
   // 2. SORTING
   const sortedFlights = [...filteredFlights].sort((a, b) => {
     if (sortBy === 'cheapest') {
-      return a.price.total - b.price.total;
+      return (a.price?.total || 0) - (b.price?.total || 0);
     }
     if (sortBy === 'fastest') {
       return durationToMinutes(a.duration) - durationToMinutes(b.duration);
     }
     if (sortBy === 'earliest') {
-      return (a.departure.time || '').localeCompare(b.departure.time || '');
+      return (a.departure?.time || '').localeCompare(b.departure?.time || '');
     }
     if (sortBy === 'latest') {
-      return (b.departure.time || '').localeCompare(a.departure.time || '');
+      return (b.departure?.time || '').localeCompare(a.departure?.time || '');
     }
     if (sortBy === 'best') {
-      const scoreA = a.price.total + (durationToMinutes(a.duration) * 1.25) + (a.stops * 150);
-      const scoreB = b.price.total + (durationToMinutes(b.duration) * 1.25) + (b.stops * 150);
+      const scoreA = (a.price?.total || 0) + (durationToMinutes(a.duration) * 1.25) + ((a.stops || 0) * 150);
+      const scoreB = (b.price?.total || 0) + (durationToMinutes(b.duration) * 1.25) + ((b.stops || 0) * 150);
       return scoreA - scoreB;
     }
     return 0;
   });
 
   const isRail = searchType === 'rail';
-  const uniqueAirlines = [...new Set(flights.map(f => f.airline))];
+  const uniqueAirlines = [...new Set(flightArray.map(f => f?.airline).filter(Boolean))];
 
   // Active filters calculation
   let activeFiltersCount = 0;
@@ -329,8 +423,6 @@ function SearchResults() {
   const toggleExpandFlight = (flightId) => {
     setExpandedFlightId(prev => (prev === flightId ? null : flightId));
   };
-
-
 
   // Rendering Loading Skeletons
   if (loading) {
@@ -375,13 +467,38 @@ function SearchResults() {
   }
 
   if (error) {
+    const isMissingParams = String(error).toLowerCase().includes('missing');
     return (
       <div className="search-results-page">
         <div className="container">
-          <div className="error-message">
-            <i className="fas fa-exclamation-triangle"></i>
-            <p>{error}</p>
-            <button onClick={() => navigate(isRail ? '/amtrak' : '/')} className="btn-primary">Go Back</button>
+          <div className="error-message" style={{ maxWidth: '600px', margin: '3rem auto', textAlign: 'center', padding: '2.5rem', background: '#ffffff', borderRadius: '16px', boxShadow: '0 4px 25px rgba(0,0,0,0.06)' }}>
+            <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.75rem', margin: '0 auto 1.25rem' }}>
+              <i className="fas fa-exclamation-triangle"></i>
+            </div>
+            <h2 style={{ fontSize: '1.5rem', color: '#1e293b', marginBottom: '0.75rem', fontWeight: 700 }}>
+              {isMissingParams ? 'Invalid Search Criteria' : 'Flight Search Error'}
+            </h2>
+            <p style={{ color: '#64748b', fontSize: '1rem', lineHeight: 1.6, marginBottom: '1.75rem' }}>
+              {getErrorMessage(error)}
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+              {!isMissingParams && searchParams && (
+                <button 
+                  onClick={() => executeSearch(searchParams, searchType)} 
+                  className="btn-primary"
+                  style={{ padding: '0.75rem 1.5rem', borderRadius: '8px', background: '#2563eb', color: '#ffffff', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  <i className="fas fa-redo-alt" style={{ marginRight: '0.5rem' }}></i> Retry Search
+                </button>
+              )}
+              <button 
+                onClick={() => navigate(isRail ? '/amtrak' : '/')} 
+                className="btn-outline-modify"
+                style={{ padding: '0.75rem 1.5rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#ffffff', color: '#334155', cursor: 'pointer', fontWeight: 600 }}
+              >
+                <i className="fas fa-search" style={{ marginRight: '0.5rem' }}></i> {isMissingParams ? 'Start New Search' : 'Modify Search'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -537,12 +654,12 @@ function SearchResults() {
             <div className="results-meta-header-row">
               <div className="route-dates-summary">
                 <span className="summary-route">
-                  {searchParams?.from?.split('(')[0]?.trim() || 'Origin'} <i className="fas fa-arrow-right route-arrow-icon"></i> {searchParams?.to?.split('(')[0]?.trim() || 'Destination'}
+                  {getAirportName(searchParams?.from) || getAirportCode(searchParams?.fromCode || searchParams?.from) || 'Origin'} <i className="fas fa-arrow-right route-arrow-icon"></i> {getAirportName(searchParams?.to) || getAirportCode(searchParams?.toCode || searchParams?.to) || 'Destination'}
                 </span>
                 <span className="summary-date-separator">·</span>
                 <span className="summary-date">
-                  {searchParams?.departure ? new Date(searchParams.departure + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Departure'}
-                  {searchParams?.returnDate && ` – ${new Date(searchParams.returnDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                  {formatDateDisplay(searchParams?.departure) || 'Departure'}
+                  {searchParams?.returnDate && ` – ${formatDateDisplay(searchParams.returnDate)}`}
                 </span>
               </div>
               <span className="results-count-badge">{sortedFlights.length} result(s)</span>
@@ -776,6 +893,49 @@ function SearchResults() {
 
       </div>
     </div>
+  );
+}
+
+class SearchResultsErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Uncaught error in SearchResultsPage:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="search-results-page">
+          <div className="container" style={{ padding: '4rem 1rem', textAlign: 'center' }}>
+            <div className="error-message" style={{ maxWidth: '600px', margin: '0 auto', background: '#fff', padding: '2.5rem', borderRadius: '16px', boxShadow: '0 4px 25px rgba(0,0,0,0.08)' }}>
+              <i className="fas fa-exclamation-circle" style={{ fontSize: '3rem', color: '#ef4444', marginBottom: '1rem' }}></i>
+              <h2 style={{ fontSize: '1.5rem', marginBottom: '0.75rem', color: '#1e293b' }}>Display Error</h2>
+              <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>{getErrorMessage(this.state.error)}</p>
+              <button onClick={() => window.location.href = '/'} style={{ padding: '0.75rem 1.5rem', borderRadius: '8px', background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                Return to Search Home
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function SearchResults() {
+  return (
+    <SearchResultsErrorBoundary>
+      <SearchResultsContent />
+    </SearchResultsErrorBoundary>
   );
 }
 

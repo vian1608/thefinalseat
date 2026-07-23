@@ -72,10 +72,15 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, excludeC
   const containerRef = useRef(null);
   const debounceTimer = useRef(null);
 
-  // Sync display query with external value (e.g. from parent/sessionStorage)
+  // Sync display query with external value (e.g. string or airport object)
   useEffect(() => {
     if (value) {
-      setQuery(value);
+      if (typeof value === 'object') {
+        const text = value.city ? `${value.city} (${value.code})` : (value.name ? `${value.name} (${value.code})` : value.code);
+        setQuery(text);
+      } else {
+        setQuery(String(value));
+      }
     } else {
       setQuery('');
     }
@@ -117,28 +122,31 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, excludeC
     
     airportAPI.search(trimmedVal)
       .then(response => {
-        if (response && response.success) {
+        if (response && response.success && Array.isArray(response.data)) {
           const list = response.data || [];
           const filtered = list.filter(item => item.code !== excludeCode);
           setSuggestions(filtered);
           setErrorMsg('');
         } else {
-          // If response not success, trigger catch block
-          throw new Error('API returned unsuccessful response');
+          // If API response is empty or unformatted, throw error to use local fallback
+          throw new Error('API response invalid or empty');
         }
       })
       .catch(err => {
         if (process.env.NODE_ENV === 'development') {
-          console.error('Failed to fetch airport suggestions from API:', err);
+          console.warn('Failed to fetch airport suggestions from API, falling back locally:', err?.message || err);
         }
         
-        // Use local fallback
+        // Use local fallback silently
         const localList = searchLocalFallback(trimmedVal);
         const filteredLocal = localList.filter(item => item.code !== excludeCode);
         setSuggestions(filteredLocal);
 
-        // Show a helpful warning/error message without breaking the dropdown
-        setErrorMsg('Unable to reach flight servers. Using offline fallback.');
+        if (filteredLocal.length === 0) {
+          setErrorMsg('No matching airports found.');
+        } else {
+          setErrorMsg('');
+        }
       })
       .finally(() => {
         setLoading(false);
@@ -149,7 +157,20 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, excludeC
   const handleInputChange = (e) => {
     const val = e.target.value;
     setQuery(val);
-    onChange(val, null); // Clear parent object representation until fully selected
+    
+    // Check if input is a 3-letter IATA code directly typed by user
+    const cleanVal = val.trim().toUpperCase();
+    const directMatch = LOCAL_FALLBACK_AIRPORTS.find(a => a.code === cleanVal);
+    
+    if (directMatch) {
+      onChange(val, directMatch);
+    } else {
+      // Pass raw text and temporary structured object with extracted code
+      const codeMatch = val.match(/\(([A-Z]{3,4})\)/i);
+      const extractedCode = codeMatch ? codeMatch[1].toUpperCase() : (cleanVal.length === 3 ? cleanVal : '');
+      onChange(val, extractedCode ? { code: extractedCode, name: val, city: val.split('(')[0].trim() } : null);
+    }
+
     setShowSuggestions(true);
 
     if (debounceTimer.current) {

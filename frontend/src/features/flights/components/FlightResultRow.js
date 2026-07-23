@@ -132,26 +132,29 @@ export function getFlightSegments(flight) {
       date: flight.departure.date
     };
 
-    flight.layovers.forEach((layover, index) => {
+    const fnStr = String(flight.flightNumber || 'N/A');
+    const layoverList = Array.isArray(flight.layovers) ? flight.layovers : [];
+
+    layoverList.forEach((layover, index) => {
       segments.push({
         from: currentFrom.airport,
         fromCity: currentFrom.city,
         fromTime: currentFrom.time,
         fromDate: currentFrom.date,
-        to: layover.airportCode,
-        toCity: layover.airportName || layover.airportCode,
+        to: layover.airportCode || 'N/A',
+        toCity: layover.airportName || layover.airportCode || 'Layover',
         toTime: 'Connection',
         toDate: currentFrom.date,
         airline: flight.airline,
-        flightNumber: flight.flightNumber.split(',')[index]?.trim() || flight.flightNumber,
+        flightNumber: fnStr.split(',')[index]?.trim() || fnStr,
         aircraft: flight.aircraft || 'Boeing / Airbus',
         class: flight.class,
         duration: 'Flight segment',
         layoverAfter: {
           airport: layover.airportCode,
           name: layover.airportName || layover.airportCode,
-          duration: `${Math.floor(layover.duration / 60)}h ${layover.duration % 60}m`,
-          durationMinutes: layover.duration
+          duration: `${Math.floor((layover.duration || 0) / 60)}h ${(layover.duration || 0) % 60}m`,
+          durationMinutes: layover.duration || 0
         }
       });
 
@@ -169,12 +172,12 @@ export function getFlightSegments(flight) {
       fromCity: currentFrom.city,
       fromTime: currentFrom.time,
       fromDate: currentFrom.date,
-      to: flight.arrival.airport,
-      toCity: flight.arrival.city,
-      toTime: flight.arrival.time,
-      toDate: flight.arrival.date,
+      to: flight.arrival?.airport || 'N/A',
+      toCity: flight.arrival?.city || 'Destination',
+      toTime: flight.arrival?.time || 'N/A',
+      toDate: flight.arrival?.date || 'N/A',
       airline: flight.airline,
-      flightNumber: flight.flightNumber.split(',')[flight.layovers.length]?.trim() || flight.flightNumber,
+      flightNumber: fnStr.split(',')[layoverList.length]?.trim() || fnStr,
       aircraft: flight.aircraft || 'Boeing / Airbus',
       class: flight.class,
       duration: 'Flight segment',

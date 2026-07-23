@@ -15,24 +15,29 @@ export const flightController = {
       // Safe check to verify we are not sending empty or invalid airport inputs
       const extractCode = (val) => {
         if (!val) return '';
-        if (typeof val === 'object') return val.code || '';
-        const match = String(val).match(/\(([A-Z]{3,4})\)/i);
-        return match ? match[1].toUpperCase() : String(val).trim().toUpperCase().substring(0, 3);
+        if (typeof val === 'object') return (val.code || val.id || '').toUpperCase();
+        const str = String(val).trim();
+        const match = str.match(/\(([A-Z]{3,4})\)/i);
+        if (match) return match[1].toUpperCase();
+        if (/^[A-Z]{3}$/i.test(str)) return str.toUpperCase();
+        return str.toUpperCase().substring(0, 3);
       };
 
       const fromCode = extractCode(from);
       const toCode = extractCode(to);
 
-      if (fromCode.length !== 3 || toCode.length !== 3) {
+      if (!fromCode || !toCode || fromCode.length !== 3 || toCode.length !== 3) {
         return res.status(400).json({
           success: false,
-          error: { code: 'INVALID_AIRPORT_CODE', message: 'Invalid airport codes: must be 3-letter IATA codes.' }
+          error: { code: 'INVALID_AIRPORT_CODE', message: 'Invalid airport codes: must be 3-letter IATA codes (e.g. SEA, LAX).' }
         });
       }
 
       const searchParams = {
-        from,
-        to,
+        from: fromCode,
+        to: toCode,
+        fromRaw: from,
+        toRaw: to,
         departure,
         returnDate,
         adults: parseInt(adults || 1, 10),
@@ -44,7 +49,7 @@ export const flightController = {
 
       const results = await flightService.searchFlights(searchParams);
       
-      // Standard stable response shape requested: { success: true, data: [...], meta: { source: '...', count: X } }
+      // Standard stable response shape: { success: true, data: [...], meta: { source: '...', count: X } }
       res.json({
         success: true,
         data: results.flights || [],
@@ -59,7 +64,7 @@ export const flightController = {
         success: false,
         error: {
           code: 'FLIGHT_SEARCH_FAILED',
-          message: 'Unable to retrieve available flights.'
+          message: error.message || 'Unable to retrieve available flights.'
         }
       });
     }
