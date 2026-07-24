@@ -31,6 +31,23 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Handle 401 Unauthorized responses globally
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) {
+        localStorage.removeItem('token');
+        sessionStorage.removeItem('adminSession');
+        if (window.location.pathname !== '/admin/login') {
+          window.location.href = '/admin/login';
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Flight API
 export const flightAPI = {
   search: async (searchParams) => {
@@ -155,6 +172,14 @@ export const adminAPI = {
   },
   getStats: async () => {
     const response = await api.get('/admin/stats');
+    return response.data;
+  },
+  getAnalytics: async (days = 30) => {
+    const response = await api.get('/admin/analytics', { params: { days } });
+    return response.data;
+  },
+  getAbandonedBookings: async () => {
+    const response = await api.get('/admin/abandoned-bookings');
     return response.data;
   },
   updateBooking: async (id, updateData) => {

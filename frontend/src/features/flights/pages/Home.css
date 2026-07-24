@@ -709,54 +709,60 @@
     max-width: 100% !important;
   }
 
-  /* ── COMPACT Support card on mobile ── */
+  /* ── Responsive Support card on mobile ── */
   .support-inquiry-card {
-    padding: 1rem !important;
-    border-radius: 12px !important;
+    padding: 1.25rem !important;
+    border-radius: 14px !important;
     width: 100% !important;
+    margin-top: 1rem !important;
+    box-sizing: border-box !important;
   }
 
-  /* Hide the large paragraph and benefits heading on mobile */
-  .support-inquiry-card > div > p,
-  .support-inquiry-card .benefits-list h3 {
-    display: none !important;
-  }
-
-  /* Compact heading */
   .support-inquiry-card h2 {
-    font-size: 1rem !important;
-    margin-bottom: 0.4rem !important;
+    font-size: clamp(1.15rem, 4.5vw, 1.45rem) !important;
+    margin-bottom: 0.5rem !important;
+    font-weight: 800 !important;
+    color: #1e293b !important;
+  }
+
+  .support-inquiry-card > div > p {
+    display: block !important;
+    font-size: 0.88rem !important;
+    line-height: 1.5 !important;
+    color: #475569 !important;
+    margin-bottom: 0.85rem !important;
+  }
+
+  .support-inquiry-card .benefits-list {
+    margin-top: 0.75rem !important;
+  }
+
+  .support-inquiry-card .benefits-list h3 {
+    display: block !important;
+    font-size: 0.9rem !important;
+    margin-bottom: 0.5rem !important;
     font-weight: 700 !important;
   }
 
-  /* Compact benefits list — show as inline chips */
-  .support-inquiry-card .benefits-list {
-    margin-top: 0.5rem !important;
-  }
-
   .support-inquiry-card .benefits-list ul {
-    flex-direction: row !important;
-    flex-wrap: wrap !important;
-    gap: 0.35rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
   }
 
   .support-inquiry-card .benefits-list li {
-    font-size: 0.78rem !important;
-    background: #f1f5f9;
-    border-radius: 20px;
-    padding: 0.2rem 0.6rem;
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
+    font-size: 0.82rem !important;
+    color: #475569 !important;
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 0.5rem !important;
   }
 
   .call-btn {
     width: 100% !important;
-    margin-top: 0.75rem !important;
-    margin-bottom: 0.25rem !important;
+    margin-top: 1rem !important;
     min-height: 48px !important;
-    height: auto !important;
-    font-size: 1rem !important;
+    font-size: 0.95rem !important;
     padding: 0.75rem 1rem !important;
   }
 }

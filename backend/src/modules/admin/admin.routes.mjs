@@ -20,6 +20,8 @@ router.get('/bookings', authenticate, authorize(['admin']), adminController.getB
 router.get('/bookings/:id', authenticate, authorize(['admin']), adminController.getBookingDetail);
 router.put('/bookings/:id', authenticate, authorize(['admin']), adminController.updateBooking);
 router.get('/stats', authenticate, authorize(['admin']), adminController.getStats);
+router.get('/analytics', authenticate, authorize(['admin']), adminController.getAnalytics);
+router.get('/abandoned-bookings', authenticate, authorize(['admin']), adminController.getAbandonedBookings);
 
 export default router;
 export { router as adminRouter };

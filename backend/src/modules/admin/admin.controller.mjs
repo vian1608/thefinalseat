@@ -88,6 +88,32 @@ export const adminController = {
     } catch (error) {
       next(error);
     }
+  },
+
+  getAnalytics: async (req, res, next) => {
+    try {
+      const days = parseInt(req.query.days || '30', 10);
+      const analytics = await adminService.getAnalytics(days);
+      res.json({
+        success: true,
+        data: analytics
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  getAbandonedBookings: async (req, res, next) => {
+    try {
+      const abandoned = await adminService.getAbandonedBookings();
+      res.json({
+        success: true,
+        data: abandoned,
+        count: abandoned.length
+      });
+    } catch (error) {
+      next(error);
+    }
   }
 };
 

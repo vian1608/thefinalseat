@@ -43,7 +43,12 @@ export const env = {
   paypalClientId: process.env.PAYPAL_CLIENT_ID || '',
   paypalClientSecret: process.env.PAYPAL_CLIENT_SECRET || '',
   paypalEnv: process.env.PAYPAL_ENV || 'sandbox',
-  paypalWebhookId: process.env.PAYPAL_WEBHOOK_ID || ''
+  paypalWebhookId: process.env.PAYPAL_WEBHOOK_ID || '',
+
+  // Google Analytics 4
+  ga4PropertyId: process.env.GA4_PROPERTY_ID || '456789123',
+  ga4ClientEmail: process.env.GA4_CLIENT_EMAIL || 'the-final-seat-analytics@the-final-seat.iam.gserviceaccount.com',
+  ga4PrivateKey: process.env.GA4_PRIVATE_KEY || (process.env.GA4_CREDENTIALS_JSON ? JSON.parse(process.env.GA4_CREDENTIALS_JSON).private_key : '')
 };
 
 export default env;

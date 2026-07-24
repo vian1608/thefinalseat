@@ -16,12 +16,15 @@ function AdminLogin() {
 
     try {
       const response = await adminAPI.login(formData);
-      if (response.success) {
-        sessionStorage.setItem('adminSession', JSON.stringify(response.admin));
+      if (response.success && response.token) {
+        localStorage.setItem('token', response.token);
+        sessionStorage.setItem('adminSession', JSON.stringify(response.admin || { email: formData.email }));
         navigate('/admin/dashboard');
+      } else {
+        setError(response.error?.message || response.message || 'Invalid admin credentials');
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed');
+      setError(err.response?.data?.error?.message || err.response?.data?.error || err.message || 'Login failed');
     } finally {
       setLoading(false);
     }
