@@ -6,6 +6,20 @@
   min-height: 100vh;
   font-family: inherit;
   color: #1e293b; /* Charcoal/dark navy text for maximum readability */
+  opacity: 1 !important;
+}
+
+.search-error-card {
+  display: block !important;
+  opacity: 1 !important;
+  max-width: 600px;
+  margin: 3rem auto;
+  text-align: center;
+  padding: 2.5rem;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
 }
 
 .search-results-page--rail {

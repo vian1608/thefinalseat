@@ -1462,7 +1462,7 @@ body {
     color: #ef4444;
     font-size: 0.85rem;
     margin-top: 0.25rem;
-    display: none;
+    display: block;
 }
 
 /* Payment Methods */

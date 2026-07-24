@@ -471,7 +471,7 @@ function SearchResultsContent() {
     return (
       <div className="search-results-page">
         <div className="container">
-          <div className="error-message" style={{ maxWidth: '600px', margin: '3rem auto', textAlign: 'center', padding: '2.5rem', background: '#ffffff', borderRadius: '16px', boxShadow: '0 4px 25px rgba(0,0,0,0.06)' }}>
+          <div className="search-error-card">
             <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.75rem', margin: '0 auto 1.25rem' }}>
               <i className="fas fa-exclamation-triangle"></i>
             </div>
