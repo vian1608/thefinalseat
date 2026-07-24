@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import HeroSlider from '../../../shared/components/HeroSlider';
 import InquiryLocationSelect from '../components/InquiryLocationSelect';
@@ -26,7 +26,6 @@ const initialFormData = {
 };
 
 function AmtrakAssistance() {
-  const navigate = useNavigate();
   const [formData, setFormData] = useState(initialFormData);
   const [submitStatus, setSubmitStatus] = useState('idle');
   const [submitMessage, setSubmitMessage] = useState('');
@@ -35,27 +34,7 @@ function AmtrakAssistance() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSearchSchedules = (e) => {
-    e.preventDefault();
-    if (!formData.origin || !formData.destination || !formData.travelDate) {
-      setSubmitStatus('error');
-      setSubmitMessage('Please fill in Origin, Destination, and Departure Date to search train schedules.');
-      return;
-    }
 
-    const searchParams = {
-      from: formData.origin,
-      to: formData.destination,
-      departure: formData.travelDate,
-      passengers: formData.passengers || '1',
-      serviceType: 'rail'
-    };
-
-    sessionStorage.setItem('searchParams', JSON.stringify(searchParams));
-    sessionStorage.setItem('searchType', 'rail');
-    
-    navigate('/search', { state: { searchParams, searchType: 'rail' } });
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -122,22 +101,22 @@ function AmtrakAssistance() {
         <div className="container">
           <div className="inquiry-split-layout">
             <div className="inquiry-left-panel">
-              <h2 style={{ fontSize: '1.8rem', color: '#1e3a5f', marginBottom: '1rem' }}>Need Immediate Support?</h2>
-              <p>Skip the form and call us directly to secure your rail logistics immediately.</p>
+              <h2 className="inquiry-left-title">Need Immediate Support?</h2>
+              <p className="inquiry-left-lead">Skip the form and call us directly to secure your rail logistics immediately.</p>
               
-              <a href={SUPPORT_PHONE_HREF} className="call-btn amtrak-btn amtrak-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#8b1538', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
+              <a href={SUPPORT_PHONE_HREF} className="call-btn amtrak-btn amtrak-btn--cta amtrak-call-banner-btn">
                 <i className="fas fa-phone"></i> Call {SUPPORT_PHONE_DISPLAY}
               </a>
               
               <div className="benefits-list">
-                <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', color: '#1e293b' }}>Benefits for booking with us:</h3>
-                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                  <li style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', alignItems: 'start' }}>
-                    <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.25rem' }}></i>
+                <h3 className="benefits-list-title">Benefits for booking with us:</h3>
+                <ul className="benefits-list-items">
+                  <li>
+                    <i className="fas fa-check-circle icon-check"></i>
                     <span>Includes free 24/7 support till date of travel.</span>
                   </li>
-                  <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start' }}>
-                    <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.25rem' }}></i>
+                  <li>
+                    <i className="fas fa-check-circle icon-check"></i>
                     <span>No need to wait on long holds like with Amtrak.</span>
                   </li>
                 </ul>
@@ -145,8 +124,8 @@ function AmtrakAssistance() {
             </div>
 
             <div className="inquiry-right-panel">
-              <div className="amtrak-inquiry-card" style={{ margin: 0 }}>
-                <h2 style={{ marginBottom: '0.5rem', color: '#1e3a5f', fontSize: '1.75rem' }}>Consulting Inquiry</h2>
+              <div className="amtrak-inquiry-card">
+                <h2 className="inquiry-form-title">Consulting Inquiry</h2>
                 <p className="amtrak-inquiry__intro">
                   Submit your rail logistics details. A consultant will respond with advisory options and a quote outline.
                 </p>
@@ -248,39 +227,27 @@ function AmtrakAssistance() {
               </div>
 
               {/* SMS OPT-IN COMPLIANCE DISCLOSURE BLOCK */}
-              <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', marginBottom: '1rem', width: '100%' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+              <div className="amtrak-sms-box">
+                <div className="amtrak-sms-inner">
                   <input 
                     type="checkbox" 
                     id="smsOptIn" 
                     name="smsOptIn" 
                     required 
-                    style={{ marginTop: '0.25rem', cursor: 'pointer' }}
                   />
-                  <label htmlFor="smsOptIn" style={{ fontSize: '0.75rem', color: '#475569', lineHeight: '1.625', cursor: 'pointer' }}>
+                  <label htmlFor="smsOptIn">
                     By checking this box and submitting this request, I provide my express written consent to receive automated travel updates, route quotes, and booking notifications via SMS from The Final Seat LLC at the number provided. <strong>Consent is not a condition of purchase. Message frequency varies based on booking activity (up to 4 messages per month).</strong> Message and data rates may apply. Text STOP to cancel at any time, or HELP for assistance. View our <Link to="/privacy-policy" style={{ color: '#4f46e5', textDecoration: 'underline' }}>Privacy Policy</Link> and <Link to="/terms" style={{ color: '#4f46e5', textDecoration: 'underline' }}>Terms of Service</Link>.
                   </label>
                 </div>
               </div>
-              <div className="amtrak-form__actions-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <button
-                    type="submit"
-                    className="amtrak-btn amtrak-btn--cta"
-                    style={{ flex: 1 }}
-                    disabled={submitStatus === 'submitting'}
-                  >
-                    {submitStatus === 'submitting' ? 'Submitting…' : 'Request Callback'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSearchSchedules}
-                    className="amtrak-btn"
-                    style={{ flex: 1, backgroundColor: '#0f172a', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
-                  >
-                    Search Trains
-                  </button>
-                </div>
+              <div className="amtrak-form__actions-group">
+                <button
+                  type="submit"
+                  className="amtrak-btn amtrak-btn--cta amtrak-btn--full"
+                  disabled={submitStatus === 'submitting'}
+                >
+                  {submitStatus === 'submitting' ? 'Submitting Query…' : 'Submit Query'}
+                </button>
               </div>
               {submitMessage && (
                 <p

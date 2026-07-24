@@ -468,9 +468,9 @@ function AdminDashboard() {
                     </button>
                   </form>
 
-                  {/* CUSTOMER CONTACT INFORMATION */}
+                  {/* CUSTOMER CONTACT & PRICING INFORMATION */}
                   <div className="detail-section">
-                    <h4>Customer Contact Details</h4>
+                    <h4>Customer Contact & Pricing Details</h4>
                     <div className="meta-data-grid">
                       <div>
                         <span>Name</span>
@@ -485,8 +485,22 @@ function AdminDashboard() {
                         <strong>{selectedBooking.phone || 'N/A'}</strong>
                       </div>
                       <div>
-                        <span>Total Paid</span>
-                        <strong>${parseFloat(selectedBooking.total_amount || 0).toFixed(2)}</strong>
+                        <span>Supplier Airfare</span>
+                        <strong style={{ textDecoration: 'line-through', color: '#94a3b8' }}>
+                          ${parseFloat(selectedBooking.supplier_price || selectedBooking.original_api_price || selectedBooking.total_amount || 0).toFixed(2)}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Final Seat Subsidy (10% OFF)</span>
+                        <strong style={{ color: '#047857' }}>
+                          -${parseFloat(selectedBooking.discount_amount || Math.max(0, (selectedBooking.supplier_price || selectedBooking.original_api_price || selectedBooking.total_amount) - selectedBooking.total_amount)).toFixed(2)}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Total Customer Price</span>
+                        <strong style={{ color: '#0f172a', fontSize: '1.05rem' }}>
+                          ${parseFloat(selectedBooking.customer_price || selectedBooking.total_amount || 0).toFixed(2)}
+                        </strong>
                       </div>
                     </div>
                   </div>

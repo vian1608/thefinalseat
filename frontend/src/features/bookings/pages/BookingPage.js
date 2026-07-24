@@ -53,10 +53,38 @@ function Booking() {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const [couponCode, setCouponCode] = useState('');
-  const [couponApplied, setCouponApplied] = useState(false);
-  const [couponMessage, setCouponMessage] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState('');
+  // Calculate total pricing based on 10% discount pricing helper
+  const calculateTotal = () => {
+    const isMock = !!flight?.isMock || !!returnFlight?.isMock;
+    const passCount = Math.max(1, passengersList.length || 1);
+
+    const outFinal = parseFloat(flight?.price?.finalPrice || flight?.price?.total || 0);
+    const outOriginal = parseFloat(flight?.price?.originalApiPrice || outFinal);
+    const outDiscount = isMock ? 0 : parseFloat(flight?.price?.discountAmount || (outOriginal - outFinal));
+
+    const retFinal = returnFlight ? parseFloat(returnFlight?.price?.finalPrice || returnFlight?.price?.total || 0) : 0;
+    const retOriginal = returnFlight ? parseFloat(returnFlight?.price?.originalApiPrice || retFinal) : 0;
+    const retDiscount = (returnFlight && !isMock) ? parseFloat(returnFlight?.price?.discountAmount || (retOriginal - retFinal)) : 0;
+
+    const perPassOriginal = outOriginal + retOriginal;
+    const perPassDiscount = outDiscount + retDiscount;
+    const perPassFinal = outFinal + retFinal;
+
+    const supplierPrice = (perPassOriginal * passCount).toFixed(2);
+    const discountAmount = (perPassDiscount * passCount).toFixed(2);
+    const total = (perPassFinal * passCount).toFixed(2);
+
+    return {
+      supplierPrice,
+      discountAmount,
+      discountPercent: isMock ? 0 : 10,
+      total,
+      subtotal: total,
+      tax: '0.00',
+      originalPrice: supplierPrice,
+      isMock
+    };
+  };
 
   const [primaryContact, setPrimaryContact] = useState({
     firstName: '',
@@ -192,40 +220,6 @@ function Booking() {
     const maxLen = cardBrand === 'amex' ? 4 : 3;
     let raw = e.target.value.replace(/\D/g, '').slice(0, maxLen);
     handlePaymentChange('cvv', raw);
-  };
-
-  const handleApplyCoupon = () => {
-    if (couponCode.trim().toLowerCase() === 'welcome') {
-      setCouponApplied(true);
-      setAppliedCoupon('WELCOME');
-      setCouponMessage('Promo applied successfully! Enjoy 99% off.');
-    } else {
-      setCouponMessage('Invalid promo code.');
-      setCouponApplied(false);
-    }
-  };
-
-  const calculateTotal = () => {
-    const outboundPrice = parseFloat(flight?.price?.total || 0);
-    const returnPrice = returnFlight ? parseFloat(returnFlight.price?.total || 0) : 0;
-    const subtotal = outboundPrice + returnPrice;
-    const tax = subtotal * 0.05;
-    let total = subtotal + tax;
-
-    if (couponApplied && appliedCoupon === 'WELCOME') {
-      total = total * 0.01;
-    }
-
-    const originalPriceOut = parseFloat(flight?.price?.originalApiPrice || 0);
-    const originalPriceRet = returnFlight ? parseFloat(returnFlight.price?.originalApiPrice || 0) : 0;
-    const originalTotal = originalPriceOut + originalPriceRet;
-
-    return {
-      subtotal: subtotal.toFixed(2),
-      tax: tax.toFixed(2),
-      total: total.toFixed(2),
-      originalPrice: originalTotal.toFixed(2),
-    };
   };
 
   const handleSubmit = async (e) => {
@@ -1024,51 +1018,20 @@ function Booking() {
                 />
               )}
 
-              <div className="promo-code-box">
-                <span className="promo-title">Promo Code</span>
-                <div className="promo-input-row">
-                  <input
-                    type="text"
-                    placeholder="Enter code"
-                    value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value)}
-                    disabled={couponApplied}
-                    className="promo-input"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleApplyCoupon}
-                    disabled={couponApplied}
-                    className="promo-apply-btn"
-                  >
-                    Apply
-                  </button>
-                </div>
-                {couponMessage && (
-                  <p className={`promo-message ${couponApplied ? 'promo-message--success' : 'promo-message--error'}`}>
-                    {couponMessage}
-                  </p>
-                )}
-              </div>
-
               <div className="price-breakdown-section">
                 <h4>Pricing Breakdown</h4>
                 <div className="price-row">
-                  <span>Base Tickets</span>
-                  <span>${pricing.subtotal}</span>
+                  <span>Supplier Airfare ({passengersList.length || 1} traveler{passengersList.length > 1 ? 's' : ''})</span>
+                  <span style={{ textDecoration: 'line-through', color: '#94a3b8' }}>${pricing.supplierPrice}</span>
                 </div>
-                <div className="price-row">
-                  <span>Taxes & Partner Fees</span>
-                  <span>${pricing.tax}</span>
-                </div>
-                {couponApplied && (
-                  <div className="price-row price-row--discount">
-                    <span>Promo Applied (WELCOME)</span>
-                    <span>-99%</span>
+                {!pricing.isMock && parseFloat(pricing.discountAmount) > 0 && (
+                  <div className="price-row price-row--discount" style={{ color: '#047857', fontWeight: 600 }}>
+                    <span>Final Seat Subsidy (10% OFF)</span>
+                    <span>-${pricing.discountAmount}</span>
                   </div>
                 )}
                 <div className="price-row price-row--total">
-                  <strong>Total Web Price</strong>
+                  <strong>Total Customer Price</strong>
                   <strong className="price-total-amount">${pricing.total} USD</strong>
                 </div>
               </div>
