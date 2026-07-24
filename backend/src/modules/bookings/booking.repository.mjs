@@ -63,6 +63,10 @@ export const bookingRepository = {
     return data;
   },
 
+  getByReference: async (code) => {
+    return bookingRepository.findBookingByCode(code);
+  },
+
   findBookingById: async (id) => {
     const { data, error } = await supabase
       .from('bookings')
@@ -72,6 +76,10 @@ export const bookingRepository = {
 
     if (error) throw new Error(error.message);
     return data;
+  },
+
+  getById: async (id) => {
+    return bookingRepository.findBookingById(id);
   },
 
   findBookingsByEmail: async (email) => {
@@ -86,7 +94,6 @@ export const bookingRepository = {
   },
 
   searchBookings: async (q) => {
-    // Exact confirmation code matches
     const { data: byCode } = await supabase
       .from('bookings')
       .select('*')
@@ -94,7 +101,6 @@ export const bookingRepository = {
 
     if (byCode && byCode.length > 0) return byCode;
 
-    // Email partial matches
     const { data: byEmail } = await supabase
       .from('bookings')
       .select('*')
@@ -104,7 +110,6 @@ export const bookingRepository = {
 
     if (byEmail && byEmail.length > 0) return byEmail;
 
-    // Passenger name partial matches
     const { data: byName } = await supabase
       .from('bookings')
       .select('*')
@@ -155,6 +160,10 @@ export const bookingRepository = {
 
     if (error) throw new Error(error.message);
     return data;
+  },
+
+  updateBookingStatus: async (id, updateFields) => {
+    return bookingRepository.updateStatus(id, updateFields);
   },
 
   getStats: async () => {
@@ -217,7 +226,6 @@ export const bookingRepository = {
   },
 
   upsertPayPalPayment: async (paymentRow) => {
-    // Check if payment row already exists for booking
     const { data: existing } = await supabase
       .from('payments')
       .select('*')
@@ -241,6 +249,34 @@ export const bookingRepository = {
         .single();
       if (error) throw new Error(error.message);
       return data;
+    }
+  },
+
+  getWebhookEvent: async (webhookId) => {
+    try {
+      const { data, error } = await supabase
+        .from('webhook_events')
+        .select('*')
+        .eq('id', webhookId)
+        .maybeSingle();
+      if (error) return null;
+      return data;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  recordWebhookEvent: async (eventRow) => {
+    try {
+      const { data, error } = await supabase
+        .from('webhook_events')
+        .insert(eventRow)
+        .select()
+        .maybeSingle();
+      if (error) return null;
+      return data;
+    } catch (e) {
+      return null;
     }
   }
 };

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
-import { paymentAPI, bookingAPI } from '../../../shared/api/api';
+import { WhopCheckoutEmbed } from '@whop/checkout/react';
+import { paymentAPI, bookingAPI, whopAPI } from '../../../shared/api/api';
 
 import AccordionSection from '../../../shared/components/AccordionSection';
 import ItineraryCard from '../components/ItineraryCard';
@@ -10,9 +11,6 @@ import DateOfBirthPicker from '../../../shared/components/DateOfBirthPicker';
 import TravelDatePicker from '../../flights/components/TravelDatePicker';
 import InternationalPhoneInput from '../../../shared/components/InternationalPhoneInput';
 import CountrySelect from '../../../shared/components/CountrySelect';
-import RegionSelect from '../../../shared/components/RegionSelect';
-import CitySelect from '../../../shared/components/CitySelect';
-import CardNumberInput from '../../../shared/components/CardNumberInput';
 import EmailInput from '../../../shared/components/EmailInput';
 
 import './BookingPage.css';
@@ -25,13 +23,17 @@ function Booking() {
   const navigate = useNavigate();
   const [flight, setFlight] = useState(null);
   const [returnFlight, setReturnFlight] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Payment Method: 'card' (Stripe) or 'paypal'
+  // Payment Method: 'card' (Whop embedded checkout) or 'paypal'
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [paypalError, setPaypalError] = useState('');
   const [payPalProcessing, setPayPalProcessing] = useState(false);
+
+  // Whop embedded checkout state
+  const [whopCheckoutConfig, setWhopCheckoutConfig] = useState(null);
+  const [whopLoading, setWhopLoading] = useState(false);
+  const [whopError, setWhopError] = useState('');
 
   const pendingBookingId = useRef(null);
   const pendingBookingCode = useRef(null);
@@ -94,21 +96,6 @@ function Booking() {
   });
 
   const [contactSameAsTraveller, setContactSameAsTraveller] = useState(false);
-
-  const [paymentInfo, setPaymentInfo] = useState({
-    nameOnCard: '',
-    cardNumber: '',
-    expiry: '',
-    cvv: '',
-    addressLine1: '',
-    addressLine2: '',
-    city: '',
-    state: '',
-    zip: '',
-    country: 'United States',
-  });
-
-  const [cardBrand, setCardBrand] = useState('unknown');
 
   const [specialRequests, setSpecialRequests] = useState({
     wheelchair: false,
@@ -187,14 +174,6 @@ function Booking() {
     setPrimaryContact(prev => ({ ...prev, [field]: value }));
   };
 
-  const handlePaymentChange = (field, value) => {
-    if (field === 'country' && value !== paymentInfo.country) {
-      setPaymentInfo(prev => ({ ...prev, country: value, state: '', city: '' }));
-    } else {
-      setPaymentInfo(prev => ({ ...prev, [field]: value }));
-    }
-  };
-
   const handleSpecialRequestsChange = (field, value) => {
     setSpecialRequests(prev => ({ ...prev, [field]: value }));
   };
@@ -207,84 +186,22 @@ function Booking() {
     });
   };
 
-  // Expiry formatting: MM/YY
-  const handleExpiryChange = (e) => {
-    let raw = e.target.value.replace(/\D/g, '').slice(0, 4);
-    if (raw.length >= 3) {
-      raw = raw.slice(0, 2) + '/' + raw.slice(2);
+  const validateForm = () => {
+    if (!primaryContact.firstName || !primaryContact.lastName || !primaryContact.email || !primaryContact.phone) {
+      setError('Please fill in all primary contact details (First Name, Last Name, Email, Phone).');
+      setOpenSections({ travellers: false, contact: true, requests: false, payment: false });
+      return false;
     }
-    handlePaymentChange('expiry', raw);
-  };
 
-  const handleCvvChange = (e) => {
-    const maxLen = cardBrand === 'amex' ? 4 : 3;
-    let raw = e.target.value.replace(/\D/g, '').slice(0, maxLen);
-    handlePaymentChange('cvv', raw);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      const pricing = calculateTotal();
-
-      const billingAddress = {
-        street: paymentInfo.addressLine1 + (paymentInfo.addressLine2 ? ', ' + paymentInfo.addressLine2 : ''),
-        city: paymentInfo.city,
-        state: paymentInfo.state,
-        zip: paymentInfo.zip,
-        country: paymentInfo.country,
-      };
-
-      sessionStorage.setItem('pendingPassenger', JSON.stringify({
-        primaryContact,
-        billingAddress,
-        specialRequests,
-        passengers: passengersList,
-      }));
-      sessionStorage.setItem('pricingTotal', pricing.total.toString());
-
-      // Delete abandoned booking record now that payment is proceeding
-      bookingAPI.deleteAbandoned(abandonedSessionKey.current).catch(() => {});
-      sessionStorage.removeItem('abandonedSessionKey');
-
-      const response = await paymentAPI.createStripeSession({
-        type: 'booking',
-        email: primaryContact.email,
-        amount: parseFloat(pricing.total),
-        flight: flight,
-        returnFlight: returnFlight,
-        passenger: {
-          firstName: primaryContact.firstName,
-          lastName: primaryContact.lastName,
-          email: primaryContact.email,
-          phone: primaryContact.phone,
-          dateOfBirth: passengersList[0]?.dateOfBirth || '',
-          gender: passengersList[0]?.gender || '',
-          nationality: passengersList[0]?.nationality || '',
-          passportNumber: passengersList[0]?.passportNumber || '',
-          passportExpiry: passengersList[0]?.passportExpiry || '',
-          emergencyName: primaryContact.firstName + ' ' + primaryContact.lastName,
-          emergencyPhone: primaryContact.phone,
-          emergencyRelationship: 'Primary Contact',
-        },
-      });
-
-      if (response.success && response.url) {
-        window.location.href = response.url;
-      } else {
-        throw new Error('Stripe redirect URL not returned by server.');
+    for (let i = 0; i < passengersList.length; i++) {
+      const p = passengersList[i];
+      if (!p.firstName || !p.lastName || !p.gender || !p.dateOfBirth) {
+        setError(`Please complete all required fields for Traveler #${i + 1} (First Name, Last Name, Gender, DOB).`);
+        setOpenSections({ travellers: true, contact: false, requests: false, payment: false });
+        return false;
       }
-    } catch (err) {
-      console.error('Checkout creation error:', err);
-      setError(
-        err.response?.data?.error ||
-        'Unable to process checkout. Please verify passenger details and try again.'
-      );
-      setLoading(false);
     }
+    return true;
   };
 
   const createPendingBookingRecord = async () => {
@@ -299,8 +216,6 @@ function Booking() {
       returnFlight: returnFlight,
       specialRequests: specialRequests
     };
-    const originalOut = parseFloat(flight?.price?.originalApiPrice || 0);
-    const originalRet = returnFlight ? parseFloat(returnFlight.price?.originalApiPrice || 0) : 0;
 
     const bookingPayload = {
       customerName,
@@ -309,11 +224,17 @@ function Booking() {
       passengers: passengersList,
       flight: flightObj,
       returnFlight: returnFlight,
-      originalApiPrice: (originalOut + originalRet).toFixed(2),
+      originalApiPrice: pricing.supplierPrice,
+      supplier_price: pricing.supplierPrice,
+      discount_percent: pricing.discountPercent,
+      discount_amount: pricing.discountAmount,
+      customer_price: pricing.total,
       displayedWebsitePrice: pricing.total,
       paymentStatus: 'pending',
+      payment_provider: 'whop',
       currency: 'USD',
-      status: 'PENDING'
+      status: 'PENDING',
+      isMock: pricing.isMock
     };
 
     const res = await bookingAPI.create(bookingPayload);
@@ -328,49 +249,58 @@ function Booking() {
     }
   };
 
+  const handleInitWhopCheckout = async () => {
+    setWhopError('');
+    setError('');
+
+    if (!validateForm()) return;
+
+    setWhopLoading(true);
+    try {
+      // 1. Create or reuse pending booking in Supabase
+      const pending = await createPendingBookingRecord();
+
+      // 2. Request backend Whop checkout configuration using ONLY bookingId
+      const res = await whopAPI.createCheckout(pending.id);
+
+      if (res && res.success && res.sessionId) {
+        setWhopCheckoutConfig(res);
+      } else {
+        throw new Error(res.error?.message || 'Failed to initialize Whop checkout configuration');
+      }
+    } catch (err) {
+      console.error('Whop checkout initialization error:', err);
+      setWhopError(
+        err.response?.data?.error?.message || err.message ||
+        'Unable to initialize Whop card checkout. Please verify traveler information.'
+      );
+    } finally {
+      setWhopLoading(false);
+    }
+  };
+
   const handlePayPalCreateOrder = async () => {
     setPayPalProcessing(true);
     setPaypalError('');
     setError('');
 
-    // Field validations
-    if (!primaryContact.firstName || !primaryContact.lastName || !primaryContact.email || !primaryContact.phone) {
-      const msg = 'Please fill out all required Primary Contact details before paying with PayPal.';
-      setPaypalError(msg);
-      setPayPalProcessing(false);
-      throw new Error(msg);
-    }
-
-    if (passengersList.some(p => !p.firstName || !p.lastName || !p.gender || !p.dateOfBirth)) {
-      const msg = 'Please fill out all required Traveller Information before paying with PayPal.';
-      setPaypalError(msg);
-      setPayPalProcessing(false);
-      throw new Error(msg);
-    }
-
-    const agreeCheck = document.getElementById('agree-check');
-    if (agreeCheck && !agreeCheck.checked) {
-      const msg = 'Please check the box to agree to the Terms of Service & Privacy Policy.';
-      setPaypalError(msg);
-      setPayPalProcessing(false);
-      throw new Error(msg);
-    }
-
     try {
-      // 1. Create or get internal pending booking record
-      const { id: bookingId } = await createPendingBookingRecord();
+      if (!validateForm()) {
+        setPayPalProcessing(false);
+        throw new Error('Please fill in all required traveler and contact details before checkout.');
+      }
 
-      // 2. Call backend /api/paypal/create-order sending ONLY bookingId
-      const orderRes = await paymentAPI.createPayPalOrder(bookingId);
-      if (orderRes && orderRes.success && orderRes.orderId) {
-        return orderRes.orderId;
+      const pending = await createPendingBookingRecord();
+      const res = await paymentAPI.createPayPalOrder(pending.id);
+
+      if (res && res.success && res.orderId) {
+        return res.orderId;
       } else {
-        throw new Error(orderRes?.error?.message || 'Failed to initialize PayPal payment order.');
+        throw new Error(res.error?.message || 'Failed to create PayPal order');
       }
     } catch (err) {
-      console.error('PayPal createOrder execution error:', err);
-      const msg = err.response?.data?.error?.message || err.message || 'PayPal order creation error.';
-      setPaypalError(msg);
+      console.error('PayPal Order creation failed:', err);
+      setPaypalError(err.message || 'Unable to connect to PayPal. Please try again.');
       setPayPalProcessing(false);
       throw err;
     }
@@ -379,41 +309,23 @@ function Booking() {
   const handlePayPalApprove = async (data) => {
     setPayPalProcessing(true);
     setPaypalError('');
-
     try {
-      const bookingId = pendingBookingId.current;
-      const bookingCode = pendingBookingCode.current;
-      const paypalOrderId = data.orderID;
+      const bId = pendingBookingId.current;
+      const bCode = pendingBookingCode.current;
 
-      // Call backend capture-order
-      const captureRes = await paymentAPI.capturePayPalOrder(bookingId, paypalOrderId);
+      const res = await paymentAPI.capturePayPalOrder(bId, data.orderID);
 
-      if (captureRes && captureRes.success) {
-        // Delete abandoned snapshot
+      if (res && res.success) {
         bookingAPI.deleteAbandoned(abandonedSessionKey.current).catch(() => {});
         sessionStorage.removeItem('abandonedSessionKey');
 
-        sessionStorage.setItem('bookingReference', bookingCode);
-        // Redirect to booking confirmation page
-        navigate(`/confirmation/success?type=booking&booking_id=${bookingId}&code=${bookingCode}`);
+        navigate(`/confirmation/success?session_id=${data.orderID}&type=booking&booking_id=${bId}&code=${bCode}`);
       } else {
-        const errMsg = captureRes?.error?.message || 'Payment capture failed. Please try again.';
-        setPaypalError(errMsg);
+        throw new Error(res.error?.message || 'PayPal payment capture failed.');
       }
     } catch (err) {
-      console.error('PayPal capture error:', err);
-      const errCode = err.response?.data?.error?.code;
-      let userMsg = err.response?.data?.error?.message || 'An error occurred while verifying PayPal payment.';
-
-      if (errCode === 'PAYMENT_DECLINED') {
-        userMsg = 'Payment was declined by PayPal. Please try another card or payment method.';
-      } else if (errCode === 'CAPTURE_PENDING') {
-        userMsg = 'Payment is pending review by PayPal. Confirmation will be sent once cleared.';
-      } else if (errCode === 'BOOKING_EXPIRED' || errCode === 'BOOKING_ALREADY_PAID') {
-        userMsg = 'Booking session expired or payment has already been completed.';
-      }
-
-      setPaypalError(userMsg);
+      console.error('PayPal Capture failed:', err);
+      setPaypalError(err.message || 'Payment capture failed. Please contact support.');
     } finally {
       setPayPalProcessing(false);
     }
@@ -421,83 +333,76 @@ function Booking() {
 
   const handlePayPalCancel = () => {
     setPayPalProcessing(false);
-    setPaypalError('Payment process was cancelled. You can try again or select Credit / Debit Card payment.');
+    setPaypalError('PayPal payment was cancelled. You can try again or select credit card.');
   };
 
   const handlePayPalError = (err) => {
     setPayPalProcessing(false);
-    console.error('PayPal SDK error:', err);
-    setPaypalError('An error occurred during PayPal checkout. Please verify account details or choose credit card payment.');
+    console.error('PayPal button error:', err);
+    setPaypalError('A PayPal checkout error occurred. Please verify details or try card payment.');
   };
 
   if (!flight) {
     return (
-      <div className="booking-loading-container">
+      <div className="booking-page-loading">
         <i className="fas fa-circle-notch fa-spin"></i>
-        <p>Loading flight summaries...</p>
+        <p>Loading itinerary details...</p>
       </div>
     );
   }
 
   const pricing = calculateTotal();
-  const isTrain = flight.isTrain;
+  const isTrain = !!flight.isTrain;
 
   return (
-    <div className="booking-page-container">
+    <div className="booking-page">
       <Helmet>
-        <title>Flight Checkout & Booking | The Final Seat</title>
+        <title>Flight Booking & Passenger Details | The Final Seat</title>
       </Helmet>
 
-      <div className="booking-inner-container">
-
-        <header className="booking-page-header">
-          <h1>Secure Ticket Checkout</h1>
-          <p>Complete your reservation below. Your payment is processed via Stripe's PCI-compliant secure gateway.</p>
-        </header>
-
-        {error && (
-          <div className="booking-error-alert" role="alert">
-            <i className="fas fa-exclamation-circle"></i>
-            <span>{error}</span>
+      <div className="booking-hero-strip">
+        <div className="container">
+          <div className="hero-strip-content">
+            <h2>Complete Your Reservation</h2>
+            <p>Enter traveler information to secure your 10% discounted airfare with Instant Electronic Ticketing.</p>
           </div>
-        )}
+        </div>
+      </div>
 
-        {flight?.isMock && (
-          <div className="booking-error-alert" role="alert" style={{ background: '#fff8e1', borderColor: '#f59e0b', color: '#92400e' }}>
-            <i className="fas fa-exclamation-triangle" style={{ color: '#f59e0b' }}></i>
-            <span>
-              <strong>Offline Estimated Result:</strong> This flight result was generated as an offline sample because live flight data is currently unavailable. Prices are estimated and this ticket <strong>cannot be booked</strong>. Please go back, search again, or contact us for live availability.
-            </span>
-          </div>
-        )}
+      <div className="container booking-main-container">
+        <div className="booking-layout">
+          <div className="booking-form-area">
 
-        <div className="booking-checkout-layout">
-          <div className="booking-main-content">
-            <form onSubmit={flight?.isMock ? (e) => { e.preventDefault(); setError('This is an offline sample flight and cannot be booked. Please search for live flights.'); } : handleSubmit} className="booking-form-element">
+            {error && (
+              <div className="booking-global-error" role="alert">
+                <i className="fas fa-exclamation-circle"></i>
+                <span>{error}</span>
+              </div>
+            )}
 
-              {/* SECTION 1: TRAVELLER INFORMATION */}
+            <form onSubmit={(e) => e.preventDefault()}>
+
+              {/* SECTION 1: TRAVELLER DETAILS */}
               <AccordionSection
-                id="travellers"
-                stepNumber={1}
-                title="Traveller Information"
+                title={`1. Traveler Details (${passengersList.length} Passenger${passengersList.length > 1 ? 's' : ''})`}
                 isOpen={openSections.travellers}
                 onToggle={() => toggleSection('travellers')}
+                icon="fas fa-users"
+                badgeText="Step 1"
               >
-                {passengersList.map((passenger, index) => (
-                  <div key={index} className="passenger-entry-block">
-                    <h3 className="passenger-block-title">
-                      <i className="fas fa-user"></i>
-                      Traveller {index + 1}
-                      <span className="passenger-role-badge">{passenger.role}</span>
-                    </h3>
+                {passengersList.map((passenger, idx) => (
+                  <div key={idx} className="passenger-card-block">
+                    <h4 className="passenger-card-title">
+                      <i className="fas fa-user"></i> Passenger #{idx + 1} ({passenger.role.toUpperCase()})
+                    </h4>
 
-                    {/* Row 1: Title, First, Middle, Last */}
-                    <div className="booking-form-grid booking-form-grid--4col">
+                    <div className="booking-form-grid booking-form-grid--3col">
                       <label className="booking-form-field">
-                        Title
+                        Title *
                         <select
                           value={passenger.title}
-                          onChange={(e) => handlePassengerChange(index, 'title', e.target.value)}
+                          onChange={(e) => handlePassengerChange(idx, 'title', e.target.value)}
+                          required
                         >
                           <option value="">Select</option>
                           <option value="Mr">Mr.</option>
@@ -506,185 +411,156 @@ function Booking() {
                           <option value="Dr">Dr.</option>
                         </select>
                       </label>
+
                       <label className="booking-form-field">
                         First Name *
                         <input
                           type="text"
                           value={passenger.firstName}
-                          onChange={(e) => handlePassengerChange(index, 'firstName', e.target.value)}
+                          onChange={(e) => handlePassengerChange(idx, 'firstName', e.target.value)}
                           required
-                          placeholder="As on ID"
+                          placeholder="First Name (as on Passport/ID)"
                         />
                       </label>
+
                       <label className="booking-form-field">
                         Middle Name
                         <input
                           type="text"
                           value={passenger.middleName}
-                          onChange={(e) => handlePassengerChange(index, 'middleName', e.target.value)}
-                          placeholder="Optional"
+                          onChange={(e) => handlePassengerChange(idx, 'middleName', e.target.value)}
+                          placeholder="Middle Name (optional)"
                         />
                       </label>
+                    </div>
+
+                    <div className="booking-form-grid booking-form-grid--3col" style={{ marginTop: '0.85rem' }}>
                       <label className="booking-form-field">
                         Last Name *
                         <input
                           type="text"
                           value={passenger.lastName}
-                          onChange={(e) => handlePassengerChange(index, 'lastName', e.target.value)}
+                          onChange={(e) => handlePassengerChange(idx, 'lastName', e.target.value)}
                           required
-                          placeholder="As on ID"
+                          placeholder="Last Name (as on Passport/ID)"
                         />
                       </label>
-                    </div>
 
-                    {/* Row 2: Gender, DOB, Nationality */}
-                    <div className="booking-form-grid booking-form-grid--3col" style={{ marginTop: '0.85rem' }}>
                       <label className="booking-form-field">
                         Gender *
                         <select
                           value={passenger.gender}
-                          onChange={(e) => handlePassengerChange(index, 'gender', e.target.value)}
+                          onChange={(e) => handlePassengerChange(idx, 'gender', e.target.value)}
                           required
                         >
                           <option value="">Select Gender</option>
                           <option value="male">Male</option>
                           <option value="female">Female</option>
-                          <option value="other">Other</option>
                         </select>
                       </label>
+
                       <div className="booking-form-field">
+                        <label>Date of Birth *</label>
                         <DateOfBirthPicker
-                          id={`dob-passenger-${index}`}
-                          label="Date of Birth *"
+                          id={`dob-pass-${idx}`}
                           value={passenger.dateOfBirth}
-                          onChange={(val) => handlePassengerChange(index, 'dateOfBirth', val)}
-                          required
-                        />
-                      </div>
-                      <div className="booking-form-field">
-                        <label htmlFor={`nationality-${index}`}>Nationality *</label>
-                        <CountrySelect
-                          id={`nationality-${index}`}
-                          value={passenger.nationality}
-                          onChange={(val) => handlePassengerChange(index, 'nationality', val)}
+                          onChange={(val) => handlePassengerChange(idx, 'dateOfBirth', val)}
                           required
                         />
                       </div>
                     </div>
 
-                    {/* Row 3: Passport fields */}
-                    {!isTrain && (
-                      <>
-                        <div className="booking-form-grid" style={{ marginTop: '0.85rem' }}>
-                          <label className="booking-form-field">
-                            Passport Number
-                            <input
-                              type="text"
-                              value={passenger.passportNumber}
-                              onChange={(e) => handlePassengerChange(index, 'passportNumber', e.target.value)}
-                              placeholder="Optional"
-                            />
-                          </label>
-                          <div className="booking-form-field">
-                            <TravelDatePicker
-                              id={`passport-expiry-${index}`}
-                              label="Passport Expiry"
-                              value={passenger.passportExpiry}
-                              onChange={(val) => handlePassengerChange(index, 'passportExpiry', val)}
-                              placeholder="Optional"
-                            />
-                          </div>
-                        </div>
-                        <div className="booking-form-grid" style={{ marginTop: '0.85rem' }}>
-                          <label className="booking-form-field">
-                            Known Traveler Number
-                            <input
-                              type="text"
-                              value={passenger.knownTravelerNumber}
-                              onChange={(e) => handlePassengerChange(index, 'knownTravelerNumber', e.target.value)}
-                              placeholder="KTN (optional)"
-                            />
-                          </label>
-                          <label className="booking-form-field">
-                            Redress Number
-                            <input
-                              type="text"
-                              value={passenger.redressNumber}
-                              onChange={(e) => handlePassengerChange(index, 'redressNumber', e.target.value)}
-                              placeholder="Optional"
-                            />
-                          </label>
-                        </div>
-                      </>
-                    )}
+                    <div className="booking-form-grid booking-form-grid--3col" style={{ marginTop: '0.85rem' }}>
+                      <div className="booking-form-field">
+                        <label>Nationality</label>
+                        <CountrySelect
+                          id={`nat-pass-${idx}`}
+                          value={passenger.nationality}
+                          onChange={(val) => handlePassengerChange(idx, 'nationality', val)}
+                        />
+                      </div>
+
+                      <label className="booking-form-field">
+                        Passport Number
+                        <input
+                          type="text"
+                          value={passenger.passportNumber}
+                          onChange={(e) => handlePassengerChange(idx, 'passportNumber', e.target.value.toUpperCase())}
+                          placeholder="Passport Number (if intl)"
+                        />
+                      </label>
+
+                      <div className="booking-form-field">
+                        <label>Passport Expiry</label>
+                        <TravelDatePicker
+                          id={`passport-exp-${idx}`}
+                          value={passenger.passportExpiry}
+                          onChange={(val) => handlePassengerChange(idx, 'passportExpiry', val)}
+                          placeholder="YYYY-MM-DD"
+                        />
+                      </div>
+                    </div>
                   </div>
                 ))}
               </AccordionSection>
 
-              {/* SECTION 2: PRIMARY CONTACT */}
+              {/* SECTION 2: PRIMARY CONTACT INFO */}
               <AccordionSection
-                id="contact"
-                stepNumber={2}
-                title="Primary Contact"
+                title="2. Primary Contact Details"
                 isOpen={openSections.contact}
                 onToggle={() => toggleSection('contact')}
+                icon="fas fa-envelope"
+                badgeText="Step 2"
               >
-                <div className="same-as-traveller-check">
+                <div className="contact-checkbox-row">
                   <input
                     type="checkbox"
-                    id="same-as-traveller"
+                    id="contactSame"
                     checked={contactSameAsTraveller}
-                    onChange={(e) => {
-                      setContactSameAsTraveller(e.target.checked);
-                      if (!e.target.checked) {
-                        setPrimaryContact({ firstName: '', lastName: '', email: primaryContact.email, phone: primaryContact.phone });
-                      }
-                    }}
+                    onChange={(e) => setContactSameAsTraveller(e.target.checked)}
                   />
-                  <label htmlFor="same-as-traveller">Primary contact is the same as Traveller 1</label>
+                  <label htmlFor="contactSame">Primary contact is Passenger #1</label>
                 </div>
 
                 <div className="booking-form-grid">
                   <label className="booking-form-field">
-                    First Name *
+                    Contact First Name *
                     <input
                       type="text"
                       value={primaryContact.firstName}
                       onChange={(e) => handlePrimaryContactChange('firstName', e.target.value)}
                       required
-                      placeholder="e.g. John"
-                      readOnly={contactSameAsTraveller}
-                      className={contactSameAsTraveller ? 'input-synced' : ''}
+                      placeholder="First Name"
                     />
                   </label>
+
                   <label className="booking-form-field">
-                    Last Name *
+                    Contact Last Name *
                     <input
                       type="text"
                       value={primaryContact.lastName}
                       onChange={(e) => handlePrimaryContactChange('lastName', e.target.value)}
                       required
-                      placeholder="e.g. Doe"
-                      readOnly={contactSameAsTraveller}
-                      className={contactSameAsTraveller ? 'input-synced' : ''}
+                      placeholder="Last Name"
                     />
                   </label>
                 </div>
 
                 <div className="booking-form-grid" style={{ marginTop: '0.85rem' }}>
                   <div className="booking-form-field">
+                    <label>Email Address (For E-Ticket) *</label>
                     <EmailInput
-                      id="primary-contact-email"
-                      label="Email Address *"
+                      id="contact-email"
                       value={primaryContact.email}
                       onChange={(val) => handlePrimaryContactChange('email', val)}
                       required
                     />
                   </div>
+
                   <div className="booking-form-field">
-                    <label>Phone Number *</label>
+                    <label>Phone Number (For Flight SMS Updates) *</label>
                     <InternationalPhoneInput
-                      id="primary-contact-phone"
+                      id="contact-phone"
                       value={primaryContact.phone}
                       onChange={(val) => handlePrimaryContactChange('phone', val)}
                       required
@@ -695,27 +571,12 @@ function Booking() {
 
               {/* SECTION 3: SPECIAL REQUESTS */}
               <AccordionSection
-                id="requests"
-                stepNumber={3}
-                title="Special Requests"
+                title="3. Special Requests & Preferences"
                 isOpen={openSections.requests}
                 onToggle={() => toggleSection('requests')}
+                icon="fas fa-concierge-bell"
+                badgeText="Optional"
               >
-                <p className="section-info-notice">
-                  <i className="fas fa-info-circle"></i>
-                  Special requests are subject to airline availability and are not guaranteed.
-                </p>
-
-                <div className="same-as-traveller-check" style={{ marginBottom: '0.85rem' }}>
-                  <input
-                    type="checkbox"
-                    id="wheelchair"
-                    checked={specialRequests.wheelchair}
-                    onChange={(e) => handleSpecialRequestsChange('wheelchair', e.target.checked)}
-                  />
-                  <label htmlFor="wheelchair">Request wheelchair assistance at airports</label>
-                </div>
-
                 <div className="booking-form-grid booking-form-grid--3col">
                   <label className="booking-form-field">
                     Meal Preference
@@ -723,57 +584,64 @@ function Booking() {
                       value={specialRequests.mealPreference}
                       onChange={(e) => handleSpecialRequestsChange('mealPreference', e.target.value)}
                     >
-                      <option value="none">No Preference</option>
-                      <option value="vegetarian">Vegetarian</option>
-                      <option value="vegan">Vegan</option>
+                      <option value="none">Standard Airline Meal</option>
+                      <option value="vegetarian">Vegetarian / Vegan</option>
                       <option value="kosher">Kosher</option>
                       <option value="halal">Halal</option>
-                      <option value="gluten-free">Gluten-Free</option>
+                      <option value="child">Child Meal</option>
                     </select>
                   </label>
+
                   <label className="booking-form-field">
-                    Seating Preference
+                    Seat Preference
                     <select
                       value={specialRequests.seatingPreference}
                       onChange={(e) => handleSpecialRequestsChange('seatingPreference', e.target.value)}
                     >
                       <option value="none">No Preference</option>
-                      <option value="window">Window</option>
-                      <option value="aisle">Aisle</option>
-                      <option value="middle">Middle</option>
+                      <option value="aisle">Aisle Seat</option>
+                      <option value="window">Window Seat</option>
+                      <option value="extra_legroom">Extra Legroom (if available)</option>
                     </select>
                   </label>
+
+                  <div className="checkbox-field-wrapper" style={{ marginTop: '1.75rem' }}>
+                    <input
+                      type="checkbox"
+                      id="wheelchair-check"
+                      checked={specialRequests.wheelchair}
+                      onChange={(e) => handleSpecialRequestsChange('wheelchair', e.target.checked)}
+                    />
+                    <label htmlFor="wheelchair-check">Request Wheelchair Assistance</label>
+                  </div>
                 </div>
 
-                <div style={{ marginTop: '0.85rem' }}>
-                  <label className="booking-form-field">
-                    Additional Requests
-                    <textarea
-                      rows={3}
-                      value={specialRequests.notes}
-                      onChange={(e) => handleSpecialRequestsChange('notes', e.target.value)}
-                      placeholder="Airline loyalty number, special assistance, or any other requests..."
-                      className="booking-textarea"
-                    />
-                  </label>
+                <div className="booking-form-field" style={{ marginTop: '0.85rem' }}>
+                  <label>Additional Advisory Notes</label>
+                  <textarea
+                    rows={3}
+                    value={specialRequests.notes}
+                    onChange={(e) => handleSpecialRequestsChange('notes', e.target.value)}
+                    placeholder="Enter special assistance requests, frequent flyer numbers, etc."
+                  />
                 </div>
               </AccordionSection>
 
-              {/* SECTION 4: PAYMENT INFORMATION */}
+              {/* SECTION 4: SECURE PAYMENT METHOD */}
               <AccordionSection
-                id="payment"
-                stepNumber={4}
-                title="Payment Information"
+                title="4. Secure Payment Method"
                 isOpen={openSections.payment}
                 onToggle={() => toggleSection('payment')}
+                icon="fas fa-lock"
+                badgeText="Final Step"
               >
                 <div className="payment-method-selector">
                   <button
                     type="button"
                     className={`payment-method-tab ${paymentMethod === 'card' ? 'active' : ''}`}
-                    onClick={() => { setPaymentMethod('card'); setPaypalError(''); }}
+                    onClick={() => { setPaymentMethod('card'); setError(''); setWhopError(''); }}
                   >
-                    <i className="fas fa-credit-card"></i> Credit / Debit Card
+                    <i className="fas fa-credit-card" style={{ color: '#1e3a5f' }}></i> Credit / Debit Card (Whop)
                   </button>
                   <button
                     type="button"
@@ -785,150 +653,71 @@ function Booking() {
                 </div>
 
                 {paymentMethod === 'card' ? (
-                  <>
+                  <div className="whop-checkout-box">
                     <div className="payment-security-notice">
-                      <i className="fas fa-lock"></i>
-                      <span>Your payment is processed securely via Stripe. We never store or access your card information.</span>
+                      <i className="fas fa-shield-alt"></i>
+                      <span>Your payment is processed securely via Whop 256-Bit Encrypted Embedded Checkout. We never store or access your card information.</span>
                     </div>
 
-                    <div className="payment-card-group">
-                      <h4 className="payment-sub-title">Card Details</h4>
-
-                      <div className="booking-form-grid">
-                        <label className="booking-form-field" style={{ gridColumn: 'span 2' }}>
-                          Name on Card *
-                          <input
-                            type="text"
-                            value={paymentInfo.nameOnCard}
-                            onChange={(e) => handlePaymentChange('nameOnCard', e.target.value)}
-                            required={paymentMethod === 'card'}
-                            placeholder="Full name as on card"
-                          />
-                        </label>
+                    {whopError && (
+                      <div className="whop-error-notice" role="alert" style={{ margin: '1rem 0', padding: '0.85rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b' }}>
+                        <i className="fas fa-exclamation-circle" style={{ marginRight: '0.5rem' }}></i>
+                        <span>{whopError}</span>
                       </div>
+                    )}
 
-                      <div className="booking-form-grid" style={{ marginTop: '0.85rem' }}>
-                        <div className="booking-form-field">
-                          <label>Card Number *</label>
-                          <CardNumberInput
-                            id="card-number-input"
-                            value={paymentInfo.cardNumber}
-                            onChange={(val) => handlePaymentChange('cardNumber', val)}
-                            onBrandChange={setCardBrand}
-                            required={paymentMethod === 'card'}
-                          />
-                        </div>
-                        
-                        <div className="booking-form-grid-inline">
-                          <label className="booking-form-field">
-                            Expiry *
-                            <input
-                              type="text"
-                              value={paymentInfo.expiry}
-                              onChange={handleExpiryChange}
-                              required={paymentMethod === 'card'}
-                              placeholder="MM/YY"
-                              maxLength={5}
-                              inputMode="numeric"
-                              autoComplete="cc-exp"
-                            />
-                          </label>
-                          <label className="booking-form-field">
-                            {cardBrand === 'amex' ? 'CID *' : 'CVV *'}
-                            <div className="card-input-wrapper">
-                              <input
-                                type="password"
-                                value={paymentInfo.cvv}
-                                onChange={handleCvvChange}
-                                required={paymentMethod === 'card'}
-                                placeholder={cardBrand === 'amex' ? '••••' : '•••'}
-                                maxLength={cardBrand === 'amex' ? 4 : 3}
-                                inputMode="numeric"
-                                autoComplete="cc-csc"
-                              />
-                              <i className="fas fa-shield-alt" style={{position: 'absolute', right: '0.85rem', color: '#94a3b8', fontSize: '0.95rem'}}></i>
+                    {!whopCheckoutConfig ? (
+                      <div className="whop-init-container" style={{ margin: '1.25rem 0' }}>
+                        <button
+                          type="button"
+                          onClick={handleInitWhopCheckout}
+                          className="amtrak-btn amtrak-btn--cta amtrak-btn--full"
+                          disabled={whopLoading}
+                        >
+                          {whopLoading ? (
+                            <span><i className="fas fa-circle-notch fa-spin"></i> Initializing Secure Whop Checkout...</span>
+                          ) : (
+                            <span><i className="fas fa-lock"></i> Proceed to Card Payment — ${pricing.total} USD</span>
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="whop-embed-wrapper" style={{ marginTop: '1.25rem' }}>
+                        {/* Price breakdown display immediately above embed */}
+                        <div className="whop-price-breakdown-card" style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1.25rem' }}>
+                          <h4 style={{ margin: '0 0 0.75rem', color: '#1e3a5f', fontSize: '1rem', fontWeight: '700' }}>
+                            <i className="fas fa-receipt" style={{ marginRight: '0.4rem' }}></i> Final Seat Fare Breakdown
+                          </h4>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.92rem', color: '#475569' }}>
+                            <span>Supplier Airfare Total</span>
+                            <span style={{ textDecoration: 'line-through', color: '#94a3b8' }}>
+                              ${whopCheckoutConfig.price?.supplierPrice || pricing.supplierPrice} USD
+                            </span>
+                          </div>
+                          {!pricing.isMock && parseFloat(whopCheckoutConfig.price?.discountAmount || pricing.discountAmount) > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.92rem', color: '#047857', fontWeight: '600' }}>
+                              <span>Final Seat Subsidy (10% OFF)</span>
+                              <span>-${whopCheckoutConfig.price?.discountAmount || pricing.discountAmount} USD</span>
                             </div>
-                          </label>
+                          )}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.5rem', borderTop: '1px solid #cbd5e1', fontSize: '1.05rem', fontWeight: '700', color: '#0f172a' }}>
+                            <span>Total Whop Charge</span>
+                            <span style={{ color: '#0f2744' }}>${whopCheckoutConfig.price?.customerPrice || pricing.total} USD</span>
+                          </div>
                         </div>
-                      </div>
-                    </div>
 
-                    {/* Billing Address */}
-                    <div className="payment-card-group" style={{ marginTop: '1.5rem' }}>
-                      <h4 className="payment-sub-title">Billing Address</h4>
-
-                      <div className="booking-form-grid">
-                        <div className="booking-form-field" style={{ gridColumn: 'span 2' }}>
-                          <label>Country *</label>
-                          <CountrySelect
-                            id="billing-country"
-                            value={paymentInfo.country}
-                            onChange={(val) => handlePaymentChange('country', val)}
-                            required={paymentMethod === 'card'}
+                        {/* Whop React Embed Component */}
+                        <div className="whop-embed-frame-container">
+                          <WhopCheckoutEmbed
+                            planId={whopCheckoutConfig.planId}
+                            sessionId={whopCheckoutConfig.sessionId}
+                            prefill={{ email: primaryContact.email }}
+                            returnUrl={`${window.location.origin}/confirmation/success?type=booking&booking_id=${pendingBookingId.current}&code=${pendingBookingCode.current}`}
                           />
                         </div>
                       </div>
-
-                      <div className="booking-form-grid" style={{ marginTop: '0.85rem' }}>
-                        <label className="booking-form-field" style={{ gridColumn: 'span 2' }}>
-                          Address Line 1 *
-                          <input
-                            type="text"
-                            value={paymentInfo.addressLine1}
-                            onChange={(e) => handlePaymentChange('addressLine1', e.target.value)}
-                            required={paymentMethod === 'card'}
-                            placeholder="Street and house number"
-                          />
-                        </label>
-                      </div>
-
-                      <div className="booking-form-grid" style={{ marginTop: '0.85rem' }}>
-                        <label className="booking-form-field" style={{ gridColumn: 'span 2' }}>
-                          Address Line 2
-                          <input
-                            type="text"
-                            value={paymentInfo.addressLine2}
-                            onChange={(e) => handlePaymentChange('addressLine2', e.target.value)}
-                            placeholder="Apartment, suite, etc. (optional)"
-                          />
-                        </label>
-                      </div>
-
-                      <div className="booking-form-grid booking-form-grid--3col" style={{ marginTop: '0.85rem' }}>
-                        <div className="booking-form-field">
-                          <label>City *</label>
-                          <CitySelect
-                            id="billing-city"
-                            value={paymentInfo.city}
-                            onChange={(val) => handlePaymentChange('city', val)}
-                            countryName={paymentInfo.country}
-                            stateName={paymentInfo.state}
-                            required={paymentMethod === 'card'}
-                          />
-                        </div>
-                        <div className="booking-form-field">
-                          <label>State / Province *</label>
-                          <RegionSelect
-                            id="billing-state"
-                            value={paymentInfo.state}
-                            onChange={(val) => handlePaymentChange('state', val)}
-                            countryName={paymentInfo.country}
-                            required={paymentMethod === 'card'}
-                          />
-                        </div>
-                        <label className="booking-form-field">
-                          ZIP / Postal Code *
-                          <input
-                            type="text"
-                            value={paymentInfo.zip}
-                            onChange={(e) => handlePaymentChange('zip', e.target.value)}
-                            required={paymentMethod === 'card'}
-                            placeholder="ZIP Code"
-                          />
-                        </label>
-                      </div>
-                    </div>
-                  </>
+                    )}
+                  </div>
                 ) : (
                   <div className="paypal-container">
                     <div className="paypal-notice">
@@ -972,20 +761,6 @@ function Booking() {
                   </label>
                 </div>
               </div>
-
-              {paymentMethod === 'card' && (
-                <button
-                  type="submit"
-                  className="booking-submit-button"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <span><i className="fas fa-circle-notch fa-spin"></i> Redirecting to Secure Stripe Checkout...</span>
-                  ) : (
-                    <span><i className="fas fa-lock"></i> Secure Pay — ${pricing.total} USD</span>
-                  )}
-                </button>
-              )}
 
             </form>
           </div>
@@ -1037,7 +812,6 @@ function Booking() {
               </div>
             </div>
           </aside>
-
         </div>
       </div>
     </div>

@@ -9,6 +9,11 @@ const app = express();
 
 // Apply global middlewares
 app.use(cors(corsOptions));
+
+// Raw body parser for Whop webhook HMAC signature verification
+app.use('/api/webhooks/whop', express.raw({ type: 'application/json' }));
+app.use('/webhooks/whop', express.raw({ type: 'application/json' }));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 

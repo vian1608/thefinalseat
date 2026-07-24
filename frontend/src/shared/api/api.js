@@ -54,8 +54,6 @@ export const flightAPI = {
     const response = await api.post('/flights/search', searchParams);
     const resData = response.data || {};
     
-    // Normalize response: if backend returns `{ success: true, data: [flight1, flight2...], meta: {...} }`
-    // format to `{ success: true, data: { flights: [...], meta: {...} } }` for SearchResultsPage compatibility
     if (resData.success && Array.isArray(resData.data)) {
       return {
         ...resData,
@@ -107,6 +105,10 @@ export const bookingAPI = {
     const response = await api.get(`/bookings/${reference}`);
     return response.data;
   },
+  getPaymentStatus: async (bookingId) => {
+    const response = await api.get(`/bookings/${bookingId}/payment-status`);
+    return response.data;
+  },
   search: async (query) => {
     const response = await api.get('/bookings/search', { params: { query } });
     return response.data;
@@ -117,6 +119,14 @@ export const bookingAPI = {
   },
   deleteAbandoned: async (sessionKey) => {
     const response = await api.delete(`/bookings/abandoned/${sessionKey}`);
+    return response.data;
+  },
+};
+
+// Whop API
+export const whopAPI = {
+  createCheckout: async (bookingId) => {
+    const response = await api.post('/whop/create-checkout', { bookingId });
     return response.data;
   },
 };

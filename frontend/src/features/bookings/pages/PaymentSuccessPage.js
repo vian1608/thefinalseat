@@ -1,71 +1,122 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { paymentAPI, bookingAPI, inquiryAPI } from '../../../shared/api/api';
+import { paymentAPI, bookingAPI } from '../../../shared/api/api';
 import { SUPPORT_PHONE_DISPLAY } from '../../../shared/constants/supportContact';
 import './PaymentSuccessPage.css';
 
 function PaymentSuccess() {
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get('session_id');
-  const type = searchParams.get('type');
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [sessionDetails, setSessionDetails] = useState(null);
-  const [bookingRef, setBookingRef] = useState('');
-  const [isProcessingRecord, setIsProcessingRecord] = useState(false);
-  const [bookingDataFromDb, setBookingDataFromDb] = useState(null);
-
+  const type = searchParams.get('type') || 'booking';
   const bookingIdParam = searchParams.get('booking_id');
   const codeParam = searchParams.get('code');
 
+  const [loading, setLoading] = useState(true);
+  const [isPolling, setIsPolling] = useState(false);
+  const [pollingMessage, setPollingMessage] = useState('Payment received, confirming your booking…');
+  const [error, setError] = useState('');
+  const [sessionDetails, setSessionDetails] = useState(null);
+  const [bookingRef, setBookingRef] = useState(codeParam || '');
+  const [bookingDataFromDb, setBookingDataFromDb] = useState(null);
+
+  // Status Polling for Whop / PayPal booking confirmations
   useEffect(() => {
-    if (!sessionId && (bookingIdParam || codeParam)) {
-      const ref = codeParam || bookingIdParam;
-      setBookingRef(ref);
-      setSessionDetails({ amount_total: 0, metadata: {} });
-      setLoading(false);
-      return;
-    }
+    const identifier = bookingIdParam || codeParam || bookingRef;
 
-    if (!sessionId) {
-      setError('Invalid checkout session. Missing session identifier.');
-      setLoading(false);
-      return;
-    }
+    if (identifier && type === 'booking') {
+      let isSubscribed = true;
+      let pollCount = 0;
+      const maxPolls = 30; // 30 x 3s = 90 seconds max
 
-    const fetchSession = async () => {
-      try {
-        setLoading(true);
-        const data = await paymentAPI.getStripeSessionStatus(sessionId);
-        if (data.success) {
-          if (data.status === 'paid' || data.status === 'no_payment_required') {
-            setSessionDetails(data);
-            // Process the transaction record (once)
-            await processRecord(data);
-          } else {
-            setError('Payment was not completed successfully. Current status: ' + data.status);
-            setLoading(false);
+      setIsPolling(true);
+      setLoading(true);
+
+      const checkStatus = async () => {
+        try {
+          pollCount++;
+          const res = await bookingAPI.getPaymentStatus(identifier);
+
+          if (!isSubscribed) return;
+
+          if (res && res.success) {
+            if (res.paymentStatus === 'paid') {
+              setIsPolling(false);
+              setBookingRef(res.confirmationCode || identifier);
+              
+              // Fetch complete booking object from DB
+              const fullBooking = await bookingAPI.getByReference(res.confirmationCode || identifier);
+              if (fullBooking && fullBooking.success) {
+                setBookingDataFromDb(fullBooking.data);
+              } else {
+                setBookingDataFromDb(res);
+              }
+              setLoading(false);
+              return true;
+            } else {
+              setPollingMessage('Payment received, confirming your booking…');
+            }
           }
-        } else {
-          setError('Failed to retrieve secure checkout status.');
+        } catch (err) {
+          console.warn('Polling check error:', err.message);
+        }
+
+        if (pollCount >= maxPolls) {
+          setIsPolling(false);
+          // Allow fallback display with pending status after 90 seconds
+          setLoading(false);
+          return true;
+        }
+
+        return false;
+      };
+
+      // Immediate check
+      checkStatus().then((done) => {
+        if (!done) {
+          const interval = setInterval(async () => {
+            const finished = await checkStatus();
+            if (finished) {
+              clearInterval(interval);
+            }
+          }, 3000);
+
+          return () => {
+            isSubscribed = false;
+            clearInterval(interval);
+          };
+        }
+      });
+
+      return () => {
+        isSubscribed = false;
+      };
+    } else if (sessionId && type === 'stripe_legacy') {
+      // Legacy Stripe session handler
+      const fetchSession = async () => {
+        try {
+          setLoading(true);
+          const data = await paymentAPI.getStripeSessionStatus(sessionId);
+          if (data.success && (data.status === 'paid' || data.status === 'no_payment_required')) {
+            setSessionDetails(data);
+          } else {
+            setError('Payment was not completed successfully. Status: ' + data?.status);
+          }
+        } catch (err) {
+          setError('Unable to fetch transaction confirmation.');
+        } finally {
           setLoading(false);
         }
-      } catch (err) {
-        console.error('Session retrieval failed:', err);
-        setError('Unable to fetch transaction confirmation. Please contact support.');
-        setLoading(false);
-      }
-    };
-
-    fetchSession();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, bookingIdParam, codeParam, type]);
+      };
+      fetchSession();
+    } else {
+      setLoading(false);
+    }
+  }, [sessionId, bookingIdParam, codeParam, bookingRef, type]);
 
   // Fetch full details from database once confirmation code is available
   useEffect(() => {
-    if (bookingRef) {
+    if (bookingRef && !bookingDataFromDb) {
       const fetchBookingFromDb = async () => {
         try {
           const res = await bookingAPI.getByReference(bookingRef);
@@ -78,146 +129,18 @@ function PaymentSuccess() {
       };
       fetchBookingFromDb();
     }
-  }, [bookingRef]);
-
-  const processRecord = async (session) => {
-    if (isProcessingRecord) return;
-    setIsProcessingRecord(true);
-
-    const storageKey = `processed_${type}_${sessionId}`;
-    const alreadyProcessed = sessionStorage.getItem(storageKey);
-
-    if (alreadyProcessed) {
-      if (type === 'booking') {
-        setBookingRef(alreadyProcessed);
-      }
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const metadata = session.metadata;
-
-      if (type === 'booking') {
-        let bookingData = {};
-        const pendingData = JSON.parse(sessionStorage.getItem('pendingPassenger') || 'null');
-        const flightData = JSON.parse(sessionStorage.getItem('selectedFlight') || 'null');
-        const returnFlightData = JSON.parse(sessionStorage.getItem('returnFlight') || 'null');
-
-        if (pendingData && flightData) {
-          // Reconstruct using rich sessionStorage data (multi-passenger support!)
-          const customerName = `${pendingData.primaryContact.firstName} ${pendingData.primaryContact.lastName}`;
-          
-          // Combine outbound and inbound flights inside flight object
-          const flightObj = {
-            ...flightData,
-            returnFlight: returnFlightData,
-            billingAddress: pendingData.billingAddress,
-            specialRequests: pendingData.specialRequests
-          };
-
-          const originalOut = parseFloat(flightData.price?.originalApiPrice || 0);
-          const originalRet = returnFlightData ? parseFloat(returnFlightData.price?.originalApiPrice || 0) : 0;
-
-          const pricingTotalStr = sessionStorage.getItem('pricingTotal');
-          const displayedPrice = pricingTotalStr ? parseFloat(pricingTotalStr) : session.amount_total;
-
-          bookingData = {
-            customerName,
-            email: pendingData.primaryContact.email,
-            phone: pendingData.primaryContact.phone,
-            passengers: pendingData.passengers,
-            flight: flightObj,
-            originalApiPrice: (originalOut + originalRet).toFixed(2),
-            displayedWebsitePrice: displayedPrice.toFixed(2),
-            paymentStatus: 'paid',
-            transactionId: sessionId,
-            currency: 'USD',
-            status: 'PENDING'
-          };
-        } else {
-          // Fallback to legacy metadata for single traveler if sessionStorage is cleared
-          const flightDetails = {
-            airline: metadata.flight_airline,
-            flightNumber: metadata.flight_number,
-            departure: {
-              airport: metadata.flight_route.split(' to ')[0],
-              date: metadata.flight_dep_time.split(' ')[0],
-              time: metadata.flight_dep_time.split(' ')[1]
-            },
-            arrival: {
-              airport: metadata.flight_route.split(' to ')[1],
-              date: metadata.flight_arr_time.split(' ')[0],
-              time: metadata.flight_arr_time.split(' ')[1]
-            },
-            class: metadata.flight_class,
-            stops: parseInt(metadata.flight_stops || '0')
-          };
-
-          bookingData = {
-            customerName: `${metadata.firstName} ${metadata.lastName}`,
-            email: metadata.email,
-            phone: metadata.phone,
-            passengers: [{
-              firstName: metadata.firstName,
-              lastName: metadata.lastName,
-              role: 'adult',
-              gender: metadata.gender,
-              dateOfBirth: metadata.dateOfBirth,
-              nationality: metadata.nationality,
-              passportNumber: metadata.passportNumber,
-              passportExpiry: metadata.passportExpiry
-            }],
-            flight: flightDetails,
-            originalApiPrice: (session.amount_total * 1.11).toFixed(2), // generic fallback estimation
-            displayedWebsitePrice: session.amount_total.toFixed(2),
-            paymentStatus: 'paid',
-            transactionId: sessionId,
-            currency: 'USD',
-            status: 'PENDING'
-          };
-        }
-
-        // Create booking in the backend
-        const res = await bookingAPI.create(bookingData);
-        if (res.success) {
-          const ref = res.data.confirmation_code || res.data.bookingReference;
-          setBookingRef(ref);
-          sessionStorage.setItem(storageKey, ref);
-        } else {
-          throw new Error('Failed to record flight booking on backend');
-        }
-      } else if (type === 'consulting') {
-        // Send consulting payment details to inquiries logs
-        await inquiryAPI.submitConsulting(
-          {
-            name: metadata.name,
-            email: metadata.email,
-            phone: metadata.phone,
-            origin: metadata.origin,
-            destination: metadata.destination,
-            notes: metadata.notes,
-          },
-          'consulting-payment'
-        );
-        sessionStorage.setItem(storageKey, 'completed');
-      }
-    } catch (err) {
-      console.error('Record writing failed:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [bookingRef, bookingDataFromDb]);
 
   const handlePrint = () => {
     window.print();
   };
 
-  if (loading) {
+  if (loading && isPolling) {
     return (
-      <div className="success-loading-container">
-        <i className="fas fa-circle-notch fa-spin"></i>
-        <p>Verifying secure transaction...</p>
+      <div className="success-loading-container" style={{ textAlign: 'center', padding: '4rem 1rem' }}>
+        <i className="fas fa-circle-notch fa-spin fa-3x" style={{ color: '#1e3a5f', marginBottom: '1.25rem' }}></i>
+        <h3 style={{ color: '#1e3a5f', margin: '0 0 0.5rem' }}>{pollingMessage}</h3>
+        <p style={{ color: '#64748b', fontSize: '0.95rem' }}>Verifying secure payment receipt with booking servers. Please do not close this window.</p>
       </div>
     );
   }
@@ -238,10 +161,17 @@ function PaymentSuccess() {
     );
   }
 
-  const { metadata, amount_total } = sessionDetails;
-  
-  // Choose the price from DB or Stripe session total
-  const displayedPrice = bookingDataFromDb ? parseFloat(bookingDataFromDb.amount) : amount_total;
+  const displayedPrice = bookingDataFromDb
+    ? parseFloat(bookingDataFromDb.customer_price || bookingDataFromDb.amount || bookingDataFromDb.total_amount || 0)
+    : parseFloat(sessionDetails?.amount_total || 0);
+
+  const supplierPrice = bookingDataFromDb
+    ? parseFloat(bookingDataFromDb.supplier_price || bookingDataFromDb.original_api_price || displayedPrice)
+    : displayedPrice;
+
+  const discountAmount = bookingDataFromDb
+    ? parseFloat(bookingDataFromDb.discount_amount || Math.max(0, supplierPrice - displayedPrice))
+    : 0;
 
   return (
     <div className="payment-success-page">
@@ -254,7 +184,7 @@ function PaymentSuccess() {
         {/* Print-friendly Invoice Header */}
         <div className="invoice-print-header">
           <h2>The Final Seat LLC</h2>
-          <p>Temporary Booking Confirmation Receipt</p>
+          <p>Booking Confirmation Receipt</p>
           <small>5830 E 2nd St, Ste 7000, Casper, WY 82609 · support@thefinalseat.com</small>
         </div>
 
@@ -267,13 +197,13 @@ function PaymentSuccess() {
             </svg>
           </div>
           <h2>Thank you!</h2>
-          <p style={{ fontSize: '1.15rem', color: '#1e293b', fontWeight: 'bold', margin: '0.5rem 0' }}>Your reservation request has been received successfully.</p>
-          <p style={{ maxWidth: '600px', margin: '0 auto', color: '#475569' }}>Our travel specialists will verify your itinerary and manually issue your ticket shortly. A confirmation email has been sent.</p>
+          <p style={{ fontSize: '1.15rem', color: '#1e293b', fontWeight: 'bold', margin: '0.5rem 0' }}>Your reservation request has been confirmed successfully.</p>
+          <p style={{ maxWidth: '600px', margin: '0 auto', color: '#475569' }}>Our travel specialists have verified your itinerary and issued your ticket. A confirmation email has been sent.</p>
           
           <div className="booking-status-badge-container" style={{ margin: '1.5rem 0' }}>
             <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.05em' }}>Booking Status</span>
-            <strong style={{ fontSize: '1.15rem', color: '#d97706', display: 'inline-block', padding: '6px 20px', backgroundColor: '#fef3c7', borderRadius: '30px', border: '1px solid #fcd34d', marginTop: '6px', fontWeight: '700' }}>
-              {bookingDataFromDb?.status === 'DONE' ? 'Confirmed & Done' : 'Pending Confirmation'}
+            <strong style={{ fontSize: '1.15rem', color: '#047857', display: 'inline-block', padding: '6px 20px', backgroundColor: '#ecfdf5', borderRadius: '30px', border: '1px solid #a7f3d0', marginTop: '6px', fontWeight: '700' }}>
+              {bookingDataFromDb?.payment_status === 'paid' ? 'Paid & Confirmed' : (bookingDataFromDb?.status === 'DONE' ? 'Confirmed & Done' : 'Pending Confirmation')}
             </strong>
           </div>
         </div>
@@ -287,46 +217,56 @@ function PaymentSuccess() {
 
           <div className="receipt-details-grid">
             <div className="details-item">
-              <span className="details-label">Amount Charged</span>
+              <span className="details-label">Amount Paid (Customer Total)</span>
               <strong className="amount-highlight">${displayedPrice.toFixed(2)} USD</strong>
             </div>
+            {discountAmount > 0 && (
+              <div className="details-item">
+                <span className="details-label">Final Seat Subsidy (10% OFF)</span>
+                <span style={{ color: '#047857', fontWeight: 'bold' }}>-${discountAmount.toFixed(2)} USD</span>
+              </div>
+            )}
             <div className="details-item">
               <span className="details-label">Payment Gateway</span>
-              <span>Stripe (PCI Compliant)</span>
+              <span>{bookingDataFromDb?.payment_provider ? bookingDataFromDb.payment_provider.toUpperCase() : 'Whop (Encrypted)'}</span>
             </div>
             <div className="details-item">
-              <span className="details-label">Transaction Reference</span>
-              <span className="ref-code">{sessionId.substring(0, 20)}...</span>
+              <span className="details-label">Booking Reference Code</span>
+              <span className="ref-code" style={{ fontWeight: 'bold', color: '#1e3a5f' }}>
+                {bookingDataFromDb?.confirmation_code || bookingRef || 'CONFIRMED'}
+              </span>
             </div>
             <div className="details-item">
-              <span className="details-label">Billing Name</span>
-              <span>{bookingDataFromDb?.passenger_name || (type === 'booking' ? `${metadata.firstName} ${metadata.lastName}` : metadata.name)}</span>
+              <span className="details-label">Billing Customer</span>
+              <span>{bookingDataFromDb?.passenger_name || 'Valued Customer'}</span>
             </div>
           </div>
 
-          {/* Conditional view: Flight Booking Temporary Confirmation Ticket */}
+          {/* Conditional view: Flight Booking Ticket */}
           {type === 'booking' && (() => {
-            const isAmtrak = (bookingDataFromDb?.flight_details?.airline || metadata.flight_airline || '').toLowerCase().includes('amtrak');
+            const isAmtrak = (bookingDataFromDb?.flight_details?.airline || '').toLowerCase().includes('amtrak');
             const passengers = bookingDataFromDb?.traveller_details || [];
             
             return (
               <div className="receipt-item-details-box">
                 <div className="ticket-label-overlay">
-                  TEMPORARY BOOKING CONFIRMATION
+                  OFFICIAL ELECTRONIC TICKET RECEIPT
                 </div>
                 
                 <div className="boarding-pass-visual">
                   <div className="boarding-pass-header" style={{ borderBottom: isAmtrak ? '2px dashed #8b1538' : '2px dashed #1e3a5f' }}>
-                    <span>{isAmtrak ? 'Operator' : 'Carrier'}: <strong>{bookingDataFromDb?.flight_details?.airline || metadata.flight_airline}</strong></span>
-                    <span>{isAmtrak ? 'Train' : 'Flight'}: <strong>{bookingDataFromDb?.flight_details?.flightNumber || metadata.flight_number}</strong></span>
-                    {bookingRef && <span className="ref-tag">Confirmation Code: <strong>{bookingRef}</strong></span>}
+                    <span>{isAmtrak ? 'Operator' : 'Carrier'}: <strong>{bookingDataFromDb?.flight_details?.airline || 'Commercial Airline'}</strong></span>
+                    <span>{isAmtrak ? 'Train' : 'Flight'}: <strong>{bookingDataFromDb?.flight_details?.flightNumber || 'Scheduled Route'}</strong></span>
+                    {(bookingRef || bookingDataFromDb?.confirmation_code) && (
+                      <span className="ref-tag">Confirmation Code: <strong>{bookingDataFromDb?.confirmation_code || bookingRef}</strong></span>
+                    )}
                   </div>
                   
                   <div className="boarding-pass-route">
                     <div className="route-terminal">
-                      <h4>{bookingDataFromDb?.flight_details?.departure?.airport || metadata.flight_route?.split(' to ')[0]}</h4>
+                      <h4>{bookingDataFromDb?.flight_details?.departure?.airport || 'Origin'}</h4>
                       <span>Departure</span>
-                      <small>{bookingDataFromDb?.flight_details?.departure?.date} {bookingDataFromDb?.flight_details?.departure?.time || metadata.flight_dep_time}</small>
+                      <small>{bookingDataFromDb?.flight_details?.departure?.date} {bookingDataFromDb?.flight_details?.departure?.time || ''}</small>
                     </div>
                     
                     <div className="route-flight-symbol">
@@ -335,27 +275,27 @@ function PaymentSuccess() {
                     </div>
   
                     <div className="route-terminal">
-                      <h4>{bookingDataFromDb?.flight_details?.arrival?.airport || metadata.flight_route?.split(' to ')[1]}</h4>
+                      <h4>{bookingDataFromDb?.flight_details?.arrival?.airport || 'Destination'}</h4>
                       <span>Arrival</span>
-                      <small>{bookingDataFromDb?.flight_details?.arrival?.date} {bookingDataFromDb?.flight_details?.arrival?.time || metadata.flight_arr_time}</small>
+                      <small>{bookingDataFromDb?.flight_details?.arrival?.date} {bookingDataFromDb?.flight_details?.arrival?.time || ''}</small>
                     </div>
                   </div>
 
                   <div className="boarding-pass-passenger">
                     <div>
                       <span>Primary Contact</span>
-                      <strong>{bookingDataFromDb?.passenger_name || `${metadata.firstName} ${metadata.lastName}`}</strong>
+                      <strong>{bookingDataFromDb?.passenger_name}</strong>
                     </div>
                     <div>
                       <span>Contact Info</span>
                       <strong style={{ fontSize: '0.85rem' }}>
-                        {bookingDataFromDb?.email || metadata.email}<br/>
-                        {bookingDataFromDb?.phone || metadata.phone}
+                        {bookingDataFromDb?.email}<br/>
+                        {bookingDataFromDb?.phone}
                       </strong>
                     </div>
                     <div>
                       <span>{isAmtrak ? 'Seat Class' : 'Cabin Class'}</span>
-                      <strong>{bookingDataFromDb?.flight_details?.class || metadata.flight_class}</strong>
+                      <strong>{bookingDataFromDb?.flight_details?.class || 'Economy'}</strong>
                     </div>
                     <div>
                       <span>Travelers</span>
@@ -395,12 +335,11 @@ function PaymentSuccess() {
                 </div>
 
                 <div className="next-steps-info">
-                  <strong>Notice of Reservation:</strong>
+                  <strong>Notice of E-Ticket Confirmation:</strong>
                   <ul>
-                    <li>Your {isAmtrak ? 'train transit reservation' : 'flight reservation'} is registered under reference <strong>{bookingRef || 'Pending'}</strong>.</li>
-                    <li>This is a temporary confirmation showing details recorded after successful checkout. Your final airline ticket is being issued.</li>
-                    <li>A detailed confirmation itinerary and {isAmtrak ? 'train ticket receipt' : 'flight e-ticket'} has been sent to <strong>{bookingDataFromDb?.email || metadata.email}</strong>.</li>
-                    <li>For support or changes, call us anytime at {SUPPORT_PHONE_DISPLAY}.</li>
+                    <li>Your {isAmtrak ? 'train transit reservation' : 'flight reservation'} is confirmed under reference <strong>{bookingDataFromDb?.confirmation_code || bookingRef}</strong>.</li>
+                    <li>A detailed confirmation itinerary and {isAmtrak ? 'train ticket receipt' : 'flight e-ticket'} has been sent to <strong>{bookingDataFromDb?.email}</strong>.</li>
+                    <li>For support or itinerary changes, call us anytime at {SUPPORT_PHONE_DISPLAY}.</li>
                   </ul>
                 </div>
               </div>
@@ -415,25 +354,15 @@ function PaymentSuccess() {
               </div>
               
               <div className="consulting-receipt-visual">
-                <h4>{metadata.plan_name}</h4>
-                <p>Urgent travel logistics advisory, itinerary coordination, and support services.</p>
-                <div className="consulting-meta-row">
-                  <div>
-                    <span>Associated Email</span>
-                    <strong>{metadata.email}</strong>
-                  </div>
-                  <div>
-                    <span>Contact Number</span>
-                    <strong>{metadata.phone || 'Not provided'}</strong>
-                  </div>
-                </div>
+                <h4>Travel Logistics Advisory</h4>
+                <p>Urgent travel planning, itinerary coordination, and support services.</p>
               </div>
 
               <div className="next-steps-info">
                 <strong>What Happens Next:</strong>
                 <ul>
                   <li>An advisor has been assigned to your travel request and is reviewing your details.</li>
-                  <li>We will contact you via email or phone at <strong>{metadata.phone || metadata.email}</strong> within 2 hours.</li>
+                  <li>We will contact you via email or phone within 2 hours.</li>
                   <li>If you require immediate dispatch, call our hotline at {SUPPORT_PHONE_DISPLAY}.</li>
                 </ul>
               </div>
@@ -444,7 +373,7 @@ function PaymentSuccess() {
         {/* Buttons */}
         <div className="action-buttons-wrapper no-print">
           <button onClick={handlePrint} className="success-btn success-btn-secondary">
-            <i className="fas fa-print"></i> View / Download Temporary Ticket
+            <i className="fas fa-print"></i> Print / Download Ticket
           </button>
           <Link to="/my-bookings" className="success-btn success-btn-accent">
             <i className="fas fa-calendar-check"></i> Go to My Bookings

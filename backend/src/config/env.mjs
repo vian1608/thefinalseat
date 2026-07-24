@@ -28,6 +28,13 @@ export const env = {
   stripeSecretKey: required('STRIPE_SECRET_KEY'),
   stripeMockMode: process.env.STRIPE_MOCK_MODE === 'true',
 
+  // Whop Flight Checkout Integration
+  whopApiKey: process.env.WHOP_API_KEY || '',
+  whopCompanyId: process.env.WHOP_COMPANY_ID || '',
+  whopWebhookSecret: process.env.WHOP_WEBHOOK_SECRET || '',
+  whopEnv: process.env.WHOP_ENV || 'sandbox',
+  whopFlightCheckoutEnabled: process.env.WHOP_FLIGHT_CHECKOUT_ENABLED === 'true',
+
   // SerpAPI
   serpapiApiKey: required('SERPAPI_API_KEY'),
 

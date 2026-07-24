@@ -6,6 +6,7 @@ import { paymentRouter } from '../modules/payments/payment.routes.mjs';
 import { flightRouter, airportRouter } from '../modules/flights/flight.routes.mjs';
 import { enquiryRouter } from '../modules/enquiries/enquiry.routes.mjs';
 import { adminRouter } from '../modules/admin/admin.routes.mjs';
+import whopRouter from '../modules/payments/whop.routes.mjs';
 import paypalController from '../modules/payments/paypal.controller.mjs';
 import rateLimit from '../middleware/rate-limit.mjs';
 
@@ -28,6 +29,7 @@ router.use('/bookings', bookingRouter);
 router.use('/payments', paymentRouter);
 router.use('/paypal', paypalRouter);
 router.post('/webhooks/paypal', paypalController.handleWebhook);
+router.use('/', whopRouter);
 router.use('/flights', flightRouter);
 router.use('/airports', airportRouter);
 router.use('/inquiries', enquiryRouter);
