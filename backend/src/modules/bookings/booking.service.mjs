@@ -51,12 +51,14 @@ export const bookingService = {
       );
     }
 
-    // 5 — Save primary contact
+    // 5 — Save primary contact safely
+    const rawPhone = String(payload.phone || '').trim();
+    const countryCode = rawPhone.startsWith('+') ? rawPhone.split(' ')[0] : null;
     const contactRow = {
       booking_id: booking.id,
       email: payload.email,
-      country_code: payload.phone?.startsWith('+') ? payload.phone.split(' ')[0] : null,
-      phone_number: payload.phone
+      country_code: countryCode,
+      phone_number: rawPhone
     };
     const contacts = await bookingRepository.insertContact(contactRow);
 

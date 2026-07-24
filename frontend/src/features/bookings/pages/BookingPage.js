@@ -34,6 +34,7 @@ function Booking() {
   const [whopCheckoutConfig, setWhopCheckoutConfig] = useState(null);
   const [whopLoading, setWhopLoading] = useState(false);
   const [whopError, setWhopError] = useState('');
+  const [paymentComplete, setPaymentComplete] = useState(false);
 
   const pendingBookingId = useRef(null);
   const pendingBookingCode = useRef(null);
@@ -170,6 +171,20 @@ function Booking() {
     }
   }, [contactSameAsTraveller, passengersList]);
 
+  // Dynamic step completion flags (Turn green checkmark when valid, revert to red when invalid)
+  const isStep1Complete = passengersList.length > 0 && passengersList.every(p => 
+    !!(p.firstName && p.firstName.trim() && p.lastName && p.lastName.trim() && p.gender && p.dateOfBirth)
+  );
+
+  const isStep2Complete = !!(
+    primaryContact.firstName && primaryContact.firstName.trim() && 
+    primaryContact.lastName && primaryContact.lastName.trim() && 
+    primaryContact.email && primaryContact.email.trim() && 
+    primaryContact.phone && primaryContact.phone.trim()
+  );
+
+  const isStep3Complete = true; // Special requests section is optional
+
   const handlePrimaryContactChange = (field, value) => {
     setPrimaryContact(prev => ({ ...prev, [field]: value }));
   };
@@ -187,19 +202,16 @@ function Booking() {
   };
 
   const validateForm = () => {
-    if (!primaryContact.firstName || !primaryContact.lastName || !primaryContact.email || !primaryContact.phone) {
+    if (!isStep2Complete) {
       setError('Please fill in all primary contact details (First Name, Last Name, Email, Phone).');
       setOpenSections({ travellers: false, contact: true, requests: false, payment: false });
       return false;
     }
 
-    for (let i = 0; i < passengersList.length; i++) {
-      const p = passengersList[i];
-      if (!p.firstName || !p.lastName || !p.gender || !p.dateOfBirth) {
-        setError(`Please complete all required fields for Traveler #${i + 1} (First Name, Last Name, Gender, DOB).`);
-        setOpenSections({ travellers: true, contact: false, requests: false, payment: false });
-        return false;
-      }
+    if (!isStep1Complete) {
+      setError('Please complete all required fields for all travelers (First Name, Last Name, Gender, DOB).');
+      setOpenSections({ travellers: true, contact: false, requests: false, payment: false });
+      return false;
     }
     return true;
   };
@@ -316,6 +328,7 @@ function Booking() {
       const res = await paymentAPI.capturePayPalOrder(bId, data.orderID);
 
       if (res && res.success) {
+        setPaymentComplete(true);
         bookingAPI.deleteAbandoned(abandonedSessionKey.current).catch(() => {});
         sessionStorage.removeItem('abandonedSessionKey');
 
@@ -384,11 +397,12 @@ function Booking() {
 
               {/* SECTION 1: TRAVELLER DETAILS */}
               <AccordionSection
+                id="travellers"
+                stepNumber="1"
                 title={`1. Traveler Details (${passengersList.length} Passenger${passengersList.length > 1 ? 's' : ''})`}
                 isOpen={openSections.travellers}
                 onToggle={() => toggleSection('travellers')}
-                icon="fas fa-users"
-                badgeText="Step 1"
+                isComplete={isStep1Complete}
               >
                 {passengersList.map((passenger, idx) => (
                   <div key={idx} className="passenger-card-block">
@@ -506,11 +520,12 @@ function Booking() {
 
               {/* SECTION 2: PRIMARY CONTACT INFO */}
               <AccordionSection
+                id="contact"
+                stepNumber="2"
                 title="2. Primary Contact Details"
                 isOpen={openSections.contact}
                 onToggle={() => toggleSection('contact')}
-                icon="fas fa-envelope"
-                badgeText="Step 2"
+                isComplete={isStep2Complete}
               >
                 <div className="contact-checkbox-row">
                   <input
@@ -571,11 +586,12 @@ function Booking() {
 
               {/* SECTION 3: SPECIAL REQUESTS */}
               <AccordionSection
+                id="requests"
+                stepNumber="3"
                 title="3. Special Requests & Preferences"
                 isOpen={openSections.requests}
                 onToggle={() => toggleSection('requests')}
-                icon="fas fa-concierge-bell"
-                badgeText="Optional"
+                isComplete={isStep3Complete}
               >
                 <div className="booking-form-grid booking-form-grid--3col">
                   <label className="booking-form-field">
@@ -629,11 +645,12 @@ function Booking() {
 
               {/* SECTION 4: SECURE PAYMENT METHOD */}
               <AccordionSection
+                id="payment"
+                stepNumber="4"
                 title="4. Secure Payment Method"
                 isOpen={openSections.payment}
                 onToggle={() => toggleSection('payment')}
-                icon="fas fa-lock"
-                badgeText="Final Step"
+                isComplete={paymentComplete}
               >
                 <div className="payment-method-selector">
                   <button

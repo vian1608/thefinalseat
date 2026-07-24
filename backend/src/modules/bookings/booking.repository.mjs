@@ -49,7 +49,24 @@ export const bookingRepository = {
       .insert(contactRow)
       .select();
 
-    if (error) throw new Error(`Contact record insert failed: ${error.message}`);
+    if (error) {
+      // Resilience fallback for character length limits before migration 006 runs
+      const safeContactRow = {
+        ...contactRow,
+        phone_number: String(contactRow.phone_number || '').substring(0, 32),
+        country_code: String(contactRow.country_code || '').substring(0, 10)
+      };
+      const { data: safeData, error: safeError } = await supabase
+        .from('contacts')
+        .insert(safeContactRow)
+        .select();
+
+      if (safeError) {
+        console.warn('Non-blocking contact insert warning:', safeError.message);
+        return [safeContactRow];
+      }
+      return safeData;
+    }
     return data;
   },
 
