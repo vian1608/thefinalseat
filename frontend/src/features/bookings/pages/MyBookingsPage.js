@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { bookingAPI } from '../../../shared/api/api';
 import { SUPPORT_PHONE_DISPLAY } from '../../../shared/constants/supportContact';
+import { normalizeError } from '../../../shared/utils/normalizeError';
 import './MyBookingsPage.css';
 
 function MyBookings() {
@@ -45,11 +46,17 @@ function MyBookings() {
       if (response.success) {
         setBookings(response.data || []);
       } else {
-        setError('Failed to fetch bookings. Please try again.');
+        // Guard: response.error can be { code, message } — always stringify to a safe string
+        const apiMsg = normalizeError(
+          { message: response.error?.message || response.message },
+          'Failed to fetch bookings. Please try again.'
+        );
+        setError(apiMsg);
       }
     } catch (err) {
       console.error('Search bookings failed:', err);
-      setError(err.response?.data?.error || 'Unable to retrieve bookings. Check your connection or search reference.');
+      // normalizeError safely unwraps nested { error: { code, message } } objects
+      setError(normalizeError(err, 'Unable to retrieve bookings. Check your connection or search reference.'));
     } finally {
       setLoading(false);
     }
@@ -146,7 +153,7 @@ function MyBookings() {
             {error && (
               <div className="bookings-error-banner" role="alert">
                 <i className="fas fa-exclamation-circle"></i>
-                <span>{error}</span>
+                <span>{String(error)}</span>
               </div>
             )}
 
