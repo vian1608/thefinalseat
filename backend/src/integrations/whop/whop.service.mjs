@@ -29,8 +29,8 @@ export const whopService = {
   /**
    * Create a one-time Whop checkout configuration for a flight booking.
    *
-   * Uses the official @whop/sdk client:
-   *   client.checkoutConfigurations.create({ company_id, plan: { initial_price, plan_type }, metadata })
+   * Uses the official @whop/sdk client configured according to WHOP_ENV:
+   *   new Whop({ apiKey, ...(env === 'sandbox' ? { baseURL: 'https://sandbox-api.whop.com/api/v1' } : {}) })
    *
    * Returns { sessionId: checkoutConfig.id, planId: checkoutConfig.plan?.id }
    */
@@ -45,6 +45,39 @@ export const whopService = {
       throw new Error('Invalid authoritative price for Whop checkout configuration');
     }
 
+    // 1. Resolve & normalize environment
+    const rawEnv = (env.whopEnv || 'sandbox').trim().toLowerCase();
+    if (rawEnv !== 'sandbox' && rawEnv !== 'production' && rawEnv !== 'live') {
+      throw new Error(`Invalid WHOP_ENV "${env.whopEnv}". Allowed values: "sandbox", "production", "live".`);
+    }
+
+    const isSandbox = rawEnv === 'sandbox';
+    const resolvedEnv = isSandbox ? 'sandbox' : 'production';
+    const baseURL = isSandbox ? 'https://sandbox-api.whop.com/api/v1' : 'https://api.whop.com/api/v1';
+    const apiHost = 'sandbox-api.whop.com'; // or URL hostname
+
+    // 2. Validate API Key & Company ID
+    const apiKey = (env.whopApiKey || '').trim();
+    if (!apiKey) {
+      throw new Error('WHOP_API_KEY environment variable is required.');
+    }
+
+    const companyId = (env.whopCompanyId || '').trim();
+    if (!companyId || !companyId.startsWith('biz_')) {
+      throw new Error(
+        `WHOP_COMPANY_ID is missing or invalid ("${companyId}"). ` +
+        'Whop company IDs must start with "biz_". Set WHOP_COMPANY_ID in your environment.'
+      );
+    }
+
+    // 3. Initialise official @whop/sdk client with environment-aware baseURL
+    logger.info(`[Whop] Initialising SDK client — env: ${resolvedEnv}, host: ${new URL(baseURL).hostname}`);
+
+    const client = new Whop({
+      apiKey,
+      ...(isSandbox ? { baseURL } : {}),
+    });
+
     // Minimal metadata — Whop accepts string values
     const metadata = {
       bookingId: String(bookingId),
@@ -54,66 +87,41 @@ export const whopService = {
       expectedAmount: formattedAmount.toFixed(2),
     };
 
-    if (env.whopApiKey) {
-      const companyId = env.whopCompanyId || '';
+    try {
+      logger.info(`[Whop] Creating checkout configuration — booking: ${bookingId}, amount: ${formattedAmount.toFixed(2)} USD, host: ${new URL(baseURL).hostname}`);
 
-      // Require a valid biz_ company ID — Whop rejects requests without it
-      if (!companyId || !companyId.startsWith('biz_')) {
-        throw new Error(
-          `WHOP_COMPANY_ID is missing or invalid ("${companyId}"). ` +
-          'Whop company IDs must start with "biz_". Set WHOP_COMPANY_ID in your environment.'
-        );
+      // Minimal official request body per Whop SDK documentation
+      const checkoutConfig = await client.checkoutConfigurations.create({
+        company_id: companyId,
+        plan: {
+          initial_price: Number(formattedAmount.toFixed(2)),
+          plan_type: 'one_time',
+        },
+        metadata,
+      });
+
+      const sessionId = checkoutConfig?.id;
+      const planId    = checkoutConfig?.plan?.id ?? null;
+
+      if (!sessionId) {
+        throw new Error('Whop SDK returned a response with no checkout configuration id');
       }
 
-      // Initialise the official @whop/sdk client (per-request — lightweight)
-      const client = new Whop({ apiKey: env.whopApiKey });
+      logger.info(`[Whop] Checkout configuration created successfully — configId: ${sessionId}, planId: ${planId ?? 'n/a'}, host: ${new URL(baseURL).hostname}`);
 
-      try {
-        logger.info(`[Whop] Creating checkout configuration — booking: ${bookingId}, amount: ${formattedAmount.toFixed(2)} USD`);
+      return { sessionId, planId, raw: checkoutConfig };
 
-        // Minimal official request body per Whop SDK documentation
-        const checkoutConfig = await client.checkoutConfigurations.create({
-          company_id: companyId,
-          plan: {
-            initial_price: Number(formattedAmount.toFixed(2)),
-            plan_type: 'one_time',
-          },
-          metadata,
-        });
-
-        const sessionId = checkoutConfig?.id;
-        const planId    = checkoutConfig?.plan?.id ?? null;
-
-        if (!sessionId) {
-          throw new Error('Whop SDK returned a response with no checkout configuration id');
-        }
-
-        logger.info(`[Whop] Checkout configuration created — configId: ${sessionId}, planId: ${planId ?? 'n/a'}`);
-
-        return { sessionId, planId, raw: checkoutConfig };
-
-      } catch (err) {
-        // Rich structured log: HTTP status, error code, message, field names
-        const httpStatus  = err?.status ?? err?.response?.status ?? 'N/A';
-        const errorCode   = err?.error?.code ?? err?.error?.name ?? '';
-        const errorMsg    = extractWhopErrorMessage(err);
-        logger.error(
-          `[Whop] Checkout API error — HTTP ${httpStatus}${errorCode ? ` [${errorCode}]` : ''}: ${errorMsg}`
-        );
-        // Re-throw with clean message so the frontend UI never shows [object Object]
-        throw new Error(`Whop Checkout error (HTTP ${httpStatus}): ${errorMsg}`);
-      }
+    } catch (err) {
+      // Structured log: HTTP status, error code, message, field names (never log API key)
+      const httpStatus  = err?.status ?? err?.response?.status ?? 'N/A';
+      const errorCode   = err?.error?.code ?? err?.error?.name ?? '';
+      const errorMsg    = extractWhopErrorMessage(err);
+      logger.error(
+        `[Whop] Checkout API error [${new URL(baseURL).hostname}] — HTTP ${httpStatus}${errorCode ? ` [${errorCode}]` : ''}: ${errorMsg}`
+      );
+      // Re-throw clean error message for caller
+      throw new Error(`Whop Checkout error (HTTP ${httpStatus}): ${errorMsg}`);
     }
-
-    // ── Dev-only sandbox fallback when WHOP_API_KEY is absent ──────────────
-    logger.warn('[Whop] WHOP_API_KEY not set — using sandbox stub (dev only, not real Whop)');
-    const mockId  = `chk_sb_${String(bookingId).substring(0, 8)}_${Date.now()}`;
-    const mockPlan = `plan_sb_${String(bookingId).substring(0, 8)}`;
-    return {
-      sessionId: mockId,
-      planId: mockPlan,
-      raw: { id: mockId, plan: { id: mockPlan }, metadata },
-    };
   },
 
   /**
