@@ -3,11 +3,13 @@ import axios from 'axios';
 import env from '../../config/env.mjs';
 import logger from '../../config/logger.mjs';
 
-const WHOP_BASE_URL = 'https://api.whop.com/v5';
+// Current official Whop REST API base URL (v1)
+const WHOP_API_BASE = 'https://api.whop.com/api/v1';
 
 export const whopService = {
   /**
-   * Create a one-time Whop checkout configuration for a flight booking
+   * Create a one-time Whop checkout configuration for a flight booking.
+   * Uses POST /api/v1/checkout_configurations (current official endpoint).
    */
   createCheckoutConfiguration: async ({
     bookingId,
@@ -30,13 +32,19 @@ export const whopService = {
       currency: currency.toUpperCase()
     };
 
-    // If WHOP_API_KEY is configured, call Whop official API
+    // If WHOP_API_KEY is configured, call the Whop official API
     if (env.whopApiKey) {
+      // Validate company ID format — Whop company IDs begin with biz_
+      const companyId = env.whopCompanyId || '';
+      if (companyId && !companyId.startsWith('biz_')) {
+        logger.warn(`WHOP_COMPANY_ID "${companyId}" does not start with "biz_" — may cause API errors`);
+      }
+
       try {
         const response = await axios.post(
-          `${WHOP_BASE_URL}/app/checkout_configurations`,
+          `${WHOP_API_BASE}/checkout_configurations`,
           {
-            company_id: env.whopCompanyId || undefined,
+            ...(companyId ? { company_id: companyId } : {}),
             plan: {
               initial_price: formattedAmount,
               plan_type: 'one_time',
@@ -50,34 +58,46 @@ export const whopService = {
             headers: {
               'Authorization': `Bearer ${env.whopApiKey}`,
               'Content-Type': 'application/json'
-            }
+            },
+            timeout: 15000
           }
         );
 
         const data = response.data;
-        const sessionId = data.id || data.checkout_configuration_id;
-        const planId = data.plan_id || (data.plan && data.plan.id);
 
-        logger.info(`Whop checkout configuration created for booking ${bookingId}: ${sessionId}`);
+        // Official v1 response shape: { id: "cc_xxx", plan: { id: "plan_xxx" }, ... }
+        const sessionId = data?.id || data?.checkout_configuration_id;
+        const planId    = data?.plan?.id || data?.plan_id;
+
+        if (!sessionId) {
+          throw new Error('Whop API returned a response with no checkout configuration id');
+        }
+
+        logger.info(`[Whop] Checkout configuration created — booking: ${bookingId}, configId: ${sessionId}, planId: ${planId || 'n/a'}`);
+
         return {
           sessionId,
-          planId: planId || `plan_${sessionId}`,
+          planId: planId || null,
           raw: data
         };
+
       } catch (err) {
-        logger.error(`Whop API error creating checkout: ${err.response?.data?.message || err.message}`);
-        throw new Error(`Whop Checkout API error: ${err.response?.data?.message || err.message}`);
+        // Log status + message safely — never log the API key
+        const httpStatus = err.response?.status;
+        const apiMessage = err.response?.data?.message || err.response?.data?.error || err.message;
+        logger.error(`[Whop] Checkout API error — HTTP ${httpStatus || 'N/A'}: ${apiMessage}`);
+        throw new Error(`Whop Checkout API error (HTTP ${httpStatus || 'N/A'}): ${apiMessage}`);
       }
     }
 
-    // Sandbox / Test fallback when WHOP_API_KEY is not set in dev
-    logger.warn('WHOP_API_KEY is not set. Generating Whop sandbox test checkout session.');
-    const mockSessionId = `chk_sb_${bookingId.substring(0, 8)}_${Date.now()}`;
-    const mockPlanId = `plan_sb_${bookingId.substring(0, 8)}`;
+    // Sandbox / no-key fallback used ONLY in local dev when WHOP_API_KEY is not set
+    logger.warn('[Whop] WHOP_API_KEY is not set — generating sandbox test checkout session (dev only)');
+    const mockSessionId = `chk_sb_${String(bookingId).substring(0, 8)}_${Date.now()}`;
+    const mockPlanId    = `plan_sb_${String(bookingId).substring(0, 8)}`;
     return {
       sessionId: mockSessionId,
       planId: mockPlanId,
-      raw: { id: mockSessionId, plan_id: mockPlanId, metadata }
+      raw: { id: mockSessionId, plan: { id: mockPlanId }, metadata }
     };
   },
 

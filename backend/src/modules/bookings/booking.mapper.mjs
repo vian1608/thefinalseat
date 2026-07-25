@@ -11,7 +11,7 @@ export const bookingMapper = {
     return {
       confirmation_code: bookingReference,
       status: payload.status || 'PENDING',
-      payment_status: payload.paymentStatus || 'paid',
+      payment_status: payload.paymentStatus || 'pending',  // default pending — NEVER 'paid' before capture
       total_amount: rawCustomerPrice,
       customer_price: rawCustomerPrice,
       supplier_price: rawSupplierPrice,

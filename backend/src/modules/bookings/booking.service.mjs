@@ -119,6 +119,48 @@ export const bookingService = {
     }
 
     return canonicalBooking;
+  },
+
+  /**
+   * Search bookings by confirmation code, email, or passenger name.
+   * Used by GET /api/bookings/search?query=...  (My Bookings page)
+   */
+  search: async (query) => {
+    const results = await bookingRepository.searchBookings(String(query).trim());
+    return bookingMapper.toSummaryList(results);
+  },
+
+  /**
+   * Return all bookings associated with a given email address.
+   * Used by GET /api/bookings/user/:email
+   */
+  getBookingsForEmail: async (email) => {
+    const results = await bookingRepository.findBookingsByEmail(String(email).trim());
+    return bookingMapper.toSummaryList(results);
+  },
+
+  /**
+   * Return a single fully-enriched canonical booking by UUID id or confirmation code.
+   * Used by GET /api/bookings/:reference  (confirmation page + booking detail)
+   */
+  getDetailsByCodeOrId: async (reference) => {
+    const ref = String(reference).trim();
+    // Try as UUID (booking id) first, then as confirmation code string
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref);
+    const raw = isUUID
+      ? await bookingRepository.findBookingById(ref)
+      : await bookingRepository.findBookingByCode(ref);
+
+    if (!raw) return null;
+
+    // enrichBookingRecord is already called inside find* methods and attaches
+    // travellers/contacts/flights/payments arrays on the returned object.
+    const travellers = raw.travellers || [];
+    const contacts   = raw.contacts   || [];
+    const flights    = raw.flights    || [];
+    const payments   = raw.payments   || [];
+
+    return bookingMapper.toCanonicalModel(raw, travellers, contacts, flights, payments);
   }
 };
 

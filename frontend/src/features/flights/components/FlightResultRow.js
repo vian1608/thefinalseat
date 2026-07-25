@@ -266,32 +266,32 @@ export function FlightResultRow({
 
         {/* 6. Price & Chevron toggle */}
         <div className="col-price-action">
-          <div className="price-block" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+          <div className="fare-price-col">
             {!flight.isMock && parseFloat(flight.price.discountAmount) > 0 ? (
               <>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
-                  <span className="original-supplier-price" style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: '0.88rem', fontWeight: 600 }}>
-                    ${flight.price.originalApiPrice}
-                  </span>
-                  <span className="row-price" style={{ color: '#0f172a', fontWeight: 800, fontSize: '1.25rem' }}>
-                    ${flight.price.finalPrice}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.15rem' }}>
-                  <span className="row-fare-badge discount-badge" style={{ backgroundColor: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', padding: '2px 6px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700 }}>
+                {/* Original supplier price — crossed out */}
+                <span className="original-supplier-fare">
+                  ${flight.price.originalApiPrice}
+                </span>
+                {/* Discounted Final Seat price — prominent */}
+                <span className="final-fare-price">
+                  ${flight.price.finalPrice}
+                </span>
+                {/* Chip row: 10% OFF pill + savings text */}
+                <div className="fare-savings-row">
+                  <span className="discount-promo-chip">
+                    <i className="fas fa-tag" style={{ fontSize: '0.55rem' }}></i>
                     10% OFF
                   </span>
-                  <span className="savings-tag" style={{ color: '#047857', fontSize: '0.72rem', fontWeight: 700 }}>
-                    You save ${flight.price.discountAmount}
-                  </span>
+                  <span className="savings-label">You save ${flight.price.discountAmount}</span>
                 </div>
               </>
             ) : (
               <>
-                <span className="row-price" style={{ color: '#0f172a', fontWeight: 800, fontSize: '1.25rem' }}>
+                <span className="final-fare-price">
                   ${flight.price.finalPrice}
                 </span>
-                <span className="row-fare-badge mock-badge" style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '2px 6px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, marginTop: '0.15rem' }}>
+                <span className="mock-fare-badge">
                   {flight.isMock ? 'Offline / Call Desk' : 'Web Fare Only'}
                 </span>
               </>
@@ -402,29 +402,41 @@ export function FlightResultRow({
                   </div>
                 </div>
 
-                <div className="fare-total-price-block" style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
-                  {!flight.isMock && parseFloat(flight.price.discountAmount) > 0 ? (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', color: '#64748b', marginBottom: '0.35rem' }}>
-                        <span>Supplier Airfare ({travelersCount} traveler{travelersCount > 1 ? 's' : ''})</span>
-                        <span style={{ textDecoration: 'line-through' }}>${flight.price.originalApiPrice}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', color: '#047857', fontWeight: 600, marginBottom: '0.5rem' }}>
-                        <span>Final Seat Subsidy (10% OFF)</span>
-                        <span>-${flight.price.discountAmount}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #cbd5e1', paddingTop: '0.5rem', fontWeight: 800, fontSize: '1.15rem', color: '#0f172a' }}>
-                        <span>Total Customer Price</span>
-                        <span>${flight.price.finalPrice}</span>
-                      </div>
-                    </>
-                  ) : (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '1.15rem', color: '#0f172a' }}>
+                {/* Premium fare breakdown card */}
+                {!flight.isMock && parseFloat(flight.price.discountAmount) > 0 ? (
+                  <div className="fare-breakdown-premium">
+                    {/* Chip header */}
+                    <div className="fare-breakdown-premium__chip-row">
+                      <span className="discount-promo-chip">
+                        <i className="fas fa-tag" style={{ fontSize: '0.55rem' }}></i>
+                        10% OFF
+                      </span>
+                      <span className="fare-breakdown-premium__label">Final Seat Exclusive Discount</span>
+                    </div>
+                    {/* Supplier crossed-out */}
+                    <div className="fare-breakdown-premium__row">
+                      <span>Supplier Airfare ({travelersCount} traveler{travelersCount > 1 ? 's' : ''})</span>
+                      <span className="original-supplier-fare">${flight.price.originalApiPrice}</span>
+                    </div>
+                    {/* Discount saving */}
+                    <div className="fare-breakdown-premium__row fare-breakdown-premium__row--discount">
+                      <span>Final Seat Subsidy (10% OFF)</span>
+                      <span>−${flight.price.discountAmount}</span>
+                    </div>
+                    {/* Total */}
+                    <div className="fare-breakdown-premium__row fare-breakdown-premium__row--total">
+                      <span>Total Customer Price</span>
+                      <span>${flight.price.finalPrice}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="fare-breakdown-premium">
+                    <div className="fare-breakdown-premium__row fare-breakdown-premium__row--total">
                       <span>Total Price ({travelersCount} traveler{travelersCount > 1 ? 's' : ''})</span>
                       <span>${flight.price.finalPrice}</span>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 <button 
                   type="button" 

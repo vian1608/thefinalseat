@@ -51,6 +51,7 @@ function Booking() {
   // Accordion state
   const [openSections, setOpenSections] = useState({ travellers: true, contact: false, requests: false, payment: false });
   const [showSummaryMobile, setShowSummaryMobile] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const toggleSection = (key) => {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -184,6 +185,7 @@ function Booking() {
   );
 
   const isStep3Complete = true; // Special requests section is optional
+  const isStep4Complete = paymentComplete && termsAccepted;
 
   const handlePrimaryContactChange = (field, value) => {
     setPrimaryContact(prev => ({ ...prev, [field]: value }));
@@ -267,6 +269,11 @@ function Booking() {
 
     if (!validateForm()) return;
 
+    if (!termsAccepted) {
+      setWhopError('Please read and accept the Terms of Service, Privacy Policy, and Refund Policy before proceeding.');
+      return;
+    }
+
     setWhopLoading(true);
     try {
       // 1. Create or reuse pending booking in Supabase
@@ -300,6 +307,11 @@ function Booking() {
       if (!validateForm()) {
         setPayPalProcessing(false);
         throw new Error('Please fill in all required traveler and contact details before checkout.');
+      }
+
+      if (!termsAccepted) {
+        setPayPalProcessing(false);
+        throw new Error('Please accept the Terms of Service, Privacy Policy, and Refund Policy before proceeding.');
       }
 
       const pending = await createPendingBookingRecord();
@@ -650,7 +662,7 @@ function Booking() {
                 title="4. Secure Payment Method"
                 isOpen={openSections.payment}
                 onToggle={() => toggleSection('payment')}
-                isComplete={paymentComplete}
+                isComplete={isStep4Complete}
               >
                 <div className="payment-method-selector">
                   <button
@@ -667,6 +679,21 @@ function Booking() {
                   >
                     <i className="fab fa-paypal" style={{ color: '#003087' }}></i> PayPal / Pay Later
                   </button>
+                </div>
+
+                {/* ── Terms of Service agreement — inside payment section, above buttons ── */}
+                <div className="verification-block" style={{ marginTop: '1rem', marginBottom: '1rem' }}>
+                  <div className="verification-inner">
+                    <input
+                      type="checkbox"
+                      id="agree-check"
+                      checked={termsAccepted}
+                      onChange={(e) => setTermsAccepted(e.target.checked)}
+                    />
+                    <label htmlFor="agree-check" className="verification-label">
+                      I agree to the <Link to="/terms" target="_blank">Terms of Service</Link>, <Link to="/privacy-policy" target="_blank">Privacy Policy</Link>, and <Link to="/refund-policy" target="_blank">Refund Policy</Link>. I verify that the passenger credentials entered above match official photo IDs exactly.
+                    </label>
+                  </div>
                 </div>
 
                 {paymentMethod === 'card' ? (
@@ -689,7 +716,8 @@ function Booking() {
                           type="button"
                           onClick={handleInitWhopCheckout}
                           className="amtrak-btn amtrak-btn--cta amtrak-btn--full"
-                          disabled={whopLoading}
+                          disabled={whopLoading || !termsAccepted}
+                          title={!termsAccepted ? 'Please accept the Terms above to proceed' : ''}
                         >
                           {whopLoading ? (
                             <span><i className="fas fa-circle-notch fa-spin"></i> Initializing Secure Whop Checkout...</span>
@@ -759,7 +787,7 @@ function Booking() {
                     <PayPalScriptProvider options={{ "client-id": paypalClientId, currency: "USD", intent: "capture" }}>
                       <PayPalButtons
                         style={{ layout: "vertical", color: "gold", shape: "rect", label: "paypal" }}
-                        disabled={payPalProcessing}
+                        disabled={payPalProcessing || !termsAccepted}
                         createOrder={handlePayPalCreateOrder}
                         onApprove={handlePayPalApprove}
                         onCancel={handlePayPalCancel}
@@ -769,15 +797,6 @@ function Booking() {
                   </div>
                 )}
               </AccordionSection>
-
-              <div className="verification-block">
-                <div className="verification-inner">
-                  <input type="checkbox" id="agree-check" required />
-                  <label htmlFor="agree-check" className="verification-label">
-                    I agree to the <Link to="/terms" target="_blank">Terms of Service</Link>, <Link to="/privacy-policy" target="_blank">Privacy Policy</Link>, and <Link to="/refund-policy" target="_blank">Refund Policy</Link>. I verify that the passenger credentials entered above match official photo IDs exactly.
-                  </label>
-                </div>
-              </div>
 
             </form>
           </div>

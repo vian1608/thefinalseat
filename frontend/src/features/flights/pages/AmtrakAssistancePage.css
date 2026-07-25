@@ -433,10 +433,15 @@
 @media (max-width: 640px) {
   .amtrak-section {
     padding: 1.75rem 0;
+    overflow: visible;
+    height: auto;
+    min-height: 0;
   }
 
   .amtrak-hero {
     padding: 1.5rem 0 2rem;
+    overflow: visible;
+    position: static;
   }
 
   .amtrak-form__row {
@@ -453,5 +458,95 @@
 
   .amtrak-btn {
     width: 100%;
+  }
+
+  /* Ensure sections following hero are never buried under overflow:hidden */
+  #inquiry.amtrak-section,
+  .amtrak-page > section,
+  .amtrak-page > div {
+    position: relative;
+    z-index: 1;
+    overflow: visible;
+  }
+}
+
+/* ── Narrow-phone (320-414px) – prevent "Need Immediate Support?" clipping ── */
+@media (max-width: 414px) {
+  .amtrak-page {
+    overflow-x: hidden;
+    /* Do NOT use overflow: hidden — allow vertical content to flow normally */
+  }
+
+  .amtrak-hero {
+    /* No fixed height, no overflow:hidden, no negative margins */
+    height: auto;
+    min-height: 0;
+    padding: 1.25rem 0 1.75rem;
+    overflow: visible;
+    position: static;
+  }
+
+  /* Hero slider wrapper must not clip following sections */
+  .amtrak-page .hero-slider,
+  .amtrak-page .hero-slide,
+  .amtrak-page [class*="hero-slide"],
+  .amtrak-page [class*="hero-slider"] {
+    overflow: visible !important;
+    height: auto !important;
+    position: relative !important;
+  }
+
+  #inquiry.amtrak-section {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    overflow: visible;
+    position: relative;
+    z-index: 2;
+    /* Belt-and-suspenders: ensure it sits above any hero layer */
+    margin-top: 0;
+  }
+
+  .inquiry-split-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .inquiry-left-panel,
+  .inquiry-right-panel {
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+    height: auto;
+    min-height: 0;
+  }
+
+  .inquiry-left-title {
+    font-size: 1.3rem;
+    line-height: 1.3;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .inquiry-left-lead {
+    font-size: 0.9rem;
+  }
+
+  .amtrak-call-banner-btn {
+    font-size: 0.95rem;
+    padding: 0.75rem 1rem;
+    min-height: 48px;
+  }
+
+  .amtrak-inquiry-card {
+    padding: 1rem 0.85rem;
+  }
+
+  .amtrak-section--muted {
+    overflow: visible;
+  }
+
+  .benefits-list-items li {
+    font-size: 0.88rem;
   }
 }
