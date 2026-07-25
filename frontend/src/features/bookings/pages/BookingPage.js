@@ -385,11 +385,90 @@ function Booking() {
         <title>Flight Booking & Passenger Details | The Final Seat</title>
       </Helmet>
 
-      <div className="booking-hero-strip">
-        <div className="container">
-          <div className="hero-strip-content">
-            <h2>Complete Your Reservation</h2>
-            <p>Enter traveler information to secure your 10% discounted airfare with Instant Electronic Ticketing.</p>
+      {/* ── Premium Booking Hero ──────────────────────────────────── */}
+      <section className="booking-hero-premium">
+        <div className="booking-hero-premium__inner">
+          <p className="booking-hero-premium__eyebrow">
+            <i className="fas fa-star"></i>
+            Exclusive Member Fare · 10% Discount Applied
+          </p>
+          <h1>
+            Secure Your <span className="highlight-gold">Discounted</span> Flight Reservation
+          </h1>
+          <p className="booking-hero-premium__subtitle">
+            Review your itinerary below and enter traveler details to lock in your{' '}
+            <strong style={{ color: '#f59e0b' }}>10% discounted airfare</strong> with fast
+            electronic ticketing and secure, encrypted checkout.
+          </p>
+          <div className="booking-hero-premium__badges">
+            <span className="booking-hero-badge booking-hero-badge--discount">
+              <i className="fas fa-tag"></i>
+              10% Final Seat Discount
+            </span>
+            <span className="booking-hero-badge">
+              <i className="fas fa-shield-alt"></i>
+              256-Bit Encrypted Checkout
+            </span>
+            <span className="booking-hero-badge">
+              <i className="fas fa-bolt"></i>
+              Instant E-Ticket Delivery
+            </span>
+            <span className="booking-hero-badge">
+              <i className="fas fa-headset"></i>
+              24/7 Booking Support
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Itinerary Top Panel ───────────────────────────────────── */}
+      <div className="booking-itinerary-top-panel">
+        <div className="booking-itinerary-top-panel__inner">
+          <p className="booking-itinerary-top-panel__title">
+            <i className="fas fa-map-marked-alt"></i>
+            Your Selected Itinerary
+          </p>
+          <div className={`booking-itinerary-top-grid${returnFlight ? '' : '--single'}`}
+               style={{ display: 'grid', gridTemplateColumns: returnFlight ? '1fr 1fr auto' : '1fr auto', gap: '1.25rem', alignItems: 'start' }}>
+            <ItineraryCard
+              flight={flight}
+              label="Outbound Flight"
+              labelColor="#1e3a5f"
+              isTrain={isTrain}
+            />
+            {returnFlight && (
+              <ItineraryCard
+                flight={returnFlight}
+                label="Return Flight"
+                labelColor="#8b1538"
+                isTrain={returnFlight.isTrain}
+              />
+            )}
+            {/* Pricing summary chip */}
+            <div className="booking-itinerary-pricing-summary">
+              {!pricing.isMock && parseFloat(pricing.discountAmount) > 0 && (
+                <p className="booking-itinerary-pricing-summary__original">
+                  ${pricing.supplierPrice} USD
+                </p>
+              )}
+              <p className="booking-itinerary-pricing-summary__discounted">
+                ${pricing.total} <small style={{ fontSize: '0.7em', fontWeight: 600, color: '#64748b' }}>USD</small>
+              </p>
+              {!pricing.isMock && parseFloat(pricing.discountAmount) > 0 && (
+                <>
+                  <span className="booking-itinerary-pricing-summary__chip">
+                    <i className="fas fa-tag" style={{ fontSize: '0.55rem' }}></i>
+                    10% OFF
+                  </span>
+                  <p className="booking-itinerary-pricing-summary__saving">
+                    You save ${pricing.discountAmount}
+                  </p>
+                </>
+              )}
+              <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '0.5rem', marginBottom: 0 }}>
+                {passengersList.length || 1} traveler{(passengersList.length > 1) ? 's' : ''} · All taxes included
+              </p>
+            </div>
           </div>
         </div>
       </div>

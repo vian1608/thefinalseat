@@ -1,156 +1,164 @@
 import crypto from 'crypto';
-import axios from 'axios';
+import { Whop } from '@whop/sdk';
 import env from '../../config/env.mjs';
 import logger from '../../config/logger.mjs';
 
-// Current official Whop REST API base URL (v1)
-const WHOP_API_BASE = 'https://api.whop.com/api/v1';
+/**
+ * Safely extract a human-readable string from any Whop SDK / Axios error.
+ * Never returns [object Object], never logs the API key.
+ */
+function extractWhopErrorMessage(err) {
+  // @whop/sdk APIError shape: err.error?.message, err.status, err.error?.field_errors
+  if (err?.error?.message) {
+    const fieldErrors = err.error?.field_errors
+      ? ` (fields: ${Object.keys(err.error.field_errors).join(', ')})`
+      : '';
+    return `${err.error.message}${fieldErrors}`;
+  }
+  // Axios-style nested error object
+  if (err?.response?.data?.error?.message) return err.response.data.error.message;
+  if (typeof err?.response?.data?.message === 'string') return err.response.data.message;
+  if (err?.response?.data && typeof err.response.data === 'object') {
+    try { return JSON.stringify(err.response.data); } catch (_) { /* fall through */ }
+  }
+  if (typeof err?.message === 'string' && err.message) return err.message;
+  return 'Unknown Whop API error';
+}
 
 export const whopService = {
   /**
    * Create a one-time Whop checkout configuration for a flight booking.
-   * Uses POST /api/v1/checkout_configurations (current official endpoint).
+   *
+   * Uses the official @whop/sdk client:
+   *   client.checkoutConfigurations.create({ company_id, plan: { initial_price, plan_type }, metadata })
+   *
+   * Returns { sessionId: checkoutConfig.id, planId: checkoutConfig.plan?.id }
    */
   createCheckoutConfiguration: async ({
     bookingId,
     bookingReference,
     customerEmail,
     amount,
-    currency = 'USD'
   }) => {
     const formattedAmount = parseFloat(amount);
     if (isNaN(formattedAmount) || formattedAmount <= 0) {
       throw new Error('Invalid authoritative price for Whop checkout configuration');
     }
 
+    // Minimal metadata — Whop accepts string values
     const metadata = {
       bookingId: String(bookingId),
       bookingReference: String(bookingReference || ''),
       customerEmail: String(customerEmail || ''),
       paymentType: 'flight_booking',
       expectedAmount: formattedAmount.toFixed(2),
-      currency: currency.toUpperCase()
     };
 
-    // If WHOP_API_KEY is configured, call the Whop official API
     if (env.whopApiKey) {
-      // Validate company ID format — Whop company IDs begin with biz_
       const companyId = env.whopCompanyId || '';
-      if (companyId && !companyId.startsWith('biz_')) {
-        logger.warn(`WHOP_COMPANY_ID "${companyId}" does not start with "biz_" — may cause API errors`);
+
+      // Require a valid biz_ company ID — Whop rejects requests without it
+      if (!companyId || !companyId.startsWith('biz_')) {
+        throw new Error(
+          `WHOP_COMPANY_ID is missing or invalid ("${companyId}"). ` +
+          'Whop company IDs must start with "biz_". Set WHOP_COMPANY_ID in your environment.'
+        );
       }
 
+      // Initialise the official @whop/sdk client (per-request — lightweight)
+      const client = new Whop({ apiKey: env.whopApiKey });
+
       try {
-        const response = await axios.post(
-          `${WHOP_API_BASE}/checkout_configurations`,
-          {
-            ...(companyId ? { company_id: companyId } : {}),
-            plan: {
-              initial_price: formattedAmount,
-              plan_type: 'one_time',
-              release_method: 'buy_now',
-              currency: currency.toLowerCase(),
-              promo_codes_enabled: false
-            },
-            metadata
+        logger.info(`[Whop] Creating checkout configuration — booking: ${bookingId}, amount: ${formattedAmount.toFixed(2)} USD`);
+
+        // Minimal official request body per Whop SDK documentation
+        const checkoutConfig = await client.checkoutConfigurations.create({
+          company_id: companyId,
+          plan: {
+            initial_price: Number(formattedAmount.toFixed(2)),
+            plan_type: 'one_time',
           },
-          {
-            headers: {
-              'Authorization': `Bearer ${env.whopApiKey}`,
-              'Content-Type': 'application/json'
-            },
-            timeout: 15000
-          }
-        );
+          metadata,
+        });
 
-        const data = response.data;
-
-        // Official v1 response shape: { id: "cc_xxx", plan: { id: "plan_xxx" }, ... }
-        const sessionId = data?.id || data?.checkout_configuration_id;
-        const planId    = data?.plan?.id || data?.plan_id;
+        const sessionId = checkoutConfig?.id;
+        const planId    = checkoutConfig?.plan?.id ?? null;
 
         if (!sessionId) {
-          throw new Error('Whop API returned a response with no checkout configuration id');
+          throw new Error('Whop SDK returned a response with no checkout configuration id');
         }
 
-        logger.info(`[Whop] Checkout configuration created — booking: ${bookingId}, configId: ${sessionId}, planId: ${planId || 'n/a'}`);
+        logger.info(`[Whop] Checkout configuration created — configId: ${sessionId}, planId: ${planId ?? 'n/a'}`);
 
-        return {
-          sessionId,
-          planId: planId || null,
-          raw: data
-        };
+        return { sessionId, planId, raw: checkoutConfig };
 
       } catch (err) {
-        // Log status + message safely — never log the API key
-        const httpStatus = err.response?.status;
-        const apiMessage = err.response?.data?.message || err.response?.data?.error || err.message;
-        logger.error(`[Whop] Checkout API error — HTTP ${httpStatus || 'N/A'}: ${apiMessage}`);
-        throw new Error(`Whop Checkout API error (HTTP ${httpStatus || 'N/A'}): ${apiMessage}`);
+        // Rich structured log: HTTP status, error code, message, field names
+        const httpStatus  = err?.status ?? err?.response?.status ?? 'N/A';
+        const errorCode   = err?.error?.code ?? err?.error?.name ?? '';
+        const errorMsg    = extractWhopErrorMessage(err);
+        logger.error(
+          `[Whop] Checkout API error — HTTP ${httpStatus}${errorCode ? ` [${errorCode}]` : ''}: ${errorMsg}`
+        );
+        // Re-throw with clean message so the frontend UI never shows [object Object]
+        throw new Error(`Whop Checkout error (HTTP ${httpStatus}): ${errorMsg}`);
       }
     }
 
-    // Sandbox / no-key fallback used ONLY in local dev when WHOP_API_KEY is not set
-    logger.warn('[Whop] WHOP_API_KEY is not set — generating sandbox test checkout session (dev only)');
-    const mockSessionId = `chk_sb_${String(bookingId).substring(0, 8)}_${Date.now()}`;
-    const mockPlanId    = `plan_sb_${String(bookingId).substring(0, 8)}`;
+    // ── Dev-only sandbox fallback when WHOP_API_KEY is absent ──────────────
+    logger.warn('[Whop] WHOP_API_KEY not set — using sandbox stub (dev only, not real Whop)');
+    const mockId  = `chk_sb_${String(bookingId).substring(0, 8)}_${Date.now()}`;
+    const mockPlan = `plan_sb_${String(bookingId).substring(0, 8)}`;
     return {
-      sessionId: mockSessionId,
-      planId: mockPlanId,
-      raw: { id: mockSessionId, plan: { id: mockPlanId }, metadata }
+      sessionId: mockId,
+      planId: mockPlan,
+      raw: { id: mockId, plan: { id: mockPlan }, metadata },
     };
   },
 
   /**
-   * Verify Whop Webhook HMAC SHA256 Signature
+   * Verify Whop Webhook HMAC SHA256 Signature (Svix standard format).
    */
   verifyWebhookSignature: (rawBody, headers) => {
-    const secret = env.whopWebhookSecret;
-    const webhookId = headers['webhook-id'] || headers['x-whop-id'];
+    const secret           = env.whopWebhookSecret;
+    const webhookId        = headers['webhook-id']        || headers['x-whop-id'];
     const webhookTimestamp = headers['webhook-timestamp'] || headers['x-whop-timestamp'];
     const webhookSignature = headers['webhook-signature'] || headers['x-whop-signature'];
 
     if (!webhookId || !webhookTimestamp || !webhookSignature) {
-      logger.warn('Missing Whop webhook signature headers');
+      logger.warn('[Whop] Missing webhook signature headers');
       return false;
     }
 
-    // In dev/test when WHOP_WEBHOOK_SECRET is not configured, allow mock test signature
     if (!secret) {
       if (process.env.NODE_ENV === 'test' || webhookSignature.startsWith('v1,test_sig')) {
         return true;
       }
-      logger.warn('WHOP_WEBHOOK_SECRET is missing in environment.');
+      logger.warn('[Whop] WHOP_WEBHOOK_SECRET is missing in environment.');
       return false;
     }
 
     try {
-      const payloadString = rawBody instanceof Buffer ? rawBody.toString('utf8') : String(rawBody);
+      const payloadString    = rawBody instanceof Buffer ? rawBody.toString('utf8') : String(rawBody);
       const signaturePayload = `${webhookId}.${webhookTimestamp}.${payloadString}`;
-      
-      // Parse signatures (Whop/Svix header format: v1,signature or v1=signature)
-      const parts = webhookSignature.split(' ');
+
+      const parts      = webhookSignature.split(' ');
       const signatures = parts.map(p => {
         const [, sig] = p.includes(',') ? p.split(',') : p.split('=');
         return sig || p;
       });
 
-      const computedHmac = crypto
-        .createHmac('sha256', secret)
-        .update(signaturePayload)
-        .digest('base64');
+      const computedHmac = crypto.createHmac('sha256', secret).update(signaturePayload).digest('base64');
+      const computedHex  = crypto.createHmac('sha256', secret).update(signaturePayload).digest('hex');
 
-      const computedHex = crypto
-        .createHmac('sha256', secret)
-        .update(signaturePayload)
-        .digest('hex');
-
-      return signatures.some(sig => sig === computedHmac || sig === computedHex || sig === `v1,${computedHmac}`);
+      return signatures.some(sig =>
+        sig === computedHmac || sig === computedHex || sig === `v1,${computedHmac}`
+      );
     } catch (err) {
-      logger.error(`Error verifying Whop webhook signature: ${err.message}`);
+      logger.error(`[Whop] Error verifying webhook signature: ${err.message}`);
       return false;
     }
-  }
+  },
 };
 
 export default whopService;

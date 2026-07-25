@@ -40,7 +40,7 @@
   padding: 0 2rem;
 }
 
-/* ── Page header ── */
+/* ── Page header (legacy fallback) ── */
 .booking-page-header {
   margin-bottom: 2rem;
 }
@@ -56,6 +56,246 @@
   font-size: 0.98rem;
   margin: 0;
   line-height: 1.5;
+}
+
+/* ═══════════════════════════════════════
+   PREMIUM BOOKING HERO SECTION
+   ═══════════════════════════════════════ */
+.booking-hero-premium {
+  background: linear-gradient(135deg, #0f2744 0%, #1e3a5f 45%, #0a1e38 100%);
+  position: relative;
+  overflow: hidden;
+  padding: 2.5rem 0 2rem;
+}
+
+/* Subtle diagonal stripe overlay for texture */
+.booking-hero-premium::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 28px,
+    rgba(255, 255, 255, 0.018) 28px,
+    rgba(255, 255, 255, 0.018) 29px
+  );
+  pointer-events: none;
+}
+
+/* Soft glow accent top-right */
+.booking-hero-premium::after {
+  content: '';
+  position: absolute;
+  top: -60px;
+  right: -80px;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(139, 21, 56, 0.22) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.booking-hero-premium__inner {
+  position: relative;
+  z-index: 1;
+  max-width: 1260px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.booking-hero-premium__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 0.75rem;
+}
+
+.booking-hero-premium__eyebrow i {
+  font-size: 0.75rem;
+  color: #f59e0b;
+}
+
+.booking-hero-premium h1 {
+  font-size: clamp(1.55rem, 3.8vw, 2.35rem);
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  margin: 0 0 0.75rem 0;
+}
+
+.booking-hero-premium h1 .highlight-gold {
+  color: #f59e0b;
+}
+
+.booking-hero-premium__subtitle {
+  font-size: clamp(0.9rem, 2.2vw, 1.05rem);
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.65;
+  max-width: 680px;
+  margin: 0 0 1.5rem 0;
+}
+
+/* Trust badges row */
+.booking-hero-premium__badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.booking-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  padding: 0.3rem 0.8rem;
+  backdrop-filter: blur(4px);
+}
+
+.booking-hero-badge i {
+  font-size: 0.72rem;
+  color: #34d399;
+}
+
+.booking-hero-badge--discount i {
+  color: #f59e0b;
+}
+
+/* ═══════════════════════════════════════
+   ITINERARY TOP PANEL (above form)
+   ═══════════════════════════════════════ */
+.booking-itinerary-top-panel {
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 1.5rem 0;
+}
+
+.booking-itinerary-top-panel__inner {
+  max-width: 1260px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.booking-itinerary-top-panel__title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin: 0 0 1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.booking-itinerary-top-panel__title i {
+  color: #1e3a5f;
+  font-size: 0.78rem;
+}
+
+.booking-itinerary-top-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+/* When only outbound (no return), collapse to single+pricing */
+.booking-itinerary-top-grid--single {
+  grid-template-columns: 1fr auto;
+}
+
+.booking-itinerary-pricing-summary {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border: 1px solid #a7f3d0;
+  border-radius: 14px;
+  padding: 1.1rem 1.25rem;
+  min-width: 200px;
+}
+
+.booking-itinerary-pricing-summary__original {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  text-decoration: line-through;
+  margin-bottom: 0.15rem;
+}
+
+.booking-itinerary-pricing-summary__discounted {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin-bottom: 0.4rem;
+}
+
+.booking-itinerary-pricing-summary__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 20px;
+  margin-bottom: 0.5rem;
+}
+
+.booking-itinerary-pricing-summary__saving {
+  font-size: 0.78rem;
+  color: #047857;
+  font-weight: 600;
+}
+
+/* Responsive: collapse to single column on tablet/mobile */
+@media (max-width: 960px) {
+  .booking-itinerary-top-grid,
+  .booking-itinerary-top-grid--single {
+    grid-template-columns: 1fr;
+  }
+  .booking-itinerary-pricing-summary {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .booking-hero-premium {
+    padding: 1.75rem 0 1.5rem;
+  }
+  .booking-hero-premium h1 {
+    font-size: 1.5rem;
+  }
+  .booking-hero-premium__subtitle {
+    font-size: 0.9rem;
+  }
+  .booking-hero-premium__badges {
+    gap: 0.6rem;
+  }
+  .booking-hero-badge {
+    font-size: 0.72rem;
+    padding: 0.25rem 0.65rem;
+  }
+  .booking-itinerary-top-panel {
+    padding: 1.1rem 0;
+  }
+  .booking-itinerary-top-panel__inner {
+    padding: 0 1rem;
+  }
 }
 
 /* ── Error alert ── */
