@@ -9,11 +9,13 @@ function PaymentSuccess() {
   const bookingIdParam = searchParams.get('booking_id');
   const codeParam = searchParams.get('code');
 
-  const [paymentState, setPaymentState] = useState('POLLING'); // 'POLLING' | 'PAID' | 'FAILED'
+  const [paymentState, setPaymentState] = useState('POLLING'); // 'POLLING' | 'PAID' | 'PENDING_TIMEOUT' | 'FAILED'
   const [bookingData, setBookingData] = useState(null);
+  const [pollAttempts, setPollAttempts] = useState(0);
   const intervalRef = useRef(null);
 
   const targetIdentifier = bookingIdParam || codeParam;
+  const maxPollAttempts = 30; // 30 attempts x 2s = 60s timeout
 
   // Break out of Whop iframe if embedded checkout redirected inside the iframe
   useEffect(() => {
@@ -26,66 +28,95 @@ function PaymentSuccess() {
     }
   }, []);
 
-  useEffect(() => {
+  const checkPaymentStatus = async () => {
     if (!targetIdentifier) {
       setPaymentState('FAILED');
-      return;
+      return true;
     }
 
-    const checkPaymentStatus = async () => {
-      try {
-        const res = await bookingAPI.getPaymentStatus(targetIdentifier);
-        if (res && res.success) {
-          const status = (res.paymentStatus || '').toLowerCase();
+    try {
+      const res = await bookingAPI.getPaymentStatus(targetIdentifier);
+      if (res && res.success) {
+        const status = (res.paymentStatus || '').toLowerCase();
+        const bStatus = (res.bookingStatus || res.status || '').toUpperCase();
 
-          if (status === 'paid') {
-            // Also fetch enriched booking data from DB if available
-            try {
-              const fullRes = await bookingAPI.getByReference(res.confirmationCode || targetIdentifier);
-              if (fullRes && fullRes.success && fullRes.data) {
-                setBookingData({
-                  ...res,
-                  ...fullRes.data,
-                  passengerName: fullRes.data.passenger_name || res.passengerName,
-                  confirmationCode: fullRes.data.confirmation_code || res.confirmationCode,
-                  email: fullRes.data.email || res.email,
-                  emailSentAt: fullRes.data.confirmation_email_sent_at || res.emailSentAt
-                });
-              } else {
-                setBookingData(res);
-              }
-            } catch (e) {
+        if (status === 'paid' || bStatus === 'CONFIRMED') {
+          // Fetch complete enriched booking data from DB if available
+          try {
+            const fullRes = await bookingAPI.getByReference(res.confirmationCode || targetIdentifier);
+            if (fullRes && fullRes.success && fullRes.data) {
+              setBookingData({
+                ...res,
+                ...fullRes.data,
+                passengerName: fullRes.data.passenger_name || res.passengerName,
+                confirmationCode: fullRes.data.confirmation_code || res.confirmationCode,
+                email: fullRes.data.email || res.email,
+                emailSentAt: fullRes.data.confirmation_email_sent_at || res.emailSentAt
+              });
+            } else {
               setBookingData(res);
             }
-            setPaymentState('PAID');
-            if (intervalRef.current) clearInterval(intervalRef.current);
-            return true;
+          } catch (e) {
+            setBookingData(res);
           }
-
-          if (status === 'failed' || status === 'cancelled') {
-            setPaymentState('FAILED');
-            if (intervalRef.current) clearInterval(intervalRef.current);
-            return true;
-          }
+          setPaymentState('PAID');
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          return true;
         }
-      } catch (err) {
-        console.warn('Status poll error:', err.message);
+
+        if (status === 'failed' || status === 'cancelled' || bStatus === 'FAILED' || bStatus === 'CANCELLED') {
+          setPaymentState('FAILED');
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          return true;
+        }
       }
-      return false;
+    } catch (err) {
+      console.warn('Status poll error:', err.message);
+    }
+    return false;
+  };
+
+  const startPolling = () => {
+    setPaymentState('POLLING');
+    setPollAttempts(0);
+    let count = 0;
+
+    const poll = async () => {
+      count++;
+      setPollAttempts(count);
+
+      const isFinished = await checkPaymentStatus();
+      if (isFinished) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        return;
+      }
+
+      if (count >= maxPollAttempts) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        // Attempt final fetch of booking reference for pending timeout display
+        try {
+          const finalRes = await bookingAPI.getByReference(targetIdentifier);
+          if (finalRes && finalRes.success && finalRes.data) {
+            setBookingData(finalRes.data);
+          }
+        } catch (e) { /* non-blocking */ }
+        setPaymentState('PENDING_TIMEOUT');
+      }
     };
 
-    // Initial check immediately
-    checkPaymentStatus();
+    poll();
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(poll, 2000);
+  };
 
-    // Poll every 2 seconds
-    intervalRef.current = setInterval(checkPaymentStatus, 2000);
-
+  useEffect(() => {
+    startPolling();
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [targetIdentifier]);
 
-  // ── 1. LOADING / POLLING / PENDING STATE ──────────────────────────────────
+  // ── 1. LOADING / POLLING STATE ────────────────────────────────────────────
   if (paymentState === 'POLLING') {
     return (
       <div className="minimal-page-wrapper">
@@ -125,7 +156,43 @@ function PaymentSuccess() {
     );
   }
 
-  // ── 3. MINIMAL SUCCESS STATE (paymentStatus === 'paid') ───────────────────
+  // ── 3. PENDING TIMEOUT (60s elapsed) STATE ───────────────────────────────
+  if (paymentState === 'PENDING_TIMEOUT') {
+    const tempCode = bookingData?.confirmationCode || bookingData?.confirmation_code || targetIdentifier || 'TFS-2026-ABC123';
+    return (
+      <div className="minimal-page-wrapper">
+        <Helmet>
+          <title>Payment Received — Processing | The Final Seat</title>
+        </Helmet>
+        <div className="minimal-card minimal-card--pending">
+          <div className="minimal-pending-icon">
+            <i className="fas fa-hourglass-half"></i>
+          </div>
+          <h2 className="minimal-pending-title">Your payment was received, but confirmation is still processing</h2>
+
+          <div className="minimal-ref-box">
+            <span className="minimal-ref-label">Temporary Confirmation Number</span>
+            <strong className="minimal-ref-code">{tempCode}</strong>
+          </div>
+
+          <p className="minimal-disclaimer">
+            We are verifying your transaction with the payment gateway. Click Check Again below to re-verify your status.
+          </p>
+
+          <div className="minimal-actions">
+            <button type="button" onClick={startPolling} className="btn-minimal btn-minimal--primary">
+              Check Again
+            </button>
+            <Link to="/my-bookings" className="btn-minimal btn-minimal--secondary">
+              View My Booking
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── 4. MINIMAL SUCCESS STATE (paymentStatus.toLowerCase() === 'paid') ─────
   const rawName = bookingData?.passengerName || bookingData?.passenger_name || 'Customer';
   const firstName = rawName.split(' ')[0] || 'Customer';
   const confirmationCode = bookingData?.confirmationCode || bookingData?.confirmation_code || targetIdentifier || 'TFS-2026-ABC123';

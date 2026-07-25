@@ -20,8 +20,8 @@ export const env = {
   supabaseSecretKey: required('SUPABASE_SECRET_KEY'),
   
   // Resend
-  resendApiKey: required('RESEND_API_KEY'),
-  resendFrom: process.env.RESEND_FROM || 'The Final Seat LLC <onboarding@resend.dev>',
+  resendApiKey: process.env.RESEND_API_KEY || '',
+  resendFrom: process.env.RESEND_FROM || 'The Final Seat <support@thefinalseat.com>',
   inquiryNotifyEmails: process.env.INQUIRY_NOTIFY_EMAILS || 'support@thefinalseat.com,viansaini1608@gmail.com',
 
   // Stripe

@@ -136,31 +136,36 @@ export const whopController = {
    * POST /api/webhooks/whop
    * Verified, idempotent webhook handler for Whop payment events
    */
+  /**
+   * POST /api/webhooks/whop
+   * Verified, idempotent webhook handler for Whop payment events using @whop/sdk
+   */
   handleWebhook: async (req, res) => {
     try {
       const rawBody = req.body;
       const headers = req.headers;
 
-      // 1. Verify HMAC SHA256 Signature
-      const isValidSig = whopService.verifyWebhookSignature(rawBody, headers);
-      if (!isValidSig) {
-        logger.warn('Whop webhook signature verification failed');
-        return res.status(401).json({ success: false, error: 'Invalid webhook signature' });
-      }
-
-      // Parse payload JSON
-      let payload = {};
+      // 1. Verify and unwrap webhook using official @whop/sdk webhooks.unwrap
+      let event;
       try {
-        payload = typeof rawBody === 'string' 
-          ? JSON.parse(rawBody) 
-          : (Buffer.isBuffer(rawBody) ? JSON.parse(rawBody.toString('utf8')) : rawBody);
-      } catch (pErr) {
-        logger.error(`Error parsing Whop webhook JSON: ${pErr.message}`);
-        return res.status(400).json({ success: false, error: 'Invalid JSON payload' });
+        event = whopService.verifyAndUnwrapWebhook(rawBody, headers);
+      } catch (unwrapErr) {
+        logger.warn(`[Whop] Webhook signature verification failed: ${unwrapErr.message}`);
+        return res.status(401).json({ success: false, error: `Invalid webhook signature: ${unwrapErr.message}` });
       }
 
-      const webhookId = headers['webhook-id'] || headers['x-whop-id'] || payload.id || `wh_${Date.now()}`;
-      const eventType = payload.action || payload.event || payload.type || 'payment.succeeded';
+      if (!event) {
+        return res.status(400).json({ success: false, error: 'Unwrapped webhook event is null' });
+      }
+
+      // Exact event type — NEVER default absent event types to payment.succeeded
+      const eventType = String(event.action || event.event || event.type || event.action_type || '').trim();
+      if (!eventType) {
+        logger.warn('[Whop] Webhook event received without valid event type');
+        return res.status(400).json({ success: false, error: 'Event missing type field' });
+      }
+
+      const webhookId = headers['webhook-id'] || headers['x-whop-id'] || event.id || `wh_${Date.now()}`;
 
       // 2. Idempotent Deduplication Check
       const existingEvent = await bookingRepository.getWebhookEvent(webhookId);
@@ -173,24 +178,24 @@ export const whopController = {
       await bookingRepository.recordWebhookEvent({
         id: String(webhookId),
         provider: 'whop',
-        event_type: String(eventType),
-        payload
+        event_type: eventType,
+        payload: event
       });
 
-      // 3. Process Event
-      const data = payload.data || payload;
-      const metadata = data.metadata || payload.metadata || {};
-      const bookingId = metadata.bookingId || data.booking_id;
+      // 3. Process Verified Event
+      const data = event.data || event;
+      const metadata = data.metadata || event.metadata || {};
+      const bookingId = metadata.bookingId || metadata.booking_id || data.booking_id;
 
-      if (eventType.includes('payment.succeeded') || eventType.includes('payment_succeeded')) {
+      if (eventType === 'payment.succeeded' || eventType === 'payment_succeeded' || eventType.includes('payment.succeeded')) {
         if (!bookingId) {
-          logger.warn(`Whop payment.succeeded event missing metadata bookingId`);
+          logger.warn('[Whop] payment.succeeded event missing metadata bookingId');
           return res.status(200).json({ success: true, warning: 'Missing bookingId in metadata' });
         }
 
         const booking = await bookingRepository.getById(bookingId);
         if (!booking) {
-          logger.error(`Whop webhook booking ${bookingId} not found in database`);
+          logger.error(`[Whop] Webhook booking ${bookingId} not found in database`);
           return res.status(404).json({ success: false, error: 'Booking not found' });
         }
 
@@ -198,7 +203,7 @@ export const whopController = {
         const providerCheckoutId = data.checkout_configuration_id || metadata.sessionId || booking.provider_checkout_id;
         const paidAmount = parseFloat(data.final_amount || data.amount || metadata.expectedAmount || booking.customer_price || booking.total_amount);
 
-        // Update payment table record
+        // Update payment table record (insert/update row)
         await bookingRepository.insertPayment({
           booking_id: booking.id,
           payment_provider: 'whop',
@@ -220,9 +225,9 @@ export const whopController = {
           paid_at: new Date().toISOString()
         });
 
-        logger.info(`Whop webhook successfully marked booking ${booking.confirmation_code} as paid`);
+        logger.info(`[Whop] Webhook successfully marked booking ${booking.confirmation_code || booking.id} as PAID & CONFIRMED`);
 
-        // Send confirmation email asynchronously
+        // Send confirmation email asynchronously (idempotent — sendBookingConfirmation checks confirmation_email_sent_at)
         try {
           const canonicalBooking = bookingMapper.toCanonicalModel(
             { ...booking, payment_status: 'paid', status: 'CONFIRMED' },
@@ -233,7 +238,7 @@ export const whopController = {
           );
           await sendBookingConfirmation(canonicalBooking);
         } catch (emailErr) {
-          logger.error(`Non-blocking confirmation email failed after Whop payment: ${emailErr.message}`);
+          logger.error(`[Whop] Non-blocking confirmation email failed: ${emailErr.message}`);
         }
       } else if (eventType.includes('refund') || eventType.includes('dispute')) {
         if (bookingId) {
@@ -242,13 +247,13 @@ export const whopController = {
             payment_status: newPaymentStatus,
             status: 'CANCELLED'
           });
-          logger.info(`Whop webhook updated booking ${bookingId} to ${newPaymentStatus}`);
+          logger.info(`[Whop] Webhook updated booking ${bookingId} to ${newPaymentStatus}`);
         }
       }
 
       return res.status(200).json({ success: true, received: true });
     } catch (err) {
-      logger.error(`Error handling Whop webhook: ${err.message}`);
+      logger.error(`[Whop] Error handling webhook: ${err.message}`);
       return res.status(500).json({ success: false, error: err.message });
     }
   },

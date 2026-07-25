@@ -136,45 +136,53 @@ export const whopService = {
   },
 
   /**
-   * Verify Whop Webhook HMAC SHA256 Signature (Svix standard format).
+   * Verify and unwrap Whop Webhook Event using official @whop/sdk:
+   *   whop.webhooks.unwrap(rawBodyString, { headers })
+   */
+  verifyAndUnwrapWebhook: (rawBody, headers) => {
+    const rawEnv = (env.whopEnv || 'sandbox').trim().toLowerCase();
+    const isSandbox = rawEnv === 'sandbox';
+    const baseURL = isSandbox
+      ? 'https://sandbox-api.whop.com/api/v1'
+      : 'https://api.whop.com/api/v1';
+
+    const secret = (env.whopWebhookSecret || '').trim();
+    if (!secret) {
+      if (process.env.NODE_ENV === 'test') {
+        const bodyStr = typeof rawBody === 'string'
+          ? rawBody
+          : (rawBody instanceof Buffer ? rawBody.toString('utf8') : JSON.stringify(rawBody));
+        return JSON.parse(bodyStr);
+      }
+      throw new Error('WHOP_WEBHOOK_SECRET environment variable is missing.');
+    }
+
+    // Whop SDK expects base64-encoded webhookKey
+    const webhookKey = Buffer.from(secret).toString('base64');
+    const apiKey = (env.whopApiKey || '').trim();
+
+    const whop = new Whop({
+      apiKey: apiKey || 'dummy_key',
+      baseURL,
+      webhookKey,
+    });
+
+    const bodyString = typeof rawBody === 'string'
+      ? rawBody
+      : (rawBody instanceof Buffer ? rawBody.toString('utf8') : String(rawBody));
+
+    return whop.webhooks.unwrap(bodyString, { headers });
+  },
+
+  /**
+   * Legacy signature verification method fallback
    */
   verifyWebhookSignature: (rawBody, headers) => {
-    const secret           = env.whopWebhookSecret;
-    const webhookId        = headers['webhook-id']        || headers['x-whop-id'];
-    const webhookTimestamp = headers['webhook-timestamp'] || headers['x-whop-timestamp'];
-    const webhookSignature = headers['webhook-signature'] || headers['x-whop-signature'];
-
-    if (!webhookId || !webhookTimestamp || !webhookSignature) {
-      logger.warn('[Whop] Missing webhook signature headers');
-      return false;
-    }
-
-    if (!secret) {
-      if (process.env.NODE_ENV === 'test' || webhookSignature.startsWith('v1,test_sig')) {
-        return true;
-      }
-      logger.warn('[Whop] WHOP_WEBHOOK_SECRET is missing in environment.');
-      return false;
-    }
-
     try {
-      const payloadString    = rawBody instanceof Buffer ? rawBody.toString('utf8') : String(rawBody);
-      const signaturePayload = `${webhookId}.${webhookTimestamp}.${payloadString}`;
-
-      const parts      = webhookSignature.split(' ');
-      const signatures = parts.map(p => {
-        const [, sig] = p.includes(',') ? p.split(',') : p.split('=');
-        return sig || p;
-      });
-
-      const computedHmac = crypto.createHmac('sha256', secret).update(signaturePayload).digest('base64');
-      const computedHex  = crypto.createHmac('sha256', secret).update(signaturePayload).digest('hex');
-
-      return signatures.some(sig =>
-        sig === computedHmac || sig === computedHex || sig === `v1,${computedHmac}`
-      );
+      const event = whopService.verifyAndUnwrapWebhook(rawBody, headers);
+      return !!event;
     } catch (err) {
-      logger.error(`[Whop] Error verifying webhook signature: ${err.message}`);
+      logger.warn(`[Whop] Webhook signature verification error: ${err.message}`);
       return false;
     }
   },
