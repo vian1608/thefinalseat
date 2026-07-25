@@ -284,7 +284,10 @@ export const whopController = {
         supplierPrice: supplierPrice.toFixed(2),
         discountAmount: discountAmount.toFixed(2),
         discountPercent: booking.discount_percent || 10,
-        paidAt: booking.paid_at || null
+        paidAt: booking.paid_at || null,
+        passengerName: booking.passenger_name || 'Customer',
+        email: booking.email || null,
+        emailSentAt: booking.confirmation_email_sent_at || null
       });
     } catch (err) {
       logger.error(`Error in getPaymentStatus: ${err.message}`);

@@ -833,10 +833,25 @@ function Booking() {
                         {/* Whop React Embed Component */}
                         <div className="whop-embed-frame-container">
                           <WhopCheckoutEmbed
-                            planId={whopCheckoutConfig.planId}
+                            key={whopCheckoutConfig.sessionId}
+                            environment={
+                              whopCheckoutConfig.env === 'sandbox'
+                                ? 'sandbox'
+                                : 'production'
+                            }
                             sessionId={whopCheckoutConfig.sessionId}
+                            planId={whopCheckoutConfig.planId}
                             prefill={{ email: primaryContact.email }}
-                            returnUrl={`${window.location.origin}/confirmation/success?type=booking&booking_id=${pendingBookingId.current}&code=${pendingBookingCode.current}`}
+                            returnUrl={`${window.location.origin}/confirmation/success?booking_id=${pendingBookingId.current}&code=${pendingBookingCode.current}`}
+                            onComplete={() => {
+                              const bookingId = pendingBookingId.current;
+                              const code = pendingBookingCode.current;
+                              setWhopCheckoutConfig(null);
+                              setPaymentComplete(true);
+                              navigate(
+                                `/confirmation/success?booking_id=${encodeURIComponent(bookingId)}&code=${encodeURIComponent(code)}`
+                              );
+                            }}
                           />
                         </div>
                       </div>
