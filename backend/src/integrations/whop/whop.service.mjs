@@ -29,8 +29,12 @@ export const whopService = {
   /**
    * Create a one-time Whop checkout configuration for a flight booking.
    *
-   * Uses the official @whop/sdk client configured according to WHOP_ENV:
-   *   new Whop({ apiKey, ...(env === 'sandbox' ? { baseURL: 'https://sandbox-api.whop.com/api/v1' } : {}) })
+   * Matches Whop's official getting-started schema:
+   *   client.checkoutConfigurations.create({
+   *     currency: 'usd',
+   *     plan: { company_id, currency: 'usd', initial_price, plan_type: 'one_time' },
+   *     metadata
+   *   })
    *
    * Returns { sessionId: checkoutConfig.id, planId: checkoutConfig.plan?.id }
    */
@@ -39,13 +43,14 @@ export const whopService = {
     bookingReference,
     customerEmail,
     amount,
+    currency = 'USD',
   }) => {
     const formattedAmount = parseFloat(amount);
     if (isNaN(formattedAmount) || formattedAmount <= 0) {
       throw new Error('Invalid authoritative price for Whop checkout configuration');
     }
 
-    // 1. Resolve & normalize environment
+    // 1. Resolve & normalize environment and currency
     const rawEnv = (env.whopEnv || 'sandbox').trim().toLowerCase();
     if (rawEnv !== 'sandbox' && rawEnv !== 'production' && rawEnv !== 'live') {
       throw new Error(`Invalid WHOP_ENV "${env.whopEnv}". Allowed values: "sandbox", "production", "live".`);
@@ -54,7 +59,7 @@ export const whopService = {
     const isSandbox = rawEnv === 'sandbox';
     const resolvedEnv = isSandbox ? 'sandbox' : 'production';
     const baseURL = isSandbox ? 'https://sandbox-api.whop.com/api/v1' : 'https://api.whop.com/api/v1';
-    const apiHost = 'sandbox-api.whop.com'; // or URL hostname
+    const resolvedCurrency = (currency || 'USD').trim().toLowerCase();
 
     // 2. Validate API Key & Company ID
     const apiKey = (env.whopApiKey || '').trim();
@@ -69,6 +74,8 @@ export const whopService = {
         'Whop company IDs must start with "biz_". Set WHOP_COMPANY_ID in your environment.'
       );
     }
+
+    const companyPrefix = companyId.length >= 7 ? `${companyId.substring(0, 7)}...` : companyId;
 
     // 3. Initialise official @whop/sdk client with environment-aware baseURL
     logger.info(`[Whop] Initialising SDK client — env: ${resolvedEnv}, host: ${new URL(baseURL).hostname}`);
@@ -88,12 +95,16 @@ export const whopService = {
     };
 
     try {
-      logger.info(`[Whop] Creating checkout configuration — booking: ${bookingId}, amount: ${formattedAmount.toFixed(2)} USD, host: ${new URL(baseURL).hostname}`);
+      logger.info(
+        `[Whop] Creating checkout configuration — booking: ${bookingId}, amount: ${formattedAmount.toFixed(2)} ${resolvedCurrency.toUpperCase()}, env: ${resolvedEnv}, company: ${companyPrefix}, host: ${new URL(baseURL).hostname}`
+      );
 
-      // Minimal official request body per Whop SDK documentation
+      // Official request payload matching Whop dynamic-plan schema
       const checkoutConfig = await client.checkoutConfigurations.create({
-        company_id: companyId,
+        currency: resolvedCurrency,
         plan: {
+          company_id: companyId,
+          currency: resolvedCurrency,
           initial_price: Number(formattedAmount.toFixed(2)),
           plan_type: 'one_time',
         },
