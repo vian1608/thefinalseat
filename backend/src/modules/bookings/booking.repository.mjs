@@ -280,6 +280,24 @@ export const bookingRepository = {
     return enrichedList;
   },
 
+  markConfirmationEmailSent: async (id, emailId) => {
+    const sentAt = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        confirmation_email_sent_at: sentAt,
+        confirmation_email_id: String(emailId || 'sent')
+      })
+      .eq('id', id)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      logger.warn(`Failed to update confirmation_email_sent_at for booking ${id}: ${error.message}`);
+    }
+    return data;
+  },
+
   updateStatus: async (id, updateFields) => {
     const { data, error } = await supabase
       .from('bookings')

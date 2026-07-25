@@ -265,140 +265,306 @@ export const sendConsultingInquiry = async (inquiry) => {
   };
 };
 
-export const sendBookingConfirmation = async (booking) => {
+export const sendBookingConfirmation = async (booking, options = {}) => {
   try {
-    const flight = booking.flight || booking.flight_details || {};
-    const rawPassengers = booking.passengers || booking.traveller_details;
-    const passengers = Array.isArray(rawPassengers) ? rawPassengers : JSON.parse(rawPassengers || '[]');
-    
-    const customerName = booking.customerName || booking.passenger_name || 'Customer';
-    const bookingReference = booking.bookingReference || booking.confirmation_code || 'Pending';
-    const displayedWebsitePrice = booking.displayedWebsitePrice || booking.amount || 0;
-    const transactionId = booking.transactionId || booking.payment_reference || 'Offline Verified';
-    const bookingDate = booking.bookingDate || booking.created_at || new Date();
-    const originalApiPrice = booking.originalApiPrice || booking.amount || 0;
-    const paymentStatus = booking.paymentStatus || 'paid';
-    const email = booking.email || '';
-    const phone = booking.phone || '';
+    const bookingId = booking.id || booking.booking_id;
+    const sentAt = booking.confirmation_email_sent_at || booking.confirmationEmailSentAt;
 
-    const passengerTextLines = passengers.map((p, i) => {
-      const passportInfo = p.passportNumber ? `, Passport: ${p.passportNumber} (${p.nationality || 'N/A'})` : '';
-      const ktnInfo = p.knownTravelerNumber ? `, KTN: ${p.knownTravelerNumber}` : '';
-      return `${i + 1}. ${p.firstName} ${p.middleName || ''} ${p.lastName} (${p.role || 'Adult'}) - DOB: ${p.dateOfBirth}, Gender: ${p.gender}${passportInfo}${ktnInfo}`;
-    }).join('\n');
-
-    const flightRouteText = flight.departure && flight.arrival 
-      ? `${flight.departure.city || flight.departureAirport} (${flight.departure.airport || ''}) to ${flight.arrival.city || flight.arrivalAirport} (${flight.arrival.airport || ''})`
-      : 'Itinerary details';
-
-    const customerEmailBody = `
-Dear ${customerName},
-
-Thank you! Your flight reservation request has been received successfully. 
-
-Our travel specialists will verify your itinerary details and manually issue your e-ticket shortly. A secondary email with your ticket number will be dispatched once confirmed.
-
-====================================================
-RESERVATION RECEIPT
-====================================================
-Booking Reference: ${bookingReference}
-Booking Status: Pending Confirmation
-Amount Charged: $${parseFloat(displayedWebsitePrice).toFixed(2)} USD
-Transaction ID: ${transactionId}
-Booking Date: ${new Date(bookingDate).toLocaleString()}
-
-TRAVELERS:
-${passengerTextLines}
-
-FLIGHT ITINERARY:
-Airline: ${flight.airline}
-Flight Number: ${flight.flightNumber}
-Route: ${flightRouteText}
-Departure: ${flight.departure?.time || ''} on ${flight.departure?.date || ''}
-Arrival: ${flight.arrival?.time || ''} on ${flight.arrival?.date || ''}
-Cabin Class: ${flight.class || 'Economy'}
-Stops: ${flight.stops === 0 ? 'Nonstop' : `${flight.stops} stop(s)`}
-
-If you have any questions or need immediate assistance, please reply directly to this email or contact us at support@thefinalseat.com.
-
-Best Regards,
-Support Team
-The Final Seat LLC
-    `.trim();
-
-    const adminEmailBody = `
-⚠️ NEW FLIGHT BOOKING REQUEST - MANUAL TICKETING REQUIRED
-====================================================
-Booking Reference: ${bookingReference}
-Booking Status: Pending Confirmation
-Booking Date: ${new Date(bookingDate).toLocaleString()}
-
-PRICING & VERIFICATION:
------------------------
-Original API Price: $${parseFloat(originalApiPrice).toFixed(2)} USD
-Website Displayed Price: $${parseFloat(displayedWebsitePrice).toFixed(2)} USD
-Stripe Payment Status: ${paymentStatus}
-Transaction Reference: ${transactionId}
-
-PRIMARY CONTACT:
-----------------
-Name: ${customerName}
-Email: ${email}
-Phone: ${phone}
-
-TRAVELERS DETAILS:
-------------------
-${passengerTextLines}
-
-FLIGHT ITINERARY:
------------------
-Airline: ${flight.airline}
-Flight Number: ${flight.flightNumber}
-Route: ${flightRouteText}
-Departure: ${flight.departure?.time || ''} on ${flight.departure?.date || ''}
-Arrival: ${flight.arrival?.time || ''} on ${flight.arrival?.date || ''}
-Cabin Class: ${flight.class || 'Economy'}
-Stops: ${flight.stops === 0 ? 'Nonstop' : `${flight.stops} stop(s)`}
-Aircraft: ${flight.aircraft || 'Unknown'}
-Refundable: ${flight.refundableStatus || 'Unknown'}
-Baggage Allowance: ${flight.baggageAllowance || 'Standard'}
-
-ACTION REQUIRED:
-Please review traveler credentials, verify original fares, issue the ticket manually, and update the booking status to "Confirmed" in the admin dashboard.
-    `.trim();
-
-    if (isSmtpConfigured()) {
-      const transporter = getTransporter();
-
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: email,
-        subject: `Flight Booking Received - Ref: ${bookingReference}`,
-        text: customerEmailBody,
-        html: customerEmailBody.replace(/\n/g, '<br>')
-      });
-
-      const adminEmails = getInquiryRecipients();
-      for (const emailAddress of adminEmails) {
-        await transporter.sendMail({
-          from: process.env.EMAIL_USER,
-          to: emailAddress,
-          subject: `🚨 [Manual Ticket Needed] New Booking Ref: ${bookingReference}`,
-          text: adminEmailBody,
-          html: adminEmailBody.replace(/\n/g, '<br>')
-        });
-      }
-      
-      logger.info(`✅ Success/Admin notification emails sent for ${bookingReference}`);
-      return { success: true };
+    // Idempotency check: Skip duplicate sends unless forced (e.g. admin action)
+    if (sentAt && !options.force) {
+      logger.info(`[Email] Skipping duplicate confirmation email for booking ${bookingId} (already sent at ${sentAt})`);
+      return { success: true, duplicate: true, sentAt };
     }
 
-    logger.warn('Nodemailer SMTP not configured. Logged notification templates below:');
-    logger.info('------------- CUSTOMER EMAIL -------------\n', customerEmailBody);
-    logger.info('-------------- ADMIN EMAIL --------------\n', adminEmailBody);
-    return { success: true, message: 'SMTP not configured, templates printed to console logs.' };
+    const flight = booking.flight || booking.flight_details || booking.outbound_flight || {};
+    const returnFlight = booking.returnFlight || booking.return_flight || null;
+    const rawPassengers = booking.passengers || booking.traveller_details || booking.travellers;
+    const passengers = Array.isArray(rawPassengers)
+      ? rawPassengers
+      : (typeof rawPassengers === 'string' ? JSON.parse(rawPassengers || '[]') : []);
+
+    const firstPassenger = passengers[0] || {};
+    const firstName = firstPassenger.firstName || firstPassenger.first_name || (booking.customerName || booking.passenger_name || 'Customer').split(' ')[0];
+    const customerName = booking.customerName || booking.passenger_name || `${firstPassenger.firstName || ''} ${firstPassenger.lastName || ''}`.trim() || 'Valued Customer';
+    const bookingReference = booking.bookingReference || booking.confirmation_code || booking.confirmationCode || 'TFS-PENDING';
+    
+    const customerPrice = parseFloat(booking.customer_price || booking.displayedWebsitePrice || booking.total_amount || booking.amount || 0);
+    const supplierPrice = parseFloat(booking.supplier_price || booking.original_api_price || customerPrice);
+    const discountAmount = parseFloat(booking.discount_amount || Math.max(0, supplierPrice - customerPrice));
+    
+    const transactionId = booking.transactionId || booking.provider_payment_id || booking.payment_reference || 'Verified';
+    const paymentProvider = (booking.payment_provider || booking.paymentProvider || 'Card (Whop Encrypted)').toUpperCase();
+    const bookingDate = booking.bookingDate || booking.created_at || new Date().toISOString();
+    const email = booking.email || booking.customerEmail || '';
+    const phone = booking.phone || booking.customerPhone || '';
+    const frontendUrl = env.frontendUrl || 'https://thefinalseat.com';
+
+    const carrierName = booking.carrier || booking.airline || flight.airline || flight.carrier || 'Commercial Airline';
+    const flightNumber = flight.flight_number || flight.flightNumber || flight.number || 'Scheduled';
+    const origin = flight.origin_code || flight.departure_airport || flight.departure?.airport || flight.departureAirport || 'DEP';
+    const destination = flight.destination_code || flight.arrival_airport || flight.arrival?.airport || flight.arrivalAirport || 'ARR';
+    const departureTime = flight.departure_time || flight.departure?.time || flight.departure?.date || 'Scheduled';
+    const cabinClass = flight.cabin_class || flight.class || 'Economy';
+
+    const passengerTextLines = passengers.length > 0
+      ? passengers.map((p, i) => {
+          const fn = p.firstName || p.first_name || '';
+          const ln = p.lastName || p.last_name || '';
+          const dob = p.dateOfBirth || p.date_of_birth || 'N/A';
+          const gen = p.gender || 'N/A';
+          const pass = p.passportNumber || p.passport_number ? `, Passport: ${p.passportNumber || p.passport_number}` : '';
+          return `${i + 1}. ${fn} ${ln} (DOB: ${dob}, Gender: ${gen}${pass})`;
+        }).join('\n')
+      : `1. ${customerName}`;
+
+    // Plaintext Body
+    const customerTextBody = `
+====================================================
+THE FINAL SEAT — TEMPORARY RESERVATION CONFIRMATION
+====================================================
+
+Dear ${firstName},
+
+Thank you! Your payment of $${customerPrice.toFixed(2)} USD has been successfully received.
+
+TEMPORARY CONFIRMATION NUMBER: ${bookingReference}
+
+A confirmation email has been sent to ${email}. Please keep your temporary confirmation number for tracking your reservation. Your final electronic ticket and airline confirmation details will be emailed after fulfilment is completed.
+
+NOTICE:
+This email serves as a temporary reservation confirmation and receipt for your payment. It is NOT the airline's final electronic ticket number or PNR. Your official electronic ticket and airline confirmation details will be dispatched in a separate email once manual fulfilment is completed by our travel team.
+
+====================================================
+PAYMENT & RESERVATION RECEIPT
+====================================================
+Temporary Confirmation Number: ${bookingReference}
+Payment Status: PAID & CONFIRMED
+Amount Paid (Customer Total): $${customerPrice.toFixed(2)} USD
+Supplier Airfare: $${supplierPrice.toFixed(2)} USD
+Final Seat Subsidy (10% OFF): -$${discountAmount.toFixed(2)} USD
+Payment Method: ${paymentProvider}
+Transaction Reference: ${transactionId}
+Booking Date: ${new Date(bookingDate).toLocaleString()}
+
+FLIGHT ITINERARY:
+Airline / Operator: ${carrierName}
+Flight Number: ${flightNumber}
+Route: ${origin} to ${destination}
+Departure Date/Time: ${departureTime}
+Cabin Class: ${cabinClass}
+Travelers: ${passengers.length || 1}
+
+PASSENGER MANIFEST:
+${passengerTextLines}
+
+WHAT HAPPENS NEXT:
+1. Our travel specialists are verifying your passenger credentials and securing ticket issuance with the airline.
+2. Once issued, your official airline PNR & Electronic Ticket document will be sent to ${email}.
+3. You can check your booking status anytime at: ${frontendUrl}/my-bookings
+
+Need immediate support? Contact us 24/7:
+Email: support@thefinalseat.com
+Phone: +1 (888) 210-8656
+
+The Final Seat LLC · 5830 E 2nd St, Ste 7000, Casper, WY 82609
+    `.trim();
+
+    // HTML Email Template with Premium Branding
+    const customerHtmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6fa; margin: 0; padding: 20px; color: #0f172a; }
+    .email-card { max-width: 620px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(15,23,42,0.08); }
+    .email-header { background: linear-gradient(135deg, #0f2744 0%, #1e3a5f 100%); padding: 32px 28px; text-align: center; color: #ffffff; }
+    .brand-title { font-size: 22px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; margin: 0 0 6px; }
+    .brand-sub { font-size: 13px; color: rgba(255,255,255,0.75); margin: 0; }
+    .email-body { padding: 28px; }
+    .greeting { font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 0; }
+    .success-pill { display: inline-block; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; font-weight: 700; font-size: 13px; padding: 6px 16px; border-radius: 20px; margin: 12px 0 20px; }
+    .ref-box { background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 18px; text-align: center; margin-bottom: 24px; }
+    .ref-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; font-weight: 700; margin-bottom: 4px; }
+    .ref-code { font-size: 24px; font-weight: 800; color: #1e3a5f; letter-spacing: 0.05em; margin: 0; }
+    .breakdown-card { background: #fafbfd; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 24px; }
+    .breakdown-title { font-size: 14px; font-weight: 700; color: #1e3a5f; margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; }
+    .row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; color: #475569; }
+    .row--total { border-top: 1px dashed #cbd5e1; padding-top: 10px; margin-top: 10px; font-size: 16px; font-weight: 800; color: #0f172a; }
+    .row--discount { color: #047857; font-weight: 700; }
+    .itinerary-card { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 18px; margin-bottom: 24px; }
+    .itinerary-header { font-size: 13px; font-weight: 700; color: #1e3a5f; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 6px; }
+    .disclaimer-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 16px; margin-bottom: 24px; color: #92400e; font-size: 13px; line-height: 1.6; }
+    .disclaimer-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; color: #78350f; display: block; }
+    .cta-button { display: block; width: 100%; text-align: center; background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%); color: #ffffff !important; text-decoration: none; padding: 14px 20px; border-radius: 10px; font-weight: 700; font-size: 15px; box-sizing: border-box; margin-bottom: 24px; }
+    .manifest-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+    .manifest-table th { background: #f1f5f9; text-align: left; padding: 8px 10px; color: #475569; font-weight: 700; }
+    .manifest-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
+    .footer { text-align: center; padding: 20px; font-size: 12px; color: #94a3b8; border-top: 1px solid #f1f5f9; background: #fafbfd; }
+  </style>
+</head>
+<body>
+  <div class="email-card">
+    <div class="email-header">
+      <div class="brand-title">The Final Seat</div>
+      <div class="brand-sub">Instant Electronic Ticketing &amp; Travel Logistics</div>
+    </div>
+    
+    <div class="email-body">
+      <h2 class="greeting">Thank you, ${firstName}!</h2>
+      <p style="font-size: 15px; color: #334155; margin-top: 4px; line-height: 1.6;">
+        Your payment has been successfully received. We are currently processing your reservation request.
+      </p>
+      
+      <div class="success-pill">✓ Payment Status: PAID &amp; CONFIRMED</div>
+      
+      <div class="ref-box">
+        <div class="ref-label">Temporary Confirmation Number</div>
+        <div class="ref-code">${bookingReference}</div>
+      </div>
+      
+      <!-- Critical Disclaimer Box -->
+      <div class="disclaimer-box">
+        <span class="disclaimer-title">⚠️ Temporary Reservation Notice</span>
+        This email serves as a <strong>temporary reservation confirmation and receipt for your payment</strong>. It is not the airline's final electronic ticket number or PNR. Your official electronic ticket and airline confirmation details will be emailed after manual fulfilment is completed by our travel specialists.
+      </div>
+      
+      <!-- Receipt & Breakdown -->
+      <div class="breakdown-card">
+        <div class="breakdown-title">Payment &amp; Fare Receipt</div>
+        <div class="row">
+          <span>Supplier Airfare</span>
+          <span style="text-decoration: line-through;">$${supplierPrice.toFixed(2)} USD</span>
+        </div>
+        ${discountAmount > 0 ? `
+        <div class="row row--discount">
+          <span>Final Seat Subsidy (10% OFF)</span>
+          <span>-$${discountAmount.toFixed(2)} USD</span>
+        </div>` : ''}
+        <div class="row row--total">
+          <span>Total Customer Amount Paid</span>
+          <span style="color: #0f172a;">$${customerPrice.toFixed(2)} USD</span>
+        </div>
+        <div class="row" style="margin-top: 12px; font-size: 13px;">
+          <span>Payment Gateway</span>
+          <strong>${paymentProvider}</strong>
+        </div>
+        <div class="row" style="font-size: 13px;">
+          <span>Transaction Reference</span>
+          <code>${transactionId}</code>
+        </div>
+      </div>
+      
+      <!-- Itinerary Summary -->
+      <div class="itinerary-card">
+        <div class="itinerary-header">Flight Itinerary — ${carrierName}</div>
+        <div class="row">
+          <span>Route</span>
+          <strong>${origin} &rarr; ${destination}</strong>
+        </div>
+        <div class="row">
+          <span>Flight Number</span>
+          <strong>${flightNumber}</strong>
+        </div>
+        <div class="row">
+          <span>Departure Time</span>
+          <strong>${departureTime}</strong>
+        </div>
+        <div class="row">
+          <span>Cabin Class</span>
+          <strong>${cabinClass}</strong>
+        </div>
+      </div>
+      
+      <!-- Passenger Manifest -->
+      ${passengers.length > 0 ? `
+      <div style="margin-bottom: 24px;">
+        <div style="font-size: 13px; font-weight: 700; color: #1e3a5f; text-transform: uppercase; margin-bottom: 8px;">Passenger Manifest</div>
+        <table class="manifest-table">
+          <thead>
+            <tr><th>#</th><th>Passenger Name</th><th>DOB</th><th>Gender</th></tr>
+          </thead>
+          <tbody>
+            ${passengers.map((p, i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td><strong>${p.firstName || p.first_name} ${p.lastName || p.last_name}</strong></td>
+                <td>${p.dateOfBirth || p.date_of_birth || 'N/A'}</td>
+                <td style="text-transform: capitalize;">${p.gender || 'N/A'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>` : ''}
+
+      <!-- Next Steps & Action CTA -->
+      <a href="${frontendUrl}/my-bookings" class="cta-button">View My Booking on The Final Seat &rarr;</a>
+      
+      <div style="font-size: 13px; color: #64748b; line-height: 1.6; text-align: center;">
+        Need assistance or changes? Contact our 24/7 travel desk:<br>
+        <strong>Email:</strong> <a href="mailto:support@thefinalseat.com" style="color: #1e3a5f;">support@thefinalseat.com</a> &middot; 
+        <strong>Phone:</strong> <a href="tel:+18882108656" style="color: #1e3a5f;">+1 (888) 210-8656</a>
+      </div>
+    </div>
+    
+    <div class="footer">
+      The Final Seat LLC &middot; 5830 E 2nd St, Ste 7000, Casper, WY 82609<br>
+      &copy; ${new Date().getFullYear()} The Final Seat LLC. All rights reserved.
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
+
+    let emailMessageId = `log_${Date.now()}`;
+    let emailResult = null;
+
+    // Send email using configured Resend API or Nodemailer SMTP
+    if (env.resendApiKey?.trim()) {
+      try {
+        emailResult = await sendViaResend({
+          recipients: [email],
+          subject: `Temporary Reservation Confirmation — ${bookingReference} | The Final Seat`,
+          textBody: customerTextBody,
+          htmlBody: customerHtmlBody,
+          replyTo: 'support@thefinalseat.com',
+        });
+        if (emailResult && emailResult.messageId) {
+          emailMessageId = emailResult.messageId;
+        }
+      } catch (rErr) {
+        logger.error(`Resend email error for booking ${bookingId}:`, rErr.message);
+      }
+    } else if (isSmtpConfigured()) {
+      try {
+        const transporter = getTransporter();
+        const info = await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: email,
+          subject: `Temporary Reservation Confirmation — ${bookingReference} | The Final Seat`,
+          text: customerTextBody,
+          html: customerHtmlBody,
+        });
+        emailMessageId = info.messageId || emailMessageId;
+        logger.info(`SMTP confirmation email sent to ${email} for booking ${bookingReference}`);
+      } catch (sErr) {
+        logger.error(`SMTP email error for booking ${bookingId}:`, sErr.message);
+      }
+    } else {
+      logger.warn(`No email API key / SMTP configured. Confirmation email for ${bookingReference} printed to logs.`);
+    }
+
+    // Mark email sent idempotently in Supabase DB so duplicate webhooks do not trigger re-sends
+    if (bookingId) {
+      await bookingRepository.markConfirmationEmailSent(bookingId, emailMessageId);
+    }
+
+    return { success: true, emailId: emailMessageId };
+
   } catch (error) {
-    logger.error('Error sending booking confirmation email templates:', error.message);
-    throw error;
+    logger.error('[Email] Non-blocking error in sendBookingConfirmation:', error.message);
+    // Return gracefully without throwing so payment capture is never reversed by email errors
+    return { success: false, error: error.message };
   }
 };
+

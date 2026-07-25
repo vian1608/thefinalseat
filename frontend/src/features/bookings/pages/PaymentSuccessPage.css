@@ -54,15 +54,560 @@
 
 .payment-success-page {
   background: #f8fafc;
-  padding: 3.5rem 0 5rem;
+  padding: 3rem 0 5rem;
   min-height: 85vh;
 }
 
 .success-inner-wrapper {
-  max-width: 680px;
+  max-width: 720px;
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 0 1.25rem;
 }
+
+/* ── Polling / Verification Screen ── */
+.polling-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 3rem 2rem;
+  text-align: center;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.06);
+}
+
+.polling-spinner-container {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pulse-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid #1e3a5f;
+  border-top-color: transparent;
+  animation: spinRing 1.2s linear infinite;
+}
+
+@keyframes spinRing {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.polling-lock-icon {
+  font-size: 1.75rem;
+  color: #1e3a5f;
+}
+
+.polling-card h2 {
+  font-size: 1.75rem;
+  color: #0f172a;
+  font-weight: 800;
+  margin: 0 0 0.5rem;
+}
+
+.polling-subtitle {
+  color: #64748b;
+  font-size: 1rem;
+  margin: 0 0 2rem;
+  line-height: 1.55;
+  max-width: 540px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.polling-progress-bar {
+  background: #e2e8f0;
+  height: 8px;
+  border-radius: 20px;
+  overflow: hidden;
+  max-width: 480px;
+  margin: 0 auto 1rem;
+}
+
+.polling-progress-fill {
+  background: linear-gradient(90deg, #1e3a5f 0%, #059669 100%);
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
+.polling-step-text {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ── Failed Screen ── */
+.failed-card {
+  background: #ffffff;
+  border: 1px solid #fecaca;
+  border-radius: 20px;
+  padding: 3rem 2rem;
+  text-align: center;
+  box-shadow: 0 14px 40px rgba(220, 38, 38, 0.08);
+}
+
+.failed-icon-circle {
+  width: 72px;
+  height: 72px;
+  background: #fef2f2;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #dc2626;
+  font-size: 2.25rem;
+  margin: 0 auto 1.5rem;
+}
+
+.failed-card h2 {
+  font-size: 1.65rem;
+  color: #991b1b;
+  margin: 0 0 0.5rem;
+  font-weight: 800;
+}
+
+.failed-message {
+  color: #475569;
+  font-size: 1rem;
+  line-height: 1.6;
+  margin: 0 0 2rem;
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.failed-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-retry-payment {
+  background: #dc2626;
+  color: #ffffff;
+  padding: 0.85rem 1.75rem;
+  border-radius: 10px;
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.15s ease;
+}
+
+.btn-retry-payment:hover {
+  background: #b91c1c;
+}
+
+.btn-support-contact {
+  background: #f1f5f9;
+  color: #334155;
+  padding: 0.85rem 1.5rem;
+  border-radius: 10px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+/* ── Pending Timeout Screen ── */
+.pending-card {
+  background: #ffffff;
+  border: 1px solid #fde68a;
+  border-radius: 20px;
+  padding: 2.5rem 2rem;
+  text-align: center;
+  box-shadow: 0 14px 40px rgba(245, 158, 11, 0.08);
+}
+
+.pending-icon-circle {
+  width: 72px;
+  height: 72px;
+  background: #fffbeb;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d97706;
+  font-size: 2.25rem;
+  margin: 0 auto 1.5rem;
+}
+
+.pending-card h2 {
+  font-size: 1.55rem;
+  color: #78350f;
+  margin: 0 0 0.5rem;
+  font-weight: 800;
+}
+
+.pending-subtitle {
+  color: #475569;
+  font-size: 0.98rem;
+  line-height: 1.6;
+  margin: 0 0 1.5rem;
+}
+
+.temp-code-card {
+  background: #f8fafc;
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin: 0 auto 1.5rem;
+  max-width: 440px;
+}
+
+.temp-code-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.temp-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.temp-code-value {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #1e3a5f;
+  letter-spacing: 0.04em;
+  font-family: monospace;
+}
+
+.pending-info {
+  font-size: 0.92rem;
+  color: #475569;
+  line-height: 1.6;
+  margin-bottom: 1.75rem;
+}
+
+.pending-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.btn-refresh-status {
+  background: #1e3a5f;
+  color: #ffffff;
+  border: none;
+  padding: 0.85rem 1.5rem;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.btn-view-bookings {
+  background: #f1f5f9;
+  color: #334155;
+  padding: 0.85rem 1.5rem;
+  border-radius: 10px;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ── Temporary Confirmation Ref Box & Copy Button ── */
+.temp-ref-box {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 2px dashed #cbd5e1;
+  border-radius: 14px;
+  padding: 1.5rem;
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.temp-ref-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #64748b;
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
+.temp-ref-value-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+}
+
+.temp-ref-code {
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #1e3a5f;
+  letter-spacing: 0.05em;
+  font-family: monospace;
+}
+
+.btn-copy-code {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  padding: 0.35rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.15s ease;
+}
+
+.btn-copy-code:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+/* ── Sent Notice ── */
+.email-sent-notice {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  font-size: 0.92rem;
+  color: #065f46;
+  line-height: 1.6;
+}
+
+.email-sent-notice i {
+  font-size: 1.2rem;
+  color: #047857;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Disclaimer Alert Box ── */
+.disclaimer-alert-box {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 2rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  font-size: 0.9rem;
+  color: #92400e;
+  line-height: 1.6;
+}
+
+.disclaimer-alert-box i {
+  color: #d97706;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.disclaimer-alert-box strong {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: #78350f;
+}
+
+.disclaimer-alert-box p {
+  margin: 0;
+}
+
+/* ── Receipt Summary Card ── */
+.receipt-summary-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+  margin-bottom: 2rem;
+}
+
+.card-section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e3a5f;
+  margin: 0 0 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 0.85rem;
+}
+
+.receipt-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem 2rem;
+  margin-bottom: 2rem;
+}
+
+.receipt-grid-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.r-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+}
+
+.r-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.r-value-price {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #059669;
+}
+
+.r-value-discount {
+  color: #047857;
+  font-weight: 700;
+}
+
+.r-value-original {
+  color: #94a3b8;
+  text-decoration: line-through;
+}
+
+/* ── Action Buttons Row ── */
+.action-buttons-row {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.btn-action {
+  min-height: 48px;
+  padding: 0.75rem 1.6rem;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.btn-action-primary {
+  background: #0f172a;
+  color: #ffffff;
+  border: none;
+}
+
+.btn-action-primary:hover {
+  background: #1e293b;
+}
+
+.btn-action-accent {
+  background: #1e3a5f;
+  color: #ffffff;
+  border: none;
+}
+
+.btn-action-accent:hover {
+  background: #0f2744;
+}
+
+.btn-action-secondary {
+  background: #ffffff;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+
+.btn-action-secondary:hover {
+  background: #f8fafc;
+}
+
+.success-footer-note {
+  text-align: center;
+  margin-top: 2.5rem;
+  font-size: 0.82rem;
+  color: #94a3b8;
+}
+
+.success-banner-card {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.success-checkmark-animated {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 1.25rem;
+}
+
+.success-greeting {
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 0.35rem;
+  letter-spacing: -0.02em;
+}
+
+.success-tagline {
+  font-size: 1.05rem;
+  color: #475569;
+  margin: 0 0 1.25rem;
+  font-weight: 500;
+}
+
+.status-badge-row {
+  display: flex;
+  justify-content: center;
+}
+
+.badge-confirmed {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0.4rem 1.2rem;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+
 
 .invoice-print-header {
   display: none;

@@ -1,209 +1,238 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { paymentAPI, bookingAPI } from '../../../shared/api/api';
+import { bookingAPI } from '../../../shared/api/api';
 import { SUPPORT_PHONE_DISPLAY } from '../../../shared/constants/supportContact';
 import './PaymentSuccessPage.css';
 
 function PaymentSuccess() {
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get('session_id');
-  const type = searchParams.get('type') || 'booking';
   const bookingIdParam = searchParams.get('booking_id');
   const codeParam = searchParams.get('code');
 
-  const [loading, setLoading] = useState(true);
-  const [isPolling, setIsPolling] = useState(false);
-  const [pollingMessage, setPollingMessage] = useState('Payment received, confirming your booking…');
-  const [error, setError] = useState('');
-  const [sessionDetails, setSessionDetails] = useState(null);
-  const [bookingRef, setBookingRef] = useState(codeParam || '');
-  const [bookingDataFromDb, setBookingDataFromDb] = useState(null);
+  const [pollingStatus, setPollingStatus] = useState('POLLING'); // 'POLLING' | 'SUCCESS' | 'PENDING_TIMEOUT' | 'FAILED'
+  const [pollCount, setPollCount] = useState(0);
+  const [bookingData, setBookingData] = useState(null);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [copied, setCopied] = useState(false);
 
-  // Status Polling for Whop / PayPal booking confirmations
-  useEffect(() => {
-    const identifier = bookingIdParam || codeParam || bookingRef;
+  const maxAttempts = 30; // 30 attempts x 2s = 60s max polling
+  const intervalRef = useRef(null);
 
-    if (identifier && type === 'booking') {
-      let isSubscribed = true;
-      let pollCount = 0;
-      const maxPolls = 10; // 10 x 2s = 20s fast check
+  const targetIdentifier = bookingIdParam || codeParam || sessionId;
 
-      setIsPolling(true);
-      setLoading(true);
+  const fetchAndVerifyStatus = async () => {
+    if (!targetIdentifier) {
+      setPollingStatus('FAILED');
+      setErrorMessage('No booking reference or session identifier found in URL.');
+      return true;
+    }
 
-      const checkStatus = async () => {
-        try {
-          pollCount++;
-          const res = await bookingAPI.getPaymentStatus(identifier);
+    try {
+      // 1. Check status from payment status endpoint
+      const statusRes = await bookingAPI.getPaymentStatus(targetIdentifier);
 
-          if (!isSubscribed) return;
+      if (statusRes && statusRes.success) {
+        const pStatus = (statusRes.paymentStatus || '').toLowerCase();
+        const bStatus = (statusRes.bookingStatus || statusRes.status || '').toUpperCase();
 
-          if (res && res.success) {
-            if (res.paymentStatus === 'paid') {
-              setIsPolling(false);
-              setBookingRef(res.confirmationCode || identifier);
-              
-              // Fetch complete enriched booking object from DB
-              const fullBooking = await bookingAPI.getByReference(res.confirmationCode || identifier);
-              if (fullBooking && fullBooking.success) {
-                setBookingDataFromDb(fullBooking.data);
-              } else {
-                setBookingDataFromDb(res);
-              }
-              setLoading(false);
-              return true;
-            } else {
-              setPollingMessage('Payment received, confirming your booking…');
-            }
+        if (pStatus === 'paid' && (bStatus === 'CONFIRMED' || bStatus === 'DONE')) {
+          // Fetch complete enriched canonical booking from DB
+          const fullRes = await bookingAPI.getByReference(statusRes.confirmationCode || targetIdentifier);
+          if (fullRes && fullRes.success && fullRes.data) {
+            setBookingData(fullRes.data);
+          } else {
+            setBookingData(statusRes);
           }
-        } catch (err) {
-          console.warn('Polling check error:', err.message);
-        }
-
-        if (pollCount >= maxPolls) {
-          setIsPolling(false);
-          // Try fetching booking once more before concluding polling
-          try {
-            const finalRef = await bookingAPI.getByReference(identifier);
-            if (finalRef && finalRef.success) {
-              setBookingDataFromDb(finalRef.data);
-            }
-          } catch (e) {
-            /* non-blocking */
-          }
-          setLoading(false);
+          setPollingStatus('SUCCESS');
           return true;
         }
 
-        return false;
-      };
-
-      // Immediate check
-      checkStatus().then((done) => {
-        if (!done) {
-          const interval = setInterval(async () => {
-            const finished = await checkStatus();
-            if (finished) {
-              clearInterval(interval);
-            }
-          }, 2000);
-
-          return () => {
-            isSubscribed = false;
-            clearInterval(interval);
-          };
+        if (pStatus === 'failed' || pStatus === 'cancelled' || bStatus === 'FAILED' || bStatus === 'CANCELLED') {
+          setPollingStatus('FAILED');
+          setErrorMessage('Payment processing was declined or failed. Your reservation could not be completed.');
+          return true;
         }
-      });
-
-      return () => {
-        isSubscribed = false;
-      };
-    } else if (sessionId && type === 'stripe_legacy') {
-      const fetchSession = async () => {
-        try {
-          setLoading(true);
-          const data = await paymentAPI.getStripeSessionStatus(sessionId);
-          if (data.success && (data.status === 'paid' || data.status === 'no_payment_required')) {
-            setSessionDetails(data);
-          } else {
-            setError('Payment was not completed successfully. Status: ' + data?.status);
-          }
-        } catch (err) {
-          setError('Unable to fetch transaction confirmation.');
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchSession();
-    } else {
-      setLoading(false);
+      }
+    } catch (err) {
+      console.warn('[Polling] Verification check attempt error:', err.message);
     }
-  }, [sessionId, bookingIdParam, codeParam, bookingRef, type]);
 
-  // Fetch full details from database once confirmation code is available
+    return false;
+  };
+
+  const startPolling = () => {
+    setPollingStatus('POLLING');
+    setPollCount(0);
+    setErrorMessage('');
+
+    let attempts = 0;
+
+    const poll = async () => {
+      attempts++;
+      setPollCount(attempts);
+
+      const isComplete = await fetchAndVerifyStatus();
+      if (isComplete) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        return;
+      }
+
+      if (attempts >= maxAttempts) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        // Final attempt to fetch booking data for pending screen
+        try {
+          const finalRes = await bookingAPI.getByReference(targetIdentifier);
+          if (finalRes && finalRes.success && finalRes.data) {
+            setBookingData(finalRes.data);
+          }
+        } catch (e) { /* non-blocking */ }
+        setPollingStatus('PENDING_TIMEOUT');
+      }
+    };
+
+    // Immediate initial check
+    poll();
+
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(poll, 2000);
+  };
+
   useEffect(() => {
-    if (bookingRef && !bookingDataFromDb) {
-      const fetchBookingFromDb = async () => {
-        try {
-          const res = await bookingAPI.getByReference(bookingRef);
-          if (res.success) {
-            setBookingDataFromDb(res.data);
-          }
-        } catch (err) {
-          console.error('Failed to fetch detailed booking from database:', err);
-        }
-      };
-      fetchBookingFromDb();
-    }
-  }, [bookingRef, bookingDataFromDb]);
+    startPolling();
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [targetIdentifier]);
+
+  const handleCopyCode = (code) => {
+    if (!code) return;
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }).catch(() => {});
+  };
 
   const handlePrint = () => {
     window.print();
   };
 
-  if (loading && isPolling) {
+  // ── 1. POLLING / CONFIRMING PAYMENT SCREEN ──────────────────────────────
+  if (pollingStatus === 'POLLING') {
     return (
-      <div className="success-loading-container" style={{ textAlign: 'center', padding: '4rem 1rem' }}>
-        <i className="fas fa-circle-notch fa-spin fa-3x" style={{ color: '#1e3a5f', marginBottom: '1.25rem' }}></i>
-        <h3 style={{ color: '#1e3a5f', margin: '0 0 0.5rem' }}>{pollingMessage}</h3>
-        <p style={{ color: '#64748b', fontSize: '0.95rem' }}>Verifying secure payment receipt with booking servers. Please do not close this window.</p>
+      <div className="payment-success-page">
+        <Helmet>
+          <title>Confirming Your Payment | The Final Seat</title>
+        </Helmet>
+        <div className="success-inner-wrapper">
+          <div className="polling-card">
+            <div className="polling-spinner-container">
+              <div className="pulse-ring"></div>
+              <i className="fas fa-lock polling-lock-icon"></i>
+            </div>
+            <h2>Confirming Your Payment</h2>
+            <p className="polling-subtitle">
+              Verifying secure payment receipt with booking servers. Please do not close or refresh this window.
+            </p>
+            <div className="polling-progress-bar">
+              <div
+                className="polling-progress-fill"
+                style={{ width: `${Math.min(100, (pollCount / maxAttempts) * 100)}%` }}
+              ></div>
+            </div>
+            <p className="polling-step-text">
+              Verification step {pollCount} of {maxAttempts} &middot; 256-Bit SSL Encrypted Handshake
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (error) {
+  // ── 2. FAILED PAYMENT SCREEN ─────────────────────────────────────────────
+  if (pollingStatus === 'FAILED') {
     return (
-      <div className="success-error-container" style={{ textAlign: 'center', padding: '3rem 1.5rem', maxWidth: '600px', margin: '2rem auto' }}>
-        <div className="error-icon-circle" style={{ fontSize: '3rem', color: '#dc2626', marginBottom: '1rem' }}>
-          <i className="fas fa-times-circle"></i>
-        </div>
-        <h2 style={{ color: '#991b1b', marginBottom: '0.75rem' }}>Transaction Error</h2>
-        <p style={{ color: '#475569', marginBottom: '1.5rem' }}>{error}</p>
-        <div className="action-buttons no-print" style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-          <Link to="/" className="btn-secondary" style={{ padding: '0.75rem 1.25rem', borderRadius: '8px', backgroundColor: '#f1f5f9', color: '#334155', textDecoration: 'none' }}>Go to Homepage</Link>
-          <Link to="/booking" className="btn-primary" style={{ padding: '0.75rem 1.25rem', borderRadius: '8px', backgroundColor: '#dc2626', color: '#ffffff', textDecoration: 'none', fontWeight: '700' }}>Retry Payment</Link>
+      <div className="payment-success-page">
+        <Helmet>
+          <title>Payment Failed | The Final Seat</title>
+        </Helmet>
+        <div className="success-inner-wrapper">
+          <div className="failed-card">
+            <div className="failed-icon-circle">
+              <i className="fas fa-times"></i>
+            </div>
+            <h2>Payment Processing Failed</h2>
+            <p className="failed-message">
+              {errorMessage || 'Your payment attempt could not be processed by the gateway. Your reservation has not been charged or confirmed.'}
+            </p>
+            <div className="failed-actions">
+              <Link to="/booking" className="btn-retry-payment">
+                <i className="fas fa-redo"></i> Retry Payment
+              </Link>
+              <Link to="/contact" className="btn-support-contact">
+                Contact Support
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
-  const isPaid = (bookingDataFromDb?.payment_status === 'paid' || sessionDetails?.status === 'paid');
-
-  // Red Payment Failed / Pending state when payment is not verified as paid
-  if (!isPaid && !isPolling && !loading) {
-    const isFailed = bookingDataFromDb?.payment_status === 'FAILED' || bookingDataFromDb?.payment_status === 'failed';
-    const displayRef = bookingDataFromDb?.confirmation_code || bookingRef || codeParam || 'N/A';
+  // ── 3. TIMEOUT / PENDING SCREEN ──────────────────────────────────────────
+  if (pollingStatus === 'PENDING_TIMEOUT') {
+    const pendingCode = bookingData?.confirmation_code || targetIdentifier || 'TFS-PENDING';
+    const pendingEmail = bookingData?.email || 'your email address';
 
     return (
       <div className="payment-success-page">
         <Helmet>
-          <title>Payment Status | The Final Seat</title>
+          <title>Payment Pending Verification | The Final Seat</title>
         </Helmet>
         <div className="success-inner-wrapper">
-          <div className="success-error-container" style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '14px', padding: '2.5rem 1.5rem', textAlign: 'center', margin: '2rem auto', maxWidth: '650px' }}>
-            <div className="error-icon-circle" style={{ width: '64px', height: '64px', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', fontSize: '1.75rem' }}>
-              <i className="fas fa-exclamation-triangle"></i>
+          <div className="pending-card">
+            <div className="pending-icon-circle">
+              <i className="fas fa-clock"></i>
             </div>
-            <h2 style={{ color: '#991b1b', margin: '0 0 0.5rem', fontSize: '1.6rem', fontWeight: '700' }}>
-              {isFailed ? 'Payment Processing Failed' : 'Payment Pending Verification'}
-            </h2>
-            <p style={{ color: '#7f1d1d', fontSize: '1.05rem', margin: '0 0 1.25rem', fontWeight: '600' }}>
-              Confirmation Code: <span style={{ color: '#0f2744', textDecoration: 'underline' }}>{displayRef}</span>
-            </p>
-            <p style={{ color: '#475569', maxWidth: '520px', margin: '0 auto 1.75rem', lineHeight: '1.5', fontSize: '0.95rem' }}>
-              {isFailed
-                ? 'Your card payment attempt could not be processed. Your booking details have been saved, and you can retry your payment below to secure your 10% discounted airfare.'
-                : 'We are currently awaiting final payment confirmation for this reservation. If your card was not charged, please retry payment.'}
+            <h2>Payment Received — Confirmation Processing</h2>
+            <p className="pending-subtitle">
+              Your payment has been received, but automatic ticket confirmation is taking longer than expected to reconcile on our servers.
             </p>
 
-            <div className="action-buttons-wrapper" style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-              <Link to="/booking" className="success-btn success-btn-primary" style={{ backgroundColor: '#dc2626', borderColor: '#b91c1c', color: '#ffffff', padding: '0.85rem 1.75rem', fontWeight: '700', borderRadius: '8px', textDecoration: 'none' }}>
-                <i className="fas fa-redo" style={{ marginRight: '0.5rem' }}></i> Retry Payment
+            <div className="temp-code-card">
+              <span className="temp-code-label">Temporary Confirmation Number</span>
+              <div className="temp-code-row">
+                <strong className="temp-code-value">{pendingCode}</strong>
+                <button
+                  type="button"
+                  className="btn-copy-code"
+                  onClick={() => handleCopyCode(pendingCode)}
+                >
+                  <i className={`fas fa-${copied ? 'check' : 'copy'}`}></i>
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            <p className="pending-info">
+              A confirmation email will be sent to <strong>{pendingEmail}</strong> once processing completes. You can check your booking status anytime using your confirmation number.
+            </p>
+
+            <div className="pending-actions">
+              <button type="button" className="btn-refresh-status" onClick={startPolling}>
+                <i className="fas fa-sync-alt"></i> Refresh &amp; Check Status
+              </button>
+              <Link to="/my-bookings" className="btn-view-bookings">
+                <i className="fas fa-calendar-check"></i> View My Bookings
               </Link>
-              <Link to="/my-bookings" className="success-btn success-btn-secondary" style={{ backgroundColor: '#f1f5f9', color: '#334155', padding: '0.85rem 1.5rem', borderRadius: '8px', textDecoration: 'none' }}>
-                View My Bookings
-              </Link>
+            </div>
+
+            <div className="disclaimer-alert-box">
+              <i className="fas fa-exclamation-triangle"></i>
+              <span>
+                This is a temporary reservation status update and not the airline&apos;s final ticket number or PNR.
+              </span>
             </div>
           </div>
         </div>
@@ -211,227 +240,213 @@ function PaymentSuccess() {
     );
   }
 
-  const displayedPrice = bookingDataFromDb
-    ? parseFloat(bookingDataFromDb.customer_price || bookingDataFromDb.amount || bookingDataFromDb.total_amount || 0)
-    : parseFloat(sessionDetails?.amount_total || 0);
+  // ── 4. SUCCESSFUL PAYMENT SCREEN (paymentStatus === 'paid' & bookingStatus === 'CONFIRMED') ──
+  const travellers = bookingData?.travellers || bookingData?.traveller_details || [];
+  const firstPassenger = travellers[0] || {};
+  const firstName = firstPassenger.first_name || firstPassenger.firstName || (bookingData?.passenger_name || 'Customer').split(' ')[0];
 
-  const supplierPrice = bookingDataFromDb
-    ? parseFloat(bookingDataFromDb.supplier_price || bookingDataFromDb.original_api_price || displayedPrice)
-    : displayedPrice;
+  const confirmationCode = bookingData?.confirmation_code || targetIdentifier || 'TFS-CONFIRMED';
+  const customerEmail = bookingData?.email || firstPassenger.email || 'customer@email.com';
 
-  const discountAmount = bookingDataFromDb
-    ? parseFloat(bookingDataFromDb.discount_amount || Math.max(0, supplierPrice - displayedPrice))
-    : 0;
+  const customerPrice = parseFloat(bookingData?.customer_price || bookingData?.amount || bookingData?.total_amount || 0);
+  const supplierPrice = parseFloat(bookingData?.supplier_price || bookingData?.original_api_price || customerPrice);
+  const discountAmount = parseFloat(bookingData?.discount_amount || Math.max(0, supplierPrice - customerPrice));
 
-  const carrierName = bookingDataFromDb?.carrier || bookingDataFromDb?.airline || bookingDataFromDb?.flight_details?.airline || 'Commercial Airline';
-  const isAmtrak = carrierName.toLowerCase().includes('amtrak');
-  const passengers = bookingDataFromDb?.travellers || bookingDataFromDb?.traveller_details || [];
+  const outboundFlight = bookingData?.flights?.find(f => f.direction === 'outbound') || bookingData?.flights?.[0] || bookingData?.flight_details || {};
+  const returnFlight = bookingData?.flights?.find(f => f.direction === 'return') || bookingData?.returnFlight || null;
+  const isRoundTrip = !!returnFlight;
+
+  const carrierName = bookingData?.carrier || bookingData?.airline || outboundFlight.airline || outboundFlight.carrier || 'Commercial Airline';
+  const flightNumber = outboundFlight.flight_number || outboundFlight.flightNumber || 'Scheduled';
+  const originCode = bookingData?.origin_code || outboundFlight.departure_airport || outboundFlight.origin || 'DEP';
+  const destCode = bookingData?.destination_code || outboundFlight.arrival_airport || outboundFlight.destination || 'ARR';
+  const departureDate = bookingData?.departure_date || outboundFlight.departure_time || outboundFlight.departure_date || 'Scheduled';
+  const cabinClass = outboundFlight.cabin_class || outboundFlight.class || 'Economy';
+
+  const paymentProvider = (bookingData?.payment_provider || 'whop').toUpperCase() === 'PAYPAL' ? 'PayPal' : 'Credit Card (Whop Encrypted)';
+  const passengerCount = travellers.length || 1;
 
   return (
     <div className="payment-success-page">
       <Helmet>
-        <title>Payment Successful | The Final Seat</title>
+        <title>Payment Successful — {confirmationCode} | The Final Seat</title>
       </Helmet>
 
       <div className="success-inner-wrapper">
-        
-        {/* Print-friendly Invoice Header */}
+
+        {/* Print-only Invoice Header */}
         <div className="invoice-print-header">
           <h2>The Final Seat LLC</h2>
-          <p>Booking Confirmation Receipt</p>
-          <small>5830 E 2nd St, Ste 7000, Casper, WY 82609 · support@thefinalseat.com</small>
+          <p>Temporary Booking Confirmation Receipt</p>
+          <small>5830 E 2nd St, Ste 7000, Casper, WY 82609 &middot; support@thefinalseat.com</small>
         </div>
 
-        {/* Success Card Header */}
-        <div className="success-card-header no-print">
-          <div className="success-checkmark-wrapper">
-            <svg className="checkmark-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
-              <circle className="checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
-              <path className="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+        {/* Success Banner Card */}
+        <div className="success-banner-card no-print">
+          <div className="success-checkmark-animated">
+            <svg className="checkmark-svg" viewBox="0 0 52 52">
+              <circle className="checkmark-circle" cx="26" cy="26" r="25" fill="none" />
+              <path className="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8" />
             </svg>
           </div>
-          <h2>Thank you!</h2>
-          <p style={{ fontSize: '1.15rem', color: '#1e293b', fontWeight: 'bold', margin: '0.5rem 0' }}>Your reservation request has been confirmed successfully.</p>
-          <p style={{ maxWidth: '600px', margin: '0 auto', color: '#475569' }}>Our travel specialists have verified your itinerary and issued your ticket. A confirmation email has been sent.</p>
-          
-          <div className="booking-status-badge-container" style={{ margin: '1.5rem 0' }}>
-            <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.05em' }}>Booking Status</span>
-            <strong style={{ fontSize: '1.15rem', color: '#047857', display: 'inline-block', padding: '6px 20px', backgroundColor: '#ecfdf5', borderRadius: '30px', border: '1px solid #a7f3d0', marginTop: '6px', fontWeight: '700' }}>
-              Paid & Confirmed
-            </strong>
+
+          <h1 className="success-greeting">Thank you, {firstName}!</h1>
+          <p className="success-tagline">Your payment has been successfully received.</p>
+
+          <div className="status-badge-row">
+            <span className="badge-confirmed">
+              <i className="fas fa-check-circle"></i> Payment Status: Paid &amp; Confirmed
+            </span>
           </div>
         </div>
 
-        {/* Receipt / Invoice Details */}
-        <div className="receipt-main-card">
-          <div className="receipt-section-header">
-            <h3>Receipt & Order Summary</h3>
-            <span className="receipt-badge">Paid</span>
+        {/* Temporary Confirmation Number Box */}
+        <div className="temp-ref-box">
+          <span className="temp-ref-label">Temporary Confirmation Number</span>
+          <div className="temp-ref-value-row">
+            <strong className="temp-ref-code">{confirmationCode}</strong>
+            <button
+              type="button"
+              className="btn-copy-code"
+              onClick={() => handleCopyCode(confirmationCode)}
+            >
+              <i className={`fas fa-${copied ? 'check' : 'copy'}`}></i>
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
           </div>
+        </div>
 
-          <div className="receipt-details-grid">
-            <div className="details-item">
-              <span className="details-label">Amount Paid (Customer Total)</span>
-              <strong className="amount-highlight">${displayedPrice.toFixed(2)} USD</strong>
+        {/* Email Notification & Status Info Message */}
+        <div className="email-sent-notice">
+          <i className="fas fa-envelope-open-text"></i>
+          <span>
+            A confirmation email has been sent to <strong>{customerEmail}</strong>. Please keep your temporary confirmation number for tracking your reservation. Your final electronic ticket and airline confirmation details will be emailed after fulfilment is completed.
+          </span>
+        </div>
+
+        {/* Critical Disclaimer Box */}
+        <div className="disclaimer-alert-box">
+          <i className="fas fa-info-circle" style={{ fontSize: '1.25rem' }}></i>
+          <div>
+            <strong>Notice of Temporary Reservation:</strong>
+            <p>
+              This is a temporary reservation confirmation and not the airline&apos;s final ticket number or PNR. Your electronic ticket details will be emailed after fulfilment is completed.
+            </p>
+          </div>
+        </div>
+
+        {/* Main Details & Breakdown Card */}
+        <div className="receipt-summary-card">
+          <h3 className="card-section-title">
+            <i className="fas fa-receipt"></i> Payment &amp; Reservation Breakdown
+          </h3>
+
+          <div className="receipt-grid">
+            <div className="receipt-grid-item">
+              <span className="r-label">Amount Paid (Customer Total)</span>
+              <strong className="r-value r-value-price">${customerPrice.toFixed(2)} USD</strong>
             </div>
+
             {discountAmount > 0 && (
-              <div className="details-item">
-                <span className="details-label">Final Seat Subsidy (10% OFF)</span>
-                <span style={{ color: '#047857', fontWeight: 'bold' }}>-${discountAmount.toFixed(2)} USD</span>
+              <div className="receipt-grid-item">
+                <span className="r-label">Final Seat Subsidy (10% OFF)</span>
+                <span className="r-value r-value-discount">-${discountAmount.toFixed(2)} USD</span>
               </div>
             )}
-            <div className="details-item">
-              <span className="details-label">Payment Gateway</span>
-              <span>{bookingDataFromDb?.payment_provider ? bookingDataFromDb.payment_provider.toUpperCase() : 'WHOP (Encrypted)'}</span>
+
+            <div className="receipt-grid-item">
+              <span className="r-label">Original Supplier Fare</span>
+              <span className="r-value r-value-original">${supplierPrice.toFixed(2)} USD</span>
             </div>
-            <div className="details-item">
-              <span className="details-label">Booking Reference Code</span>
-              <span className="ref-code" style={{ fontWeight: 'bold', color: '#1e3a5f' }}>
-                {bookingDataFromDb?.confirmation_code || bookingRef || 'CONFIRMED'}
-              </span>
+
+            <div className="receipt-grid-item">
+              <span className="r-label">Payment Gateway</span>
+              <span className="r-value">{paymentProvider}</span>
             </div>
-            <div className="details-item">
-              <span className="details-label">Billing Customer</span>
-              <span>{bookingDataFromDb?.passenger_name || 'Valued Customer'}</span>
+
+            <div className="receipt-grid-item">
+              <span className="r-label">Route</span>
+              <span className="r-value">{originCode} &rarr; {destCode}</span>
+            </div>
+
+            <div className="receipt-grid-item">
+              <span className="r-label">Airline / Operator</span>
+              <span className="r-value">{carrierName}</span>
+            </div>
+
+            <div className="receipt-grid-item">
+              <span className="r-label">Flight Number</span>
+              <span className="r-value">{flightNumber}</span>
+            </div>
+
+            <div className="receipt-grid-item">
+              <span className="r-label">Travel Date / Time</span>
+              <span className="r-value">{departureDate}</span>
+            </div>
+
+            <div className="receipt-grid-item">
+              <span className="r-label">Cabin Class</span>
+              <span className="r-value">{cabinClass}</span>
+            </div>
+
+            <div className="receipt-grid-item">
+              <span className="r-label">Travelers</span>
+              <span className="r-value">{passengerCount} Traveler{passengerCount > 1 ? 's' : ''}</span>
             </div>
           </div>
 
-          {/* Flight / Transit Booking Ticket */}
-          {type === 'booking' && (
-            <div className="receipt-item-details-box">
-              <div className="ticket-label-overlay">
-                OFFICIAL ELECTRONIC TICKET RECEIPT
-              </div>
-              
-              <div className="boarding-pass-visual">
-                <div className="boarding-pass-header" style={{ borderBottom: isAmtrak ? '2px dashed #8b1538' : '2px dashed #1e3a5f' }}>
-                  <span>{isAmtrak ? 'Operator' : 'Carrier'}: <strong>{carrierName}</strong></span>
-                  <span>{isAmtrak ? 'Train' : 'Flight'}: <strong>{bookingDataFromDb?.flights?.[0]?.flight_number || bookingDataFromDb?.flight_details?.flightNumber || 'Scheduled Route'}</strong></span>
-                  {(bookingRef || bookingDataFromDb?.confirmation_code) && (
-                    <span className="ref-tag">Confirmation Code: <strong>{bookingDataFromDb?.confirmation_code || bookingRef}</strong></span>
-                  )}
-                </div>
-                
-                <div className="boarding-pass-route">
-                  <div className="route-terminal">
-                    <h4>{bookingDataFromDb?.origin_code || bookingDataFromDb?.flights?.[0]?.departure_airport || bookingDataFromDb?.flight_details?.departure?.airport || 'SEA'}</h4>
-                    <span>Departure</span>
-                    <small>{bookingDataFromDb?.departure_date || bookingDataFromDb?.flights?.[0]?.departure_time || bookingDataFromDb?.flight_details?.departure?.date || 'N/A'}</small>
-                  </div>
-                  
-                  <div className="route-flight-symbol">
-                    <i className={`fas ${isAmtrak ? 'fa-subway' : 'fa-plane'}`} style={{ color: isAmtrak ? '#8b1538' : '#1e3a5f' }}></i>
-                    <span className="flight-dot-line"></span>
-                  </div>
-
-                  <div className="route-terminal">
-                    <h4>{bookingDataFromDb?.destination_code || bookingDataFromDb?.flights?.[0]?.arrival_airport || bookingDataFromDb?.flight_details?.arrival?.airport || 'MIA'}</h4>
-                    <span>Arrival</span>
-                    <small>{bookingDataFromDb?.flights?.[0]?.arrival_time || bookingDataFromDb?.flight_details?.arrival?.date || 'N/A'}</small>
-                  </div>
-                </div>
-
-                <div className="boarding-pass-passenger">
-                  <div>
-                    <span>Primary Passenger</span>
-                    <strong>{bookingDataFromDb?.passenger_name || 'Valued Passenger'}</strong>
-                  </div>
-                  <div>
-                    <span>Contact Email</span>
-                    <strong style={{ fontSize: '0.85rem' }}>{bookingDataFromDb?.email || 'N/A'}</strong>
-                  </div>
-                  <div>
-                    <span>{isAmtrak ? 'Seat Class' : 'Cabin Class'}</span>
-                    <strong>{bookingDataFromDb?.flights?.[0]?.cabin_class || bookingDataFromDb?.flight_details?.class || 'Economy'}</strong>
-                  </div>
-                  <div>
-                    <span>Travelers</span>
-                    <strong>{passengers.length || 1}</strong>
-                  </div>
-                </div>
-
-                {passengers.length > 0 && (
-                  <div className="boarding-pass-manifest">
-                    <div className="manifest-header">Passenger Manifest</div>
-                    <table className="manifest-table">
-                      <thead>
-                        <tr>
-                          <th>#</th>
-                          <th>Name</th>
-                          <th>DOB</th>
-                          <th>Gender</th>
-                          <th>Passport</th>
-                          <th>Nationality</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {passengers.map((p, idx) => (
-                          <tr key={idx}>
-                            <td data-label="No.">{idx + 1}</td>
-                            <td data-label="Name"><strong>{p.firstName || p.first_name} {p.middleName || p.middle_name || ''} {p.lastName || p.last_name}</strong></td>
-                            <td data-label="DOB">{p.dateOfBirth || p.date_of_birth || 'N/A'}</td>
-                            <td data-label="Gender" style={{ textTransform: 'capitalize' }}>{p.gender || 'N/A'}</td>
-                            <td data-label="Passport">{p.passportNumber || p.passport_number || 'N/A'}</td>
-                            <td data-label="Nationality">{p.nationality || 'N/A'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              <div className="next-steps-info">
-                <strong>Notice of E-Ticket Confirmation:</strong>
-                <ul>
-                  <li>Your {isAmtrak ? 'train transit reservation' : 'flight reservation'} is confirmed under reference <strong>{bookingDataFromDb?.confirmation_code || bookingRef}</strong>.</li>
-                  <li>A detailed confirmation itinerary and {isAmtrak ? 'train ticket receipt' : 'flight e-ticket'} has been sent to <strong>{bookingDataFromDb?.email}</strong>.</li>
-                  <li>For support or itinerary changes, call us anytime at {SUPPORT_PHONE_DISPLAY}.</li>
-                </ul>
-              </div>
-            </div>
-          )}
-
-          {/* Conditional view: Consulting Payment */}
-          {type === 'consulting' && (
-            <div className="receipt-item-details-box">
-              <div className="receipt-sub-header">
-                <i className="fas fa-concierge-bell"></i> Consulting Service Plan
-              </div>
-              
-              <div className="consulting-receipt-visual">
-                <h4>Travel Logistics Advisory</h4>
-                <p>Urgent travel planning, itinerary coordination, and support services.</p>
-              </div>
-
-              <div className="next-steps-info">
-                <strong>What Happens Next:</strong>
-                <ul>
-                  <li>An advisor has been assigned to your travel request and is reviewing your details.</li>
-                  <li>We will contact you via email or phone within 2 hours.</li>
-                  <li>If you require immediate dispatch, call our hotline at {SUPPORT_PHONE_DISPLAY}.</li>
-                </ul>
+          {/* Passenger Manifest Table */}
+          {travellers.length > 0 && (
+            <div className="manifest-section">
+              <h4 className="manifest-title">Passenger Manifest</h4>
+              <div className="table-responsive">
+                <table className="manifest-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Passenger Name</th>
+                      <th>DOB</th>
+                      <th>Gender</th>
+                      <th>Passport Number</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {travellers.map((p, idx) => (
+                      <tr key={idx}>
+                        <td>{idx + 1}</td>
+                        <td><strong>{p.first_name || p.firstName} {p.middle_name || p.middleName || ''} {p.last_name || p.lastName}</strong></td>
+                        <td>{p.date_of_birth || p.dateOfBirth || 'N/A'}</td>
+                        <td style={{ textTransform: 'capitalize' }}>{p.gender || 'N/A'}</td>
+                        <td>{p.passport_number || p.passportNumber || 'N/A'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
         </div>
 
-        {/* Buttons */}
-        <div className="action-buttons-wrapper no-print">
-          <button onClick={handlePrint} className="success-btn success-btn-secondary">
-            <i className="fas fa-print"></i> Print / Download Ticket
+        {/* Action Buttons */}
+        <div className="action-buttons-row no-print">
+          <Link to="/my-bookings" className="btn-action btn-action-accent">
+            <i className="fas fa-calendar-check"></i> View My Booking
+          </Link>
+          <Link to="/" className="btn-action btn-action-primary">
+            <i className="fas fa-home"></i> Return to Home
+          </Link>
+          <button type="button" onClick={handlePrint} className="btn-action btn-action-secondary">
+            <i className="fas fa-print"></i> Print Confirmation
           </button>
-          <Link to="/my-bookings" className="success-btn success-btn-accent">
-            <i className="fas fa-calendar-check"></i> Go to My Bookings
-          </Link>
-          <Link to="/" className="success-btn success-btn-primary">
-            Go to Homepage
-          </Link>
         </div>
 
-        <div className="success-footer">
-          <p>The Final Seat LLC · Casper, WY · support@thefinalseat.com</p>
-        </div>
+        <footer className="success-footer-note">
+          <p>
+            The Final Seat LLC &middot; Casper, WY &middot;{' '}
+            <a href="mailto:support@thefinalseat.com">support@thefinalseat.com</a> &middot; Phone: {SUPPORT_PHONE_DISPLAY}
+          </p>
+        </footer>
+
       </div>
     </div>
   );

@@ -21,6 +21,7 @@ router.post('/', bookingRateLimiter, bookingController.create);
 router.get('/search', searchRateLimiter, bookingController.search);
 router.get('/user/:email', bookingController.getByUserEmail);
 router.use('/abandoned', abandonedBookingRouter);
+router.post('/:id/resend-confirmation', bookingController.resendConfirmation);
 router.get('/:reference', bookingController.getByReference);
 
 export default router;

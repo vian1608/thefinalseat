@@ -1,4 +1,5 @@
 import bookingService from './booking.service.mjs';
+import { sendBookingConfirmation } from '../../integrations/resend/resend.service.mjs';
 
 export const bookingController = {
   create: async (req, res, next) => {
@@ -60,6 +61,28 @@ export const bookingController = {
       res.json({
         success: true,
         data: bookings
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  resendConfirmation: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const booking = await bookingService.getDetailsByCodeOrId(id);
+      if (!booking) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' }
+        });
+      }
+
+      const emailResult = await sendBookingConfirmation(booking, { force: true });
+      res.json({
+        success: true,
+        message: 'Confirmation email resend initiated.',
+        data: emailResult
       });
     } catch (error) {
       next(error);

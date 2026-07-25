@@ -223,17 +223,18 @@ export const paypalController = {
         idempotency_key: idempotencyKey
       });
 
-      // Update booking status to DONE / paid
+      // Update booking status to CONFIRMED / paid
       await bookingRepository.updateStatus(booking.id, {
-        status: 'DONE',
+        status: 'CONFIRMED',
         payment_status: 'paid',
+        paid_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
 
-      // 9. Send Confirmation Email asynchronously
+      // 9. Send Confirmation Email asynchronously (idempotent)
       bookingRepository.getRelations(booking.id).then(relations => {
         const canonical = bookingMapper.toCanonicalModel(
-          { ...booking, status: 'DONE', payment_status: 'paid' },
+          { ...booking, status: 'CONFIRMED', payment_status: 'paid' },
           relations.travellers,
           relations.contacts,
           relations.flights,
@@ -290,7 +291,7 @@ export const paypalController = {
         
         if (!paymentRecord && customId) {
           const booking = await bookingRepository.findBookingById(customId);
-          if (booking && booking.status !== 'DONE') {
+          if (booking && booking.status !== 'CONFIRMED') {
             await bookingRepository.upsertPayPalPayment({
               booking_id: booking.id,
               payment_provider: 'paypal',
@@ -303,10 +304,27 @@ export const paypalController = {
             });
 
             await bookingRepository.updateStatus(booking.id, {
-              status: 'DONE',
-              payment_status: 'paid'
+              status: 'CONFIRMED',
+              payment_status: 'paid',
+              paid_at: new Date().toISOString()
             });
             logger.info(`Reconciled booking ${booking.id} via PAYMENT.CAPTURE.COMPLETED webhook`);
+
+            // Send confirmation email asynchronously (idempotent)
+            bookingRepository.getRelations(booking.id).then(relations => {
+              const canonical = bookingMapper.toCanonicalModel(
+                { ...booking, status: 'CONFIRMED', payment_status: 'paid' },
+                relations.travellers,
+                relations.contacts,
+                relations.flights,
+                relations.payments
+              );
+              sendBookingConfirmation(canonical).catch(err => {
+                logger.error('Failed to send PayPal webhook booking confirmation email:', err.message);
+              });
+            }).catch(err => {
+              logger.error('Error constructing canonical booking for email:', err.message);
+            });
           }
         }
       } else if (eventType === 'PAYMENT.CAPTURE.PENDING') {
