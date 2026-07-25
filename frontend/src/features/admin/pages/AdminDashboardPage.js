@@ -373,10 +373,12 @@ function AdminDashboard() {
                         <tr>
                           <th>Reference #</th>
                           <th>Customer</th>
+                          <th>Carrier</th>
                           <th>Route</th>
                           <th>Passengers</th>
                           <th>Amount</th>
-                          <th>Status</th>
+                          <th>Booking Status</th>
+                          <th>Payment Status</th>
                           <th>Date</th>
                           <th>Action</th>
                         </tr>
@@ -386,6 +388,14 @@ function AdminDashboard() {
                           const isSelected = selectedBooking?.id === booking.id;
                           const statusStr = (booking.status || 'PENDING').toUpperCase();
                           const badgeClass = statusStr === 'DONE' || statusStr === 'CONFIRMED' ? 'status-badge--completed' : (statusStr === 'PENDING' ? 'status-badge--pending' : 'status-badge--cancelled');
+                          
+                          const payStatusStr = (booking.payment_status || 'PENDING').toUpperCase();
+                          const payBadgeClass = payStatusStr === 'PAID' ? 'status-badge--completed' : (payStatusStr === 'FAILED' ? 'status-badge--cancelled' : 'status-badge--pending');
+
+                          const carrierName = booking.carrier || booking.airline || booking.flight_details?.airline || booking.flights?.[0]?.airline || 'N/A';
+                          const originCode = booking.origin_code || booking.flights?.[0]?.departure_airport || 'SEA';
+                          const destCode = booking.destination_code || booking.flights?.[0]?.arrival_airport || 'MIA';
+
                           return (
                             <tr key={booking.id} className={isSelected ? 'active-row' : ''}>
                               <td>
@@ -398,12 +408,20 @@ function AdminDashboard() {
                                 </div>
                               </td>
                               <td>
-                                {booking.origin_code || 'ORIG'} <i className="fas fa-arrow-right"></i> {booking.destination_code || 'DEST'}
+                                <strong>{carrierName}</strong>
                               </td>
-                              <td>{booking.passengers_count || 1}</td>
-                              <td>${parseFloat(booking.total_amount || 0).toFixed(2)}</td>
+                              <td>
+                                {originCode} <i className="fas fa-arrow-right"></i> {destCode}
+                              </td>
+                              <td>{booking.passengers_count || booking.travellers?.length || 1}</td>
+                              <td>${parseFloat(booking.customer_price || booking.total_amount || 0).toFixed(2)}</td>
                               <td>
                                 <span className={`status-badge ${badgeClass}`}>{statusStr}</span>
+                              </td>
+                              <td>
+                                <span className={`status-badge ${payBadgeClass}`}>
+                                  {payStatusStr === 'FAILED' ? 'PAYMENT FAILED' : payStatusStr}
+                                </span>
                               </td>
                               <td>
                                 {booking.created_at ? new Date(booking.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A'}

@@ -93,7 +93,7 @@ export const bookingRepository = {
         payment_provider: paymentRow.payment_provider || 'whop',
         payment_amount: paymentRow.payment_amount || paymentRow.amount || 0,
         currency: paymentRow.currency || 'USD',
-        payment_status: paymentRow.payment_status || 'paid',
+        payment_status: paymentRow.payment_status || 'pending',
         payment_date: paymentRow.payment_date || new Date().toISOString()
       };
       const { data: corePaymentData, error: corePaymentErr } = await supabase
@@ -107,6 +107,59 @@ export const bookingRepository = {
     return data;
   },
 
+  getRelations: async (bookingId) => {
+    const [travellers, contacts, flights, payments] = await Promise.all([
+      supabase.from('travellers').select('*').eq('booking_id', bookingId),
+      supabase.from('contacts').select('*').eq('booking_id', bookingId),
+      supabase.from('flights').select('*').eq('booking_id', bookingId),
+      supabase.from('payments').select('*').eq('booking_id', bookingId),
+    ]);
+
+    return {
+      travellers: travellers.data || [],
+      contacts: contacts.data || [],
+      flights: flights.data || [],
+      payments: payments.data || []
+    };
+  },
+
+  enrichBookingRecord: (booking, relations = { travellers: [], contacts: [], flights: [], payments: [] }) => {
+    if (!booking) return null;
+    const outboundFlight = relations.flights?.find(f => f.direction === 'outbound') || relations.flights?.[0] || {};
+    const firstTraveller = relations.travellers?.[0] || {};
+
+    const travellerName = [firstTraveller.first_name, firstTraveller.middle_name, firstTraveller.last_name].filter(Boolean).join(' ');
+    const masterName = travellerName.trim() || booking.passenger_name || 'Valued Passenger';
+    const carrier = outboundFlight.airline || outboundFlight.carrier || null;
+    const originCode = outboundFlight.departure_airport || outboundFlight.origin || null;
+    const destCode = outboundFlight.arrival_airport || outboundFlight.destination || null;
+    const departureDate = outboundFlight.departure_time || outboundFlight.departure_date || null;
+
+    return {
+      ...booking,
+      passenger_name: masterName,
+      carrier,
+      airline: carrier,
+      origin_code: originCode,
+      destination_code: destCode,
+      departure_date: departureDate,
+      travellers: relations.travellers || [],
+      contacts: relations.contacts || [],
+      flights: relations.flights || [],
+      payments: relations.payments || [],
+      flight_details: outboundFlight ? {
+        airline: carrier,
+        departure: {
+          airport: originCode,
+          date: departureDate
+        },
+        arrival: {
+          airport: destCode
+        }
+      } : null
+    };
+  },
+
   findBookingByCode: async (code) => {
     const { data, error } = await supabase
       .from('bookings')
@@ -114,8 +167,9 @@ export const bookingRepository = {
       .eq('confirmation_code', code)
       .maybeSingle();
 
-    if (error) throw new Error(error.message);
-    return data;
+    if (error || !data) return data;
+    const relations = await bookingRepository.getRelations(data.id);
+    return bookingRepository.enrichBookingRecord(data, relations);
   },
 
   getByReference: async (code) => {
@@ -129,8 +183,9 @@ export const bookingRepository = {
       .eq('id', id)
       .maybeSingle();
 
-    if (error) throw new Error(error.message);
-    return data;
+    if (error || !data) return data;
+    const relations = await bookingRepository.getRelations(data.id);
+    return bookingRepository.enrichBookingRecord(data, relations);
   },
 
   getById: async (id) => {
@@ -145,34 +200,48 @@ export const bookingRepository = {
       .order('created_at', { ascending: false });
 
     if (error) throw new Error(error.message);
-    return data || [];
+    const enrichedList = await Promise.all((data || []).map(async b => {
+      const rels = await bookingRepository.getRelations(b.id);
+      return bookingRepository.enrichBookingRecord(b, rels);
+    }));
+    return enrichedList;
   },
 
   searchBookings: async (q) => {
+    const queryStr = q.trim();
     const { data: byCode } = await supabase
       .from('bookings')
       .select('*')
-      .eq('confirmation_code', q.toUpperCase());
+      .eq('confirmation_code', queryStr.toUpperCase());
 
-    if (byCode && byCode.length > 0) return byCode;
+    let matchData = byCode || [];
 
-    const { data: byEmail } = await supabase
-      .from('bookings')
-      .select('*')
-      .ilike('email', `%${q}%`)
-      .order('created_at', { ascending: false })
-      .limit(20);
+    if (!matchData.length) {
+      const { data: byEmail } = await supabase
+        .from('bookings')
+        .select('*')
+        .ilike('email', `%${queryStr}%`)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      matchData = byEmail || [];
+    }
 
-    if (byEmail && byEmail.length > 0) return byEmail;
+    if (!matchData.length) {
+      const { data: byName } = await supabase
+        .from('bookings')
+        .select('*')
+        .ilike('passenger_name', `%${queryStr}%`)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      matchData = byName || [];
+    }
 
-    const { data: byName } = await supabase
-      .from('bookings')
-      .select('*')
-      .ilike('passenger_name', `%${q}%`)
-      .order('created_at', { ascending: false })
-      .limit(20);
+    const enrichedList = await Promise.all(matchData.map(async b => {
+      const rels = await bookingRepository.getRelations(b.id);
+      return bookingRepository.enrichBookingRecord(b, rels);
+    }));
 
-    return byName || [];
+    return enrichedList;
   },
 
   findAllBookings: async (filters = {}) => {
@@ -202,7 +271,13 @@ export const bookingRepository = {
 
     const { data, error } = await query;
     if (error) throw new Error(error.message);
-    return data || [];
+
+    const enrichedList = await Promise.all((data || []).map(async b => {
+      const rels = await bookingRepository.getRelations(b.id);
+      return bookingRepository.enrichBookingRecord(b, rels);
+    }));
+
+    return enrichedList;
   },
 
   updateStatus: async (id, updateFields) => {
@@ -247,22 +322,6 @@ export const bookingRepository = {
 
     if (error) throw new Error(error.message);
     return data || [];
-  },
-
-  getRelations: async (bookingId) => {
-    const [travellers, contacts, flights, payments] = await Promise.all([
-      supabase.from('travellers').select('*').eq('booking_id', bookingId),
-      supabase.from('contacts').select('*').eq('booking_id', bookingId),
-      supabase.from('flights').select('*').eq('booking_id', bookingId),
-      supabase.from('payments').select('*').eq('booking_id', bookingId),
-    ]);
-
-    return {
-      travellers: travellers.data || [],
-      contacts: contacts.data || [],
-      flights: flights.data || [],
-      payments: payments.data || []
-    };
   },
 
   findPaymentByOrderId: async (providerOrderId) => {

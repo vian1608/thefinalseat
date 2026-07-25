@@ -27,7 +27,7 @@ function PaymentSuccess() {
     if (identifier && type === 'booking') {
       let isSubscribed = true;
       let pollCount = 0;
-      const maxPolls = 30; // 30 x 3s = 90 seconds max
+      const maxPolls = 10; // 10 x 2s = 20s fast check
 
       setIsPolling(true);
       setLoading(true);
@@ -44,7 +44,7 @@ function PaymentSuccess() {
               setIsPolling(false);
               setBookingRef(res.confirmationCode || identifier);
               
-              // Fetch complete booking object from DB
+              // Fetch complete enriched booking object from DB
               const fullBooking = await bookingAPI.getByReference(res.confirmationCode || identifier);
               if (fullBooking && fullBooking.success) {
                 setBookingDataFromDb(fullBooking.data);
@@ -63,7 +63,15 @@ function PaymentSuccess() {
 
         if (pollCount >= maxPolls) {
           setIsPolling(false);
-          // Allow fallback display with pending status after 90 seconds
+          // Try fetching booking once more before concluding polling
+          try {
+            const finalRef = await bookingAPI.getByReference(identifier);
+            if (finalRef && finalRef.success) {
+              setBookingDataFromDb(finalRef.data);
+            }
+          } catch (e) {
+            /* non-blocking */
+          }
           setLoading(false);
           return true;
         }
@@ -79,7 +87,7 @@ function PaymentSuccess() {
             if (finished) {
               clearInterval(interval);
             }
-          }, 3000);
+          }, 2000);
 
           return () => {
             isSubscribed = false;
@@ -92,7 +100,6 @@ function PaymentSuccess() {
         isSubscribed = false;
       };
     } else if (sessionId && type === 'stripe_legacy') {
-      // Legacy Stripe session handler
       const fetchSession = async () => {
         try {
           setLoading(true);
@@ -147,15 +154,58 @@ function PaymentSuccess() {
 
   if (error) {
     return (
-      <div className="success-error-container">
-        <div className="error-icon-circle">
+      <div className="success-error-container" style={{ textAlign: 'center', padding: '3rem 1.5rem', maxWidth: '600px', margin: '2rem auto' }}>
+        <div className="error-icon-circle" style={{ fontSize: '3rem', color: '#dc2626', marginBottom: '1rem' }}>
           <i className="fas fa-times-circle"></i>
         </div>
-        <h2>Transaction Error</h2>
-        <p>{error}</p>
-        <div className="action-buttons no-print">
-          <Link to="/" className="btn-secondary">Go to Homepage</Link>
-          <Link to="/booking" className="btn-primary">Try Payment Again</Link>
+        <h2 style={{ color: '#991b1b', marginBottom: '0.75rem' }}>Transaction Error</h2>
+        <p style={{ color: '#475569', marginBottom: '1.5rem' }}>{error}</p>
+        <div className="action-buttons no-print" style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+          <Link to="/" className="btn-secondary" style={{ padding: '0.75rem 1.25rem', borderRadius: '8px', backgroundColor: '#f1f5f9', color: '#334155', textDecoration: 'none' }}>Go to Homepage</Link>
+          <Link to="/booking" className="btn-primary" style={{ padding: '0.75rem 1.25rem', borderRadius: '8px', backgroundColor: '#dc2626', color: '#ffffff', textDecoration: 'none', fontWeight: '700' }}>Retry Payment</Link>
+        </div>
+      </div>
+    );
+  }
+
+  const isPaid = (bookingDataFromDb?.payment_status === 'paid' || sessionDetails?.status === 'paid');
+
+  // Red Payment Failed / Pending state when payment is not verified as paid
+  if (!isPaid && !isPolling && !loading) {
+    const isFailed = bookingDataFromDb?.payment_status === 'FAILED' || bookingDataFromDb?.payment_status === 'failed';
+    const displayRef = bookingDataFromDb?.confirmation_code || bookingRef || codeParam || 'N/A';
+
+    return (
+      <div className="payment-success-page">
+        <Helmet>
+          <title>Payment Status | The Final Seat</title>
+        </Helmet>
+        <div className="success-inner-wrapper">
+          <div className="success-error-container" style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '14px', padding: '2.5rem 1.5rem', textAlign: 'center', margin: '2rem auto', maxWidth: '650px' }}>
+            <div className="error-icon-circle" style={{ width: '64px', height: '64px', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', fontSize: '1.75rem' }}>
+              <i className="fas fa-exclamation-triangle"></i>
+            </div>
+            <h2 style={{ color: '#991b1b', margin: '0 0 0.5rem', fontSize: '1.6rem', fontWeight: '700' }}>
+              {isFailed ? 'Payment Processing Failed' : 'Payment Pending Verification'}
+            </h2>
+            <p style={{ color: '#7f1d1d', fontSize: '1.05rem', margin: '0 0 1.25rem', fontWeight: '600' }}>
+              Confirmation Code: <span style={{ color: '#0f2744', textDecoration: 'underline' }}>{displayRef}</span>
+            </p>
+            <p style={{ color: '#475569', maxWidth: '520px', margin: '0 auto 1.75rem', lineHeight: '1.5', fontSize: '0.95rem' }}>
+              {isFailed
+                ? 'Your card payment attempt could not be processed. Your booking details have been saved, and you can retry your payment below to secure your 10% discounted airfare.'
+                : 'We are currently awaiting final payment confirmation for this reservation. If your card was not charged, please retry payment.'}
+            </p>
+
+            <div className="action-buttons-wrapper" style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+              <Link to="/booking" className="success-btn success-btn-primary" style={{ backgroundColor: '#dc2626', borderColor: '#b91c1c', color: '#ffffff', padding: '0.85rem 1.75rem', fontWeight: '700', borderRadius: '8px', textDecoration: 'none' }}>
+                <i className="fas fa-redo" style={{ marginRight: '0.5rem' }}></i> Retry Payment
+              </Link>
+              <Link to="/my-bookings" className="success-btn success-btn-secondary" style={{ backgroundColor: '#f1f5f9', color: '#334155', padding: '0.85rem 1.5rem', borderRadius: '8px', textDecoration: 'none' }}>
+                View My Bookings
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -172,6 +222,10 @@ function PaymentSuccess() {
   const discountAmount = bookingDataFromDb
     ? parseFloat(bookingDataFromDb.discount_amount || Math.max(0, supplierPrice - displayedPrice))
     : 0;
+
+  const carrierName = bookingDataFromDb?.carrier || bookingDataFromDb?.airline || bookingDataFromDb?.flight_details?.airline || 'Commercial Airline';
+  const isAmtrak = carrierName.toLowerCase().includes('amtrak');
+  const passengers = bookingDataFromDb?.travellers || bookingDataFromDb?.traveller_details || [];
 
   return (
     <div className="payment-success-page">
@@ -203,7 +257,7 @@ function PaymentSuccess() {
           <div className="booking-status-badge-container" style={{ margin: '1.5rem 0' }}>
             <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.05em' }}>Booking Status</span>
             <strong style={{ fontSize: '1.15rem', color: '#047857', display: 'inline-block', padding: '6px 20px', backgroundColor: '#ecfdf5', borderRadius: '30px', border: '1px solid #a7f3d0', marginTop: '6px', fontWeight: '700' }}>
-              {bookingDataFromDb?.payment_status === 'paid' ? 'Paid & Confirmed' : (bookingDataFromDb?.status === 'DONE' ? 'Confirmed & Done' : 'Pending Confirmation')}
+              Paid & Confirmed
             </strong>
           </div>
         </div>
@@ -228,7 +282,7 @@ function PaymentSuccess() {
             )}
             <div className="details-item">
               <span className="details-label">Payment Gateway</span>
-              <span>{bookingDataFromDb?.payment_provider ? bookingDataFromDb.payment_provider.toUpperCase() : 'Whop (Encrypted)'}</span>
+              <span>{bookingDataFromDb?.payment_provider ? bookingDataFromDb.payment_provider.toUpperCase() : 'WHOP (Encrypted)'}</span>
             </div>
             <div className="details-item">
               <span className="details-label">Booking Reference Code</span>
@@ -242,109 +296,101 @@ function PaymentSuccess() {
             </div>
           </div>
 
-          {/* Conditional view: Flight Booking Ticket */}
-          {type === 'booking' && (() => {
-            const isAmtrak = (bookingDataFromDb?.flight_details?.airline || '').toLowerCase().includes('amtrak');
-            const passengers = bookingDataFromDb?.traveller_details || [];
-            
-            return (
-              <div className="receipt-item-details-box">
-                <div className="ticket-label-overlay">
-                  OFFICIAL ELECTRONIC TICKET RECEIPT
-                </div>
-                
-                <div className="boarding-pass-visual">
-                  <div className="boarding-pass-header" style={{ borderBottom: isAmtrak ? '2px dashed #8b1538' : '2px dashed #1e3a5f' }}>
-                    <span>{isAmtrak ? 'Operator' : 'Carrier'}: <strong>{bookingDataFromDb?.flight_details?.airline || 'Commercial Airline'}</strong></span>
-                    <span>{isAmtrak ? 'Train' : 'Flight'}: <strong>{bookingDataFromDb?.flight_details?.flightNumber || 'Scheduled Route'}</strong></span>
-                    {(bookingRef || bookingDataFromDb?.confirmation_code) && (
-                      <span className="ref-tag">Confirmation Code: <strong>{bookingDataFromDb?.confirmation_code || bookingRef}</strong></span>
-                    )}
-                  </div>
-                  
-                  <div className="boarding-pass-route">
-                    <div className="route-terminal">
-                      <h4>{bookingDataFromDb?.flight_details?.departure?.airport || 'Origin'}</h4>
-                      <span>Departure</span>
-                      <small>{bookingDataFromDb?.flight_details?.departure?.date} {bookingDataFromDb?.flight_details?.departure?.time || ''}</small>
-                    </div>
-                    
-                    <div className="route-flight-symbol">
-                      <i className={`fas ${isAmtrak ? 'fa-subway' : 'fa-plane'}`} style={{ color: isAmtrak ? '#8b1538' : '#1e3a5f' }}></i>
-                      <span className="flight-dot-line"></span>
-                    </div>
-  
-                    <div className="route-terminal">
-                      <h4>{bookingDataFromDb?.flight_details?.arrival?.airport || 'Destination'}</h4>
-                      <span>Arrival</span>
-                      <small>{bookingDataFromDb?.flight_details?.arrival?.date} {bookingDataFromDb?.flight_details?.arrival?.time || ''}</small>
-                    </div>
-                  </div>
-
-                  <div className="boarding-pass-passenger">
-                    <div>
-                      <span>Primary Contact</span>
-                      <strong>{bookingDataFromDb?.passenger_name}</strong>
-                    </div>
-                    <div>
-                      <span>Contact Info</span>
-                      <strong style={{ fontSize: '0.85rem' }}>
-                        {bookingDataFromDb?.email}<br/>
-                        {bookingDataFromDb?.phone}
-                      </strong>
-                    </div>
-                    <div>
-                      <span>{isAmtrak ? 'Seat Class' : 'Cabin Class'}</span>
-                      <strong>{bookingDataFromDb?.flight_details?.class || 'Economy'}</strong>
-                    </div>
-                    <div>
-                      <span>Travelers</span>
-                      <strong>{passengers.length || 1}</strong>
-                    </div>
-                  </div>
-
-                  {passengers.length > 0 && (
-                    <div className="boarding-pass-manifest">
-                      <div className="manifest-header">Passenger Manifest</div>
-                      <table className="manifest-table">
-                        <thead>
-                          <tr>
-                            <th>#</th>
-                            <th>Name</th>
-                            <th>DOB</th>
-                            <th>Gender</th>
-                            <th>Passport</th>
-                            <th>Nationality</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {passengers.map((p, idx) => (
-                            <tr key={idx}>
-                              <td data-label="No.">{idx + 1}</td>
-                              <td data-label="Name"><strong>{p.firstName} {p.middleName || ''} {p.lastName}</strong></td>
-                              <td data-label="DOB">{p.dateOfBirth}</td>
-                              <td data-label="Gender" style={{ textTransform: 'capitalize' }}>{p.gender}</td>
-                              <td data-label="Passport">{p.passportNumber || 'N/A'}</td>
-                              <td data-label="Nationality">{p.nationality || 'N/A'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+          {/* Flight / Transit Booking Ticket */}
+          {type === 'booking' && (
+            <div className="receipt-item-details-box">
+              <div className="ticket-label-overlay">
+                OFFICIAL ELECTRONIC TICKET RECEIPT
+              </div>
+              
+              <div className="boarding-pass-visual">
+                <div className="boarding-pass-header" style={{ borderBottom: isAmtrak ? '2px dashed #8b1538' : '2px dashed #1e3a5f' }}>
+                  <span>{isAmtrak ? 'Operator' : 'Carrier'}: <strong>{carrierName}</strong></span>
+                  <span>{isAmtrak ? 'Train' : 'Flight'}: <strong>{bookingDataFromDb?.flights?.[0]?.flight_number || bookingDataFromDb?.flight_details?.flightNumber || 'Scheduled Route'}</strong></span>
+                  {(bookingRef || bookingDataFromDb?.confirmation_code) && (
+                    <span className="ref-tag">Confirmation Code: <strong>{bookingDataFromDb?.confirmation_code || bookingRef}</strong></span>
                   )}
                 </div>
+                
+                <div className="boarding-pass-route">
+                  <div className="route-terminal">
+                    <h4>{bookingDataFromDb?.origin_code || bookingDataFromDb?.flights?.[0]?.departure_airport || bookingDataFromDb?.flight_details?.departure?.airport || 'SEA'}</h4>
+                    <span>Departure</span>
+                    <small>{bookingDataFromDb?.departure_date || bookingDataFromDb?.flights?.[0]?.departure_time || bookingDataFromDb?.flight_details?.departure?.date || 'N/A'}</small>
+                  </div>
+                  
+                  <div className="route-flight-symbol">
+                    <i className={`fas ${isAmtrak ? 'fa-subway' : 'fa-plane'}`} style={{ color: isAmtrak ? '#8b1538' : '#1e3a5f' }}></i>
+                    <span className="flight-dot-line"></span>
+                  </div>
 
-                <div className="next-steps-info">
-                  <strong>Notice of E-Ticket Confirmation:</strong>
-                  <ul>
-                    <li>Your {isAmtrak ? 'train transit reservation' : 'flight reservation'} is confirmed under reference <strong>{bookingDataFromDb?.confirmation_code || bookingRef}</strong>.</li>
-                    <li>A detailed confirmation itinerary and {isAmtrak ? 'train ticket receipt' : 'flight e-ticket'} has been sent to <strong>{bookingDataFromDb?.email}</strong>.</li>
-                    <li>For support or itinerary changes, call us anytime at {SUPPORT_PHONE_DISPLAY}.</li>
-                  </ul>
+                  <div className="route-terminal">
+                    <h4>{bookingDataFromDb?.destination_code || bookingDataFromDb?.flights?.[0]?.arrival_airport || bookingDataFromDb?.flight_details?.arrival?.airport || 'MIA'}</h4>
+                    <span>Arrival</span>
+                    <small>{bookingDataFromDb?.flights?.[0]?.arrival_time || bookingDataFromDb?.flight_details?.arrival?.date || 'N/A'}</small>
+                  </div>
                 </div>
+
+                <div className="boarding-pass-passenger">
+                  <div>
+                    <span>Primary Passenger</span>
+                    <strong>{bookingDataFromDb?.passenger_name || 'Valued Passenger'}</strong>
+                  </div>
+                  <div>
+                    <span>Contact Email</span>
+                    <strong style={{ fontSize: '0.85rem' }}>{bookingDataFromDb?.email || 'N/A'}</strong>
+                  </div>
+                  <div>
+                    <span>{isAmtrak ? 'Seat Class' : 'Cabin Class'}</span>
+                    <strong>{bookingDataFromDb?.flights?.[0]?.cabin_class || bookingDataFromDb?.flight_details?.class || 'Economy'}</strong>
+                  </div>
+                  <div>
+                    <span>Travelers</span>
+                    <strong>{passengers.length || 1}</strong>
+                  </div>
+                </div>
+
+                {passengers.length > 0 && (
+                  <div className="boarding-pass-manifest">
+                    <div className="manifest-header">Passenger Manifest</div>
+                    <table className="manifest-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Name</th>
+                          <th>DOB</th>
+                          <th>Gender</th>
+                          <th>Passport</th>
+                          <th>Nationality</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {passengers.map((p, idx) => (
+                          <tr key={idx}>
+                            <td data-label="No.">{idx + 1}</td>
+                            <td data-label="Name"><strong>{p.firstName || p.first_name} {p.middleName || p.middle_name || ''} {p.lastName || p.last_name}</strong></td>
+                            <td data-label="DOB">{p.dateOfBirth || p.date_of_birth || 'N/A'}</td>
+                            <td data-label="Gender" style={{ textTransform: 'capitalize' }}>{p.gender || 'N/A'}</td>
+                            <td data-label="Passport">{p.passportNumber || p.passport_number || 'N/A'}</td>
+                            <td data-label="Nationality">{p.nationality || 'N/A'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            );
-          })()}
+
+              <div className="next-steps-info">
+                <strong>Notice of E-Ticket Confirmation:</strong>
+                <ul>
+                  <li>Your {isAmtrak ? 'train transit reservation' : 'flight reservation'} is confirmed under reference <strong>{bookingDataFromDb?.confirmation_code || bookingRef}</strong>.</li>
+                  <li>A detailed confirmation itinerary and {isAmtrak ? 'train ticket receipt' : 'flight e-ticket'} has been sent to <strong>{bookingDataFromDb?.email}</strong>.</li>
+                  <li>For support or itinerary changes, call us anytime at {SUPPORT_PHONE_DISPLAY}.</li>
+                </ul>
+              </div>
+            </div>
+          )}
 
           {/* Conditional view: Consulting Payment */}
           {type === 'consulting' && (

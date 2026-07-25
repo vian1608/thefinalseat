@@ -24,11 +24,21 @@ export const bookingService = {
       
     travellerService.validateTravellers(passengerList);
 
-    // 2 — Generate confirmation code
-    const confirmationCode = generateConfirmationCode();
+    // 2 — Derive master passenger_name from first actual passenger (e.g. John Doe)
+    const firstPass = passengerList[0] || {};
+    const firstPassName = [firstPass.firstName, firstPass.middleName, firstPass.lastName].filter(Boolean).join(' ');
+    const masterPassengerName = firstPassName.trim() || payload.customerName || 'Valued Passenger';
 
-    // 3 — Insert master record
-    const insertRow = bookingMapper.toDatabaseInsert(confirmationCode, payload);
+    // 3 — Generate confirmation code & prepare insert payload
+    const confirmationCode = generateConfirmationCode();
+    const payloadWithPassengerName = {
+      ...payload,
+      customerName: masterPassengerName,
+      paymentStatus: payload.paymentStatus || 'pending',
+      payment_provider: payload.payment_provider || 'whop'
+    };
+
+    const insertRow = bookingMapper.toDatabaseInsert(confirmationCode, payloadWithPassengerName);
     const booking = await bookingRepository.createBookingRecord(insertRow);
 
     // 4 — Save travellers list
@@ -51,7 +61,7 @@ export const bookingService = {
       );
     }
 
-    // 5 — Save primary contact safely
+    // 5 — Save primary contact details separately
     const rawPhone = String(payload.phone || '').trim();
     const countryCode = rawPhone.startsWith('+') ? rawPhone.split(' ')[0] : null;
     const contactRow = {
@@ -80,14 +90,15 @@ export const bookingService = {
       flights = await bookingRepository.insertFlights(flightsList);
     }
 
-    // 7 — Save stripe payment record
+    // 7 — Save pending payment record with correct provider and pending status (no Stripe defaults)
     const paymentRow = {
       booking_id: booking.id,
-      payment_provider: 'stripe',
-      stripe_session_id: payload.transactionId || null,
-      payment_amount: parseFloat(payload.displayedWebsitePrice) || 0,
-      currency: payload.currency || 'USD',
-      payment_status: payload.paymentStatus || 'paid',
+      payment_provider: payload.payment_provider || 'whop',
+      provider_checkout_id: payload.provider_checkout_id || null,
+      provider_payment_id: payload.provider_payment_id || null,
+      payment_amount: parseFloat(payload.customer_price || payload.displayedWebsitePrice) || 0,
+      currency: (payload.currency || 'USD').toUpperCase(),
+      payment_status: payload.paymentStatus || 'pending',
       payment_date: new Date().toISOString()
     };
     const payments = await bookingRepository.insertPayment(paymentRow);
@@ -100,42 +111,14 @@ export const bookingService = {
       payments
     );
 
-    // Send confirmation email asynchronously
-    sendBookingConfirmation(canonicalBooking).catch(err => {
-      logger.error('Failed to send booking confirmation email:', err.message);
-    });
-
-    return canonicalBooking;
-  },
-
-  getDetailsByCodeOrId: async (reference) => {
-    // Attempt code fetch
-    let booking = await bookingRepository.findBookingByCode(reference.toUpperCase());
-    if (!booking) {
-      // Fallback ID fetch
-      booking = await bookingRepository.findBookingById(reference);
+    // Only send confirmation email if payment status is explicitly paid
+    if (payload.paymentStatus === 'paid') {
+      sendBookingConfirmation(canonicalBooking).catch(err => {
+        logger.error(`Non-blocking email sending failed: ${err.message}`);
+      });
     }
 
-    if (!booking) return null;
-
-    const relations = await bookingRepository.getRelations(booking.id);
-    return bookingMapper.toCanonicalModel(
-      booking,
-      relations.travellers,
-      relations.contacts,
-      relations.flights,
-      relations.payments
-    );
-  },
-
-  getBookingsForEmail: async (email) => {
-    const list = await bookingRepository.findBookingsByEmail(email);
-    return bookingMapper.toSummaryList(list);
-  },
-
-  search: async (query) => {
-    const list = await bookingRepository.searchBookings(query);
-    return bookingMapper.toSummaryList(list);
+    return canonicalBooking;
   }
 };
 

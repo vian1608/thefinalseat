@@ -60,22 +60,56 @@ function MyBookings() {
     performSearch();
   };
 
-  const getStatusBadge = (status) => {
-    const s = String(status).toUpperCase();
+  const getBookingStatusBadge = (status) => {
+    const s = String(status || 'PENDING').toUpperCase();
     if (s === 'DONE' || s === 'CONFIRMED') {
-      return <span className="status-badge status-badge--done">Done</span>;
+      return <span className="status-badge status-badge--done">Confirmed</span>;
     }
     if (s === 'FAILED' || s === 'CANCELLED') {
-      return <span className="status-badge status-badge--failed">Failed</span>;
+      return <span className="status-badge status-badge--failed">Cancelled</span>;
     }
     return <span className="status-badge status-badge--pending">Pending</span>;
   };
 
-  const formatRoute = (flight) => {
-    if (!flight) return 'N/A';
-    const dep = flight.departure?.airport || 'Origin';
-    const arr = flight.arrival?.airport || 'Destination';
-    return `${dep} to ${arr}`;
+  const getPaymentBadge = (payStatus) => {
+    const ps = String(payStatus || 'PENDING').toUpperCase();
+    if (ps === 'PAID') {
+      return <span className="status-badge status-badge--done" style={{ backgroundColor: '#d1fae5', color: '#065f46' }}><i className="fas fa-check-circle"></i> Paid</span>;
+    }
+    if (ps === 'FAILED') {
+      return <span className="status-badge status-badge--failed" style={{ backgroundColor: '#fee2e2', color: '#991b1b' }}><i className="fas fa-exclamation-triangle"></i> Payment Failed</span>;
+    }
+    return <span className="status-badge status-badge--pending" style={{ backgroundColor: '#fef3c7', color: '#92400e' }}><i className="fas fa-clock"></i> Payment Pending</span>;
+  };
+
+  const deriveRouteDisplay = (b) => {
+    const origin = b.origin_code || b.flights?.[0]?.departure_airport || b.flight_details?.departure?.airport;
+    const dest = b.destination_code || b.flights?.[0]?.arrival_airport || b.flight_details?.arrival?.airport;
+    if (origin && dest) return `${origin} to ${dest}`;
+    return 'Details unavailable';
+  };
+
+  const deriveCarrier = (b) => {
+    return b.carrier || b.airline || b.flight_details?.airline || b.flights?.[0]?.airline || 'Details unavailable';
+  };
+
+  const deriveDepartureDate = (b) => {
+    const rawDate = b.departure_date || b.flights?.[0]?.departure_time || b.flights?.[0]?.departure_date || b.flight_details?.departure?.date;
+    if (!rawDate) return 'Details unavailable';
+    try {
+      return new Date(rawDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch (e) {
+      return rawDate;
+    }
+  };
+
+  const derivePassengerName = (b) => {
+    if (b.passenger_name && b.passenger_name !== 'Valued Customer') return b.passenger_name;
+    const t0 = b.travellers?.[0];
+    if (t0 && t0.first_name) {
+      return [t0.first_name, t0.middle_name, t0.last_name].filter(Boolean).join(' ');
+    }
+    return 'Details unavailable';
   };
 
   return (
@@ -87,7 +121,7 @@ function MyBookings() {
       <div className="bookings-container">
         <header className="bookings-header">
           <h1>Track Your Bookings</h1>
-          <p>Retrieve, manage, and download temporary tickets using your confirmation code or email address.</p>
+          <p>Retrieve, manage, and view confirmation details using your confirmation code or email address.</p>
         </header>
 
         <div className="bookings-layout">
@@ -131,58 +165,74 @@ function MyBookings() {
 
                   <div className="bookings-grid-list">
                     {bookings.map((booking) => {
-                      const flight = booking.flight_details || {};
-                      const isAmtrak = flight.airline?.toLowerCase().includes('amtrak');
-                      
+                      const carrierStr = deriveCarrier(booking);
+                      const isAmtrak = carrierStr.toLowerCase().includes('amtrak');
+                      const payStatus = String(booking.payment_status || 'PENDING').toLowerCase();
+                      const isPaid = payStatus === 'paid';
+                      const isFailed = payStatus === 'failed';
+
                       return (
                         <div key={booking.id} className="booking-card-item">
                           <div className="booking-card-top">
                             <div className="card-ref-block">
                               <span className="ref-label">CONFIRMATION CODE</span>
-                              <strong className="ref-value">{booking.confirmation_code}</strong>
+                              <strong className="ref-value">{booking.confirmation_code || booking.confirmationCode}</strong>
                             </div>
-                            {getStatusBadge(booking.status)}
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                              {getBookingStatusBadge(booking.status)}
+                              {getPaymentBadge(booking.payment_status)}
+                            </div>
                           </div>
 
                           <div className="booking-card-body">
                             <div className="booking-info-grid">
                               <div className="info-column">
                                 <span className="info-label">Passenger Name</span>
-                                <strong className="info-value">{booking.passenger_name}</strong>
+                                <strong className="info-value">{derivePassengerName(booking)}</strong>
                               </div>
                               <div className="info-column">
                                 <span className="info-label">Flight Route</span>
                                 <strong className="info-value">
                                   <i className={`fas ${isAmtrak ? 'fa-train' : 'fa-plane'} route-symbol`}></i>
-                                  {formatRoute(flight)}
+                                  {deriveRouteDisplay(booking)}
                                 </strong>
                               </div>
                               <div className="info-column">
                                 <span className="info-label">Airline / Transit</span>
-                                <strong className="info-value">{flight.airline || 'Unknown Carrier'}</strong>
+                                <strong className="info-value">{carrierStr}</strong>
                               </div>
                               <div className="info-column">
                                 <span className="info-label">Travel Date</span>
-                                <strong className="info-value">{flight.departure?.date || 'N/A'}</strong>
+                                <strong className="info-value">{deriveDepartureDate(booking)}</strong>
                               </div>
                               <div className="info-column">
                                 <span className="info-label">Total Amount</span>
-                                <strong className="info-value">${parseFloat(booking.amount).toFixed(2)} {booking.currency || 'USD'}</strong>
+                                <strong className="info-value">${parseFloat(booking.customer_price || booking.amount || booking.total_amount || 0).toFixed(2)} {booking.currency || 'USD'}</strong>
                               </div>
                               <div className="info-column">
                                 <span className="info-label">Booking Date</span>
-                                <strong className="info-value">{new Date(booking.created_at || booking.createdAt).toLocaleDateString()}</strong>
+                                <strong className="info-value">{booking.created_at ? new Date(booking.created_at).toLocaleDateString() : 'N/A'}</strong>
                               </div>
                             </div>
                           </div>
 
                           <div className="booking-card-actions">
-                            <Link 
-                              to={`/confirmation/success?session_id=${booking.payment_reference}&type=booking`} 
-                              className="view-ticket-btn"
-                            >
-                              <i className="fas fa-ticket-alt"></i> View Temporary Confirmation Ticket
-                            </Link>
+                            {isPaid ? (
+                              <Link 
+                                to={`/confirmation/success?type=booking&booking_id=${booking.id}&code=${booking.confirmation_code || booking.confirmationCode}`} 
+                                className="view-ticket-btn"
+                              >
+                                <i className="fas fa-ticket-alt"></i> View E-Ticket Confirmation
+                              </Link>
+                            ) : (
+                              <Link 
+                                to="/booking" 
+                                className="view-ticket-btn"
+                                style={{ backgroundColor: isFailed ? '#dc2626' : '#d97706', borderColor: isFailed ? '#b91c1c' : '#b45309' }}
+                              >
+                                <i className="fas fa-redo"></i> {isFailed ? 'Retry Payment (Card Failed)' : 'Retry Payment'}
+                              </Link>
+                            )}
                           </div>
                         </div>
                       );

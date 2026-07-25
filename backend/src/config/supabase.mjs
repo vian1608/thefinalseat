@@ -1,19 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 import env from './env.mjs';
 
+const url = env.supabaseUrl || 'https://placeholder.supabase.co';
+const key = env.supabaseSecretKey || 'placeholder-key';
+
 if (!env.supabaseUrl || !env.supabaseSecretKey) {
-  console.error('❌ Supabase environment variables are missing! Set SUPABASE_URL and SUPABASE_SECRET_KEY.');
+  console.warn('⚠️ Supabase environment variables missing! Using safe stub client for tests/offline execution.');
 }
 
-export const supabase = createClient(
-  env.supabaseUrl,
-  env.supabaseSecretKey,
-  {
-    auth: {
-      persistSession: false
-    }
+export const supabase = createClient(url, key, {
+  auth: {
+    persistSession: false
   }
-);
+});
 
 // Ping test helper
 export async function testSupabaseConnection() {

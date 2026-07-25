@@ -12,9 +12,8 @@ export const whopController = {
    * Server-side authoritative Whop checkout creation for a booking
    */
   createCheckout: async (req, res) => {
+    const { bookingId } = req.body;
     try {
-      const { bookingId } = req.body;
-
       if (!bookingId) {
         return res.status(400).json({
           success: false,
@@ -58,10 +57,18 @@ export const whopController = {
         });
       }
 
-      if (booking.status === 'FAILED' || booking.status === 'CANCELLED') {
+      if (booking.status === 'CANCELLED') {
         return res.status(400).json({
           success: false,
           error: { code: 'INVALID_BOOKING_STATUS', message: `Booking is currently in ${booking.status} status` }
+        });
+      }
+
+      // Reset payment status to 'pending' on retry if previously failed
+      if (booking.payment_status === 'FAILED' || booking.payment_status === 'failed') {
+        await bookingRepository.updateBookingStatus(booking.id, {
+          payment_status: 'pending',
+          payment_provider: 'whop'
         });
       }
 
@@ -89,7 +96,8 @@ export const whopController = {
       // 6. Update booking record with provider_checkout_id and provider
       await bookingRepository.updateBookingStatus(booking.id, {
         provider_checkout_id: whopCheckout.sessionId,
-        payment_provider: 'whop'
+        payment_provider: 'whop',
+        payment_status: 'pending'
       });
 
       return res.json({
@@ -106,6 +114,17 @@ export const whopController = {
       });
     } catch (err) {
       logger.error(`Error in Whop createCheckout: ${err.message}`);
+      if (bookingId) {
+        try {
+          await bookingRepository.updateBookingStatus(bookingId, {
+            payment_status: 'FAILED',
+            payment_provider: 'whop',
+            internal_notes: `Whop checkout initialization failed: ${err.message}`
+          });
+        } catch (dbErr) {
+          logger.warn(`Failed to update booking status to FAILED: ${dbErr.message}`);
+        }
+      }
       return res.status(500).json({
         success: false,
         error: { code: 'WHOP_CHECKOUT_FAILED', message: err.message }
