@@ -11,51 +11,52 @@ function required(key) {
 }
 
 export const env = {
-  nodeEnv: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT || '5001', 10),
-  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+  get nodeEnv() { return process.env.NODE_ENV || 'development'; },
+  get port() { return parseInt(process.env.PORT || '5001', 10); },
+  get frontendUrl() { return process.env.FRONTEND_URL || 'http://localhost:3000'; },
   
   // Supabase
-  supabaseUrl: required('SUPABASE_URL'),
-  supabaseSecretKey: required('SUPABASE_SECRET_KEY'),
+  get supabaseUrl() { return process.env.SUPABASE_URL || ''; },
+  get supabaseSecretKey() { return process.env.SUPABASE_SECRET_KEY || ''; },
   
   // Resend
-  resendApiKey: process.env.RESEND_API_KEY || '',
-  resendFrom: process.env.RESEND_FROM || 'The Final Seat <support@thefinalseat.com>',
-  inquiryNotifyEmails: process.env.INQUIRY_NOTIFY_EMAILS || 'support@thefinalseat.com,viansaini1608@gmail.com',
+  get resendApiKey() { return process.env.RESEND_API_KEY || ''; },
+  get resendFrom() { return process.env.RESEND_FROM || 'The Final Seat <support@thefinalseat.com>'; },
+  get inquiryNotifyEmails() { return process.env.INQUIRY_NOTIFY_EMAILS || 'support@thefinalseat.com,viansaini1608@gmail.com'; },
 
   // Stripe
-  stripeSecretKey: required('STRIPE_SECRET_KEY'),
-  stripeMockMode: process.env.STRIPE_MOCK_MODE === 'true',
+  get stripeSecretKey() { return process.env.STRIPE_SECRET_KEY || ''; },
+  get stripeMockMode() { return process.env.STRIPE_MOCK_MODE === 'true'; },
 
   // Whop Flight Checkout Integration
-  whopApiKey: process.env.WHOP_API_KEY || '',
-  whopCompanyId: process.env.WHOP_COMPANY_ID || '',
-  whopWebhookSecret: process.env.WHOP_WEBHOOK_SECRET || '',
-  whopEnv: process.env.WHOP_ENV || 'sandbox',
-  whopFlightCheckoutEnabled: process.env.WHOP_FLIGHT_CHECKOUT_ENABLED === 'true',
+  get whopApiKey() { return process.env.WHOP_API_KEY || ''; },
+  get whopCompanyId() { return process.env.WHOP_COMPANY_ID || ''; },
+  get whopWebhookSecret() { return process.env.WHOP_WEBHOOK_SECRET || ''; },
+  get whopEnv() { return process.env.WHOP_ENV || 'sandbox'; },
+  get whopFlightCheckoutEnabled() { return process.env.WHOP_FLIGHT_CHECKOUT_ENABLED !== 'false'; },
 
   // SerpAPI
-  serpapiApiKey: required('SERPAPI_API_KEY'),
+  get serpapiApiKey() { return process.env.SERPAPI_API_KEY || ''; },
 
   // JWT
-  jwtSecret: process.env.JWT_SECRET || 'your-secret-key-change-this-in-production',
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  get jwtSecret() { return process.env.JWT_SECRET || 'your-secret-key-change-this-in-production'; },
+  get jwtExpiresIn() { return process.env.JWT_EXPIRES_IN || '7d'; },
 
   // Admin
-  adminEmail: process.env.ADMIN_EMAIL || 'admin@thefinalseat.com',
-  adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
+  get adminEmail() { return process.env.ADMIN_EMAIL || 'admin@thefinalseat.com'; },
+  get adminPassword() { return process.env.ADMIN_PASSWORD || 'admin123'; },
 
   // PayPal
-  paypalClientId: process.env.PAYPAL_CLIENT_ID || '',
-  paypalClientSecret: process.env.PAYPAL_CLIENT_SECRET || '',
-  paypalEnv: process.env.PAYPAL_ENV || 'sandbox',
-  paypalWebhookId: process.env.PAYPAL_WEBHOOK_ID || '',
+  get paypalClientId() { return process.env.PAYPAL_CLIENT_ID || ''; },
+  get paypalClientSecret() { return process.env.PAYPAL_CLIENT_SECRET || ''; },
+  get paypalEnv() { return process.env.PAYPAL_ENV || 'sandbox'; },
+  get paypalWebhookId() { return process.env.PAYPAL_WEBHOOK_ID || ''; },
 
   // Google Analytics 4
-  ga4PropertyId: process.env.GA4_PROPERTY_ID || '456789123',
-  ga4ClientEmail: process.env.GA4_CLIENT_EMAIL || 'the-final-seat-analytics@the-final-seat.iam.gserviceaccount.com',
-  ga4PrivateKey: process.env.GA4_PRIVATE_KEY || (process.env.GA4_CREDENTIALS_JSON ? JSON.parse(process.env.GA4_CREDENTIALS_JSON).private_key : '')
+  get ga4PropertyId() { return process.env.GA4_PROPERTY_ID || '456789123'; },
+  get ga4ClientEmail() { return process.env.GA4_CLIENT_EMAIL || 'the-final-seat-analytics@the-final-seat.iam.gserviceaccount.com'; },
+  get ga4PrivateKey() { return process.env.GA4_PRIVATE_KEY || (process.env.GA4_CREDENTIALS_JSON ? JSON.parse(process.env.GA4_CREDENTIALS_JSON).private_key : '') }
 };
+
 
 export default env;

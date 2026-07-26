@@ -1,4 +1,8 @@
 import adminService from './admin.service.mjs';
+import bookingRepository from '../bookings/booking.repository.mjs';
+import bookingMapper from '../bookings/booking.mapper.mjs';
+import { sendBookingConfirmation } from '../../integrations/resend/resend.service.mjs';
+
 
 export const adminController = {
   login: async (req, res, next) => {
@@ -114,7 +118,42 @@ export const adminController = {
     } catch (error) {
       next(error);
     }
+  },
+
+  resendEmail: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const booking = await bookingRepository.getById(id);
+      if (!booking) {
+        return res.status(404).json({ success: false, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' } });
+      }
+
+      const canonicalBooking = bookingMapper.toCanonicalModel(
+        booking,
+        booking.travellers || [],
+        [{ email: booking.email, phone_number: booking.phone }],
+        booking.flights || [],
+        booking.payments || []
+      );
+
+      const emailRes = await sendBookingConfirmation(canonicalBooking, { force: true });
+      if (emailRes.success) {
+        await bookingRepository.recordEmailDelivery({
+          webhook_id: `admin_resend_${Date.now()}`,
+          booking_id: booking.id,
+          recipient_email: booking.email,
+          resend_message_id: emailRes.emailId,
+          status: 'delivered'
+        });
+        return res.json({ success: true, message: 'Confirmation email resent successfully', emailId: emailRes.emailId });
+      } else {
+        return res.status(500).json({ success: false, error: { code: 'EMAIL_FAILED', message: emailRes.error || 'Email dispatch failed' } });
+      }
+    } catch (error) {
+      next(error);
+    }
   }
 };
 
 export default adminController;
+

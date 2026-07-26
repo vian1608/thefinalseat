@@ -4,6 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import env from '../../config/env.mjs';
 import logger from '../../config/logger.mjs';
+import bookingRepository from '../../modules/bookings/booking.repository.mjs';
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const INQUIRIES_FILE = path.join(__dirname, '../../../../data/inquiries.jsonl');
@@ -567,4 +569,71 @@ The Final Seat LLC · 5830 E 2nd St, Ste 7000, Casper, WY 82609
     return { success: false, error: error.message };
   }
 };
+
+export const sendPaymentFailedEmail = async (booking, reason = 'Payment processing failed') => {
+  try {
+    const bookingId = booking.id || booking.booking_id;
+    const email = booking.email || booking.customerEmail || '';
+    if (!email) return { success: false, error: 'No recipient email provided' };
+
+    const bookingReference = booking.confirmation_code || booking.bookingReference || 'TFS-RETRY';
+    const customerName = booking.passenger_name || booking.customerName || 'Valued Customer';
+    const frontendUrl = env.frontendUrl || 'https://thefinalseat.com';
+    const retryUrl = `${frontendUrl}/booking`;
+
+    const textBody = `
+Dear ${customerName},
+
+We were unable to process your payment for booking confirmation reference ${bookingReference}.
+
+Reason: ${reason}
+
+Your reservation remains on hold. Please retry your payment using the link below to confirm your flight:
+${retryUrl}
+
+If you require assistance, contact our 24/7 support desk:
+Email: support@thefinalseat.com
+Phone: +1 (888) 210-8656
+
+The Final Seat LLC
+    `.trim();
+
+    const htmlBody = `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+  <h2 style="color: #dc2626;">Payment Action Required</h2>
+  <p>Dear ${customerName},</p>
+  <p>We were unable to process your payment for reservation <strong>${bookingReference}</strong>.</p>
+  <p style="background: #fef2f2; border: 1px solid #fecaca; padding: 12px; border-radius: 8px; color: #991b1b;">
+    <strong>Details:</strong> ${reason}
+  </p>
+  <p>Please click the button below to retry your payment and secure your flight tickets:</p>
+  <p style="text-align: center; margin: 24px 0;">
+    <a href="${retryUrl}" style="background: #dc2626; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Retry Payment Now &rarr;</a>
+  </p>
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+  <p style="font-size: 12px; color: #64748b;">
+    The Final Seat LLC &middot; Support: support@thefinalseat.com | +1 (888) 210-8656
+  </p>
+</div>
+    `.trim();
+
+    let messageId = `failed_${Date.now()}`;
+    if (env.resendApiKey?.trim()) {
+      const res = await sendViaResend({
+        recipients: [email],
+        subject: `Payment Failed — ${bookingReference} | The Final Seat`,
+        textBody,
+        htmlBody,
+        replyTo: 'support@thefinalseat.com'
+      });
+      if (res && res.messageId) messageId = res.messageId;
+    }
+
+    return { success: true, messageId };
+  } catch (err) {
+    logger.error(`[Email] Error sending payment failed email: ${err.message}`);
+    return { success: false, error: err.message };
+  }
+};
+
 

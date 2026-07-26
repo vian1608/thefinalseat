@@ -1,4 +1,6 @@
 import supabase from '../../integrations/supabase/supabase.client.mjs';
+import logger from '../../config/logger.mjs';
+
 
 export const bookingRepository = {
   createBookingRecord: async (dbRow) => {
@@ -293,10 +295,21 @@ export const bookingRepository = {
       .maybeSingle();
 
     if (error) {
-      logger.warn(`Failed to update confirmation_email_sent_at for booking ${id}: ${error.message}`);
+      const { data: safeData, error: safeError } = await supabase
+        .from('bookings')
+        .update({
+          confirmation_email_sent_at: sentAt
+        })
+        .eq('id', id)
+        .select()
+        .maybeSingle();
+
+      if (safeError) logger.warn(`Failed to update confirmation_email_sent_at for booking ${id}: ${safeError.message}`);
+      return safeData;
     }
     return data;
   },
+
 
   updateStatus: async (id, updateFields) => {
     const { data, error } = await supabase
@@ -313,8 +326,6 @@ export const bookingRepository = {
       delete safeFields.discount_percent;
       delete safeFields.discount_amount;
       delete safeFields.price_checked_at;
-      delete safeFields.provider_checkout_id;
-      delete safeFields.provider_payment_id;
 
       const { data: safeData, error: safeError } = await supabase
         .from('bookings')
@@ -328,6 +339,7 @@ export const bookingRepository = {
     }
     return data;
   },
+
 
   updateBookingStatus: async (id, updateFields) => {
     return bookingRepository.updateStatus(id, updateFields);
@@ -429,7 +441,195 @@ export const bookingRepository = {
     } catch (e) {
       return null;
     }
+  },
+
+  findBookingByCheckoutId: async (checkoutId) => {
+    if (!checkoutId) return null;
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('provider_checkout_id', checkoutId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    const relations = await bookingRepository.getRelations(data.id);
+    return bookingRepository.enrichBookingRecord(data, relations);
+  },
+
+  findPaymentByCheckoutId: async (checkoutId) => {
+    if (!checkoutId) return null;
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('provider_checkout_id', checkoutId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data;
+  },
+
+  upsertWhopPayment: async (paymentRow) => {
+    // Try updating by booking_id or provider_checkout_id first
+    let existing = null;
+    if (paymentRow.booking_id) {
+      const { data } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('booking_id', paymentRow.booking_id)
+        .maybeSingle();
+      existing = data;
+    }
+    if (!existing && paymentRow.provider_checkout_id) {
+      try {
+        const { data } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('provider_checkout_id', paymentRow.provider_checkout_id)
+          .maybeSingle();
+        existing = data;
+      } catch (e) {
+        /* fallback if column missing in remote schema cache */
+      }
+    }
+
+    if (existing) {
+      const { data, error } = await supabase
+        .from('payments')
+        .update(paymentRow)
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+      if (error) {
+        const coreRow = {
+          payment_provider: paymentRow.payment_provider || 'whop',
+          payment_amount: paymentRow.payment_amount,
+          currency: paymentRow.currency || 'USD',
+          payment_status: paymentRow.payment_status || 'paid',
+          payment_date: paymentRow.payment_date || new Date().toISOString()
+        };
+        const { data: safeData, error: safeError } = await supabase
+          .from('payments')
+          .update(coreRow)
+          .eq('id', existing.id)
+          .select()
+          .single();
+
+        if (safeError) throw new Error(`Failed updating payment record: ${error.message}`);
+        return safeData;
+      }
+      return data;
+    } else {
+      const { data, error } = await supabase
+        .from('payments')
+        .insert(paymentRow)
+        .select()
+        .single();
+
+      if (error) {
+        const coreRow = {
+          booking_id: paymentRow.booking_id,
+          payment_provider: paymentRow.payment_provider || 'whop',
+          payment_amount: paymentRow.payment_amount,
+          currency: paymentRow.currency || 'USD',
+          payment_status: paymentRow.payment_status || 'paid',
+          payment_date: paymentRow.payment_date || new Date().toISOString()
+        };
+        const { data: safeData, error: safeError } = await supabase
+          .from('payments')
+          .insert(coreRow)
+          .select()
+          .single();
+
+        if (safeError) throw new Error(`Failed creating payment record: ${error.message}`);
+        return safeData;
+      }
+      return data;
+    }
+  },
+
+
+  executePaymentConfirmationTx: async ({
+    bookingId,
+    paymentProvider = 'whop',
+    providerPaymentId,
+    providerCheckoutId,
+    paidAmount,
+    currency = 'USD',
+    paymentDate = new Date().toISOString()
+  }) => {
+    // 1. Update/upsert payments table row
+    const paymentRow = {
+      booking_id: bookingId,
+      payment_provider: paymentProvider,
+      provider_payment_id: providerPaymentId,
+      provider_checkout_id: providerCheckoutId,
+      payment_amount: paidAmount,
+      currency: currency.toUpperCase(),
+      payment_status: 'paid',
+      payment_date: paymentDate
+    };
+    const paymentRecord = await bookingRepository.upsertWhopPayment(paymentRow);
+
+    // 2. Update master bookings table row
+    const bookingUpdateFields = {
+      payment_status: 'paid',
+      status: 'DONE',
+      payment_provider: paymentProvider,
+      provider_payment_id: providerPaymentId,
+      provider_checkout_id: providerCheckoutId,
+      paid_at: paymentDate
+    };
+    const updatedBooking = await bookingRepository.updateBookingStatus(bookingId, bookingUpdateFields);
+
+
+    return { booking: updatedBooking, payment: paymentRecord };
+  },
+
+  getEmailDeliveryRecord: async (webhookId, bookingId) => {
+    if (!webhookId || !bookingId) return null;
+    try {
+      const { data, error } = await supabase
+        .from('email_deliveries')
+        .select('*')
+        .eq('webhook_id', String(webhookId))
+        .eq('booking_id', bookingId)
+        .maybeSingle();
+
+      if (error) return null;
+      return data;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  recordEmailDelivery: async (deliveryRow) => {
+    try {
+      const { data, error } = await supabase
+        .from('email_deliveries')
+        .insert({
+          webhook_id: String(deliveryRow.webhook_id),
+          booking_id: deliveryRow.booking_id,
+          email_type: deliveryRow.email_type || 'booking_confirmation',
+          recipient_email: deliveryRow.recipient_email,
+          resend_message_id: deliveryRow.resend_message_id || null,
+          status: deliveryRow.status || 'delivered',
+          error_message: deliveryRow.error_message || null
+        })
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        // Log warning if schema cache delay or duplicate constraint
+        console.warn('[DB] Non-blocking email delivery record warning:', error.message);
+        return null;
+      }
+      return data;
+    } catch (e) {
+      return null;
+    }
   }
 };
 
 export default bookingRepository;
+

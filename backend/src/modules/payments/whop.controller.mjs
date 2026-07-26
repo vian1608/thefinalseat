@@ -2,8 +2,7 @@ import env from '../../config/env.mjs';
 import logger from '../../config/logger.mjs';
 import whopService from '../../integrations/whop/whop.service.mjs';
 import bookingRepository from '../bookings/booking.repository.mjs';
-import { calculateBookingTotal } from '../../shared/utils/pricing.helper.mjs';
-import { sendBookingConfirmation } from '../../integrations/resend/resend.service.mjs';
+import { sendBookingConfirmation, sendPaymentFailedEmail } from '../../integrations/resend/resend.service.mjs';
 import bookingMapper from '../bookings/booking.mapper.mjs';
 
 export const whopController = {
@@ -50,7 +49,7 @@ export const whopController = {
       }
 
       // 3. Reject already paid or cancelled bookings
-      if (booking.payment_status === 'paid') {
+      if (String(booking.payment_status).toLowerCase() === 'paid') {
         return res.status(400).json({
           success: false,
           error: { code: 'BOOKING_ALREADY_PAID', message: 'This booking has already been paid.' }
@@ -65,14 +64,14 @@ export const whopController = {
       }
 
       // Reset payment status to 'pending' on retry if previously failed
-      if (booking.payment_status === 'FAILED' || booking.payment_status === 'failed') {
+      if (String(booking.payment_status).toUpperCase() === 'FAILED') {
         await bookingRepository.updateBookingStatus(booking.id, {
           payment_status: 'pending',
           payment_provider: 'whop'
         });
       }
 
-      // 4. Calculate authoritative 10% discount price in integer cents
+      // 4. Calculate authoritative 10% discount price
       const supplierPrice = parseFloat(booking.supplier_price || booking.original_api_price || booking.total_amount || 0);
       const discountAmount = parseFloat(booking.discount_amount || Math.max(0, supplierPrice * 0.10));
       const customerPrice = parseFloat(booking.customer_price || booking.total_amount || (supplierPrice - discountAmount));
@@ -93,11 +92,21 @@ export const whopController = {
         currency: booking.currency || 'USD'
       });
 
-      // 6. Update booking record with provider_checkout_id and provider
+      // 6. STORE provider_checkout_id on BOTH booking and payments record BEFORE rendering embed
       await bookingRepository.updateBookingStatus(booking.id, {
         provider_checkout_id: whopCheckout.sessionId,
         payment_provider: 'whop',
         payment_status: 'pending'
+      });
+
+      await bookingRepository.upsertWhopPayment({
+        booking_id: booking.id,
+        payment_provider: 'whop',
+        provider_checkout_id: whopCheckout.sessionId,
+        payment_amount: customerPrice,
+        currency: (booking.currency || 'USD').toUpperCase(),
+        payment_status: 'pending',
+        payment_date: new Date().toISOString()
       });
 
       return res.json({
@@ -134,10 +143,6 @@ export const whopController = {
 
   /**
    * POST /api/webhooks/whop
-   * Verified, idempotent webhook handler for Whop payment events
-   */
-  /**
-   * POST /api/webhooks/whop
    * Verified, idempotent webhook handler for Whop payment events using @whop/sdk
    */
   handleWebhook: async (req, res) => {
@@ -145,7 +150,7 @@ export const whopController = {
       const rawBody = req.body;
       const headers = req.headers;
 
-      // 1. Verify and unwrap webhook using official @whop/sdk webhooks.unwrap
+      // 1. Verify and unwrap webhook using official @whop/sdk client.webhooks.unwrap
       let event;
       try {
         event = whopService.verifyAndUnwrapWebhook(rawBody, headers);
@@ -159,18 +164,30 @@ export const whopController = {
       }
 
       // Exact event type — NEVER default absent event types to payment.succeeded
-      const eventType = String(event.action || event.event || event.type || event.action_type || '').trim();
+      const eventType = String(event.type || event.action || event.event || '').trim();
       if (!eventType) {
         logger.warn('[Whop] Webhook event received without valid event type');
         return res.status(400).json({ success: false, error: 'Event missing type field' });
       }
 
+      const data = event.data || event;
+      const metadata = data.metadata || event.metadata || {};
       const webhookId = headers['webhook-id'] || headers['x-whop-id'] || event.id || `wh_${Date.now()}`;
+      const paymentId = data.id || data.payment_id || 'N/A';
+      const checkoutConfigId = data.checkout_configuration?.id || data.checkout_configuration_id || data.checkout_configuration || metadata.sessionId || 'N/A';
+      const planId = data.plan?.id || data.plan_id || 'N/A';
+      const companyId = event.company_id || data.company_id || env.whopCompanyId || 'N/A';
+      const safeMetadataKeys = metadata && typeof metadata === 'object' ? Object.keys(metadata).join(', ') : 'none';
+
+      // Log verified webhook metadata safely without logging secrets or full customer credentials
+      logger.info(
+        `[Whop Webhook Verified] ID: ${webhookId} | Type: ${eventType} | PayID: ${paymentId} | CheckoutID: ${checkoutConfigId} | PlanID: ${planId} | CompanyID: ${companyId} | SafeMetaKeys: [${safeMetadataKeys}]`
+      );
 
       // 2. Idempotent Deduplication Check
       const existingEvent = await bookingRepository.getWebhookEvent(webhookId);
       if (existingEvent) {
-        logger.info(`Duplicate Whop webhook received and skipped: ${webhookId}`);
+        logger.info(`[Whop] Duplicate webhook received and skipped: ${webhookId}`);
         return res.status(200).json({ success: true, received: true, duplicate: true });
       }
 
@@ -182,73 +199,135 @@ export const whopController = {
         payload: event
       });
 
-      // 3. Process Verified Event
-      const data = event.data || event;
-      const metadata = data.metadata || event.metadata || {};
-      const bookingId = metadata.bookingId || metadata.booking_id || data.booking_id;
+      // 3. Resolve Booking Robustly in 3 Fallback Steps
+      let resolvedBooking = null;
 
-      if (eventType === 'payment.succeeded' || eventType === 'payment_succeeded' || eventType.includes('payment.succeeded')) {
-        if (!bookingId) {
-          logger.warn('[Whop] payment.succeeded event missing metadata bookingId');
-          return res.status(200).json({ success: true, warning: 'Missing bookingId in metadata' });
+      // Fallback Step 1: event.data.metadata.bookingId or booking_id
+      const metadataBookingId = metadata.bookingId || metadata.booking_id || data.booking_id;
+      if (metadataBookingId) {
+        resolvedBooking = await bookingRepository.getById(metadataBookingId);
+      }
+
+      // Fallback Step 2: Whop API Checkout Configuration fetch
+      if (!resolvedBooking && checkoutConfigId && checkoutConfigId !== 'N/A') {
+        logger.info(`[Whop] Fetching checkout configuration metadata via API for ${checkoutConfigId}...`);
+        const checkoutConfig = await whopService.getCheckoutConfiguration(checkoutConfigId);
+        const cfgMetadata = checkoutConfig?.metadata || {};
+        const cfgBookingId = cfgMetadata.bookingId || cfgMetadata.booking_id;
+        if (cfgBookingId) {
+          resolvedBooking = await bookingRepository.getById(cfgBookingId);
         }
+      }
 
-        const booking = await bookingRepository.getById(bookingId);
-        if (!booking) {
-          logger.error(`[Whop] Webhook booking ${bookingId} not found in database`);
-          return res.status(404).json({ success: false, error: 'Booking not found' });
+      // Fallback Step 3: Database lookup matching provider_checkout_id
+      if (!resolvedBooking && checkoutConfigId && checkoutConfigId !== 'N/A') {
+        logger.info(`[Whop] Looking up booking by provider_checkout_id in database for ${checkoutConfigId}...`);
+        resolvedBooking = await bookingRepository.findBookingByCheckoutId(checkoutConfigId);
+        if (!resolvedBooking) {
+          const payRecord = await bookingRepository.findPaymentByCheckoutId(checkoutConfigId);
+          if (payRecord?.booking_id) {
+            resolvedBooking = await bookingRepository.getById(payRecord.booking_id);
+          }
+        }
+      }
+
+      // 4. Process Verified Event Types
+      if (eventType === 'payment.succeeded' || eventType === 'payment_succeeded') {
+        if (!resolvedBooking) {
+          logger.warn(`[Whop] payment.succeeded event received but booking could not be resolved for checkout ${checkoutConfigId}`);
+          return res.status(200).json({ success: true, warning: 'Booking could not be resolved' });
         }
 
         const providerPaymentId = data.id || data.payment_id || `wh_pay_${Date.now()}`;
-        const providerCheckoutId = data.checkout_configuration_id || metadata.sessionId || booking.provider_checkout_id;
-        const paidAmount = parseFloat(data.final_amount || data.amount || metadata.expectedAmount || booking.customer_price || booking.total_amount);
+        const paidAmount = parseFloat(data.final_amount || data.amount || metadata.expectedAmount || resolvedBooking.customer_price || resolvedBooking.total_amount || 0);
 
-        // Update payment table record (insert/update row)
-        await bookingRepository.insertPayment({
-          booking_id: booking.id,
-          payment_provider: 'whop',
-          provider_payment_id: providerPaymentId,
-          provider_checkout_id: providerCheckoutId,
-          payment_amount: paidAmount,
-          currency: (booking.currency || 'USD').toUpperCase(),
-          payment_status: 'paid',
-          payment_date: new Date().toISOString()
+        // Run ONE idempotent server-side transaction
+        const { booking: updatedBooking } = await bookingRepository.executePaymentConfirmationTx({
+          bookingId: resolvedBooking.id,
+          paymentProvider: 'whop',
+          providerPaymentId,
+          providerCheckoutId: checkoutConfigId !== 'N/A' ? checkoutConfigId : resolvedBooking.provider_checkout_id,
+          paidAmount,
+          currency: (resolvedBooking.currency || 'USD').toUpperCase(),
+          paymentDate: new Date().toISOString()
         });
 
-        // Update booking master record
-        await bookingRepository.updateBookingStatus(booking.id, {
-          payment_status: 'paid',
-          status: 'CONFIRMED',
-          payment_provider: 'whop',
-          provider_payment_id: providerPaymentId,
-          provider_checkout_id: providerCheckoutId,
-          paid_at: new Date().toISOString()
-        });
+        logger.info(`[Whop] Server-side transaction completed: marked booking ${resolvedBooking.confirmation_code || resolvedBooking.id} as PAID & CONFIRMED`);
 
-        logger.info(`[Whop] Webhook successfully marked booking ${booking.confirmation_code || booking.id} as PAID & CONFIRMED`);
+        // Unique email delivery check
+        const existingDelivery = await bookingRepository.getEmailDeliveryRecord(webhookId, resolvedBooking.id);
+        if (existingDelivery) {
+          logger.info(`[Whop] Email delivery record already exists for webhook ${webhookId} and booking ${resolvedBooking.id}. Skipping email.`);
+        } else {
+          try {
+            const canonicalBooking = bookingMapper.toCanonicalModel(
+              { ...resolvedBooking, ...updatedBooking, payment_status: 'paid', status: 'CONFIRMED' },
+              resolvedBooking.travellers || [],
+              [{ email: resolvedBooking.email, phone_number: resolvedBooking.phone }],
+              resolvedBooking.flights || [],
+              [{ payment_provider: 'whop', payment_amount: paidAmount, payment_status: 'paid', provider_payment_id: providerPaymentId }]
+            );
 
-        // Send confirmation email asynchronously (idempotent — sendBookingConfirmation checks confirmation_email_sent_at)
-        try {
-          const canonicalBooking = bookingMapper.toCanonicalModel(
-            { ...booking, payment_status: 'paid', status: 'CONFIRMED' },
-            booking.travellers || [],
-            [{ email: booking.email, phone_number: booking.phone }],
-            booking.flights || [],
-            [{ payment_provider: 'whop', payment_amount: paidAmount, payment_status: 'paid' }]
-          );
-          await sendBookingConfirmation(canonicalBooking);
-        } catch (emailErr) {
-          logger.error(`[Whop] Non-blocking confirmation email failed: ${emailErr.message}`);
+            const emailRes = await sendBookingConfirmation(canonicalBooking);
+
+            if (emailRes.success) {
+              await bookingRepository.recordEmailDelivery({
+                webhook_id: webhookId,
+                booking_id: resolvedBooking.id,
+                recipient_email: resolvedBooking.email,
+                resend_message_id: emailRes.emailId,
+                status: 'delivered'
+              });
+              logger.info(`[Whop] Confirmation email sent successfully via Resend: ${emailRes.emailId}`);
+            } else {
+              await bookingRepository.recordEmailDelivery({
+                webhook_id: webhookId,
+                booking_id: resolvedBooking.id,
+                recipient_email: resolvedBooking.email,
+                status: 'failed',
+                error_message: emailRes.error || 'Resend error'
+              });
+              logger.error(`[Whop] Confirmation email recorded as failed: ${emailRes.error}`);
+            }
+          } catch (emailErr) {
+            logger.error(`[Whop] Confirmation email dispatch exception: ${emailErr.message}`);
+            await bookingRepository.recordEmailDelivery({
+              webhook_id: webhookId,
+              booking_id: resolvedBooking.id,
+              recipient_email: resolvedBooking.email,
+              status: 'failed',
+              error_message: emailErr.message
+            });
+          }
         }
-      } else if (eventType.includes('refund') || eventType.includes('dispute')) {
-        if (bookingId) {
-          const newPaymentStatus = eventType.includes('refund') ? 'refunded' : 'disputed';
-          await bookingRepository.updateBookingStatus(bookingId, {
-            payment_status: newPaymentStatus,
-            status: 'CANCELLED'
+
+      } else if (eventType === 'payment.failed' || eventType === 'payment_failed') {
+        if (resolvedBooking) {
+          await bookingRepository.updateBookingStatus(resolvedBooking.id, {
+            payment_status: 'FAILED',
+            status: 'FAILED'
           });
-          logger.info(`[Whop] Webhook updated booking ${bookingId} to ${newPaymentStatus}`);
+          await bookingRepository.upsertWhopPayment({
+            booking_id: resolvedBooking.id,
+            payment_provider: 'whop',
+            payment_status: 'failed',
+            provider_checkout_id: checkoutConfigId !== 'N/A' ? checkoutConfigId : resolvedBooking.provider_checkout_id
+          });
+          logger.info(`[Whop] Webhook updated booking ${resolvedBooking.id} to FAILED`);
+
+          try {
+            await sendPaymentFailedEmail(resolvedBooking, data.failure_reason || 'Payment declined by card issuer');
+          } catch (err) {
+            logger.error(`[Whop] Payment failed email dispatch error: ${err.message}`);
+          }
         }
+
+      } else if (eventType === 'payment.pending' || eventType === 'payment_pending') {
+        if (resolvedBooking) {
+          logger.info(`[Whop] payment.pending received for booking ${resolvedBooking.id}. Keeping status pending.`);
+        }
+      } else {
+        logger.info(`[Whop] Event ${eventType} received and safely ignored.`);
       }
 
       return res.status(200).json({ success: true, received: true });
@@ -260,7 +339,7 @@ export const whopController = {
 
   /**
    * GET /api/bookings/:bookingId/payment-status
-   * Polling endpoint for client confirmation page
+   * Authoritative status polling endpoint for client confirmation page
    */
   getPaymentStatus: async (req, res) => {
     try {
@@ -274,6 +353,19 @@ export const whopController = {
         return res.status(404).json({ success: false, error: 'Booking not found' });
       }
 
+      const relations = await bookingRepository.getRelations(booking.id);
+      const payments = relations.payments || booking.payments || [];
+
+      // Case-insensitive status normalization using authoritative booking & payment relation
+      const rawPayStatus = String(booking.payment_status || '').toLowerCase();
+      const rawBookingStatus = String(booking.status || '').toUpperCase();
+      const hasPaidPaymentRecord = payments.some(p => String(p.payment_status).toLowerCase() === 'paid');
+
+      const isPaid = rawPayStatus === 'paid' || rawBookingStatus === 'CONFIRMED' || rawBookingStatus === 'DONE' || hasPaidPaymentRecord;
+
+      const normalizedPaymentStatus = isPaid ? 'paid' : (rawPayStatus === 'failed' || rawBookingStatus === 'FAILED' ? 'failed' : 'pending');
+      const normalizedBookingStatus = isPaid ? 'CONFIRMED' : (rawBookingStatus === 'FAILED' || rawBookingStatus === 'CANCELLED' ? 'FAILED' : 'PENDING');
+
       const supplierPrice = parseFloat(booking.supplier_price || booking.original_api_price || booking.total_amount || 0);
       const customerPrice = parseFloat(booking.customer_price || booking.total_amount || 0);
       const discountAmount = parseFloat(booking.discount_amount || Math.max(0, supplierPrice - customerPrice));
@@ -282,8 +374,8 @@ export const whopController = {
         success: true,
         bookingId: booking.id,
         confirmationCode: booking.confirmation_code,
-        paymentStatus: booking.payment_status || 'pending',
-        bookingStatus: booking.status || 'PENDING',
+        paymentStatus: normalizedPaymentStatus,
+        bookingStatus: normalizedBookingStatus,
         paymentProvider: booking.payment_provider || 'whop',
         amount: customerPrice.toFixed(2),
         supplierPrice: supplierPrice.toFixed(2),

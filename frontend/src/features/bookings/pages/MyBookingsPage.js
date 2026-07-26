@@ -175,8 +175,10 @@ function MyBookings() {
                       const carrierStr = deriveCarrier(booking);
                       const isAmtrak = carrierStr.toLowerCase().includes('amtrak');
                       const payStatus = String(booking.payment_status || 'PENDING').toLowerCase();
-                      const isPaid = payStatus === 'paid';
-                      const isFailed = payStatus === 'failed';
+                      const bStatus = String(booking.status || 'PENDING').toUpperCase();
+                      const isPaid = payStatus === 'paid' || bStatus === 'CONFIRMED' || bStatus === 'DONE';
+                      const isFailed = payStatus === 'failed' || bStatus === 'FAILED' || bStatus === 'CANCELLED';
+
 
                       return (
                         <div key={booking.id} className="booking-card-item">
