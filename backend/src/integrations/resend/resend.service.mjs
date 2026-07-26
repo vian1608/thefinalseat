@@ -48,7 +48,7 @@ function getTransporter() {
 
 async function sendViaResendOne({ to, subject, textBody, htmlBody, replyTo }) {
   const apiKey = env.resendApiKey?.trim();
-  const from = env.resendFrom?.trim();
+  const from = env.resendFrom?.trim() || 'The Final Seat <support@thefinalseat.com>';
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -58,6 +58,7 @@ async function sendViaResendOne({ to, subject, textBody, htmlBody, replyTo }) {
     },
     body: JSON.stringify({
       from,
+
       to: [to],
       subject,
       text: textBody,
@@ -79,6 +80,7 @@ async function sendViaResend({ recipients, subject, textBody, htmlBody, replyTo 
 
   const sentTo = [];
   const failures = [];
+  let lastMessageId = null;
 
   for (const to of recipients) {
     try {
@@ -89,6 +91,7 @@ async function sendViaResend({ recipients, subject, textBody, htmlBody, replyTo 
         htmlBody,
         replyTo,
       });
+      lastMessageId = messageId;
       sentTo.push(to);
       logger.info(`Resend sent to ${to}:`, messageId);
     } catch (err) {
@@ -98,8 +101,9 @@ async function sendViaResend({ recipients, subject, textBody, htmlBody, replyTo 
   }
 
   if (sentTo.length > 0) {
-    return { provider: 'resend', messageId: sentTo.join(','), sentTo, failures };
+    return { provider: 'resend', messageId: lastMessageId || sentTo.join(','), sentTo, failures };
   }
+
 
   if (failures.length > 0) {
     throw new Error(failures.map((f) => `${f.to}: ${f.error}`).join('; '));
@@ -267,6 +271,33 @@ export const sendConsultingInquiry = async (inquiry) => {
   };
 };
 
+function formatUsDate(dateVal) {
+  if (!dateVal) return 'Scheduled';
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return String(dateVal);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatUsTime(timeVal) {
+  if (!timeVal) return 'Scheduled';
+  const str = String(timeVal);
+  if (str.includes('T') || str.includes('-')) {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    }
+  }
+  const match = str.match(/^(\d{1,2}):(\d{2})/);
+  if (match) {
+    let hrs = parseInt(match[1], 10);
+    const mins = match[2];
+    const ampm = hrs >= 12 ? 'PM' : 'AM';
+    hrs = hrs % 12 || 12;
+    return `${hrs}:${mins} ${ampm}`;
+  }
+  return str;
+}
+
 export const sendBookingConfirmation = async (booking, options = {}) => {
   try {
     const bookingId = booking.id || booking.booking_id;
@@ -278,261 +309,178 @@ export const sendBookingConfirmation = async (booking, options = {}) => {
       return { success: true, duplicate: true, sentAt };
     }
 
-    const flight = booking.flight || booking.flight_details || booking.outbound_flight || {};
-    const returnFlight = booking.returnFlight || booking.return_flight || null;
     const rawPassengers = booking.passengers || booking.traveller_details || booking.travellers;
     const passengers = Array.isArray(rawPassengers)
       ? rawPassengers
       : (typeof rawPassengers === 'string' ? JSON.parse(rawPassengers || '[]') : []);
 
     const firstPassenger = passengers[0] || {};
-    const firstName = firstPassenger.firstName || firstPassenger.first_name || (booking.customerName || booking.passenger_name || 'Customer').split(' ')[0];
-    const customerName = booking.customerName || booking.passenger_name || `${firstPassenger.firstName || ''} ${firstPassenger.lastName || ''}`.trim() || 'Valued Customer';
-    const bookingReference = booking.bookingReference || booking.confirmation_code || booking.confirmationCode || 'TFS-PENDING';
-    
+    const passengerName = booking.customerName || booking.passenger_name || `${firstPassenger.firstName || firstPassenger.first_name || ''} ${firstPassenger.lastName || firstPassenger.last_name || ''}`.trim() || 'Valued Customer';
+    const passengerFirstName = firstPassenger.firstName || firstPassenger.first_name || passengerName.split(' ')[0] || 'Valued Customer';
+    const confirmationCode = booking.bookingReference || booking.confirmation_code || booking.confirmationCode || 'TFS-PENDING';
+    const customerEmail = booking.email || booking.customerEmail || '';
+
     const customerPrice = parseFloat(booking.customer_price || booking.displayedWebsitePrice || booking.total_amount || booking.amount || 0);
-    const supplierPrice = parseFloat(booking.supplier_price || booking.original_api_price || customerPrice);
-    const discountAmount = parseFloat(booking.discount_amount || Math.max(0, supplierPrice - customerPrice));
-    
-    const transactionId = booking.transactionId || booking.provider_payment_id || booking.payment_reference || 'Verified';
-    const paymentProvider = (booking.payment_provider || booking.paymentProvider || 'Card (Whop Encrypted)').toUpperCase();
-    const bookingDate = booking.bookingDate || booking.created_at || new Date().toISOString();
-    const email = booking.email || booking.customerEmail || '';
-    const phone = booking.phone || booking.customerPhone || '';
-    const frontendUrl = env.frontendUrl || 'https://thefinalseat.com';
+    const amountPaid = customerPrice.toFixed(2);
+    const currency = (booking.currency || 'USD').toUpperCase();
+    const currencySymbol = currency === 'USD' ? '$' : (currency === 'EUR' ? '€' : (currency === 'GBP' ? '£' : '$'));
 
-    const carrierName = booking.carrier || booking.airline || flight.airline || flight.carrier || 'Commercial Airline';
-    const flightNumber = flight.flight_number || flight.flightNumber || flight.number || 'Scheduled';
-    const origin = flight.origin_code || flight.departure_airport || flight.departure?.airport || flight.departureAirport || 'DEP';
-    const destination = flight.destination_code || flight.arrival_airport || flight.arrival?.airport || flight.arrivalAirport || 'ARR';
-    const departureTime = flight.departure_time || flight.departure?.time || flight.departure?.date || 'Scheduled';
-    const cabinClass = flight.cabin_class || flight.class || 'Economy';
+    const rawPaymentProvider = (booking.payment_provider || booking.paymentProvider || 'whop').toLowerCase();
+    let paymentMethod = 'Credit / Debit Card';
+    if (rawPaymentProvider.includes('paypal')) {
+      paymentMethod = 'PayPal';
+    } else if (rawPaymentProvider.includes('whop') || rawPaymentProvider.includes('card') || rawPaymentProvider.includes('stripe')) {
+      paymentMethod = 'Credit / Debit Card';
+    }
 
-    const passengerTextLines = passengers.length > 0
-      ? passengers.map((p, i) => {
-          const fn = p.firstName || p.first_name || '';
-          const ln = p.lastName || p.last_name || '';
-          const dob = p.dateOfBirth || p.date_of_birth || 'N/A';
-          const gen = p.gender || 'N/A';
-          const pass = p.passportNumber || p.passport_number ? `, Passport: ${p.passportNumber || p.passport_number}` : '';
-          return `${i + 1}. ${fn} ${ln} (DOB: ${dob}, Gender: ${gen}${pass})`;
-        }).join('\n')
-      : `1. ${customerName}`;
+    const rawDate = booking.paid_at || booking.bookingDate || booking.created_at || new Date().toISOString();
+    const paymentDate = formatUsDate(rawDate);
 
-    // Plaintext Body
+    const passengerCount = passengers.length > 0 ? `${passengers.length}` : '1';
+
+    // Extract flights
+    const flightsList = Array.isArray(booking.flights) ? booking.flights : [];
+    const outbound = flightsList.find(f => f.direction === 'outbound') || flightsList[0] || booking.flight || booking.flight_details || booking.outbound_flight || {};
+    const returnFlight = flightsList.find(f => f.direction === 'return') || flightsList[1] || booking.returnFlight || booking.return_flight || null;
+    const hasReturnFlight = !!returnFlight && Object.keys(returnFlight).length > 0;
+
+    // Outbound Flight Fields
+    const outboundAirline = outbound.carrier || outbound.airline || booking.carrier || booking.airline || 'Commercial Airline';
+    const outboundFlightNumber = outbound.flight_number || outbound.flightNumber || outbound.number || '';
+    const outboundOriginCode = outbound.origin_code || outbound.departure_airport || outbound.departure?.airport || outbound.origin || 'DEP';
+    const outboundOriginCity = outbound.origin_city || outbound.departure_city || outbound.departure?.city || outboundOriginCode;
+    const outboundDestinationCode = outbound.destination_code || outbound.arrival_airport || outbound.arrival?.airport || outbound.destination || 'ARR';
+    const outboundDestinationCity = outbound.destination_city || outbound.arrival_city || outbound.arrival?.city || outboundDestinationCode;
+    const outboundDepartureDate = formatUsDate(outbound.departure_date || outbound.departure_time || outbound.departureTime);
+    const outboundDepartureTime = formatUsTime(outbound.departure_time || outbound.departureTime || outbound.departure_date);
+    const outboundArrivalDate = formatUsDate(outbound.arrival_date || outbound.arrival_time || outbound.arrivalTime);
+    const outboundArrivalTime = formatUsTime(outbound.arrival_time || outbound.arrivalTime || outbound.arrival_date);
+    const outboundCabin = outbound.cabin_class || outbound.cabin || outbound.class || 'Economy';
+    const outboundStops = outbound.stops !== undefined ? (outbound.stops === 0 ? 'Nonstop' : `${outbound.stops} Stop${outbound.stops > 1 ? 's' : ''}`) : 'Nonstop';
+
+    // Load HTML Template
+    const templatePath = path.join(__dirname, 'templates/booking-confirmation.html');
+    let html = await fs.readFile(templatePath, 'utf8');
+
+    // Handle {{#if hasReturnFlight}}...{{/if}}
+    if (hasReturnFlight) {
+      // Unwrap block
+      html = html.replace(/\{\{#if hasReturnFlight\}\}/g, '').replace(/\{\{\/if\}\}/g, '');
+
+      const returnAirline = returnFlight.carrier || returnFlight.airline || outboundAirline;
+      const returnFlightNumber = returnFlight.flight_number || returnFlight.flightNumber || returnFlight.number || '';
+      const returnOriginCode = returnFlight.origin_code || returnFlight.departure_airport || returnFlight.departure?.airport || outboundDestinationCode;
+      const returnOriginCity = returnFlight.origin_city || returnFlight.departure_city || returnFlight.departure?.city || returnOriginCode;
+      const returnDestinationCode = returnFlight.destination_code || returnFlight.arrival_airport || returnFlight.arrival?.airport || outboundOriginCode;
+      const returnDestinationCity = returnFlight.destination_city || returnFlight.arrival_city || returnFlight.arrival?.city || returnDestinationCode;
+      const returnDepartureDate = formatUsDate(returnFlight.departure_date || returnFlight.departure_time || returnFlight.departureTime);
+      const returnDepartureTime = formatUsTime(returnFlight.departure_time || returnFlight.departureTime || returnFlight.departure_date);
+      const returnArrivalDate = formatUsDate(returnFlight.arrival_date || returnFlight.arrival_time || returnFlight.arrivalTime);
+      const returnArrivalTime = formatUsTime(returnFlight.arrival_time || returnFlight.arrivalTime || returnFlight.arrival_date);
+      const returnCabin = returnFlight.cabin_class || returnFlight.cabin || returnFlight.class || outboundCabin;
+      const returnStops = returnFlight.stops !== undefined ? (returnFlight.stops === 0 ? 'Nonstop' : `${returnFlight.stops} Stop${returnFlight.stops > 1 ? 's' : ''}`) : 'Nonstop';
+
+      const returnReplacements = {
+        '{{returnAirline}}': returnAirline,
+        '{{returnFlightNumber}}': returnFlightNumber,
+        '{{returnOriginCity}}': returnOriginCity,
+        '{{returnOriginCode}}': returnOriginCode,
+        '{{returnDestinationCity}}': returnDestinationCity,
+        '{{returnDestinationCode}}': returnDestinationCode,
+        '{{returnDepartureDate}}': returnDepartureDate,
+        '{{returnDepartureTime}}': returnDepartureTime,
+        '{{returnArrivalDate}}': returnArrivalDate,
+        '{{returnArrivalTime}}': returnArrivalTime,
+        '{{returnCabin}}': returnCabin,
+        '{{returnStops}}': returnStops
+      };
+
+      for (const [key, val] of Object.entries(returnReplacements)) {
+        html = html.replaceAll(key, val || '');
+      }
+    } else {
+      // Remove return flight block entirely for one-way trips
+      html = html.replace(/\{\{#if hasReturnFlight\}\}[\s\S]*?\{\{\/if\}\}/g, '');
+    }
+
+    // Standard Replacements
+    const replacements = {
+      '{{confirmationCode}}': confirmationCode,
+      '{{passengerFirstName}}': passengerFirstName,
+      '{{passengerName}}': passengerName,
+      '{{currencySymbol}}': currencySymbol,
+      '{{amountPaid}}': amountPaid,
+      '{{currency}}': currency,
+      '{{paymentMethod}}': paymentMethod,
+      '{{paymentDate}}': paymentDate,
+      '{{passengerCount}}': passengerCount,
+      '{{customerEmail}}': customerEmail,
+      '{{outboundAirline}}': outboundAirline,
+      '{{outboundFlightNumber}}': outboundFlightNumber,
+      '{{outboundOriginCity}}': outboundOriginCity,
+      '{{outboundOriginCode}}': outboundOriginCode,
+      '{{outboundDestinationCity}}': outboundDestinationCity,
+      '{{outboundDestinationCode}}': outboundDestinationCode,
+      '{{outboundDepartureDate}}': outboundDepartureDate,
+      '{{outboundDepartureTime}}': outboundDepartureTime,
+      '{{outboundArrivalDate}}': outboundArrivalDate,
+      '{{outboundArrivalTime}}': outboundArrivalTime,
+      '{{outboundCabin}}': outboundCabin,
+      '{{outboundStops}}': outboundStops
+    };
+
+    for (const [key, val] of Object.entries(replacements)) {
+      html = html.replaceAll(key, val || '');
+    }
+
+    // Safety clean any residual template placeholders
+    html = html.replace(/\{\{[^}]+\\}\}/g, '');
+
+    // Plaintext Fallback
     const customerTextBody = `
-====================================================
 THE FINAL SEAT — TEMPORARY RESERVATION CONFIRMATION
-====================================================
 
-Dear ${firstName},
+Thank you, ${passengerFirstName}!
 
-Thank you! Your payment of $${customerPrice.toFixed(2)} USD has been successfully received.
+Your payment of ${currencySymbol}${amountPaid} ${currency} has been received successfully via ${paymentMethod} on ${paymentDate}.
 
-TEMPORARY CONFIRMATION NUMBER: ${bookingReference}
+TEMPORARY CONFIRMATION NUMBER: ${confirmationCode}
 
-A confirmation email has been sent to ${email}. Please keep your temporary confirmation number for tracking your reservation. Your final electronic ticket and airline confirmation details will be emailed after fulfilment is completed.
-
-NOTICE:
-This email serves as a temporary reservation confirmation and receipt for your payment. It is NOT the airline's final electronic ticket number or PNR. Your official electronic ticket and airline confirmation details will be dispatched in a separate email once manual fulfilment is completed by our travel team.
-
-====================================================
-PAYMENT & RESERVATION RECEIPT
-====================================================
-Temporary Confirmation Number: ${bookingReference}
-Payment Status: PAID & CONFIRMED
-Amount Paid (Customer Total): $${customerPrice.toFixed(2)} USD
-Supplier Airfare: $${supplierPrice.toFixed(2)} USD
-Final Seat Subsidy (10% OFF): -$${discountAmount.toFixed(2)} USD
-Payment Method: ${paymentProvider}
-Transaction Reference: ${transactionId}
-Booking Date: ${new Date(bookingDate).toLocaleString()}
+PASSENGER DETAILS:
+Primary Passenger: ${passengerName}
+Number of Travelers: ${passengerCount}
+Contact Email: ${customerEmail}
 
 FLIGHT ITINERARY:
-Airline / Operator: ${carrierName}
-Flight Number: ${flightNumber}
-Route: ${origin} to ${destination}
-Departure Date/Time: ${departureTime}
-Cabin Class: ${cabinClass}
-Travelers: ${passengers.length || 1}
+Outbound: ${outboundAirline} ${outboundFlightNumber} (${outboundOriginCity} [${outboundOriginCode}] to ${outboundDestinationCity} [${outboundDestinationCode}])
+Departure: ${outboundDepartureDate} ${outboundDepartureTime}
+Arrival: ${outboundArrivalDate} ${outboundArrivalTime}
+Cabin: ${outboundCabin} | Stops: ${outboundStops}
+${hasReturnFlight ? `
+Return: ${outboundAirline} (${outboundDestinationCity} to ${outboundOriginCity})
+` : ''}
+IMPORTANT NOTICE:
+${confirmationCode} is a temporary confirmation number issued by The Final Seat. It is not the airline's final PNR, ticket number, or electronic ticket. Please wait for the separate email containing your final airline-issued confirmation details.
 
-PASSENGER MANIFEST:
-${passengerTextLines}
+Track your reservation at: https://www.thefinalseat.com/my-bookings?code=${confirmationCode}
 
-WHAT HAPPENS NEXT:
-1. Our travel specialists are verifying your passenger credentials and securing ticket issuance with the airline.
-2. Once issued, your official airline PNR & Electronic Ticket document will be sent to ${email}.
-3. You can check your booking status anytime at: ${frontendUrl}/my-bookings
-
-Need immediate support? Contact us 24/7:
-Email: support@thefinalseat.com
-Phone: +1 (888) 210-8656
-
-The Final Seat LLC · 5830 E 2nd St, Ste 7000, Casper, WY 82609
+Support 24/7: Call +1 (213) 965-9727 or Email support@thefinalseat.com
     `.trim();
 
-    // HTML Email Template with Premium Branding
-    const customerHtmlBody = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6fa; margin: 0; padding: 20px; color: #0f172a; }
-    .email-card { max-width: 620px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(15,23,42,0.08); }
-    .email-header { background: linear-gradient(135deg, #0f2744 0%, #1e3a5f 100%); padding: 32px 28px; text-align: center; color: #ffffff; }
-    .brand-title { font-size: 22px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; margin: 0 0 6px; }
-    .brand-sub { font-size: 13px; color: rgba(255,255,255,0.75); margin: 0; }
-    .email-body { padding: 28px; }
-    .greeting { font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 0; }
-    .success-pill { display: inline-block; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; font-weight: 700; font-size: 13px; padding: 6px 16px; border-radius: 20px; margin: 12px 0 20px; }
-    .ref-box { background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 18px; text-align: center; margin-bottom: 24px; }
-    .ref-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; font-weight: 700; margin-bottom: 4px; }
-    .ref-code { font-size: 24px; font-weight: 800; color: #1e3a5f; letter-spacing: 0.05em; margin: 0; }
-    .breakdown-card { background: #fafbfd; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 24px; }
-    .breakdown-title { font-size: 14px; font-weight: 700; color: #1e3a5f; margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; }
-    .row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; color: #475569; }
-    .row--total { border-top: 1px dashed #cbd5e1; padding-top: 10px; margin-top: 10px; font-size: 16px; font-weight: 800; color: #0f172a; }
-    .row--discount { color: #047857; font-weight: 700; }
-    .itinerary-card { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 18px; margin-bottom: 24px; }
-    .itinerary-header { font-size: 13px; font-weight: 700; color: #1e3a5f; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 6px; }
-    .disclaimer-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 16px; margin-bottom: 24px; color: #92400e; font-size: 13px; line-height: 1.6; }
-    .disclaimer-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; color: #78350f; display: block; }
-    .cta-button { display: block; width: 100%; text-align: center; background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%); color: #ffffff !important; text-decoration: none; padding: 14px 20px; border-radius: 10px; font-weight: 700; font-size: 15px; box-sizing: border-box; margin-bottom: 24px; }
-    .manifest-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
-    .manifest-table th { background: #f1f5f9; text-align: left; padding: 8px 10px; color: #475569; font-weight: 700; }
-    .manifest-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
-    .footer { text-align: center; padding: 20px; font-size: 12px; color: #94a3b8; border-top: 1px solid #f1f5f9; background: #fafbfd; }
-  </style>
-</head>
-<body>
-  <div class="email-card">
-    <div class="email-header">
-      <div class="brand-title">The Final Seat</div>
-      <div class="brand-sub">Instant Electronic Ticketing &amp; Travel Logistics</div>
-    </div>
-    
-    <div class="email-body">
-      <h2 class="greeting">Thank you, ${firstName}!</h2>
-      <p style="font-size: 15px; color: #334155; margin-top: 4px; line-height: 1.6;">
-        Your payment has been successfully received. We are currently processing your reservation request.
-      </p>
-      
-      <div class="success-pill">✓ Payment Status: PAID &amp; CONFIRMED</div>
-      
-      <div class="ref-box">
-        <div class="ref-label">Temporary Confirmation Number</div>
-        <div class="ref-code">${bookingReference}</div>
-      </div>
-      
-      <!-- Critical Disclaimer Box -->
-      <div class="disclaimer-box">
-        <span class="disclaimer-title">⚠️ Temporary Reservation Notice</span>
-        This email serves as a <strong>temporary reservation confirmation and receipt for your payment</strong>. It is not the airline's final electronic ticket number or PNR. Your official electronic ticket and airline confirmation details will be emailed after manual fulfilment is completed by our travel specialists.
-      </div>
-      
-      <!-- Receipt & Breakdown -->
-      <div class="breakdown-card">
-        <div class="breakdown-title">Payment &amp; Fare Receipt</div>
-        <div class="row">
-          <span>Supplier Airfare</span>
-          <span style="text-decoration: line-through;">$${supplierPrice.toFixed(2)} USD</span>
-        </div>
-        ${discountAmount > 0 ? `
-        <div class="row row--discount">
-          <span>Final Seat Subsidy (10% OFF)</span>
-          <span>-$${discountAmount.toFixed(2)} USD</span>
-        </div>` : ''}
-        <div class="row row--total">
-          <span>Total Customer Amount Paid</span>
-          <span style="color: #0f172a;">$${customerPrice.toFixed(2)} USD</span>
-        </div>
-        <div class="row" style="margin-top: 12px; font-size: 13px;">
-          <span>Payment Gateway</span>
-          <strong>${paymentProvider}</strong>
-        </div>
-        <div class="row" style="font-size: 13px;">
-          <span>Transaction Reference</span>
-          <code>${transactionId}</code>
-        </div>
-      </div>
-      
-      <!-- Itinerary Summary -->
-      <div class="itinerary-card">
-        <div class="itinerary-header">Flight Itinerary — ${carrierName}</div>
-        <div class="row">
-          <span>Route</span>
-          <strong>${origin} &rarr; ${destination}</strong>
-        </div>
-        <div class="row">
-          <span>Flight Number</span>
-          <strong>${flightNumber}</strong>
-        </div>
-        <div class="row">
-          <span>Departure Time</span>
-          <strong>${departureTime}</strong>
-        </div>
-        <div class="row">
-          <span>Cabin Class</span>
-          <strong>${cabinClass}</strong>
-        </div>
-      </div>
-      
-      <!-- Passenger Manifest -->
-      ${passengers.length > 0 ? `
-      <div style="margin-bottom: 24px;">
-        <div style="font-size: 13px; font-weight: 700; color: #1e3a5f; text-transform: uppercase; margin-bottom: 8px;">Passenger Manifest</div>
-        <table class="manifest-table">
-          <thead>
-            <tr><th>#</th><th>Passenger Name</th><th>DOB</th><th>Gender</th></tr>
-          </thead>
-          <tbody>
-            ${passengers.map((p, i) => `
-              <tr>
-                <td>${i + 1}</td>
-                <td><strong>${p.firstName || p.first_name} ${p.lastName || p.last_name}</strong></td>
-                <td>${p.dateOfBirth || p.date_of_birth || 'N/A'}</td>
-                <td style="text-transform: capitalize;">${p.gender || 'N/A'}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>` : ''}
-
-      <!-- Next Steps & Action CTA -->
-      <a href="${frontendUrl}/my-bookings" class="cta-button">View My Booking on The Final Seat &rarr;</a>
-      
-      <div style="font-size: 13px; color: #64748b; line-height: 1.6; text-align: center;">
-        Need assistance or changes? Contact our 24/7 travel desk:<br>
-        <strong>Email:</strong> <a href="mailto:support@thefinalseat.com" style="color: #1e3a5f;">support@thefinalseat.com</a> &middot; 
-        <strong>Phone:</strong> <a href="tel:+18882108656" style="color: #1e3a5f;">+1 (888) 210-8656</a>
-      </div>
-    </div>
-    
-    <div class="footer">
-      The Final Seat LLC &middot; 5830 E 2nd St, Ste 7000, Casper, WY 82609<br>
-      &copy; ${new Date().getFullYear()} The Final Seat LLC. All rights reserved.
-    </div>
-  </div>
-</body>
-</html>
-    `.trim();
-
+    const subject = `Payment Received — Temporary Confirmation ${confirmationCode}`;
     let emailMessageId = `log_${Date.now()}`;
-    let emailResult = null;
 
-    // Send email using configured Resend API or Nodemailer SMTP
     if (env.resendApiKey?.trim()) {
       try {
-        emailResult = await sendViaResend({
-          recipients: [email],
-          subject: `Temporary Reservation Confirmation — ${bookingReference} | The Final Seat`,
+        const result = await sendViaResend({
+          recipients: [customerEmail],
+          subject,
           textBody: customerTextBody,
-          htmlBody: customerHtmlBody,
+          htmlBody: html,
           replyTo: 'support@thefinalseat.com',
         });
-        if (emailResult && emailResult.messageId) {
-          emailMessageId = emailResult.messageId;
+        if (result && result.messageId) {
+          emailMessageId = result.messageId;
         }
       } catch (rErr) {
         logger.error(`Resend email error for booking ${bookingId}:`, rErr.message);
@@ -541,22 +489,21 @@ The Final Seat LLC · 5830 E 2nd St, Ste 7000, Casper, WY 82609
       try {
         const transporter = getTransporter();
         const info = await transporter.sendMail({
-          from: process.env.EMAIL_USER,
-          to: email,
-          subject: `Temporary Reservation Confirmation — ${bookingReference} | The Final Seat`,
+          from: env.resendFrom || 'The Final Seat <support@thefinalseat.com>',
+          to: customerEmail,
+          subject,
           text: customerTextBody,
-          html: customerHtmlBody,
+          html,
         });
         emailMessageId = info.messageId || emailMessageId;
-        logger.info(`SMTP confirmation email sent to ${email} for booking ${bookingReference}`);
+        logger.info(`SMTP confirmation email sent to ${customerEmail} for booking ${confirmationCode}`);
       } catch (sErr) {
         logger.error(`SMTP email error for booking ${bookingId}:`, sErr.message);
       }
     } else {
-      logger.warn(`No email API key / SMTP configured. Confirmation email for ${bookingReference} printed to logs.`);
+      logger.warn(`No email API key / SMTP configured. Confirmation email for ${confirmationCode} printed to logs.`);
     }
 
-    // Mark email sent idempotently in Supabase DB so duplicate webhooks do not trigger re-sends
     if (bookingId) {
       await bookingRepository.markConfirmationEmailSent(bookingId, emailMessageId);
     }
@@ -565,10 +512,10 @@ The Final Seat LLC · 5830 E 2nd St, Ste 7000, Casper, WY 82609
 
   } catch (error) {
     logger.error('[Email] Non-blocking error in sendBookingConfirmation:', error.message);
-    // Return gracefully without throwing so payment capture is never reversed by email errors
     return { success: false, error: error.message };
   }
 };
+
 
 export const sendPaymentFailedEmail = async (booking, reason = 'Payment processing failed') => {
   try {

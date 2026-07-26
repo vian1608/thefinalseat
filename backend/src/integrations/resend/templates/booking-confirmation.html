@@ -1,0 +1,1263 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta
+    name="format-detection"
+    content="telephone=no,address=no,email=no,date=no,url=no"
+  >
+
+  <title>
+    Payment Received — Temporary Confirmation {{confirmationCode}}
+  </title>
+
+  <style>
+    html,
+    body {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      min-width: 100% !important;
+      background: #f8f4f5 !important;
+    }
+
+    body,
+    table,
+    td,
+    a,
+    p,
+    div,
+    span {
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    table {
+      border-collapse: collapse !important;
+      border-spacing: 0 !important;
+    }
+
+    td {
+      overflow-wrap: anywhere;
+    }
+
+    a {
+      text-decoration: none;
+    }
+
+    .email-shell {
+      width: 100% !important;
+      max-width: 600px !important;
+      table-layout: fixed !important;
+    }
+
+    .content-pad {
+      padding-left: 34px !important;
+      padding-right: 34px !important;
+    }
+
+    .full-button {
+      display: block !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+      text-align: center !important;
+    }
+
+    @media screen and (max-width: 620px) {
+      .outer-pad {
+        padding: 8px 5px !important;
+      }
+
+      .content-pad {
+        padding-left: 19px !important;
+        padding-right: 19px !important;
+      }
+
+      .mobile-title {
+        font-size: 29px !important;
+        line-height: 36px !important;
+      }
+
+      .mobile-copy {
+        font-size: 16px !important;
+        line-height: 25px !important;
+      }
+
+      .header-name {
+        font-size: 22px !important;
+        line-height: 27px !important;
+      }
+
+      .mobile-stack {
+        display: block !important;
+        width: 100% !important;
+        padding: 0 !important;
+        margin-top: 10px !important;
+      }
+    }
+  </style>
+</head>
+
+<body
+  style="
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    min-width: 100%;
+    background: #f8f4f5;
+  "
+>
+
+  <!-- Hidden inbox preview -->
+  <div
+    style="
+      display: none;
+      max-height: 0;
+      overflow: hidden;
+      opacity: 0;
+      color: transparent;
+    "
+  >
+    Your payment has been received. View your temporary confirmation number
+    and flight itinerary.
+  </div>
+
+  <table
+    role="presentation"
+    width="100%"
+    style="
+      width: 100%;
+      background: #f8f4f5;
+    "
+  >
+    <tr>
+      <td
+        class="outer-pad"
+        align="center"
+        style="padding: 20px 8px;"
+      >
+
+        <table
+          role="presentation"
+          width="100%"
+          class="email-shell"
+          style="
+            width: 100%;
+            max-width: 600px;
+            background: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 8px 28px rgba(79, 16, 43, 0.12);
+          "
+        >
+
+          <!-- HEADER -->
+          <tr>
+            <td
+              align="center"
+              style="
+                background: #9f1239;
+                padding: 22px 18px;
+              "
+            >
+              <table role="presentation">
+                <tr>
+                  <td
+                    style="
+                      font-size: 43px;
+                      line-height: 43px;
+                      color: #f6d77a;
+                      padding-right: 14px;
+                    "
+                  >
+                    ✈
+                  </td>
+
+                  <td>
+                    <div
+                      class="header-name"
+                      style="
+                        font-size: 25px;
+                        line-height: 30px;
+                        font-weight: 800;
+                        color: #ffffff;
+                        white-space: nowrap;
+                      "
+                    >
+                      The Final Seat
+                    </div>
+
+                    <div
+                      style="
+                        font-size: 10px;
+                        line-height: 15px;
+                        letter-spacing: 1.4px;
+                        text-transform: uppercase;
+                        color: #f8dfe8;
+                      "
+                    >
+                      Flight Reservation Confirmation
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- HERO -->
+          <tr>
+            <td
+              class="content-pad"
+              style="
+                background: #fff5f8;
+                padding-top: 40px;
+                padding-bottom: 34px;
+              "
+            >
+              <div
+                style="
+                  font-size: 12px;
+                  letter-spacing: 1.5px;
+                  text-transform: uppercase;
+                  font-weight: 700;
+                  color: #9f1239;
+                "
+              >
+                Payment Successfully Received
+              </div>
+
+              <h1
+                class="mobile-title"
+                style="
+                  margin: 10px 0 14px;
+                  font-size: 36px;
+                  line-height: 43px;
+                  font-weight: 800;
+                  color: #7f0d2f;
+                "
+              >
+                Thank you, {{passengerFirstName}}!
+              </h1>
+
+              <p
+                class="mobile-copy"
+                style="
+                  margin: 0;
+                  font-size: 17px;
+                  line-height: 27px;
+                  color: #5f4a53;
+                "
+              >
+                Your payment has been received successfully. We are now
+                processing your flight reservation and preparing your final
+                airline confirmation details.
+              </p>
+            </td>
+          </tr>
+
+          <!-- TEMPORARY CONFIRMATION -->
+          <tr>
+            <td
+              class="content-pad"
+              style="
+                padding-top: 32px;
+                padding-bottom: 12px;
+              "
+            >
+              <table
+                role="presentation"
+                width="100%"
+                style="
+                  background: #fffaf0;
+                  border: 2px dashed #e2b84d;
+                  border-radius: 14px;
+                "
+              >
+                <tr>
+                  <td
+                    align="center"
+                    style="padding: 26px 20px;"
+                  >
+                    <div
+                      style="
+                        font-size: 12px;
+                        letter-spacing: 1.5px;
+                        text-transform: uppercase;
+                        font-weight: 700;
+                        color: #8b6b16;
+                      "
+                    >
+                      Temporary Confirmation Number
+                    </div>
+
+                    <div
+                      style="
+                        margin-top: 10px;
+                        font-size: 29px;
+                        line-height: 36px;
+                        font-weight: 800;
+                        letter-spacing: 2px;
+                        color: #7f0d2f;
+                      "
+                    >
+                      {{confirmationCode}}
+                    </div>
+
+                    <p
+                      style="
+                        margin: 12px 0 0;
+                        font-size: 14px;
+                        line-height: 22px;
+                        color: #6b5b43;
+                      "
+                    >
+                      Please save this number. Use it to track your reservation
+                      on the My Bookings page.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- VIEW BOOKING -->
+          <tr>
+            <td
+              class="content-pad"
+              style="
+                padding-top: 14px;
+                padding-bottom: 22px;
+              "
+            >
+              <a
+                href="https://www.thefinalseat.com/my-bookings?code={{confirmationCode}}"
+                class="full-button"
+                style="
+                  background: #9f1239;
+                  color: #ffffff;
+                  font-size: 16px;
+                  font-weight: 700;
+                  padding: 15px 18px;
+                  border-radius: 9px;
+                "
+              >
+                View My Booking
+              </a>
+            </td>
+          </tr>
+
+          <!-- PAYMENT DETAILS -->
+          <tr>
+            <td
+              class="content-pad"
+              style="padding-top: 6px; padding-bottom: 10px;"
+            >
+              <table
+                role="presentation"
+                width="100%"
+                style="
+                  border: 1px solid #eadfe3;
+                  border-radius: 13px;
+                "
+              >
+                <tr>
+                  <td style="padding: 24px 22px;">
+                    <div
+                      style="
+                        font-size: 12px;
+                        letter-spacing: 1.3px;
+                        text-transform: uppercase;
+                        font-weight: 700;
+                        color: #9f1239;
+                      "
+                    >
+                      Payment Details
+                    </div>
+
+                    <table
+                      role="presentation"
+                      width="100%"
+                      style="margin-top: 14px;"
+                    >
+                      <tr>
+                        <td
+                          style="
+                            padding: 7px 0;
+                            color: #667085;
+                            font-size: 14px;
+                          "
+                        >
+                          Payment Status
+                        </td>
+
+                        <td
+                          align="right"
+                          style="
+                            padding: 7px 0;
+                            color: #0f9f6e;
+                            font-weight: 700;
+                            font-size: 14px;
+                          "
+                        >
+                          Received
+                        </td>
+                      </tr>
+
+                      <tr>
+                        <td
+                          style="
+                            padding: 7px 0;
+                            border-top: 1px solid #f0e8eb;
+                            color: #667085;
+                            font-size: 14px;
+                          "
+                        >
+                          Amount Paid
+                        </td>
+
+                        <td
+                          align="right"
+                          style="
+                            padding: 7px 0;
+                            border-top: 1px solid #f0e8eb;
+                            color: #1f2937;
+                            font-weight: 700;
+                            font-size: 14px;
+                          "
+                        >
+                          {{currencySymbol}}{{amountPaid}} {{currency}}
+                        </td>
+                      </tr>
+
+                      <tr>
+                        <td
+                          style="
+                            padding: 7px 0;
+                            border-top: 1px solid #f0e8eb;
+                            color: #667085;
+                            font-size: 14px;
+                          "
+                        >
+                          Payment Method
+                        </td>
+
+                        <td
+                          align="right"
+                          style="
+                            padding: 7px 0;
+                            border-top: 1px solid #f0e8eb;
+                            color: #1f2937;
+                            font-weight: 700;
+                            font-size: 14px;
+                          "
+                        >
+                          {{paymentMethod}}
+                        </td>
+                      </tr>
+
+                      <tr>
+                        <td
+                          style="
+                            padding: 7px 0;
+                            border-top: 1px solid #f0e8eb;
+                            color: #667085;
+                            font-size: 14px;
+                          "
+                        >
+                          Payment Date
+                        </td>
+
+                        <td
+                          align="right"
+                          style="
+                            padding: 7px 0;
+                            border-top: 1px solid #f0e8eb;
+                            color: #1f2937;
+                            font-weight: 700;
+                            font-size: 14px;
+                          "
+                        >
+                          {{paymentDate}}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- PASSENGER DETAILS -->
+          <tr>
+            <td
+              class="content-pad"
+              style="
+                padding-top: 10px;
+                padding-bottom: 10px;
+              "
+            >
+              <table
+                role="presentation"
+                width="100%"
+                style="
+                  border: 1px solid #eadfe3;
+                  border-radius: 13px;
+                "
+              >
+                <tr>
+                  <td style="padding: 24px 22px;">
+                    <div
+                      style="
+                        font-size: 12px;
+                        letter-spacing: 1.3px;
+                        text-transform: uppercase;
+                        font-weight: 700;
+                        color: #9f1239;
+                      "
+                    >
+                      Passenger Details
+                    </div>
+
+                    <table
+                      role="presentation"
+                      width="100%"
+                      style="margin-top: 14px;"
+                    >
+                      <tr>
+                        <td
+                          style="
+                            padding: 7px 0;
+                            color: #667085;
+                            font-size: 14px;
+                          "
+                        >
+                          Primary Passenger
+                        </td>
+
+                        <td
+                          align="right"
+                          style="
+                            padding: 7px 0;
+                            color: #1f2937;
+                            font-weight: 700;
+                            font-size: 14px;
+                          "
+                        >
+                          {{passengerName}}
+                        </td>
+                      </tr>
+
+                      <tr>
+                        <td
+                          style="
+                            padding: 7px 0;
+                            border-top: 1px solid #f0e8eb;
+                            color: #667085;
+                            font-size: 14px;
+                          "
+                        >
+                          Number of Travelers
+                        </td>
+
+                        <td
+                          align="right"
+                          style="
+                            padding: 7px 0;
+                            border-top: 1px solid #f0e8eb;
+                            color: #1f2937;
+                            font-weight: 700;
+                            font-size: 14px;
+                          "
+                        >
+                          {{passengerCount}}
+                        </td>
+                      </tr>
+
+                      <tr>
+                        <td
+                          style="
+                            padding: 7px 0;
+                            border-top: 1px solid #f0e8eb;
+                            color: #667085;
+                            font-size: 14px;
+                          "
+                        >
+                          Contact Email
+                        </td>
+
+                        <td
+                          align="right"
+                          style="
+                            padding: 7px 0;
+                            border-top: 1px solid #f0e8eb;
+                            color: #1f2937;
+                            font-weight: 700;
+                            font-size: 14px;
+                          "
+                        >
+                          {{customerEmail}}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- ITINERARY -->
+          <tr>
+            <td
+              class="content-pad"
+              style="
+                padding-top: 10px;
+                padding-bottom: 10px;
+              "
+            >
+              <div
+                style="
+                  margin-bottom: 12px;
+                  font-size: 12px;
+                  letter-spacing: 1.3px;
+                  text-transform: uppercase;
+                  font-weight: 700;
+                  color: #9f1239;
+                "
+              >
+                Your Itinerary
+              </div>
+
+              <!-- OUTBOUND -->
+              <table
+                role="presentation"
+                width="100%"
+                style="
+                  background: #fff8fa;
+                  border: 1px solid #eadfe3;
+                  border-radius: 13px;
+                  margin-bottom: 12px;
+                "
+              >
+                <tr>
+                  <td style="padding: 22px;">
+                    <div
+                      style="
+                        display: inline-block;
+                        background: #7f0d2f;
+                        color: #ffffff;
+                        font-size: 10px;
+                        font-weight: 700;
+                        letter-spacing: 1px;
+                        text-transform: uppercase;
+                        padding: 5px 8px;
+                        border-radius: 999px;
+                      "
+                    >
+                      Outbound Flight
+                    </div>
+
+                    <div
+                      style="
+                        margin-top: 14px;
+                        font-size: 20px;
+                        font-weight: 800;
+                        color: #1f2937;
+                      "
+                    >
+                      {{outboundAirline}} {{outboundFlightNumber}}
+                    </div>
+
+                    <div
+                      style="
+                        margin-top: 8px;
+                        font-size: 15px;
+                        line-height: 24px;
+                        color: #4f5d6b;
+                      "
+                    >
+                      {{outboundOriginCity}} ({{outboundOriginCode}})
+                      →
+                      {{outboundDestinationCity}} ({{outboundDestinationCode}})
+                    </div>
+
+                    <table
+                      role="presentation"
+                      width="100%"
+                      style="margin-top: 16px;"
+                    >
+                      <tr>
+                        <td
+                          class="mobile-stack"
+                          width="50%"
+                        >
+                          <div
+                            style="
+                              font-size: 11px;
+                              text-transform: uppercase;
+                              letter-spacing: 1px;
+                              color: #9f1239;
+                              font-weight: 700;
+                            "
+                          >
+                            Departure
+                          </div>
+
+                          <div
+                            style="
+                              margin-top: 4px;
+                              font-size: 14px;
+                              color: #1f2937;
+                              font-weight: 700;
+                            "
+                          >
+                            {{outboundDepartureDate}}
+                          </div>
+
+                          <div
+                            style="
+                              font-size: 14px;
+                              color: #667085;
+                            "
+                          >
+                            {{outboundDepartureTime}}
+                          </div>
+                        </td>
+
+                        <td
+                          class="mobile-stack"
+                          width="50%"
+                        >
+                          <div
+                            style="
+                              font-size: 11px;
+                              text-transform: uppercase;
+                              letter-spacing: 1px;
+                              color: #9f1239;
+                              font-weight: 700;
+                            "
+                          >
+                            Arrival
+                          </div>
+
+                          <div
+                            style="
+                              margin-top: 4px;
+                              font-size: 14px;
+                              color: #1f2937;
+                              font-weight: 700;
+                            "
+                          >
+                            {{outboundArrivalDate}}
+                          </div>
+
+                          <div
+                            style="
+                              font-size: 14px;
+                              color: #667085;
+                            "
+                          >
+                            {{outboundArrivalTime}}
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <div
+                      style="
+                        margin-top: 15px;
+                        font-size: 13px;
+                        color: #667085;
+                      "
+                    >
+                      Cabin: {{outboundCabin}}
+                      &nbsp;•&nbsp;
+                      Stops: {{outboundStops}}
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- RETURN FLIGHT -->
+              <!-- Remove this block for one-way reservations -->
+              {{#if hasReturnFlight}}
+              <table
+                role="presentation"
+                width="100%"
+                style="
+                  background: #fff8fa;
+                  border: 1px solid #eadfe3;
+                  border-radius: 13px;
+                "
+              >
+                <tr>
+                  <td style="padding: 22px;">
+                    <div
+                      style="
+                        display: inline-block;
+                        background: #9f1239;
+                        color: #ffffff;
+                        font-size: 10px;
+                        font-weight: 700;
+                        letter-spacing: 1px;
+                        text-transform: uppercase;
+                        padding: 5px 8px;
+                        border-radius: 999px;
+                      "
+                    >
+                      Return Flight
+                    </div>
+
+                    <div
+                      style="
+                        margin-top: 14px;
+                        font-size: 20px;
+                        font-weight: 800;
+                        color: #1f2937;
+                      "
+                    >
+                      {{returnAirline}} {{returnFlightNumber}}
+                    </div>
+
+                    <div
+                      style="
+                        margin-top: 8px;
+                        font-size: 15px;
+                        line-height: 24px;
+                        color: #4f5d6b;
+                      "
+                    >
+                      {{returnOriginCity}} ({{returnOriginCode}})
+                      →
+                      {{returnDestinationCity}} ({{returnDestinationCode}})
+                    </div>
+
+                    <table
+                      role="presentation"
+                      width="100%"
+                      style="margin-top: 16px;"
+                    >
+                      <tr>
+                        <td
+                          class="mobile-stack"
+                          width="50%"
+                        >
+                          <div
+                            style="
+                              font-size: 11px;
+                              text-transform: uppercase;
+                              letter-spacing: 1px;
+                              color: #9f1239;
+                              font-weight: 700;
+                            "
+                          >
+                            Departure
+                          </div>
+
+                          <div
+                            style="
+                              margin-top: 4px;
+                              font-size: 14px;
+                              color: #1f2937;
+                              font-weight: 700;
+                            "
+                          >
+                            {{returnDepartureDate}}
+                          </div>
+
+                          <div
+                            style="
+                              font-size: 14px;
+                              color: #667085;
+                            "
+                          >
+                            {{returnDepartureTime}}
+                          </div>
+                        </td>
+
+                        <td
+                          class="mobile-stack"
+                          width="50%"
+                        >
+                          <div
+                            style="
+                              font-size: 11px;
+                              text-transform: uppercase;
+                              letter-spacing: 1px;
+                              color: #9f1239;
+                              font-weight: 700;
+                            "
+                          >
+                            Arrival
+                          </div>
+
+                          <div
+                            style="
+                              margin-top: 4px;
+                              font-size: 14px;
+                              color: #1f2937;
+                              font-weight: 700;
+                            "
+                          >
+                            {{returnArrivalDate}}
+                          </div>
+
+                          <div
+                            style="
+                              font-size: 14px;
+                              color: #667085;
+                            "
+                          >
+                            {{returnArrivalTime}}
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <div
+                      style="
+                        margin-top: 15px;
+                        font-size: 13px;
+                        color: #667085;
+                      "
+                    >
+                      Cabin: {{returnCabin}}
+                      &nbsp;•&nbsp;
+                      Stops: {{returnStops}}
+                    </div>
+                  </td>
+                </tr>
+              </table>
+              {{/if}}
+            </td>
+          </tr>
+
+          <!-- NEXT STEPS -->
+          <tr>
+            <td
+              class="content-pad"
+              style="
+                padding-top: 18px;
+                padding-bottom: 10px;
+              "
+            >
+              <table
+                role="presentation"
+                width="100%"
+                style="
+                  background: #fff5f8;
+                  border: 1px solid #ead1da;
+                  border-radius: 13px;
+                "
+              >
+                <tr>
+                  <td style="padding: 24px 22px;">
+                    <div
+                      style="
+                        font-size: 12px;
+                        letter-spacing: 1.2px;
+                        text-transform: uppercase;
+                        font-weight: 700;
+                        color: #9f1239;
+                      "
+                    >
+                      What Happens Next?
+                    </div>
+
+                    <div
+                      style="
+                        margin-top: 6px;
+                        font-size: 22px;
+                        line-height: 29px;
+                        font-weight: 800;
+                        color: #7f0d2f;
+                      "
+                    >
+                      We are preparing your final airline confirmation
+                    </div>
+
+                    <p
+                      style="
+                        margin: 10px 0 0;
+                        font-size: 15px;
+                        line-height: 24px;
+                        color: #5f4a53;
+                      "
+                    >
+                      Our reservation team will verify the selected itinerary
+                      and complete the ticketing process. Your final airline
+                      confirmation number, PNR, and electronic ticket details
+                      will be sent in a separate email once processing is
+                      completed.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- IMPORTANT NOTICE -->
+          <tr>
+            <td
+              class="content-pad"
+              style="
+                padding-top: 18px;
+                padding-bottom: 10px;
+              "
+            >
+              <table
+                role="presentation"
+                width="100%"
+                style="
+                  background: #fff8ec;
+                  border: 1px solid #ecd6ad;
+                  border-radius: 11px;
+                "
+              >
+                <tr>
+                  <td style="padding: 18px;">
+                    <div
+                      style="
+                        font-size: 15px;
+                        font-weight: 800;
+                        color: #7f0d2f;
+                      "
+                    >
+                      Important Reservation Notice
+                    </div>
+
+                    <p
+                      style="
+                        margin: 6px 0 0;
+                        font-size: 13px;
+                        line-height: 20px;
+                        color: #5f6f7f;
+                      "
+                    >
+                      {{confirmationCode}} is a temporary confirmation number
+                      issued by The Final Seat. It is not the airline’s final
+                      PNR, ticket number, or electronic ticket. Please wait for
+                      the separate email containing your final airline-issued
+                      confirmation and ticket details.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- SUPPORT -->
+          <tr>
+            <td
+              class="content-pad"
+              style="
+                padding-top: 28px;
+                padding-bottom: 32px;
+              "
+            >
+              <table
+                role="presentation"
+                width="100%"
+                style="border-top: 1px solid #eadfe3;"
+              >
+                <tr>
+                  <td style="padding-top: 26px;">
+                    <div
+                      style="
+                        font-size: 22px;
+                        font-weight: 800;
+                        color: #7f0d2f;
+                      "
+                    >
+                      We are here for you 24/7
+                    </div>
+
+                    <p
+                      style="
+                        margin: 8px 0 20px;
+                        font-size: 15px;
+                        line-height: 24px;
+                        color: #5f4a53;
+                      "
+                    >
+                      For booking questions, schedule changes, cancellations,
+                      accessibility support, or urgent travel assistance, our
+                      passenger support team is ready to help.
+                    </p>
+
+                    <a
+                      href="tel:+12139659727"
+                      class="full-button"
+                      style="
+                        background: #9f1239;
+                        color: #ffffff;
+                        font-size: 15px;
+                        font-weight: 700;
+                        padding: 14px;
+                        border-radius: 99px;
+                        margin-bottom: 10px;
+                      "
+                    >
+                      Call +1 (213) 965-9727
+                    </a>
+
+                    <a
+                      href="mailto:support@thefinalseat.com"
+                      class="full-button"
+                      style="
+                        background: #fff3c4;
+                        color: #7f0d2f;
+                        font-size: 15px;
+                        font-weight: 700;
+                        padding: 14px;
+                        border: 1px solid #e6c866;
+                        border-radius: 9px;
+                        margin-bottom: 10px;
+                      "
+                    >
+                      Email support@thefinalseat.com
+                    </a>
+
+                    <a
+                      href="https://www.thefinalseat.com/my-bookings?code={{confirmationCode}}"
+                      class="full-button"
+                      style="
+                        background: #ffffff;
+                        color: #7f0d2f;
+                        font-size: 15px;
+                        font-weight: 700;
+                        padding: 13px 14px;
+                        border: 1px solid #cfa7b5;
+                        border-radius: 9px;
+                      "
+                    >
+                      View My Booking
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- CLOSING -->
+          <tr>
+            <td
+              class="content-pad"
+              style="
+                background: #7f0d2f;
+                padding-top: 30px;
+                padding-bottom: 30px;
+              "
+            >
+              <p
+                style="
+                  margin: 0 0 7px;
+                  font-size: 18px;
+                  font-weight: 700;
+                  color: #ffffff;
+                "
+              >
+                Thank you for choosing The Final Seat.
+              </p>
+
+              <p
+                style="
+                  margin: 0;
+                  font-size: 15px;
+                  line-height: 23px;
+                  color: #f8dfe8;
+                "
+              >
+                Warm regards,
+                <br>
+
+                <strong style="color: #ffffff;">
+                  The Final Seat Support Team
+                </strong>
+
+                <br>
+
+                Your Journey. Our Priority.
+              </p>
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td
+              align="center"
+              style="
+                padding: 22px 20px;
+                background: #fbf8f9;
+              "
+            >
+              <p
+                style="
+                  margin: 0 0 6px;
+                  font-size: 12px;
+                  color: #748596;
+                "
+              >
+                The Final Seat · 24/7 Flight Reservation Assistance
+              </p>
+
+              <p
+                style="
+                  margin: 0 0 8px;
+                  font-size: 12px;
+                  color: #748596;
+                "
+              >
+                <a
+                  href="tel:+12139659727"
+                  style="color: #7f0d2f;"
+                >
+                  Call +1 (213) 965-9727
+                </a>
+
+                &nbsp;·&nbsp;
+
+                <a
+                  href="mailto:support@thefinalseat.com"
+                  style="
+                    color: #7f0d2f;
+                    text-decoration: underline;
+                  "
+                >
+                  Email Support
+                </a>
+
+                &nbsp;·&nbsp;
+
+                <a
+                  href="https://www.thefinalseat.com"
+                  style="
+                    color: #7f0d2f;
+                    text-decoration: underline;
+                  "
+                >
+                  Website
+                </a>
+              </p>
+
+              <p
+                style="
+                  margin: 0;
+                  font-size: 11px;
+                  line-height: 18px;
+                  color: #8a98a6;
+                "
+              >
+                This is a transactional email related to your reservation
+                request and payment. The Final Seat is an independent travel
+                service and is not owned or operated by any airline.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
