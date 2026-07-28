@@ -171,7 +171,8 @@ function PaymentSuccess() {
           <h2 className="minimal-pending-title">Your payment was received, but confirmation is still processing</h2>
 
           <div className="minimal-ref-box">
-            <span className="minimal-ref-label">Temporary Confirmation Number</span>
+            <span className="minimal-ref-label">Booking Reference</span>
+
             <strong className="minimal-ref-code">{tempCode}</strong>
           </div>
 

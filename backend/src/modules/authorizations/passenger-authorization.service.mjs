@@ -106,12 +106,13 @@ export const passengerAuthorizationService = {
       memoryAuthStore.set(token, authRecord);
     }
 
-    // Update booking status to AWAITING_AUTH (within VARCHAR(20) limit)
-    await bookingRepository.updateStatus(bookingId, {
-      status: 'AWAITING_AUTH',
-      payment_status: 'pending'
+    // Persist authorization_token & expires_at directly on booking record
+    await bookingRepository.updateBookingStatus(bookingId, {
+      status: 'AWAITING_AUTHORIZATION',
+      authorization_token: token,
+      authorization_expires_at: expiresAt,
+      payment_status: 'PENDING'
     });
-
 
     return { ...authRecord, token };
   },
@@ -128,14 +129,14 @@ export const passengerAuthorizationService = {
     const currencyStr = authRecord.currency || 'USD';
     const cardLast4 = authRecord.card_last4 || '4242';
 
-    const subject = `Action Required — Authorize Flight Reservation ${confirmationCode} | The Final Seat`;
+    const subject = `Action Required — Authorize Booking ${confirmationCode} | The Final Seat`;
 
     const textBody = `
 THE FINAL SEAT — PASSENGER RESERVATION AUTHORIZATION REQUIRED
 
 Dear ${booking.passenger_name || 'Valued Customer'},
 
-Your flight reservation request ${confirmationCode} is ready for final authorization.
+Please review and authorize your reservation for Booking Reference ${confirmationCode}.
 
 Amount to Authorize: $${amountStr} ${currencyStr}
 Saved Payment Method: ${authRecord.card_brand || 'Visa'} ending in ${cardLast4}
@@ -144,7 +145,7 @@ Please review your complete flight itinerary, passenger details, fare breakdown,
 
 ${authUrl}
 
-NOTE: Your saved card ending in ${cardLast4} will NOT be charged until you review and click "I Authorize" on the secure authorization page. This authorization link expires in 24 hours.
+NOTE: Your saved card ending in ${cardLast4} will NOT be charged from an email link click alone. You will review full flight segments, fare breakdown, and passenger names on our secure authorization page before confirming. This authorization link expires in 24 hours.
 
 Need assistance? Contact our 24/7 Support Desk:
 Email: support@thefinalseat.com | Call: +1 (213) 965-9727
@@ -180,11 +181,11 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
     <div class="body">
       <h3 class="hero-title">Action Required: Authorize Your Booking</h3>
       <p style="font-size: 15px; color: #5f4a53; line-height: 1.6;">
-        Your flight reservation request is prepared. Please review your itinerary details and authorize the total amount of <strong>$${amountStr} ${currencyStr}</strong> to complete your reservation.
+        Please review and authorize your reservation for <strong>Booking Reference ${confirmationCode}</strong> for a total charge of <strong>$${amountStr} ${currencyStr}</strong>.
       </p>
 
       <div class="box">
-        <div class="box-title">Temporary Reservation Code</div>
+        <div class="box-title">Booking Reference</div>
         <div class="box-code">${confirmationCode}</div>
         <div style="font-size: 13px; color: #6b5b43;">Saved Card: ${authRecord.card_brand || 'Visa'} ending in <strong>${cardLast4}</strong></div>
       </div>
@@ -197,6 +198,7 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
     </div>
     <div class="footer">
       The Final Seat LLC &middot; 24/7 Support: support@thefinalseat.com &middot; +1 (213) 965-9727
+    </div>
     </div>
   </div>
 </body>
@@ -232,10 +234,12 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
    * Fetch sanitized authorization payload for passenger authorization page (/authorize/:token)
    */
   getAuthorizationByToken: async (token) => {
+    logger.info(`[Auth Lookup] Token lookup received: ${String(token).substring(0, 12)}...`);
+
     let authRecord = memoryAuthStore.get(token);
 
     if (!authRecord) {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('passenger_authorizations')
         .select('*')
         .eq('token', token)
@@ -245,8 +249,34 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
     }
 
     if (!authRecord) {
+      // Fallback: Check if token is stored directly on bookings record
+      const { data: bkData } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('authorization_token', token)
+        .maybeSingle();
+
+      if (bkData) {
+        authRecord = {
+          booking_id: bkData.id,
+          token: token,
+          status: ['AUTHORIZED', 'READY_FOR_TICKETING', 'TICKETED', 'DONE'].includes(bkData.status) ? 'accepted' : 'pending',
+          authorized_amount: parseFloat(bkData.customer_price || bkData.total_amount || 0),
+          currency: (bkData.currency || 'USD').toUpperCase(),
+          card_brand: bkData.card_brand || 'Visa',
+          card_last4: bkData.card_last4 || '4242',
+          expires_at: bkData.authorization_expires_at || new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+          quote_snapshot: { amount: (bkData.customer_price || bkData.total_amount || 0).toString() }
+        };
+      }
+    }
+
+    if (!authRecord) {
+      logger.warn(`[Auth Lookup] Token not found in database or memory store: ${token}`);
       throw new Error('AUTHORIZATION_NOT_FOUND');
     }
+
+    logger.info(`[Auth Lookup] Successfully resolved authorization record for booking ${authRecord.booking_id}`);
 
     // Check expiration
     if (new Date(authRecord.expires_at).getTime() < Date.now()) {

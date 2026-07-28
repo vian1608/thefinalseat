@@ -174,7 +174,8 @@ function PassengerAuthorizationPage() {
 
           {/* Code Badge */}
           <div className="auth-code-badge">
-            <span>Temporary Confirmation Code: <strong>{authData.confirmationCode}</strong></span>
+            <span>Booking Reference: <strong>{authData.confirmationCode}</strong></span>
+
           </div>
 
           {/* Passenger Details */}
