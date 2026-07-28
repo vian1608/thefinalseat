@@ -1,8 +1,12 @@
 import supabase from '../../integrations/supabase/supabase.client.mjs';
 import logger from '../../config/logger.mjs';
 
+const segmentsMemoryStore = new Map();
+const bookingsMemoryStore = new Map();
 
 export const bookingRepository = {
+
+
   createBookingRecord: async (dbRow) => {
     const { data, error } = await supabase
       .from('bookings')
@@ -110,32 +114,42 @@ export const bookingRepository = {
   },
 
   getRelations: async (bookingId) => {
-    const [travellers, contacts, flights, payments] = await Promise.all([
+    const [travellers, contacts, flights, payments, itinerarySegments] = await Promise.all([
       supabase.from('travellers').select('*').eq('booking_id', bookingId),
       supabase.from('contacts').select('*').eq('booking_id', bookingId),
       supabase.from('flights').select('*').eq('booking_id', bookingId),
       supabase.from('payments').select('*').eq('booking_id', bookingId),
+      supabase.from('booking_itinerary_segments').select('*').eq('booking_id', bookingId).order('segment_sequence', { ascending: true })
     ]);
+
+    const memorySegs = segmentsMemoryStore.get(bookingId) || [];
+    const dbSegs = itinerarySegments.data || [];
+    const finalSegs = dbSegs.length > 0 ? dbSegs : memorySegs;
 
     return {
       travellers: travellers.data || [],
       contacts: contacts.data || [],
       flights: flights.data || [],
-      payments: payments.data || []
+      payments: payments.data || [],
+      itinerarySegments: finalSegs
     };
   },
 
-  enrichBookingRecord: (booking, relations = { travellers: [], contacts: [], flights: [], payments: [] }) => {
+
+  enrichBookingRecord: (booking, relations = { travellers: [], contacts: [], flights: [], payments: [], itinerarySegments: [] }) => {
     if (!booking) return null;
-    const outboundFlight = relations.flights?.find(f => f.direction === 'outbound') || relations.flights?.[0] || {};
+    const segments = relations.itinerarySegments || [];
+    const outboundSegs = segments.filter(s => (s.journey_direction || s.direction) === 'outbound');
+    const returnSegs = segments.filter(s => (s.journey_direction || s.direction) === 'return');
+    const outboundFlight = outboundSegs[0] || relations.flights?.find(f => f.direction === 'outbound') || relations.flights?.[0] || {};
     const firstTraveller = relations.travellers?.[0] || {};
 
     const travellerName = [firstTraveller.first_name, firstTraveller.middle_name, firstTraveller.last_name].filter(Boolean).join(' ');
     const masterName = travellerName.trim() || booking.passenger_name || 'Valued Passenger';
-    const carrier = outboundFlight.airline || outboundFlight.carrier || null;
-    const originCode = outboundFlight.departure_airport || outboundFlight.origin || null;
-    const destCode = outboundFlight.arrival_airport || outboundFlight.destination || null;
-    const departureDate = outboundFlight.departure_time || outboundFlight.departure_date || null;
+    const carrier = outboundFlight.carrier_name || outboundFlight.airline || outboundFlight.carrier || null;
+    const originCode = outboundFlight.origin_airport || outboundFlight.departure_airport || outboundFlight.origin || null;
+    const destCode = outboundSegs.length > 0 ? outboundSegs[outboundSegs.length - 1].destination_airport : (outboundFlight.arrival_airport || outboundFlight.destination || null);
+    const departureDate = outboundFlight.departure_date || outboundFlight.departure_time || null;
 
     return {
       ...booking,
@@ -149,6 +163,9 @@ export const bookingRepository = {
       contacts: relations.contacts || [],
       flights: relations.flights || [],
       payments: relations.payments || [],
+      itinerary_segments: segments,
+      outbound_segments: outboundSegs,
+      return_segments: returnSegs,
       flight_details: outboundFlight ? {
         airline: carrier,
         departure: {
@@ -161,6 +178,7 @@ export const bookingRepository = {
       } : null
     };
   },
+
 
   findBookingByCode: async (code) => {
     const { data, error } = await supabase
@@ -185,10 +203,14 @@ export const bookingRepository = {
       .eq('id', id)
       .maybeSingle();
 
-    if (error || !data) return data;
-    const relations = await bookingRepository.getRelations(data.id);
-    return bookingRepository.enrichBookingRecord(data, relations);
+    const memOverridden = bookingsMemoryStore.get(id);
+    const baseData = (data || memOverridden) ? { ...(data || {}), ...(memOverridden || {}) } : null;
+
+    if (!baseData) return null;
+    const relations = await bookingRepository.getRelations(baseData.id);
+    return bookingRepository.enrichBookingRecord(baseData, relations);
   },
+
 
   getById: async (id) => {
     return bookingRepository.findBookingById(id);
@@ -328,7 +350,9 @@ export const bookingRepository = {
         logger.warn(`Supabase schema notice: ${error.message}.`);
         const existing = await bookingRepository.getById(id);
         const updatedRecord = { ...(existing || {}), ...cleanFields };
+        bookingsMemoryStore.set(id, updatedRecord);
         return updatedRecord;
+
       }
       throw new Error(`Failed to update booking status: ${error.message}`);
     }
@@ -401,34 +425,55 @@ export const bookingRepository = {
     try {
       await supabase.from('booking_itinerary_segments').delete().eq('booking_id', bookingId);
       if (segments && segments.length > 0) {
-        const rows = segments.map((seg, idx) => ({
-          booking_id: bookingId,
-          trip_type: seg.trip_type || 'one_way',
-          direction: seg.direction || 'outbound',
-          carrier_name: seg.carrier_name || seg.airline || 'Carrier',
-          carrier_code: seg.carrier_code || seg.carrier || '',
-          flight_number: seg.flight_number || seg.flightNumber || '',
-          origin_airport: seg.origin_airport || seg.originCode || 'DEP',
-          origin_city: seg.origin_city || seg.originCity || 'DEP',
-          destination_airport: seg.destination_airport || seg.destinationCode || 'ARR',
-          destination_city: seg.destination_city || seg.destinationCity || 'ARR',
-          departure_date: seg.departure_date || seg.departureDate || 'Scheduled',
-          departure_time: seg.departure_time || seg.departureTime || 'Scheduled',
-          arrival_date: seg.arrival_date || seg.arrivalDate || 'Scheduled',
-          arrival_time: seg.arrival_time || seg.arrivalTime || 'Scheduled',
-          cabin: seg.cabin || seg.cabinClass || 'Economy',
-          booking_class: seg.booking_class || 'Y',
-          terminal: seg.terminal || '',
-          baggage_allowance: seg.baggage_allowance || '1 Bag',
-          stop_count: parseInt(seg.stop_count || 0, 10),
-          segment_order: idx + 1
-        }));
-        await supabase.from('booking_itinerary_segments').insert(rows);
+        let outboundSeq = 1;
+        let returnSeq = 1;
+
+        const rows = segments.map((seg, idx) => {
+          const dir = seg.journey_direction || seg.direction || (idx === 0 ? 'outbound' : (seg.trip_type === 'round_trip' ? 'return' : 'outbound'));
+          const seq = seg.segment_sequence || (dir === 'outbound' ? outboundSeq++ : returnSeq++);
+
+          return {
+            booking_id: bookingId,
+            trip_type: seg.trip_type || 'one_way',
+            direction: dir,
+            journey_direction: dir,
+            segment_sequence: seq,
+            carrier_name: seg.carrier_name || seg.airline || 'Carrier',
+            carrier_code: seg.carrier_code || seg.carrier || '',
+            operating_carrier: seg.operating_carrier || seg.operatingCarrier || null,
+            flight_number: seg.flight_number || seg.flightNumber || '',
+            origin_airport: seg.origin_airport || seg.originCode || 'DEP',
+            origin_city: seg.origin_city || seg.originCity || 'DEP',
+            destination_airport: seg.destination_airport || seg.destinationCode || 'ARR',
+            destination_city: seg.destination_city || seg.destinationCity || 'ARR',
+            departure_date: seg.departure_date || seg.departureDate || 'Scheduled',
+            departure_time: seg.departure_time || seg.departureTime || 'Scheduled',
+            arrival_date: seg.arrival_date || seg.arrivalDate || 'Scheduled',
+            arrival_time: seg.arrival_time || seg.arrivalTime || 'Scheduled',
+            arrival_next_day: !!(seg.arrival_next_day || seg.arrivalNextDay),
+            cabin: seg.cabin || seg.cabinClass || 'Economy',
+            booking_class: seg.booking_class || 'Y',
+            terminal: seg.terminal || '',
+            baggage_allowance: seg.baggage_allowance || '1 Bag',
+            aircraft: seg.aircraft || null,
+            layover_duration: seg.layover_duration || seg.layoverDuration || null,
+            stop_count: parseInt(seg.stop_count || 0, 10),
+            segment_order: idx + 1
+          };
+        });
+
+        segmentsMemoryStore.set(bookingId, rows);
+        const { error } = await supabase.from('booking_itinerary_segments').insert(rows);
+        if (error) logger.warn(`saveItinerarySegments insert warning: ${error.message}. Saved to resilience memory store.`);
+      } else {
+        segmentsMemoryStore.delete(bookingId);
       }
     } catch (e) {
       logger.warn(`saveItinerarySegments notice: ${e.message}`);
     }
   },
+
+
 
   recordPriceRevision: async (revision) => {
     try {

@@ -196,34 +196,56 @@ function PassengerAuthorizationPage() {
           <div className="auth-section-block">
             <h4 className="auth-section-title"><i className="fas fa-plane-departure"></i> Flight Itinerary</h4>
             
-            {/* Outbound */}
-            <div className="auth-flight-card">
-              <div className="auth-flight-tag">Outbound Flight</div>
-              <div className="auth-flight-airline">{outbound.airline} {outbound.flightNumber}</div>
-              <div className="auth-flight-route">
-                {outbound.originCity} ({outbound.originCode}) &rarr; {outbound.destinationCity} ({outbound.destinationCode})
-              </div>
-              <div className="auth-flight-details">
-                <span><strong>Departure:</strong> {outbound.departureDate} {outbound.departureTime}</span>
-                <span><strong>Cabin:</strong> {outbound.cabinClass}</span>
-              </div>
-            </div>
+            {/* Outbound Journey */}
+            {(() => {
+              const outboundList = authData.itinerarySnapshot?.outboundSegments || (outbound?.carrier_name || outbound?.airline ? [outbound] : []);
+              const returnList = authData.itinerarySnapshot?.returnSegments || (returnFlight?.carrier_name || returnFlight?.airline ? [returnFlight] : []);
 
-            {/* Return if applicable */}
-            {returnFlight && (
-              <div className="auth-flight-card" style={{ marginTop: '0.85rem' }}>
-                <div className="auth-flight-tag" style={{ background: '#9f1239' }}>Return Flight</div>
-                <div className="auth-flight-airline">{returnFlight.airline} {returnFlight.flightNumber}</div>
-                <div className="auth-flight-route">
-                  {returnFlight.originCity} ({returnFlight.originCode}) &rarr; {returnFlight.destinationCity} ({returnFlight.destinationCode})
-                </div>
-                <div className="auth-flight-details">
-                  <span><strong>Departure:</strong> {returnFlight.departureDate} {returnFlight.departureTime}</span>
-                  <span><strong>Cabin:</strong> {returnFlight.cabinClass}</span>
-                </div>
-              </div>
-            )}
+              return (
+                <>
+                  <div className="auth-flight-card">
+                    <div className="auth-flight-tag">
+                      Outbound Journey ({outboundList.length > 1 ? `${outboundList.length - 1} Connection Stop(s)` : 'Nonstop'})
+                    </div>
+                    {outboundList.map((seg, idx) => (
+                      <div key={`out-${idx}`} style={{ marginTop: idx > 0 ? '0.75rem' : '0', paddingTop: idx > 0 ? '0.75rem' : '0', borderTop: idx > 0 ? '1px dashed #cbd5e1' : 'none' }}>
+                        <div className="auth-flight-airline">Flight #{idx + 1}: {seg.carrier_name || seg.airline || 'Airline'} {seg.flight_number || seg.flightNumber}</div>
+                        <div className="auth-flight-route">
+                          {seg.origin_city || seg.originCity || seg.origin_airport || seg.originCode} ({seg.origin_airport || seg.originCode}) &rarr; {seg.destination_city || seg.destinationCity || seg.destination_airport || seg.destinationCode} ({seg.destination_airport || seg.destinationCode})
+                        </div>
+                        <div className="auth-flight-details">
+                          <span><strong>Departure:</strong> {seg.departure_date || seg.departureDate} {seg.departure_time || seg.departureTime}</span>
+                          <span><strong>Cabin:</strong> {seg.cabin || seg.cabinClass || 'Economy'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Return Journey */}
+                  {returnList.length > 0 && (
+                    <div className="auth-flight-card" style={{ marginTop: '0.85rem' }}>
+                      <div className="auth-flight-tag" style={{ background: '#9f1239' }}>
+                        Return Journey ({returnList.length > 1 ? `${returnList.length - 1} Connection Stop(s)` : 'Nonstop'})
+                      </div>
+                      {returnList.map((seg, idx) => (
+                        <div key={`ret-${idx}`} style={{ marginTop: idx > 0 ? '0.75rem' : '0', paddingTop: idx > 0 ? '0.75rem' : '0', borderTop: idx > 0 ? '1px dashed #cbd5e1' : 'none' }}>
+                          <div className="auth-flight-airline">Flight #{idx + 1}: {seg.carrier_name || seg.airline || 'Airline'} {seg.flight_number || seg.flightNumber}</div>
+                          <div className="auth-flight-route">
+                            {seg.origin_city || seg.originCity || seg.origin_airport || seg.originCode} ({seg.origin_airport || seg.originCode}) &rarr; {seg.destination_city || seg.destinationCity || seg.destination_airport || seg.destinationCode} ({seg.destination_airport || seg.destinationCode})
+                          </div>
+                          <div className="auth-flight-details">
+                            <span><strong>Departure:</strong> {seg.departure_date || seg.departureDate} {seg.departure_time || seg.departureTime}</span>
+                            <span><strong>Cabin:</strong> {seg.cabin || seg.cabinClass || 'Economy'}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
+
 
           {/* Fare & Payment Breakdown */}
           <div className="auth-section-block">

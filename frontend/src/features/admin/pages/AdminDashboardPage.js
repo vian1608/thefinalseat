@@ -38,8 +38,13 @@ function AdminDashboard() {
 
 
 
-  // Itinerary Editor State
-  const [segments, setSegments] = useState([]);
+  // Itinerary Editor State (Journey Grouped)
+  const [outboundSegments, setOutboundSegments] = useState([]);
+  const [returnSegments, setReturnSegments] = useState([]);
+  const [hasReturnJourney, setHasReturnJourney] = useState(false);
+  const [openOutboundGroup, setOpenOutboundGroup] = useState(true);
+  const [openReturnGroup, setOpenReturnGroup] = useState(true);
+
 
   // Pricing Editor State
   const [pricingForm, setPricingForm] = useState({
@@ -145,35 +150,30 @@ function AdminDashboard() {
     setHasUnsavedEdits(false);
     setOpenAccordion(null);
 
-    // Initial itinerary segments setup
-    const rawFlights = booking.flights || [];
-    if (rawFlights.length > 0) {
-      setSegments(rawFlights.map((f, i) => ({
-        trip_type: booking.trip_type || 'one_way',
-        direction: f.direction || (i === 0 ? 'outbound' : 'return'),
-        carrier_name: f.airline || f.carrier || 'Commercial Airline',
-        carrier_code: f.carrier_code || 'UA',
-        flight_number: f.flight_number || f.flightNumber || 'UA 100',
-        origin_airport: f.departure_airport || f.origin_code || 'LAX',
-        origin_city: f.origin_city || f.departure_city || 'Los Angeles',
-        destination_airport: f.arrival_airport || f.destination_code || 'MIA',
-        destination_city: f.destination_city || f.arrival_city || 'Miami',
-        departure_date: f.departure_date || '2026-09-10',
-        departure_time: f.departure_time || '09:00 AM',
-        arrival_date: f.arrival_date || '2026-09-10',
-        arrival_time: f.arrival_time || '05:00 PM',
-        cabin: f.cabin || 'Economy',
-        booking_class: 'Y',
-        terminal: 'T1',
-        baggage_allowance: '1 Bag',
-        stop_count: 0
-      })));
-    } else {
-      setSegments([{
-        trip_type: 'one_way',
-        direction: 'outbound',
+    // Initial itinerary segments setup (Journey Grouped)
+    let rawOutbound = booking.outbound_segments || [];
+    let rawReturn = booking.return_segments || [];
+    const allSegments = booking.itinerary_segments || booking.flights || [];
+
+    if (rawOutbound.length === 0 && rawReturn.length === 0 && allSegments.length > 0) {
+      rawOutbound = allSegments.filter(s => (s.journey_direction || s.direction) === 'outbound');
+      rawReturn = allSegments.filter(s => (s.journey_direction || s.direction) === 'return');
+
+      if (rawOutbound.length === 0 && rawReturn.length === 0) {
+        rawOutbound = [allSegments[0]];
+        if (allSegments.length > 1 && (booking.trip_type === 'round_trip' || booking.tripType === 'round_trip')) {
+          rawReturn = allSegments.slice(1);
+        }
+      }
+    }
+
+    if (rawOutbound.length === 0) {
+      rawOutbound = [{
+        journey_direction: 'outbound',
+        segment_sequence: 1,
         carrier_name: booking.carrier || 'Commercial Airline',
         carrier_code: 'UA',
+        operating_carrier: '',
         flight_number: 'UA 100',
         origin_airport: booking.origin_code || 'LAX',
         origin_city: 'Los Angeles',
@@ -183,13 +183,68 @@ function AdminDashboard() {
         departure_time: '09:00 AM',
         arrival_date: '2026-09-10',
         arrival_time: '05:00 PM',
+        arrival_next_day: false,
         cabin: 'Economy',
         booking_class: 'Y',
         terminal: 'T1',
         baggage_allowance: '1 Bag',
+        aircraft: '',
         stop_count: 0
-      }]);
+      }];
     }
+
+    const mappedOutbound = rawOutbound.map((s, i) => ({
+      journey_direction: 'outbound',
+      segment_sequence: i + 1,
+      carrier_name: s.carrier_name || s.airline || 'Commercial Airline',
+      carrier_code: s.carrier_code || s.carrier || 'UA',
+      operating_carrier: s.operating_carrier || s.operatingCarrier || '',
+      flight_number: s.flight_number || s.flightNumber || 'UA 100',
+      origin_airport: s.origin_airport || s.originCode || 'LAX',
+      origin_city: s.origin_city || s.originCity || 'Los Angeles',
+      destination_airport: s.destination_airport || s.destinationCode || 'MIA',
+      destination_city: s.destination_city || s.destinationCity || 'Miami',
+      departure_date: s.departure_date || s.departureDate || '2026-09-10',
+      departure_time: s.departure_time || s.departureTime || '09:00 AM',
+      arrival_date: s.arrival_date || s.arrivalDate || '2026-09-10',
+      arrival_time: s.arrival_time || s.arrivalTime || '05:00 PM',
+      arrival_next_day: !!(s.arrival_next_day || s.arrivalNextDay),
+      cabin: s.cabin || s.cabinClass || 'Economy',
+      booking_class: s.booking_class || 'Y',
+      terminal: s.terminal || 'T1',
+      baggage_allowance: s.baggage_allowance || '1 Bag',
+      aircraft: s.aircraft || '',
+      stop_count: 0
+    }));
+
+    const mappedReturn = rawReturn.map((s, i) => ({
+      journey_direction: 'return',
+      segment_sequence: i + 1,
+      carrier_name: s.carrier_name || s.airline || 'Commercial Airline',
+      carrier_code: s.carrier_code || s.carrier || 'UA',
+      operating_carrier: s.operating_carrier || s.operatingCarrier || '',
+      flight_number: s.flight_number || s.flightNumber || 'UA 200',
+      origin_airport: s.origin_airport || s.originCode || 'MIA',
+      origin_city: s.origin_city || s.originCity || 'Miami',
+      destination_airport: s.destination_airport || s.destinationCode || 'LAX',
+      destination_city: s.destination_city || s.destinationCity || 'Los Angeles',
+      departure_date: s.departure_date || s.departureDate || '2026-09-17',
+      departure_time: s.departure_time || s.departureTime || '10:00 AM',
+      arrival_date: s.arrival_date || s.arrivalDate || '2026-09-17',
+      arrival_time: s.arrival_time || s.arrivalTime || '02:00 PM',
+      arrival_next_day: !!(s.arrival_next_day || s.arrivalNextDay),
+      cabin: s.cabin || s.cabinClass || 'Economy',
+      booking_class: s.booking_class || 'Y',
+      terminal: s.terminal || 'T1',
+      baggage_allowance: s.baggage_allowance || '1 Bag',
+      aircraft: s.aircraft || '',
+      stop_count: 0
+    }));
+
+    setOutboundSegments(mappedOutbound);
+    setReturnSegments(mappedReturn);
+    setHasReturnJourney(mappedReturn.length > 0 || (booking.trip_type === 'round_trip' || booking.tripType === 'round_trip'));
+
 
     // Initial pricing setup
     const total = parseFloat(booking.customer_price || booking.total_amount || 0);
@@ -230,11 +285,16 @@ function AdminDashboard() {
       setUpdatingRecord(true);
       setShowReviewModal(false);
 
+      const allSegments = [
+        ...outboundSegments.map((s, i) => ({ ...s, journey_direction: 'outbound', segment_sequence: i + 1 })),
+        ...(hasReturnJourney ? returnSegments.map((s, i) => ({ ...s, journey_direction: 'return', segment_sequence: i + 1 })) : [])
+      ];
+
       const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/itinerary`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
         body: JSON.stringify({
-          segments,
+          segments: allSegments,
           expectedVersion: selectedBooking.version || 1
         })
       });
@@ -254,6 +314,7 @@ function AdminDashboard() {
       setUpdatingRecord(false);
     }
   };
+
 
   const handleSavePricing = async () => {
     if (!selectedBooking) return;
@@ -767,114 +828,364 @@ function AdminDashboard() {
 
                   {/* THREE COLLAPSED ACCORDIONS */}
                   <div className="admin-accordion-container">
-                    
-                    {/* 1. ITINERARY ACCORDION */}
-                    <div className="admin-accordion-card">
-                      <button
-                        type="button"
-                        className="admin-accordion-header"
-                        onClick={() => setOpenAccordion(openAccordion === 'itinerary' ? null : 'itinerary')}
-                      >
-                        <span className="accordion-title-left">
-                          <i className={`fas ${openAccordion === 'itinerary' ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
-                          Itinerary
-                        </span>
-                        <span className="accordion-summary-right">
-                          {segments[0] ? `${segments[0].origin_airport || 'DEP'} → ${segments[0].destination_airport || 'ARR'}, ${segments.length} segment(s)` : 'No segments'}
-                        </span>
-                      </button>
+                                         {/* 1. ITINERARY ACCORDION */}
+                      <div className="admin-accordion-card">
+                        <button
+                          type="button"
+                          className="admin-accordion-header"
+                          onClick={() => setOpenAccordion(openAccordion === 'itinerary' ? null : 'itinerary')}
+                        >
+                          <span className="accordion-title-left">
+                            <i className={`fas ${openAccordion === 'itinerary' ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
+                            Itinerary
+                          </span>
+                          <span className="accordion-summary-right">
+                            {outboundSegments.length > 0 
+                              ? `${outboundSegments[0].origin_airport || 'DEP'} → ${outboundSegments[outboundSegments.length - 1].destination_airport || 'ARR'} (${outboundSegments.length > 1 ? `${outboundSegments.length - 1} stop(s)` : 'Nonstop'})`
+                              : 'No itinerary'}
+                            {hasReturnJourney && returnSegments.length > 0 && ` · Return: ${returnSegments[0]?.origin_airport || 'DEP'} → ${returnSegments[returnSegments.length - 1]?.destination_airport || 'ARR'}`}
+                          </span>
+                        </button>
 
-                      {openAccordion === 'itinerary' && (
-                        <div className="admin-accordion-body">
-                          {segments.map((seg, idx) => (
-                            <div key={idx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px', marginBottom: '10px' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontWeight: '700', fontSize: '0.8rem', color: '#1e3a5f' }}>
-                                <span>Segment #{idx + 1} ({seg.direction || 'outbound'})</span>
-                                {segments.length > 1 && (
+                        {openAccordion === 'itinerary' && (
+                          <div className="admin-accordion-body">
+                            
+                            {/* OUTBOUND JOURNEY GROUP */}
+                            <div className="journey-group-card" style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '10px', marginBottom: '12px' }}>
+                              <div 
+                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: openOutboundGroup ? '10px' : '0' }}
+                                onClick={() => setOpenOutboundGroup(!openOutboundGroup)}
+                              >
+                                <strong style={{ fontSize: '0.85rem', color: '#7f0d2f' }}>
+                                  <i className={`fas ${openOutboundGroup ? 'fa-chevron-down' : 'fa-chevron-right'}`} style={{ marginRight: '6px' }}></i>
+                                  Outbound Journey — {outboundSegments.length > 0 ? `${outboundSegments[0].origin_airport} → ${outboundSegments.map(s => s.destination_airport).join(' → ')}` : 'Empty'}
+                                </strong>
+                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{outboundSegments.length} segment(s)</span>
+                              </div>
+
+                              {openOutboundGroup && (
+                                <div>
+                                  {outboundSegments.map((seg, idx) => (
+                                    <div key={`outbound-${idx}`} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px', marginBottom: '8px' }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontWeight: '700', fontSize: '0.78rem', color: '#1e3a5f' }}>
+                                        <span>Flight #{idx + 1} (Outbound)</span>
+                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                          {idx > 0 && (
+                                            <button type="button" onClick={() => {
+                                              const next = [...outboundSegments];
+                                              const temp = next[idx]; next[idx] = next[idx - 1]; next[idx - 1] = temp;
+                                              setOutboundSegments(next); setHasUnsavedEdits(true);
+                                            }} style={{ background: '#e2e8f0', border: 'none', borderRadius: '3px', padding: '2px 6px', fontSize: '0.7rem', cursor: 'pointer' }}>▲ Up</button>
+                                          )}
+                                          {idx < outboundSegments.length - 1 && (
+                                            <button type="button" onClick={() => {
+                                              const next = [...outboundSegments];
+                                              const temp = next[idx]; next[idx] = next[idx + 1]; next[idx + 1] = temp;
+                                              setOutboundSegments(next); setHasUnsavedEdits(true);
+                                            }} style={{ background: '#e2e8f0', border: 'none', borderRadius: '3px', padding: '2px 6px', fontSize: '0.7rem', cursor: 'pointer' }}>▼ Down</button>
+                                          )}
+                                          {outboundSegments.length > 1 && (
+                                            <button type="button" onClick={() => {
+                                              setOutboundSegments(outboundSegments.filter((_, i) => i !== idx));
+                                              setHasUnsavedEdits(true);
+                                            }} style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.75rem' }}>Delete</button>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Continuity warning */}
+                                      {idx < outboundSegments.length - 1 && (seg.destination_airport || '').toUpperCase() !== (outboundSegments[idx + 1].origin_airport || '').toUpperCase() && (
+                                        <div style={{ background: '#fef2f2', color: '#991b1b', fontSize: '0.72rem', padding: '4px 8px', borderRadius: '4px', marginBottom: '6px' }}>
+                                          ⚠️ Continuity Mismatch: Flight #{idx + 1} arrives at {seg.destination_airport}, but Flight #{idx + 2} departs from {outboundSegments[idx + 1].origin_airport}.
+                                        </div>
+                                      )}
+
+                                      <div className="drawer-grid-2col">
+                                        <div className="drawer-form-field">
+                                          <label>Airline Name</label>
+                                          <input type="text" value={seg.carrier_name} onChange={(e) => { const next = [...outboundSegments]; next[idx].carrier_name = e.target.value; setOutboundSegments(next); setHasUnsavedEdits(true); }} />
+                                        </div>
+                                        <div className="drawer-form-field">
+                                          <label>Carrier Code</label>
+                                          <input type="text" value={seg.carrier_code} onChange={(e) => { const next = [...outboundSegments]; next[idx].carrier_code = e.target.value; setOutboundSegments(next); setHasUnsavedEdits(true); }} />
+                                        </div>
+                                        <div className="drawer-form-field">
+                                          <label>Operating Carrier (Optional)</label>
+                                          <input type="text" value={seg.operating_carrier || ''} placeholder="e.g. SkyWest" onChange={(e) => { const next = [...outboundSegments]; next[idx].operating_carrier = e.target.value; setOutboundSegments(next); setHasUnsavedEdits(true); }} />
+                                        </div>
+                                        <div className="drawer-form-field">
+                                          <label>Flight #</label>
+                                          <input type="text" value={seg.flight_number} onChange={(e) => { const next = [...outboundSegments]; next[idx].flight_number = e.target.value; setOutboundSegments(next); setHasUnsavedEdits(true); }} />
+                                        </div>
+                                        <div className="drawer-form-field">
+                                          <label>Origin Airport</label>
+                                          <input type="text" value={seg.origin_airport} onChange={(e) => { const next = [...outboundSegments]; next[idx].origin_airport = e.target.value; setOutboundSegments(next); setHasUnsavedEdits(true); }} />
+                                        </div>
+                                        <div className="drawer-form-field">
+                                          <label>Destination Airport</label>
+                                          <input type="text" value={seg.destination_airport} onChange={(e) => { const next = [...outboundSegments]; next[idx].destination_airport = e.target.value; setOutboundSegments(next); setHasUnsavedEdits(true); }} />
+                                        </div>
+                                        <div className="drawer-form-field">
+                                          <label>Departure Date</label>
+                                          <input type="text" value={seg.departure_date} onChange={(e) => { const next = [...outboundSegments]; next[idx].departure_date = e.target.value; setOutboundSegments(next); setHasUnsavedEdits(true); }} />
+                                        </div>
+                                        <div className="drawer-form-field">
+                                          <label>Departure Time</label>
+                                          <input type="text" value={seg.departure_time} onChange={(e) => { const next = [...outboundSegments]; next[idx].departure_time = e.target.value; setOutboundSegments(next); setHasUnsavedEdits(true); }} />
+                                        </div>
+                                        <div className="drawer-form-field">
+                                          <label>Arrival Date</label>
+                                          <input type="text" value={seg.arrival_date} onChange={(e) => { const next = [...outboundSegments]; next[idx].arrival_date = e.target.value; setOutboundSegments(next); setHasUnsavedEdits(true); }} />
+                                        </div>
+                                        <div className="drawer-form-field">
+                                          <label>Arrival Time</label>
+                                          <input type="text" value={seg.arrival_time} onChange={(e) => { const next = [...outboundSegments]; next[idx].arrival_time = e.target.value; setOutboundSegments(next); setHasUnsavedEdits(true); }} />
+                                        </div>
+                                        <div className="drawer-form-field">
+                                          <label>Cabin Class</label>
+                                          <select value={seg.cabin} onChange={(e) => { const next = [...outboundSegments]; next[idx].cabin = e.target.value; setOutboundSegments(next); setHasUnsavedEdits(true); }}>
+                                            <option value="Economy">Economy</option>
+                                            <option value="Premium Economy">Premium Economy</option>
+                                            <option value="Business">Business</option>
+                                            <option value="First">First</option>
+                                          </select>
+                                        </div>
+                                        <div className="drawer-form-field">
+                                          <label>Aircraft / Terminal</label>
+                                          <input type="text" value={seg.terminal || ''} placeholder="e.g. T2" onChange={(e) => { const next = [...outboundSegments]; next[idx].terminal = e.target.value; setOutboundSegments(next); setHasUnsavedEdits(true); }} />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+
                                   <button
                                     type="button"
-                                    onClick={() => { setSegments(segments.filter((_, i) => i !== idx)); setHasUnsavedEdits(true); }}
-                                    style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.75rem' }}
+                                    onClick={() => {
+                                      const lastSeg = outboundSegments[outboundSegments.length - 1];
+                                      setOutboundSegments([...outboundSegments, {
+                                        journey_direction: 'outbound',
+                                        segment_sequence: outboundSegments.length + 1,
+                                        carrier_name: lastSeg?.carrier_name || 'Commercial Airline',
+                                        carrier_code: lastSeg?.carrier_code || 'DL',
+                                        operating_carrier: '',
+                                        flight_number: `DL ${100 + outboundSegments.length}`,
+                                        origin_airport: lastSeg?.destination_airport || 'ATL',
+                                        origin_city: lastSeg?.destination_city || 'Atlanta',
+                                        destination_airport: 'MIA',
+                                        destination_city: 'Miami',
+                                        departure_date: lastSeg?.arrival_date || '2026-09-10',
+                                        departure_time: '02:00 PM',
+                                        arrival_date: lastSeg?.arrival_date || '2026-09-10',
+                                        arrival_time: '05:00 PM',
+                                        arrival_next_day: false,
+                                        cabin: lastSeg?.cabin || 'Economy',
+                                        booking_class: 'Y',
+                                        terminal: 'T1',
+                                        baggage_allowance: '1 Bag',
+                                        aircraft: ''
+                                      }]);
+                                      setHasUnsavedEdits(true);
+                                    }}
+                                    style={{ background: '#ffffff', border: '1px dashed #7f0d2f', color: '#7f0d2f', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer', width: '100%' }}
                                   >
-                                    Delete
+                                    + Add Outbound Flight
                                   </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* RETURN JOURNEY GROUP */}
+                            {hasReturnJourney ? (
+                              <div className="journey-group-card" style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '10px', marginBottom: '12px' }}>
+                                <div 
+                                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: openReturnGroup ? '10px' : '0' }}
+                                  onClick={() => setOpenReturnGroup(!openReturnGroup)}
+                                >
+                                  <strong style={{ fontSize: '0.85rem', color: '#1e3a5f' }}>
+                                    <i className={`fas ${openReturnGroup ? 'fa-chevron-down' : 'fa-chevron-right'}`} style={{ marginRight: '6px' }}></i>
+                                    Return Journey — {returnSegments.length > 0 ? `${returnSegments[0].origin_airport} → ${returnSegments.map(s => s.destination_airport).join(' → ')}` : 'Empty'}
+                                  </strong>
+                                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{returnSegments.length} segment(s)</span>
+                                </div>
+
+                                {openReturnGroup && (
+                                  <div>
+                                    {returnSegments.map((seg, idx) => (
+                                      <div key={`return-${idx}`} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px', marginBottom: '8px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontWeight: '700', fontSize: '0.78rem', color: '#1e3a5f' }}>
+                                          <span>Flight #{idx + 1} (Return)</span>
+                                          <div style={{ display: 'flex', gap: '6px' }}>
+                                            {idx > 0 && (
+                                              <button type="button" onClick={() => {
+                                                const next = [...returnSegments];
+                                                const temp = next[idx]; next[idx] = next[idx - 1]; next[idx - 1] = temp;
+                                                setReturnSegments(next); setHasUnsavedEdits(true);
+                                              }} style={{ background: '#e2e8f0', border: 'none', borderRadius: '3px', padding: '2px 6px', fontSize: '0.7rem', cursor: 'pointer' }}>▲ Up</button>
+                                            )}
+                                            {idx < returnSegments.length - 1 && (
+                                              <button type="button" onClick={() => {
+                                                const next = [...returnSegments];
+                                                const temp = next[idx]; next[idx] = next[idx + 1]; next[idx + 1] = temp;
+                                                setReturnSegments(next); setHasUnsavedEdits(true);
+                                              }} style={{ background: '#e2e8f0', border: 'none', borderRadius: '3px', padding: '2px 6px', fontSize: '0.7rem', cursor: 'pointer' }}>▼ Down</button>
+                                            )}
+                                            <button type="button" onClick={() => {
+                                              const next = returnSegments.filter((_, i) => i !== idx);
+                                              setReturnSegments(next);
+                                              if (next.length === 0) setHasReturnJourney(false);
+                                              setHasUnsavedEdits(true);
+                                            }} style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.75rem' }}>Delete</button>
+                                          </div>
+                                        </div>
+
+                                        {/* Continuity warning */}
+                                        {idx < returnSegments.length - 1 && (seg.destination_airport || '').toUpperCase() !== (returnSegments[idx + 1].origin_airport || '').toUpperCase() && (
+                                          <div style={{ background: '#fef2f2', color: '#991b1b', fontSize: '0.72rem', padding: '4px 8px', borderRadius: '4px', marginBottom: '6px' }}>
+                                            ⚠️ Continuity Mismatch: Flight #{idx + 1} arrives at {seg.destination_airport}, but Flight #{idx + 2} departs from {returnSegments[idx + 1].origin_airport}.
+                                          </div>
+                                        )}
+
+                                        <div className="drawer-grid-2col">
+                                          <div className="drawer-form-field">
+                                            <label>Airline Name</label>
+                                            <input type="text" value={seg.carrier_name} onChange={(e) => { const next = [...returnSegments]; next[idx].carrier_name = e.target.value; setReturnSegments(next); setHasUnsavedEdits(true); }} />
+                                          </div>
+                                          <div className="drawer-form-field">
+                                            <label>Carrier Code</label>
+                                            <input type="text" value={seg.carrier_code} onChange={(e) => { const next = [...returnSegments]; next[idx].carrier_code = e.target.value; setReturnSegments(next); setHasUnsavedEdits(true); }} />
+                                          </div>
+                                          <div className="drawer-form-field">
+                                            <label>Operating Carrier (Optional)</label>
+                                            <input type="text" value={seg.operating_carrier || ''} placeholder="e.g. SkyWest" onChange={(e) => { const next = [...returnSegments]; next[idx].operating_carrier = e.target.value; setReturnSegments(next); setHasUnsavedEdits(true); }} />
+                                          </div>
+                                          <div className="drawer-form-field">
+                                            <label>Flight #</label>
+                                            <input type="text" value={seg.flight_number} onChange={(e) => { const next = [...returnSegments]; next[idx].flight_number = e.target.value; setReturnSegments(next); setHasUnsavedEdits(true); }} />
+                                          </div>
+                                          <div className="drawer-form-field">
+                                            <label>Origin Airport</label>
+                                            <input type="text" value={seg.origin_airport} onChange={(e) => { const next = [...returnSegments]; next[idx].origin_airport = e.target.value; setReturnSegments(next); setHasUnsavedEdits(true); }} />
+                                          </div>
+                                          <div className="drawer-form-field">
+                                            <label>Destination Airport</label>
+                                            <input type="text" value={seg.destination_airport} onChange={(e) => { const next = [...returnSegments]; next[idx].destination_airport = e.target.value; setReturnSegments(next); setHasUnsavedEdits(true); }} />
+                                          </div>
+                                          <div className="drawer-form-field">
+                                            <label>Departure Date</label>
+                                            <input type="text" value={seg.departure_date} onChange={(e) => { const next = [...returnSegments]; next[idx].departure_date = e.target.value; setReturnSegments(next); setHasUnsavedEdits(true); }} />
+                                          </div>
+                                          <div className="drawer-form-field">
+                                            <label>Departure Time</label>
+                                            <input type="text" value={seg.departure_time} onChange={(e) => { const next = [...returnSegments]; next[idx].departure_time = e.target.value; setReturnSegments(next); setHasUnsavedEdits(true); }} />
+                                          </div>
+                                          <div className="drawer-form-field">
+                                            <label>Arrival Date</label>
+                                            <input type="text" value={seg.arrival_date} onChange={(e) => { const next = [...returnSegments]; next[idx].arrival_date = e.target.value; setReturnSegments(next); setHasUnsavedEdits(true); }} />
+                                          </div>
+                                          <div className="drawer-form-field">
+                                            <label>Arrival Time</label>
+                                            <input type="text" value={seg.arrival_time} onChange={(e) => { const next = [...returnSegments]; next[idx].arrival_time = e.target.value; setReturnSegments(next); setHasUnsavedEdits(true); }} />
+                                          </div>
+                                          <div className="drawer-form-field">
+                                            <label>Cabin Class</label>
+                                            <select value={seg.cabin} onChange={(e) => { const next = [...returnSegments]; next[idx].cabin = e.target.value; setReturnSegments(next); setHasUnsavedEdits(true); }}>
+                                              <option value="Economy">Economy</option>
+                                              <option value="Premium Economy">Premium Economy</option>
+                                              <option value="Business">Business</option>
+                                              <option value="First">First</option>
+                                            </select>
+                                          </div>
+                                          <div className="drawer-form-field">
+                                            <label>Aircraft / Terminal</label>
+                                            <input type="text" value={seg.terminal || ''} placeholder="e.g. T1" onChange={(e) => { const next = [...returnSegments]; next[idx].terminal = e.target.value; setReturnSegments(next); setHasUnsavedEdits(true); }} />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const lastOutbound = outboundSegments[outboundSegments.length - 1];
+                                        const lastReturn = returnSegments[returnSegments.length - 1];
+                                        setReturnSegments([...returnSegments, {
+                                          journey_direction: 'return',
+                                          segment_sequence: returnSegments.length + 1,
+                                          carrier_name: lastReturn?.carrier_name || lastOutbound?.carrier_name || 'Commercial Airline',
+                                          carrier_code: lastReturn?.carrier_code || lastOutbound?.carrier_code || 'UA',
+                                          operating_carrier: '',
+                                          flight_number: `UA ${200 + returnSegments.length}`,
+                                          origin_airport: lastReturn?.destination_airport || lastOutbound?.destination_airport || 'MIA',
+                                          origin_city: lastReturn?.destination_city || lastOutbound?.destination_city || 'Miami',
+                                          destination_airport: outboundSegments[0]?.origin_airport || 'LAX',
+                                          destination_city: outboundSegments[0]?.origin_city || 'Los Angeles',
+                                          departure_date: lastReturn?.arrival_date || '2026-09-17',
+                                          departure_time: '10:00 AM',
+                                          arrival_date: lastReturn?.arrival_date || '2026-09-17',
+                                          arrival_time: '02:00 PM',
+                                          arrival_next_day: false,
+                                          cabin: lastReturn?.cabin || 'Economy',
+                                          booking_class: 'Y',
+                                          terminal: 'T1',
+                                          baggage_allowance: '1 Bag',
+                                          aircraft: ''
+                                        }]);
+                                        setHasUnsavedEdits(true);
+                                      }}
+                                      style={{ background: '#ffffff', border: '1px dashed #1e3a5f', color: '#1e3a5f', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer', width: '100%' }}
+                                    >
+                                      + Add Return Flight
+                                    </button>
+                                  </div>
                                 )}
                               </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setHasReturnJourney(true);
+                                  const lastOutbound = outboundSegments[outboundSegments.length - 1];
+                                  setReturnSegments([{
+                                    journey_direction: 'return',
+                                    segment_sequence: 1,
+                                    carrier_name: lastOutbound?.carrier_name || 'Commercial Airline',
+                                    carrier_code: lastOutbound?.carrier_code || 'UA',
+                                    operating_carrier: '',
+                                    flight_number: 'UA 200',
+                                    origin_airport: lastOutbound?.destination_airport || 'MIA',
+                                    origin_city: lastOutbound?.destination_city || 'Miami',
+                                    destination_airport: outboundSegments[0]?.origin_airport || 'LAX',
+                                    destination_city: outboundSegments[0]?.origin_city || 'Los Angeles',
+                                    departure_date: '2026-09-17',
+                                    departure_time: '10:00 AM',
+                                    arrival_date: '2026-09-17',
+                                    arrival_time: '02:00 PM',
+                                    arrival_next_day: false,
+                                    cabin: lastOutbound?.cabin || 'Economy',
+                                    booking_class: 'Y',
+                                    terminal: 'T1',
+                                    baggage_allowance: '1 Bag',
+                                    aircraft: ''
+                                  }]);
+                                  setHasUnsavedEdits(true);
+                                }}
+                                style={{ background: '#f1f5f9', border: '1px dashed #cbd5e1', color: '#1e3a5f', padding: '8px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer', width: '100%', marginBottom: '12px' }}
+                              >
+                                + Add Return Journey
+                              </button>
+                            )}
 
-                              <div className="drawer-grid-2col">
-                                <div className="drawer-form-field">
-                                  <label>Carrier</label>
-                                  <input type="text" value={seg.carrier_name} onChange={(e) => { const next = [...segments]; next[idx].carrier_name = e.target.value; setSegments(next); setHasUnsavedEdits(true); }} />
-                                </div>
-                                <div className="drawer-form-field">
-                                  <label>Flight #</label>
-                                  <input type="text" value={seg.flight_number} onChange={(e) => { const next = [...segments]; next[idx].flight_number = e.target.value; setSegments(next); setHasUnsavedEdits(true); }} />
-                                </div>
-                                <div className="drawer-form-field">
-                                  <label>Origin Code</label>
-                                  <input type="text" value={seg.origin_airport} onChange={(e) => { const next = [...segments]; next[idx].origin_airport = e.target.value; setSegments(next); setHasUnsavedEdits(true); }} />
-                                </div>
-                                <div className="drawer-form-field">
-                                  <label>Destination Code</label>
-                                  <input type="text" value={seg.destination_airport} onChange={(e) => { const next = [...segments]; next[idx].destination_airport = e.target.value; setSegments(next); setHasUnsavedEdits(true); }} />
-                                </div>
-                                <div className="drawer-form-field">
-                                  <label>Departure Date</label>
-                                  <input type="text" value={seg.departure_date} onChange={(e) => { const next = [...segments]; next[idx].departure_date = e.target.value; setSegments(next); setHasUnsavedEdits(true); }} />
-                                </div>
-                                <div className="drawer-form-field">
-                                  <label>Cabin Class</label>
-                                  <select value={seg.cabin} onChange={(e) => { const next = [...segments]; next[idx].cabin = e.target.value; setSegments(next); setHasUnsavedEdits(true); }}>
-                                    <option value="Economy">Economy</option>
-                                    <option value="Premium Economy">Premium Economy</option>
-                                    <option value="Business">Business</option>
-                                    <option value="First">First</option>
-                                  </select>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSegments([...segments, {
-                                trip_type: 'one_way',
-                                direction: 'return',
-                                carrier_name: 'Commercial Airline',
-                                carrier_code: 'UA',
-                                flight_number: 'UA 200',
-                                origin_airport: segments[0]?.destination_airport || 'MIA',
-                                origin_city: 'Miami',
-                                destination_airport: segments[0]?.origin_airport || 'LAX',
-                                destination_city: 'Los Angeles',
-                                departure_date: '2026-09-17',
-                                departure_time: '10:00 AM',
-                                arrival_date: '2026-09-17',
-                                arrival_time: '02:00 PM',
-                                cabin: 'Economy',
-                                booking_class: 'Y',
-                                stop_count: 0
-                              }]);
-                              setHasUnsavedEdits(true);
-                            }}
-                            style={{ background: '#f1f5f9', border: '1px dashed #cbd5e1', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer', width: '100%', marginBottom: '10px' }}
-                          >
-                            + Add Flight Segment
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setShowReviewModal(true)}
-                            className="admin-primary-btn"
-                            style={{ width: '100%', background: '#1e3a5f' }}
-                          >
-                            Apply Itinerary Changes
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
+                            <button
+                              type="button"
+                              onClick={() => setShowReviewModal(true)}
+                              className="admin-primary-btn"
+                              style={{ width: '100%', background: '#1e3a5f' }}
+                            >
+                              Apply Itinerary Changes
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     {/* 2. PRICING ACCORDION */}
                     <div className="admin-accordion-card">
                       <button
@@ -1067,8 +1378,12 @@ function AdminDashboard() {
                           Any material change to flight numbers, travel dates, airports, or cabin class will automatically <strong>invalidate any existing passenger authorization</strong> and change status to <strong>REAUTHORIZATION_REQUIRED</strong>.
                         </p>
                         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px', fontSize: '0.82rem', marginBottom: '14px' }}>
-                          <strong>New Route Summary:</strong> {segments[0]?.origin_airport} &rarr; {segments[0]?.destination_airport} ({segments.length} segment(s))
+                          <div><strong>Outbound Journey:</strong> {outboundSegments[0]?.origin_airport || 'DEP'} &rarr; {outboundSegments.map(s => s.destination_airport).join(' &rarr; ')} ({outboundSegments.length} segment(s))</div>
+                          {hasReturnJourney && returnSegments.length > 0 && (
+                            <div style={{ marginTop: '4px' }}><strong>Return Journey:</strong> {returnSegments[0]?.origin_airport || 'DEP'} &rarr; {returnSegments.map(s => s.destination_airport).join(' &rarr; ')} ({returnSegments.length} segment(s))</div>
+                          )}
                         </div>
+
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                           <button type="button" onClick={() => setShowReviewModal(false)} className="admin-secondary-btn">
                             Cancel
