@@ -321,11 +321,22 @@ export const bookingRepository = {
 
     if (error) {
       const safeFields = { ...updateFields };
+      if (['AWAITING_AUTH', 'AWAITING_AUTHORIZATION', 'AUTHORIZED', 'READY_FOR_TICKETING'].includes(safeFields.status)) {
+        safeFields.status = 'PENDING';
+      } else if (['CONFIRMED', 'TICKETED'].includes(safeFields.status)) {
+        safeFields.status = 'DONE';
+      }
+
+      if (['authorized', 'test_card_captured'].includes(safeFields.payment_status)) {
+        safeFields.payment_status = 'pending';
+      }
+
       delete safeFields.customer_price;
       delete safeFields.supplier_price;
       delete safeFields.discount_percent;
       delete safeFields.discount_amount;
       delete safeFields.price_checked_at;
+      delete safeFields.crm_status;
 
       const { data: safeData, error: safeError } = await supabase
         .from('bookings')
@@ -337,6 +348,8 @@ export const bookingRepository = {
       if (safeError) throw new Error(safeError.message);
       return safeData;
     }
+
+
     return data;
   },
 

@@ -15,12 +15,17 @@ const loginRateLimiter = rateLimit({
 // Public login
 router.post('/login', loginRateLimiter, adminController.login);
 
+import passengerAuthorizationController from '../authorizations/passenger-authorization.controller.mjs';
+
 // Protected admin endpoints
 router.get('/bookings', authenticate, authorize(['admin']), adminController.getBookings);
 router.get('/bookings/:id', authenticate, authorize(['admin']), adminController.getBookingDetail);
 router.put('/bookings/:id', authenticate, authorize(['admin']), adminController.updateBooking);
 router.post('/bookings/:id/resend-email', authenticate, authorize(['admin']), adminController.resendEmail);
+router.post('/bookings/:id/process-authorized', authenticate, authorize(['admin']), adminController.processAuthorizedBooking);
+router.get('/bookings/:id/authorization-evidence', authenticate, authorize(['admin']), passengerAuthorizationController.getEvidenceExport);
 router.get('/stats', authenticate, authorize(['admin']), adminController.getStats);
+
 
 router.get('/analytics', authenticate, authorize(['admin']), adminController.getAnalytics);
 router.get('/abandoned-bookings', authenticate, authorize(['admin']), adminController.getAbandonedBookings);

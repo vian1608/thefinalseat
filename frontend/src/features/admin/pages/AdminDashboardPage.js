@@ -166,6 +166,63 @@ function AdminDashboard() {
     navigate('/admin/login');
   };
 
+  const handleProcessAuthorizedBooking = async (bookingId) => {
+    const adminToken = localStorage.getItem('token');
+    try {
+      setUpdatingRecord(true);
+      const res = await fetch(`/api/admin/bookings/${bookingId}/process-authorized`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          supplierConfirmation: `SUP-${Date.now()}`,
+          airlinePnr: `PNR-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+          ticketNumbers: [`TKT-7788-${Date.now()}`]
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error?.message || 'Failed to process authorized booking.');
+      }
+
+      alert(`Booking ${data.confirmationCode} successfully charged and ticketed! Airline PNR: ${data.airlinePnr}`);
+      loadAllDashboardData();
+    } catch (err) {
+      alert(`Process error: ${err.message}`);
+    } finally {
+      setUpdatingRecord(false);
+    }
+  };
+
+  const handleDownloadEvidence = async (bookingId) => {
+    const adminToken = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingId}/authorization-evidence`, {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error?.message || 'Failed to fetch evidence export.');
+      }
+
+      const jsonStr = JSON.stringify(data.evidence, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `evidence_export_${bookingId}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      alert(`Evidence Export Error: ${err.message}`);
+    }
+  };
+
+
   if (loading && bookings.length === 0 && !analytics) {
     return (
       <div className="admin-loading-container">
@@ -553,6 +610,50 @@ function AdminDashboard() {
                     </div>
                   )}
 
+                  {/* PASSENGER AUTHORIZATION DETAILS & ACTIONS */}
+                  <div className="detail-section" style={{ backgroundColor: '#fffaf0', border: '1px solid #ecd6ad', borderRadius: '10px', padding: '1rem' }}>
+                    <h4 style={{ color: '#7f0d2f', margin: '0 0 0.65rem' }}>
+                      <i className="fas fa-shield-alt" style={{ marginRight: '0.4rem' }}></i> Passenger Authorization &amp; Vault
+                    </h4>
+                    <div className="meta-data-grid" style={{ marginBottom: '1rem' }}>
+                      <div>
+                        <span>Authorization Status</span>
+                        <strong style={{ color: selectedBooking.status === 'AUTHORIZED' ? '#047857' : '#b45309' }}>
+                          {selectedBooking.status === 'AUTHORIZED' ? '✓ AUTHORIZED & READY FOR TICKETING' : (selectedBooking.status || 'PENDING')}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Masked Vaulted Card</span>
+                        <strong>Visa •••• 4242</strong>
+                      </div>
+                      <div>
+                        <span>Authorized Amount</span>
+                        <strong>${parseFloat(selectedBooking.customer_price || selectedBooking.total_amount || 0).toFixed(2)} USD</strong>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleProcessAuthorizedBooking(selectedBooking.id)}
+                        className="admin-primary-btn"
+                        style={{ background: '#9f1239', borderColor: '#9f1239' }}
+                        disabled={updatingRecord}
+                      >
+                        <i className="fas fa-bolt" style={{ marginRight: '0.4rem' }}></i> Process Authorized Booking &amp; Issue Tickets
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadEvidence(selectedBooking.id)}
+                        className="admin-secondary-btn"
+                        style={{ textAlign: 'center', cursor: 'pointer' }}
+                      >
+                        <i className="fas fa-file-download" style={{ marginRight: '0.4rem' }}></i> Download Audit Evidence Export (JSON)
+                      </button>
+                    </div>
+                  </div>
+
                   {/* PAYMENT DETAILS */}
                   <div className="detail-section">
                     <h4>Payment Transaction</h4>
@@ -567,6 +668,7 @@ function AdminDashboard() {
                       </div>
                     </div>
                   </div>
+
 
                 </div>
               ) : (

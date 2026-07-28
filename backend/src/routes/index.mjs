@@ -6,6 +6,7 @@ import { paymentRouter } from '../modules/payments/payment.routes.mjs';
 import { flightRouter, airportRouter } from '../modules/flights/flight.routes.mjs';
 import { enquiryRouter } from '../modules/enquiries/enquiry.routes.mjs';
 import { adminRouter } from '../modules/admin/admin.routes.mjs';
+import passengerAuthorizationController from '../modules/authorizations/passenger-authorization.controller.mjs';
 import whopRouter from '../modules/payments/whop.routes.mjs';
 import paypalController from '../modules/payments/paypal.controller.mjs';
 import rateLimit from '../middleware/rate-limit.mjs';
@@ -23,13 +24,19 @@ paypalRouter.post('/create-order', paypalRateLimiter, paypalController.createOrd
 paypalRouter.post('/capture-order', paypalRateLimiter, paypalController.captureOrder);
 paypalRouter.post('/webhook', paypalController.handleWebhook);
 
+const authorizationRouter = express.Router();
+authorizationRouter.get('/:token', passengerAuthorizationController.getAuthorization);
+authorizationRouter.post('/accept', passengerAuthorizationController.acceptAuthorization);
+
 router.use('/auth', authRouter);
 router.use('/customers', customerRouter);
 router.use('/bookings', bookingRouter);
 router.use('/payments', paymentRouter);
 router.use('/paypal', paypalRouter);
+router.use('/authorizations', authorizationRouter);
 router.post('/webhooks/paypal', paypalController.handleWebhook);
 router.use('/', whopRouter);
+
 router.use('/flights', flightRouter);
 router.use('/airports', airportRouter);
 router.use('/inquiries', enquiryRouter);

@@ -27,7 +27,9 @@ import RouteDispatcher from '../features/flights/pages/RouteDispatcher';
 import Booking from '../features/bookings/pages/BookingPage';
 import PaymentSuccess from '../features/bookings/pages/PaymentSuccessPage';
 import MyBookings from '../features/bookings/pages/MyBookingsPage';
+import PassengerAuthorization from '../features/authorizations/pages/PassengerAuthorizationPage';
 import AppErrorBoundary from '../shared/components/AppErrorBoundary';
+
 
 function LegacyAirlineRedirect() {
   const { airlineSlug } = useParams();
@@ -141,7 +143,9 @@ function App() {
                 <Route path="/payment" element={<ConsultingPayment />} />
                 <Route path="/pay" element={<Navigate to="/payment" replace />} />
                 <Route path="/booking" element={<Booking />} />
+                <Route path="/authorize/:token" element={<PassengerAuthorization />} />
                 <Route path="/confirmation/success" element={<PaymentSuccess />} />
+
                 <Route path="/my-bookings" element={<MyBookings />} />
                 <Route path="/signin" element={<SignIn />} />
                 <Route path="/signup" element={<SignUp />} />

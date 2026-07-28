@@ -1,0 +1,282 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+import './PassengerAuthorizationPage.css';
+
+function PassengerAuthorizationPage() {
+  const { token } = useParams();
+  const [loading, setLoading] = useState(true);
+  const [authData, setAuthData] = useState(null);
+  const [error, setError] = useState(null);
+
+  const [checkboxAccepted, setCheckboxAccepted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [authorizedSuccess, setAuthorizedSuccess] = useState(false);
+
+  useEffect(() => {
+    async function fetchAuth() {
+      try {
+        setLoading(true);
+        const res = await fetch(`/api/authorizations/${token}`);
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.error?.message || 'Failed to load authorization request.');
+        }
+
+        setAuthData(data.authorization);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (token) {
+      fetchAuth();
+    }
+  }, [token]);
+
+  const handleAuthorize = async () => {
+    if (!checkboxAccepted || !authData) return;
+
+    const cardLast4 = authData.cardLast4 || '4242';
+    const amount = authData.authorizedAmount;
+    const currency = authData.currency || 'USD';
+
+    const acceptedText = `I confirm that the passenger names, itinerary, dates, fare, fees and contact information shown above are correct. I authorize The Final Seat to use my previously provided payment method ending in ${cardLast4} for a charge of up to ${amount} ${currency} for this reservation. I understand that a new authorization will be required if the itinerary or total amount changes.`;
+
+    try {
+      setSubmitting(true);
+      setError(null);
+
+      const res = await fetch('/api/authorizations/accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          acceptedText
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error?.message || 'Authorization submission failed.');
+      }
+
+      setAuthorizedSuccess(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="auth-page-container">
+        <div className="auth-card-shell" style={{ textAlign: 'center', padding: '3rem 1.5rem' }}>
+          <i className="fas fa-circle-notch fa-spin fa-2x" style={{ color: '#9f1239', marginBottom: '1rem' }}></i>
+          <p style={{ color: '#5f4a53', fontSize: '1.05rem', fontWeight: '600' }}>
+            Loading secure passenger authorization details...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !authData) {
+    return (
+      <div className="auth-page-container">
+        <Helmet><title>Authorization Request Error | The Final Seat</title></Helmet>
+        <div className="auth-card-shell">
+          <div className="auth-error-banner">
+            <i className="fas fa-exclamation-triangle fa-2x" style={{ color: '#991b1b', marginBottom: '0.75rem' }}></i>
+            <h2 style={{ color: '#991b1b', margin: '0 0 0.5rem', fontSize: '1.4rem' }}>Authorization Request Issue</h2>
+            <p style={{ color: '#7f1d1d', margin: 0, fontSize: '0.98rem', lineHeight: '1.5' }}>
+              {error || 'The requested authorization link is invalid or expired.'}
+            </p>
+          </div>
+          <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+            <Link to="/contact" className="auth-btn-secondary">
+              Contact 24/7 Support Desk
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (authorizedSuccess) {
+    return (
+      <div className="auth-page-container">
+        <Helmet><title>Reservation Authorized | The Final Seat</title></Helmet>
+        <div className="auth-card-shell" style={{ textAlign: 'center', padding: '2.5rem 2rem' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#dcfce7', color: '#166534', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', fontSize: '2rem' }}>
+            ✓
+          </div>
+          <h2 style={{ color: '#7f0d2f', fontSize: '1.75rem', fontWeight: '800', margin: '0 0 0.5rem' }}>
+            Reservation Authorized Successfully!
+          </h2>
+          <p style={{ color: '#5f4a53', fontSize: '1.05rem', lineHeight: '1.6', maxWidth: '480px', margin: '0 auto 1.5rem' }}>
+            Thank you for confirming your itinerary. Our travel specialists have received your authorization and are securing your airline tickets.
+          </p>
+
+          <div style={{ background: '#fffaf0', border: '2px dashed #e2b84d', borderRadius: '12px', padding: '1.25rem', display: 'inline-block', minWidth: '280px', marginBottom: '1.75rem' }}>
+            <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '1px', color: '#8b6b16', fontWeight: '700' }}>
+              Confirmation Number
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#7f0d2f', letterSpacing: '1px', margin: '0.35rem 0' }}>
+              {authData.confirmationCode}
+            </div>
+          </div>
+
+          <div>
+            <Link to={`/my-bookings?code=${authData.confirmationCode}`} className="auth-primary-btn" style={{ display: 'inline-block', width: 'auto', padding: '0.85rem 2rem' }}>
+              View My Booking &rarr;
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const outbound = authData.itinerarySnapshot?.outbound || {};
+  const returnFlight = authData.itinerarySnapshot?.return || null;
+  const cardLast4 = authData.cardLast4 || '4242';
+  const cardBrand = authData.cardBrand || 'Visa';
+  const amount = authData.authorizedAmount;
+  const currency = authData.currency || 'USD';
+
+  const checkboxWording = `I confirm that the passenger names, itinerary, dates, fare, fees and contact information shown above are correct. I authorize The Final Seat to use my previously provided payment method ending in ${cardLast4} for a charge of up to ${amount} ${currency} for this reservation. I understand that a new authorization will be required if the itinerary or total amount changes.`;
+
+  return (
+    <div className="auth-page-container">
+      <Helmet>
+        <title>Authorize Flight Reservation {authData.confirmationCode} | The Final Seat</title>
+      </Helmet>
+
+      <div className="auth-card-shell">
+        {/* Header */}
+        <div className="auth-card-header">
+          <div className="auth-brand-logo">✈ The Final Seat</div>
+          <div className="auth-header-tag">Passenger Reservation Authorization</div>
+        </div>
+
+        <div className="auth-card-body">
+          {/* Top Notice */}
+          <div className="auth-notice-banner">
+            <i className="fas fa-lock" style={{ marginRight: '0.5rem', color: '#9f1239' }}></i>
+            <span>
+              Please review your flight details below. Your saved card ending in <strong>{cardLast4}</strong> will be used ONLY after you confirm and authorize this reservation.
+            </span>
+          </div>
+
+          {/* Code Badge */}
+          <div className="auth-code-badge">
+            <span>Temporary Confirmation Code: <strong>{authData.confirmationCode}</strong></span>
+          </div>
+
+          {/* Passenger Details */}
+          <div className="auth-section-block">
+            <h4 className="auth-section-title"><i className="fas fa-user-friends"></i> Passenger Details</h4>
+            <div className="auth-info-grid">
+              <div className="auth-info-row">
+                <span className="auth-info-label">Primary Passenger:</span>
+                <span className="auth-info-val">{authData.passengerName}</span>
+              </div>
+              <div className="auth-info-row">
+                <span className="auth-info-label">Contact Email:</span>
+                <span className="auth-info-val">{authData.customerEmail}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Itinerary */}
+          <div className="auth-section-block">
+            <h4 className="auth-section-title"><i className="fas fa-plane-departure"></i> Flight Itinerary</h4>
+            
+            {/* Outbound */}
+            <div className="auth-flight-card">
+              <div className="auth-flight-tag">Outbound Flight</div>
+              <div className="auth-flight-airline">{outbound.airline} {outbound.flightNumber}</div>
+              <div className="auth-flight-route">
+                {outbound.originCity} ({outbound.originCode}) &rarr; {outbound.destinationCity} ({outbound.destinationCode})
+              </div>
+              <div className="auth-flight-details">
+                <span><strong>Departure:</strong> {outbound.departureDate} {outbound.departureTime}</span>
+                <span><strong>Cabin:</strong> {outbound.cabinClass}</span>
+              </div>
+            </div>
+
+            {/* Return if applicable */}
+            {returnFlight && (
+              <div className="auth-flight-card" style={{ marginTop: '0.85rem' }}>
+                <div className="auth-flight-tag" style={{ background: '#9f1239' }}>Return Flight</div>
+                <div className="auth-flight-airline">{returnFlight.airline} {returnFlight.flightNumber}</div>
+                <div className="auth-flight-route">
+                  {returnFlight.originCity} ({returnFlight.originCode}) &rarr; {returnFlight.destinationCity} ({returnFlight.destinationCode})
+                </div>
+                <div className="auth-flight-details">
+                  <span><strong>Departure:</strong> {returnFlight.departureDate} {returnFlight.departureTime}</span>
+                  <span><strong>Cabin:</strong> {returnFlight.cabinClass}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Fare & Payment Breakdown */}
+          <div className="auth-section-block">
+            <h4 className="auth-section-title"><i className="fas fa-credit-card"></i> Payment &amp; Fare Breakdown</h4>
+            <div className="auth-fare-card">
+              <div className="auth-fare-row">
+                <span>Total Authorized Charge</span>
+                <strong style={{ fontSize: '1.2rem', color: '#7f0d2f' }}>${amount} {currency}</strong>
+              </div>
+              <div className="auth-fare-row" style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#64748b' }}>
+                <span>Saved Payment Method</span>
+                <span><strong>{cardBrand} ending in {cardLast4}</strong></span>
+              </div>
+            </div>
+          </div>
+
+          {/* Mandatory Checkbox */}
+          <div className="auth-checkbox-container">
+            <input
+              type="checkbox"
+              id="auth-mandatory-check"
+              checked={checkboxAccepted}
+              onChange={(e) => setCheckboxAccepted(e.target.checked)}
+            />
+            <label htmlFor="auth-mandatory-check" className="auth-checkbox-label">
+              {checkboxWording}
+            </label>
+          </div>
+
+          {/* Action Button */}
+          <div style={{ marginTop: '1.5rem' }}>
+            <button
+              type="button"
+              className="auth-primary-btn"
+              onClick={handleAuthorize}
+              disabled={!checkboxAccepted || submitting}
+            >
+              {submitting ? (
+                <span><i className="fas fa-circle-notch fa-spin"></i> Processing Authorization...</span>
+              ) : (
+                <span><i className="fas fa-check-circle"></i> I Authorize</span>
+              )}
+            </button>
+          </div>
+
+        </div>
+
+        <div className="auth-card-footer">
+          The Final Seat LLC &middot; 24/7 Passenger Support: support@thefinalseat.com &middot; +1 (213) 965-9727
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default PassengerAuthorizationPage;

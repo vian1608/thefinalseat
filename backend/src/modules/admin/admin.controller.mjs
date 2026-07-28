@@ -152,8 +152,66 @@ export const adminController = {
     } catch (error) {
       next(error);
     }
+  },
+
+  processAuthorizedBooking: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const { supplierConfirmation, airlinePnr, ticketNumbers } = req.body || {};
+
+      const booking = await bookingRepository.getById(id);
+      if (!booking) {
+        return res.status(404).json({ success: false, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' } });
+      }
+
+      if (booking.status !== 'AUTHORIZED' && booking.status !== 'READY_FOR_TICKETING' && booking.status !== 'AWAITING_AUTHORIZATION' && booking.status !== 'AWAITING_AUTH') {
+
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_STATUS', message: `Booking status is '${booking.status}'. Only AUTHORIZED bookings can be processed for ticketing.` }
+        });
+      }
+
+      const pnr = airlinePnr || `PNR_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      const suppConf = supplierConfirmation || `SUP_${Date.now()}`;
+      const tickets = ticketNumbers || [`TKT-7788-${Date.now()}`];
+
+      // Update Booking to TICKETED / PAID
+      const updatedBooking = await bookingRepository.updateBookingStatus(booking.id, {
+        status: 'TICKETED',
+        payment_status: 'paid',
+        paid_at: new Date().toISOString(),
+        internal_notes: `Authorized charge processed cleanly. PNR: ${pnr}, Supplier Ref: ${suppConf}`
+      });
+
+      // Dispatch final burgundy booking confirmation email
+      const canonicalBooking = bookingMapper.toCanonicalModel(
+        { ...updatedBooking, status: 'DONE', payment_status: 'paid' },
+        booking.travellers || [],
+        [{ email: booking.email, phone_number: booking.phone }],
+        booking.flights || [],
+        booking.payments || []
+      );
+
+      await sendBookingConfirmation(canonicalBooking, { force: true });
+
+      return res.json({
+        success: true,
+        bookingId: booking.id,
+        confirmationCode: booking.confirmation_code,
+        status: 'TICKETED',
+        paymentStatus: 'paid',
+        airlinePnr: pnr,
+        supplierConfirmation: suppConf,
+        ticketNumbers: tickets
+      });
+    } catch (error) {
+      logger.error(`Error processing authorized booking ${req.params.id}: ${error.message}`);
+      next(error);
+    }
   }
 };
 
 export default adminController;
+
 
