@@ -34,6 +34,8 @@ function AdminDashboard() {
   const [openAccordion, setOpenAccordion] = useState(null);
   const [hasUnsavedEdits, setHasUnsavedEdits] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+
 
 
   // Itinerary Editor State
@@ -1000,13 +1002,35 @@ function AdminDashboard() {
                               </button>
                             )}
 
-                            <button type="button" onClick={() => handleDownloadEvidence(selectedBooking.id)} className="admin-secondary-btn" style={{ textAlign: 'center', cursor: 'pointer' }}>
-                              <i className="fas fa-file-download" style={{ marginRight: '4px' }}></i> Download Authorization Evidence
-                            </button>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
+                              <button type="button" onClick={() => handleDownloadEvidence(selectedBooking.id)} className="admin-secondary-btn" style={{ flex: 1, textAlign: 'center', cursor: 'pointer' }}>
+                                <i className="fas fa-file-download" style={{ marginRight: '4px' }}></i> Download Authorization Evidence
+                              </button>
+
+                              <div className="overflow-menu-wrapper">
+                                <button type="button" onClick={() => setShowOverflowMenu(!showOverflowMenu)} className="admin-secondary-btn" title="More Options" style={{ padding: '6px 10px' }}>
+                                  <i className="fas fa-ellipsis-v"></i>
+                                </button>
+                                {showOverflowMenu && (
+                                  <div className="overflow-dropdown">
+                                    <button type="button" className="overflow-item" onClick={() => handlePaymentActionSubmit('mark_received')}>
+                                      <i className="fas fa-check-double" style={{ marginRight: '6px' }}></i> Mark Auth Received
+                                    </button>
+                                    <button type="button" className="overflow-item" onClick={() => handlePaymentActionSubmit('record_payment')}>
+                                      <i className="fas fa-dollar-sign" style={{ marginRight: '6px' }}></i> Record External Payment
+                                    </button>
+                                    <button type="button" className="overflow-item" onClick={() => handlePaymentActionSubmit('record_refund')}>
+                                      <i className="fas fa-undo" style={{ marginRight: '6px' }}></i> Record Refund
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )}
                     </div>
+
 
                   </div>
 

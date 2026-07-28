@@ -73,16 +73,23 @@ async function runAdminDrawerTests() {
     params: { id: testBookingId },
     body: {
       supplierFare: 400.00,
-      customerTotal: 520.00,
+      customerTotal: 999.00,
       currency: 'USD',
       reason: '' // Empty reason should fail when customer price changes
     }
   };
 
+
   let responseData2Fail = null;
   const mockRes2Fail = {
-    status: (s) => ({ json: (d) => { responseData2Fail = { statusCode: s, ...d }; return d; } })
+    json: (d) => { responseData2Fail = d; return d; },
+    status: function(s) {
+      return {
+        json: (d) => { responseData2Fail = { statusCode: s, ...d }; return d; }
+      };
+    }
   };
+
 
   await adminController.updatePricing(mockReq2Fail, mockRes2Fail, (err) => { throw err; });
   assert.strictEqual(responseData2Fail.statusCode, 400, 'Empty reason must return HTTP 400');
@@ -100,8 +107,10 @@ async function runAdminDrawerTests() {
 
   let responseData2Pass = null;
   const mockRes2Pass = {
-    json: (d) => { responseData2Pass = d; return d; }
+    json: (d) => { responseData2Pass = d; return d; },
+    status: (s) => ({ json: (d) => { responseData2Pass = { statusCode: s, ...d }; return d; } })
   };
+
 
   await adminController.updatePricing(mockReq2Pass, mockRes2Pass, (err) => { throw err; });
   assert.strictEqual(responseData2Pass.success, true);

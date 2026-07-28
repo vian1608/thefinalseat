@@ -11,11 +11,12 @@ async function runAuthorizationTests() {
   // Test 1: Create single-use 24-hour authorization token
   console.log('Test 1: Single-use 24-hour authorization token & snapshot creation...');
   const testUuid = '8744e915-a566-41ea-a79a-fe2163bcaf31';
+  await bookingRepository.updateStatus(testUuid, { total_amount: 489.60, customer_price: 489.60 });
+
   const mockBooking = {
     id: testUuid,
     booking_id: testUuid,
     confirmation_code: `TFS-2026-AUTH${Math.floor(1000 + Math.random() * 9000)}`,
-
     passenger_name: 'Vinod Saini',
     email: 'viansaini1608@gmail.com',
     phone: '+1 213-965-9727',
@@ -23,6 +24,7 @@ async function runAuthorizationTests() {
     total_amount: 489.60,
     currency: 'USD',
     status: 'PENDING',
+
     payment_status: 'pending',
     passengers: [{ first_name: 'Vinod', last_name: 'Saini' }],
     flights: [
