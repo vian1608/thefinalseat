@@ -124,10 +124,11 @@
 
 /* Main Container */
 .admin-main-container {
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 20px auto 0;
-  padding: 0 20px;
+  padding-inline: clamp(12px, 2vw, 28px);
 }
+
 
 /* Info banner */
 .admin-info-banner {
@@ -281,18 +282,19 @@
 }
 
 /* Workspace Layout Grid */
-.admin-workspace-grid {
+.admin-workspace-grid,
+.admin-main-layout {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) 440px;
+  gap: 20px;
   align-items: start;
 }
 
-@media (min-width: 1200px) {
-  .admin-workspace-grid {
-    grid-template-columns: 1.7fr 1fr;
-  }
+.workspace-left-panel {
+  min-width: 0;
+  width: 100%;
 }
+
 
 /* Search Filters Card */
 .admin-filters-card {
@@ -479,18 +481,30 @@
 }
 
 /* Details Panel sidebar */
-.admin-detail-panel {
+.admin-detail-panel,
+.booking-details-panel {
+  width: 100%;
+  min-width: 420px;
+  max-width: 460px;
   position: sticky;
-  top: 70px;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .admin-detail-card {
   background-color: #ffffff;
   border-radius: 12px;
   border: 1px solid #e2e8f0;
-  padding: 20px;
+  padding: 16px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
 }
+
 
 .detail-header {
   display: flex;
@@ -999,3 +1013,156 @@
 .admin-loading-container i {
   font-size: 3rem;
 }
+
+/* Accordion & Compact Form Grid Rules */
+.admin-accordion-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  margin-bottom: 16px;
+}
+
+.admin-accordion-card {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.admin-accordion-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background-color: #f8fafc;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #1e3a5f;
+  transition: background-color 0.2s ease;
+  box-sizing: border-box;
+}
+
+.admin-accordion-header:hover {
+  background-color: #f1f5f9;
+}
+
+.accordion-title-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1e3a5f;
+}
+
+.accordion-summary-right {
+  font-size: 0.76rem;
+  color: #64748b;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.admin-accordion-body {
+  padding: 12px;
+  border-top: 1px solid #e2e8f0;
+  background-color: #ffffff;
+}
+
+.detail-form-grid,
+.drawer-grid-2col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.detail-form-field,
+.drawer-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-form-field label,
+.drawer-form-field label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+}
+
+.detail-form-field input,
+.detail-form-field select,
+.detail-form-field textarea,
+.drawer-form-field input,
+.drawer-form-field select,
+.drawer-form-field textarea,
+.admin-input,
+.admin-select,
+.admin-textarea {
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.full-width-field,
+.drawer-form-field--full {
+  grid-column: 1 / -1;
+}
+
+/* Sticky Drawer Footer */
+.sticky-drawer-footer {
+  position: sticky;
+  bottom: 0;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  padding: 12px 0 4px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 10;
+  margin-top: auto;
+}
+
+.sticky-drawer-footer button {
+  height: 38px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.unsaved-badge {
+  background-color: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #ffedd5;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Responsive Media Query (< 1180px) */
+@media (max-width: 1180px) {
+  .admin-workspace-grid,
+  .admin-main-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-detail-panel,
+  .booking-details-panel {
+    position: static;
+    min-width: 0;
+    max-width: none;
+    max-height: none;
+    width: 100%;
+  }
+}
+

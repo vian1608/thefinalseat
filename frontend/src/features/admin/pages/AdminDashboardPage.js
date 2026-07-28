@@ -584,8 +584,9 @@ function AdminDashboard() {
 
         {/* TAB 1: SUPABASE BOOKINGS MANAGEMENT */}
         {activeTab === 'bookings' && (
-          <div className="admin-workspace-grid">
+          <div className="admin-workspace-grid admin-main-layout">
             <div className="workspace-left-panel">
+
               {/* SEARCH & FILTERS CARD */}
               <div className="admin-filters-card">
                 <h3>Search & Filter Bookings</h3>
@@ -712,7 +713,8 @@ function AdminDashboard() {
                 </div>
               </div>
             </div>            {/* DETAIL PANEL / DRAWER */}
-            <aside className="admin-detail-panel">
+            <aside className="admin-detail-panel booking-details-panel">
+
               {selectedBooking ? (
                 <div className="admin-detail-card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                   <div className="detail-header">
