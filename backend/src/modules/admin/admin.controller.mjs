@@ -1,9 +1,11 @@
 import adminService from './admin.service.mjs';
 import bookingRepository from '../bookings/booking.repository.mjs';
 import bookingMapper from '../bookings/booking.mapper.mjs';
+import { BOOKING_STATUSES } from '../bookings/booking.constants.mjs';
 import { sendBookingConfirmation } from '../../integrations/resend/resend.service.mjs';
 import passengerAuthorizationService from '../authorizations/passenger-authorization.service.mjs';
 import logger from '../../config/logger.mjs';
+
 
 
 
@@ -56,23 +58,88 @@ export const adminController = {
 
   updateBooking: async (req, res, next) => {
     try {
-      const { bookingStatus, internalNotes, customerName, email, phone } = req.body || {};
-      const updated = await adminService.updateBooking(req.params.id, {
-        status: bookingStatus,
-        internal_notes: internalNotes,
-        passenger_name: customerName,
-        email,
-        phone,
-      });
+      const { id } = req.params;
+      const { bookingStatus, status, internalNotes, customerName, email, phone, override, reason } = req.body || {};
+      const targetStatus = status || bookingStatus;
+
+      const existingBooking = await bookingRepository.getById(id);
+      if (!existingBooking) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' }
+        });
+      }
+
+      if (targetStatus && !BOOKING_STATUSES.includes(targetStatus)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_STATUS', message: `Unsupported booking status '${targetStatus}'.` }
+        });
+      }
+
+      // Transition validation rules
+      if (targetStatus === 'AUTHORIZED' && !override) {
+        const evidence = await passengerAuthorizationService.getAuditEvidenceByBookingId(id).catch(() => null);
+        if (!evidence || !evidence.authorization || evidence.authorization.status !== 'ACCEPTED') {
+          return res.status(400).json({
+            success: false,
+            error: {
+              code: 'TRANSITION_BLOCKED',
+              message: 'Cannot set status to AUTHORIZED without verified passenger authorization evidence or admin override.'
+            }
+          });
+        }
+      }
+
+      if (targetStatus === 'READY_FOR_TICKETING' && !override && existingBooking.status !== 'AUTHORIZED') {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'TRANSITION_BLOCKED',
+            message: 'Setting status to READY_FOR_TICKETING requires prior AUTHORIZED state or admin override.'
+          }
+        });
+      }
+
+      if (targetStatus === 'TICKETED' && !override && !existingBooking.supplier_confirmation && !existingBooking.airline_pnr) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'TRANSITION_BLOCKED',
+            message: 'Setting status to TICKETED requires a supplier confirmation code or admin override.'
+          }
+        });
+      }
+
+      const updatePayload = {};
+      if (targetStatus) updatePayload.status = targetStatus;
+      if (internalNotes !== undefined) updatePayload.internal_notes = internalNotes;
+      if (customerName !== undefined) updatePayload.passenger_name = customerName;
+      if (email !== undefined) updatePayload.email = email;
+      if (phone !== undefined) updatePayload.phone = phone;
+
+      const updated = await bookingRepository.updateStatus(id, updatePayload);
+
+      if (targetStatus && targetStatus !== existingBooking.status) {
+        await bookingRepository.recordStatusAudit({
+          bookingId: id,
+          oldStatus: existingBooking.status,
+          newStatus: targetStatus,
+          adminId: req.user?.email || 'admin',
+          reason: reason || 'Status updated via Admin Dashboard'
+        });
+      }
+
       res.json({
         success: true,
-        message: 'Booking updated.',
+        message: 'Booking status updated successfully.',
         data: updated
       });
     } catch (error) {
       next(error);
     }
   },
+
 
   getStats: async (req, res, next) => {
     try {

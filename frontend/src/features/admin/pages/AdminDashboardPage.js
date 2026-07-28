@@ -736,13 +736,16 @@ function AdminDashboard() {
                         onChange={(e) => { setNewStatus(e.target.value); setHasUnsavedEdits(true); }} 
                         className="admin-select"
                       >
-                        <option value="PENDING">PENDING</option>
-                        <option value="AWAITING_AUTH">AWAITING_AUTHORIZATION</option>
-                        <option value="AUTHORIZED">AUTHORIZED</option>
-                        <option value="REAUTHORIZATION_REQUIRED">REAUTHORIZATION_REQUIRED</option>
-                        <option value="READY_FOR_TICKETING">READY_FOR_TICKETING</option>
-                        <option value="TICKETED">TICKETED / DONE</option>
-                        <option value="FAILED">FAILED / CANCELLED</option>
+                        <option value="PENDING">Pending</option>
+                        <option value="AWAITING_AUTHORIZATION">Awaiting Authorization</option>
+                        <option value="AUTHORIZED">Authorized</option>
+                        <option value="REAUTHORIZATION_REQUIRED">Reauthorization Required</option>
+                        <option value="READY_FOR_TICKETING">Ready for Ticketing</option>
+                        <option value="TICKETED">Ticketed</option>
+                        <option value="DONE">Done</option>
+                        <option value="FAILED">Failed</option>
+                        <option value="CANCELLED">Cancelled</option>
+
                       </select>
                     </div>
 
