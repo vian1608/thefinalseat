@@ -1,5 +1,6 @@
 import env from '../../config/env.mjs';
 import { calculateFlightDiscount } from '../../shared/utils/pricing.helper.mjs';
+import { GLOBAL_AIRPORTS, rankAirportSuggestions, searchAndRankLocalAirports } from '../../modules/flights/airport-ranker.mjs';
 
 class SerpApiService {
   constructor() {
@@ -18,21 +19,22 @@ class SerpApiService {
   }
 
   // Maps UI Cabin Class to SerpAPI travel_class code
-  mapTravelClass(cabin) {
-    const c = (cabin || 'economy').toLowerCase();
+  mapTravelClass(cabinClass) {
+    if (!cabinClass) return '1';
+    const c = cabinClass.toLowerCase();
     if (c.includes('premium')) return '2';
     if (c.includes('business')) return '3';
     if (c.includes('first')) return '4';
     return '1'; // Economy default
   }
 
-  // Autocomplete airports using SerpAPI google_flights_autocomplete engine
+  // Autocomplete airports using SerpAPI google_flights_autocomplete engine & ranking algorithm
   async autocompleteAirports(query) {
-    if (!query || query.length < 2) {
-      return this.getMockAirportSuggestions(query || '');
+    if (!query || String(query).trim().length < 1) {
+      return GLOBAL_AIRPORTS.slice(0, 10);
     }
 
-    const localResults = searchLocalAirports(query);
+    const localResults = searchAndRankLocalAirports(query);
 
     let apiResults = [];
     if (this.apiKey) {
@@ -89,7 +91,7 @@ class SerpApiService {
 
     apiResults.forEach(item => {
       if (!mergedMap.has(item.code)) {
-        const matchingLocal = LOCAL_AIRPORTS.find(la => la.code === item.code);
+        const matchingLocal = GLOBAL_AIRPORTS.find(la => la.code === item.code);
         if (matchingLocal) {
           mergedMap.set(item.code, matchingLocal);
         } else {
@@ -98,8 +100,9 @@ class SerpApiService {
       }
     });
 
-    const finalResults = Array.from(mergedMap.values());
-    return finalResults.length > 0 ? finalResults : this.getMockAirportSuggestions(query);
+    const candidates = Array.from(mergedMap.values());
+    const ranked = rankAirportSuggestions(candidates, query);
+    return ranked.length > 0 ? ranked : rankAirportSuggestions(GLOBAL_AIRPORTS, query);
   }
 
   // Search flights using SerpAPI google_flights engine

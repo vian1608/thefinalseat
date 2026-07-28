@@ -1,5 +1,7 @@
 import axios from 'axios';
 import config from '../../../../config/api-config.mjs';
+import { searchAndRankLocalAirports } from '../../modules/flights/airport-ranker.mjs';
+
 
 class AmadeusService {
   constructor() {
@@ -279,29 +281,13 @@ class AmadeusService {
 
   // Mock airport suggestions (fallback)
   getMockAirportSuggestions(query) {
-    const mockAirports = [
-      { code: 'JFK', name: 'John F. Kennedy International', city: 'New York', country: 'United States' },
-      { code: 'LAX', name: 'Los Angeles International', city: 'Los Angeles', country: 'United States' },
-      { code: 'LHR', name: 'London Heathrow', city: 'London', country: 'United Kingdom' },
-      { code: 'CDG', name: 'Charles de Gaulle', city: 'Paris', country: 'France' },
-      { code: 'DXB', name: 'Dubai International', city: 'Dubai', country: 'UAE' },
-      { code: 'SIN', name: 'Singapore Changi', city: 'Singapore', country: 'Singapore' },
-      { code: 'NRT', name: 'Narita International', city: 'Tokyo', country: 'Japan' },
-      { code: 'SYD', name: 'Sydney Kingsford Smith', city: 'Sydney', country: 'Australia' }
-    ];
-
-    if (!query) return mockAirports;
-
-    const queryLower = query.toLowerCase();
-    return mockAirports.filter(airport => 
-      airport.code.toLowerCase().includes(queryLower) ||
-      airport.name.toLowerCase().includes(queryLower) ||
-      airport.city.toLowerCase().includes(queryLower)
-    ).map(airport => ({
+    const ranked = searchAndRankLocalAirports(query || '');
+    return ranked.map(airport => ({
       ...airport,
       display: `${airport.name} (${airport.code})`
     }));
   }
 }
+
 
 export default new AmadeusService();
