@@ -180,7 +180,7 @@ function AdminDashboard() {
       rawOutbound = [{
         journey_direction: 'outbound',
         segment_sequence: 1,
-        carrier_name: booking.carrier || 'Commercial Airline',
+        carrier_name: booking.carrier || 'United Airlines',
         carrier_code: 'UA',
         operating_carrier: '',
         flight_number: 'UA 100',
@@ -205,7 +205,7 @@ function AdminDashboard() {
     const mappedOutbound = rawOutbound.map((s, i) => ({
       journey_direction: 'outbound',
       segment_sequence: i + 1,
-      carrier_name: s.carrier_name || s.airline || 'Commercial Airline',
+      carrier_name: s.carrier_name || s.airline || 'United Airlines',
       carrier_code: s.carrier_code || s.carrier || 'UA',
       operating_carrier: s.operating_carrier || s.operatingCarrier || '',
       flight_number: s.flight_number || s.flightNumber || 'UA 100',
@@ -229,7 +229,7 @@ function AdminDashboard() {
     const mappedReturn = rawReturn.map((s, i) => ({
       journey_direction: 'return',
       segment_sequence: i + 1,
-      carrier_name: s.carrier_name || s.airline || 'Commercial Airline',
+      carrier_name: s.carrier_name || s.airline || 'United Airlines',
       carrier_code: s.carrier_code || s.carrier || 'UA',
       operating_carrier: s.operating_carrier || s.operatingCarrier || '',
       flight_number: s.flight_number || s.flightNumber || 'UA 200',
@@ -891,9 +891,9 @@ function AdminDashboard() {
                           </span>
                           <span className="accordion-summary-right">
                             {outboundSegments.length > 0 
-                              ? `${outboundSegments[0].origin_airport || 'DEP'} → ${outboundSegments[outboundSegments.length - 1].destination_airport || 'ARR'} (${outboundSegments.length > 1 ? `${outboundSegments.length - 1} stop(s)` : 'Nonstop'})`
+                              ? `${outboundSegments[0].origin_airport || 'LAX'} → ${outboundSegments[outboundSegments.length - 1].destination_airport || 'MIA'} (${outboundSegments.length > 1 ? `${outboundSegments.length - 1} stop(s)` : 'Nonstop'})`
                               : 'No itinerary'}
-                            {hasReturnJourney && returnSegments.length > 0 && ` · Return: ${returnSegments[0]?.origin_airport || 'DEP'} → ${returnSegments[returnSegments.length - 1]?.destination_airport || 'ARR'}`}
+                            {hasReturnJourney && returnSegments.length > 0 && ` · Return: ${returnSegments[0]?.origin_airport || 'MIA'} → ${returnSegments[returnSegments.length - 1]?.destination_airport || 'LAX'}`}
                           </span>
                         </button>
 
@@ -1015,7 +1015,7 @@ function AdminDashboard() {
                                       setOutboundSegments([...outboundSegments, {
                                         journey_direction: 'outbound',
                                         segment_sequence: outboundSegments.length + 1,
-                                        carrier_name: lastSeg?.carrier_name || 'Commercial Airline',
+                                        carrier_name: lastSeg?.carrier_name || 'United Airlines',
                                         carrier_code: lastSeg?.carrier_code || 'DL',
                                         operating_carrier: '',
                                         flight_number: `DL ${100 + outboundSegments.length}`,
@@ -1161,7 +1161,7 @@ function AdminDashboard() {
                                         setReturnSegments([...returnSegments, {
                                           journey_direction: 'return',
                                           segment_sequence: returnSegments.length + 1,
-                                          carrier_name: lastReturn?.carrier_name || lastOutbound?.carrier_name || 'Commercial Airline',
+                                          carrier_name: lastReturn?.carrier_name || lastOutbound?.carrier_name || 'United Airlines',
                                           carrier_code: lastReturn?.carrier_code || lastOutbound?.carrier_code || 'UA',
                                           operating_carrier: '',
                                           flight_number: `UA ${200 + returnSegments.length}`,
@@ -1198,7 +1198,8 @@ function AdminDashboard() {
                                   setReturnSegments([{
                                     journey_direction: 'return',
                                     segment_sequence: 1,
-                                    carrier_name: lastOutbound?.carrier_name || 'Commercial Airline',
+                                    carrier_name: lastOutbound?.carrier_name || 'United Airlines',
+
                                     carrier_code: lastOutbound?.carrier_code || 'UA',
                                     operating_carrier: '',
                                     flight_number: 'UA 200',
@@ -1706,9 +1707,9 @@ function AdminDashboard() {
                           Any material change to flight numbers, travel dates, airports, or cabin class will automatically <strong>invalidate any existing passenger authorization</strong> and change status to <strong>REAUTHORIZATION_REQUIRED</strong>.
                         </p>
                         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px', fontSize: '0.82rem', marginBottom: '14px' }}>
-                          <div><strong>Outbound Journey:</strong> {outboundSegments[0]?.origin_airport || 'DEP'} &rarr; {outboundSegments.map(s => s.destination_airport).join(' &rarr; ')} ({outboundSegments.length} segment(s))</div>
+                          <div><strong>Outbound Journey:</strong> {outboundSegments[0]?.origin_airport || 'LAX'} &rarr; {outboundSegments.map(s => s.destination_airport).join(' &rarr; ')} ({outboundSegments.length} segment(s))</div>
                           {hasReturnJourney && returnSegments.length > 0 && (
-                            <div style={{ marginTop: '4px' }}><strong>Return Journey:</strong> {returnSegments[0]?.origin_airport || 'DEP'} &rarr; {returnSegments.map(s => s.destination_airport).join(' &rarr; ')} ({returnSegments.length} segment(s))</div>
+                            <div style={{ marginTop: '4px' }}><strong>Return Journey:</strong> {returnSegments[0]?.origin_airport || 'MIA'} &rarr; {returnSegments.map(s => s.destination_airport).join(' &rarr; ')} ({returnSegments.length} segment(s))</div>
                           )}
                         </div>
 
