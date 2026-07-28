@@ -59,6 +59,15 @@ function AdminDashboard() {
     reason: ''
   });
 
+  // Airline Ticket Details State
+  const [ticketForm, setTicketForm] = useState({
+    airlinePnr: '',
+    airlineName: '',
+    ticketNumber: '',
+    ticketIssueDate: ''
+  });
+
+
   // Payment Editor State
   const [paymentForm, setPaymentForm] = useState({
     paymentStatus: 'PENDING',
@@ -276,7 +285,47 @@ function AdminDashboard() {
       reason: '',
       password: ''
     });
+
+    // Initial ticket details setup
+    setTicketForm({
+      airlinePnr: booking.airline_pnr || booking.pnr || booking.supplier_confirmation || '',
+      airlineName: booking.airline_name || booking.carrier || '',
+      ticketNumber: booking.ticket_number || '',
+      ticketIssueDate: booking.ticket_issue_date ? String(booking.ticket_issue_date).substring(0, 10) : ''
+    });
   };
+
+
+  const handleSaveTicketDetails = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedBooking) return;
+    setUpdatingRecord(true);
+
+    try {
+      const response = await adminAPI.updateBooking(selectedBooking.id, {
+        airline_pnr: ticketForm.airlinePnr,
+        airline_name: ticketForm.airlineName,
+        ticket_number: ticketForm.ticketNumber,
+        ticket_issue_date: ticketForm.ticketIssueDate || new Date().toISOString()
+      });
+
+      if (response.success && (response.data || response.booking)) {
+        const updated = response.data || response.booking;
+        setSelectedBooking(updated);
+        setHasUnsavedEdits(false);
+        loadAllDashboardData();
+        alert('Airline ticket details saved successfully.');
+      } else {
+        alert(response.error?.message || response.message || 'Failed to save airline ticket details.');
+      }
+    } catch (err) {
+      console.error('Save ticket details failed:', err);
+      alert(`Error saving ticket details: ${err.message}`);
+    } finally {
+      setUpdatingRecord(false);
+    }
+  };
+
 
   const handleConfirmItinerarySave = async () => {
     if (!selectedBooking) return;
@@ -1247,8 +1296,82 @@ function AdminDashboard() {
                       )}
                     </div>
 
-                    {/* 3. PASSENGER AUTHORIZATION ACCORDION (Details & Audit Only) */}
+                    {/* 3. AIRLINE TICKET DETAILS ACCORDION */}
                     <div className="admin-accordion-card">
+                      <button
+                        type="button"
+                        className="admin-accordion-header"
+                        onClick={() => setOpenAccordion(openAccordion === 'ticket_details' ? null : 'ticket_details')}
+                      >
+                        <span className="accordion-title-left">
+                          <i className={`fas ${openAccordion === 'ticket_details' ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
+                          Airline Ticket Details
+                        </span>
+                        <span className="accordion-summary-right">
+                          {ticketForm.airlinePnr ? `PNR: ${ticketForm.airlinePnr}` : 'Pending Ticket Issue'}
+                        </span>
+                      </button>
+
+                      {openAccordion === 'ticket_details' && (
+                        <div className="admin-accordion-body">
+                          <div className="drawer-grid-2col">
+                            <div className="drawer-form-field">
+                              <label>Airline Confirmation Number / PNR *</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. 6-char PNR (XYZ123)"
+                                value={ticketForm.airlinePnr}
+                                onChange={(e) => { setTicketForm({ ...ticketForm, airlinePnr: e.target.value }); setHasUnsavedEdits(true); }}
+                              />
+                            </div>
+                            <div className="drawer-form-field">
+                              <label>Airline Name</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. United Airlines"
+                                value={ticketForm.airlineName}
+                                onChange={(e) => { setTicketForm({ ...ticketForm, airlineName: e.target.value }); setHasUnsavedEdits(true); }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="drawer-grid-2col">
+                            <div className="drawer-form-field">
+                              <label>Ticket Number</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. 016-2490182741"
+                                value={ticketForm.ticketNumber}
+                                onChange={(e) => { setTicketForm({ ...ticketForm, ticketNumber: e.target.value }); setHasUnsavedEdits(true); }}
+                              />
+                            </div>
+                            <div className="drawer-form-field">
+                              <label>Ticket Issue Date</label>
+                              <input
+                                type="date"
+                                value={ticketForm.ticketIssueDate}
+                                onChange={(e) => { setTicketForm({ ...ticketForm, ticketIssueDate: e.target.value }); setHasUnsavedEdits(true); }}
+                              />
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleSaveTicketDetails}
+                            className="admin-primary-btn"
+                            style={{ width: '100%', marginTop: '12px', background: '#1e3a5f' }}
+                            disabled={updatingRecord}
+                          >
+                            <i className="fas fa-ticket-alt" style={{ marginRight: '6px' }}></i>
+                            Save Airline Ticket Details
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 4. PASSENGER AUTHORIZATION ACCORDION (Details & Audit Only) */}
+                    <div className="admin-accordion-card">
+
                       <button
                         type="button"
                         className="admin-accordion-header"

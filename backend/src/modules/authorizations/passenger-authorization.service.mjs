@@ -11,14 +11,37 @@ function hashText(text) {
   return crypto.createHash('sha256').update(String(text || '')).digest('hex');
 }
 
+const AUTH_SECRET = process.env.JWT_SECRET || env.resendApiKey || 'tfs_authorization_secret_key_2026';
+
+function generateStatelessToken(bookingId, expiresAtMs) {
+  const sig = crypto.createHmac('sha256', AUTH_SECRET).update(`${bookingId}_${expiresAtMs}`).digest('hex').substring(0, 16);
+  return `tks_${bookingId}_${expiresAtMs}_${sig}`;
+}
+
+function parseStatelessToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  if (!token.startsWith('tks_')) return null;
+  const parts = token.split('_');
+  if (parts.length !== 4) return null;
+  const [, bookingId, expiresAtMsStr, sig] = parts;
+  const expiresAtMs = parseInt(expiresAtMsStr, 10);
+  if (isNaN(expiresAtMs)) return null;
+
+  const expectedSig = crypto.createHmac('sha256', AUTH_SECRET).update(`${bookingId}_${expiresAtMs}`).digest('hex').substring(0, 16);
+  if (sig !== expectedSig) return null;
+
+  return { bookingId, expiresAtMs, isExpired: Date.now() > expiresAtMs };
+}
+
 export const passengerAuthorizationService = {
   /**
    * Create single-use 24-hour authorization token and snapshot
    */
   createAuthorizationToken: async (booking, vaultData = {}) => {
     const bookingId = booking.id || booking.booking_id;
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const expiresAtMs = Date.now() + 24 * 60 * 60 * 1000;
+    const token = generateStatelessToken(bookingId, expiresAtMs);
+    const expiresAt = new Date(expiresAtMs).toISOString();
 
     const flightsList = Array.isArray(booking.flights) ? booking.flights : [];
     const outbound = flightsList.find(f => f.direction === 'outbound') || flightsList[0] || booking.flight || booking.flight_details || {};
@@ -129,14 +152,14 @@ export const passengerAuthorizationService = {
     const currencyStr = authRecord.currency || 'USD';
     const cardLast4 = authRecord.card_last4 || '4242';
 
-    const subject = `Action Required — Authorize Booking ${confirmationCode} | The Final Seat`;
+    const subject = `Action Required — Authorize Booking ID ${confirmationCode} | The Final Seat`;
 
     const textBody = `
 THE FINAL SEAT — PASSENGER RESERVATION AUTHORIZATION REQUIRED
 
 Dear ${booking.passenger_name || 'Valued Customer'},
 
-Please review and authorize your reservation for Booking Reference ${confirmationCode}.
+Please review and authorize your reservation for Booking ID ${confirmationCode}.
 
 Amount to Authorize: $${amountStr} ${currencyStr}
 Saved Payment Method: ${authRecord.card_brand || 'Visa'} ending in ${cardLast4}
@@ -181,11 +204,11 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
     <div class="body">
       <h3 class="hero-title">Action Required: Authorize Your Booking</h3>
       <p style="font-size: 15px; color: #5f4a53; line-height: 1.6;">
-        Please review and authorize your reservation for <strong>Booking Reference ${confirmationCode}</strong> for a total charge of <strong>$${amountStr} ${currencyStr}</strong>.
+        Please review and authorize your reservation for <strong>Booking ID ${confirmationCode}</strong> for a total charge of <strong>$${amountStr} ${currencyStr}</strong>.
       </p>
 
       <div class="box">
-        <div class="box-title">Booking Reference</div>
+        <div class="box-title">Booking ID</div>
         <div class="box-code">${confirmationCode}</div>
         <div style="font-size: 13px; color: #6b5b43;">Saved Card: ${authRecord.card_brand || 'Visa'} ending in <strong>${cardLast4}</strong></div>
       </div>
@@ -234,7 +257,7 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
    * Fetch sanitized authorization payload for passenger authorization page (/authorize/:token)
    */
   getAuthorizationByToken: async (token) => {
-    logger.info(`[Auth Lookup] Token lookup received: ${String(token).substring(0, 12)}...`);
+    logger.info(`[Auth Lookup] Token lookup received: ${String(token).substring(0, 16)}...`);
 
     let authRecord = memoryAuthStore.get(token);
 
@@ -249,7 +272,7 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
     }
 
     if (!authRecord) {
-      // Fallback: Check if token is stored directly on bookings record
+      // Fallback 1: Check if token is stored directly on bookings record
       const { data: bkData } = await supabase
         .from('bookings')
         .select('*')
@@ -272,11 +295,33 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
     }
 
     if (!authRecord) {
-      logger.warn(`[Auth Lookup] Token not found in database or memory store: ${token}`);
+      // Fallback 2: Stateless Token Resolution (guarantees resolution even on cold starts or unmigrated DB)
+      const parsed = parseStatelessToken(token);
+      if (parsed) {
+        const liveBooking = await bookingRepository.getById(parsed.bookingId);
+        if (liveBooking) {
+          authRecord = {
+            booking_id: liveBooking.id,
+            token: token,
+            status: ['AUTHORIZED', 'READY_FOR_TICKETING', 'TICKETED', 'DONE'].includes(liveBooking.status) ? 'accepted' : 'pending',
+            authorized_amount: parseFloat(liveBooking.customer_price || liveBooking.total_amount || 0),
+            currency: (liveBooking.currency || 'USD').toUpperCase(),
+            card_brand: liveBooking.card_brand || 'Visa',
+            card_last4: liveBooking.card_last4 || '4242',
+            expires_at: liveBooking.authorization_expires_at || new Date(parsed.expiresAtMs).toISOString(),
+            quote_snapshot: { amount: (liveBooking.customer_price || liveBooking.total_amount || 0).toString() }
+          };
+        }
+      }
+    }
+
+    if (!authRecord) {
+      logger.warn(`[Auth Lookup] Token not found in database, memory store, or stateless decoder: ${token}`);
       throw new Error('AUTHORIZATION_NOT_FOUND');
     }
 
     logger.info(`[Auth Lookup] Successfully resolved authorization record for booking ${authRecord.booking_id}`);
+
 
     // Check expiration
     if (new Date(authRecord.expires_at).getTime() < Date.now()) {

@@ -34,6 +34,8 @@ router.use('/bookings', bookingRouter);
 router.use('/payments', paymentRouter);
 router.use('/paypal', paypalRouter);
 router.use('/authorizations', authorizationRouter);
+router.use('/authorization', authorizationRouter);
+
 router.post('/webhooks/paypal', paypalController.handleWebhook);
 router.use('/', whopRouter);
 

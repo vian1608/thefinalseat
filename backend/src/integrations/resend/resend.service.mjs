@@ -833,7 +833,72 @@ The Final Seat LLC
   }
 };
 
+export function getCarrierLogoUrl(carrierCode) {
+
+  const code = (carrierCode || 'UA').toUpperCase().trim();
+  return `https://assets.duffel.com/img/airlines/for-floor/sq/${code}.png`;
+}
+
+export function renderFlightItineraryHtml(flightsInput = [], currency = 'USD') {
+  const flights = Array.isArray(flightsInput) ? flightsInput : [];
+  if (flights.length === 0) {
+    return `<div style="padding: 12px; background: #f8fafc; border-radius: 8px; font-size: 13px; color: #64748b;">Itinerary details pending assignment by consultant.</div>`;
+  }
+
+  const outboundSegments = flights.filter(f => f.journey_direction === 'outbound' || f.direction === 'outbound');
+  const returnSegments = flights.filter(f => f.journey_direction === 'return' || f.direction === 'return');
+  const primaryOutbound = outboundSegments.length > 0 ? outboundSegments : flights;
+
+  const renderSegmentGroup = (segments, title, icon) => {
+    if (!segments || segments.length === 0) return '';
+    return `
+      <div style="margin-bottom: 16px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;">
+        <div style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 10px 14px; font-weight: bold; color: #1e3a5f; font-size: 13px;">
+          <span>${icon} ${title} (${segments.length} Flight${segments.length > 1 ? 's' : ''})</span>
+        </div>
+        <div style="padding: 12px 14px;">
+          ${segments.map((seg, idx) => {
+            const carrierCode = (seg.carrier_code || seg.carrier || 'UA').toUpperCase();
+            const logoUrl = getCarrierLogoUrl(carrierCode);
+            const carrierName = seg.carrier_name || seg.carrier || 'Commercial Airline';
+            const flightNum = seg.flight_number || seg.flightNumber || '101';
+            const origCode = seg.origin_airport || seg.origin_code || seg.origin || 'DEP';
+            const destCode = seg.destination_airport || seg.destination_code || seg.destination || 'ARR';
+            const depDate = seg.departure_date || 'Scheduled';
+            const depTime = seg.departure_time || '';
+            const arrDate = seg.arrival_date || 'Scheduled';
+            const arrTime = seg.arrival_time || '';
+            const cabin = seg.cabin || seg.cabin_class || 'Economy';
+
+            return `
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 0; ${idx > 0 ? 'border-top: 1px dashed #e2e8f0;' : ''}">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <img src="${logoUrl}" alt="${carrierCode}" style="width: 36px; height: 36px; border-radius: 6px; object-fit: contain; background: #ffffff; border: 1px solid #e2e8f0; padding: 2px;" onError="this.style.display='none'" />
+                  <div>
+                    <div style="font-weight: bold; font-size: 14px; color: #1e293b;">${carrierName} <span style="color: #64748b; font-size: 12px;">#${flightNum}</span></div>
+                    <div style="font-size: 12px; color: #64748b; margin-top: 2px;">Cabin: ${cabin}</div>
+                  </div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="font-weight: bold; font-size: 14px; color: #7f0d2f;">${origCode} &rarr; ${destCode}</div>
+                  <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Dep: ${depDate} ${depTime} | Arr: ${arrDate} ${arrTime}</div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  };
+
+  return `
+    ${renderSegmentGroup(primaryOutbound, 'Outbound Journey', '🛫')}
+    ${renderSegmentGroup(returnSegments, 'Return Journey', '🛬')}
+  `;
+}
+
 export const sendFinalTicketEmail = async (bookingInput) => {
+
   try {
     const booking = typeof bookingInput === 'object' ? bookingInput : await bookingRepository.getById(bookingInput);
     if (!booking) return { success: false, error: 'Booking not found' };
@@ -848,18 +913,23 @@ export const sendFinalTicketEmail = async (bookingInput) => {
       return { success: false, error: errMsg };
     }
 
+    const airlinePnr = booking.airline_pnr || booking.pnr || booking.supplier_confirmation || booking.confirmation_code;
+    if (!booking.airline_pnr && !booking.pnr && !booking.supplier_confirmation) {
+      return { success: false, error: 'Cannot send Final Ticket Email until Airline Confirmation Number (PNR) is saved.' };
+    }
+
     const bookingReference = booking.confirmation_code || booking.bookingReference || booking.id;
     const passengerName = booking.passenger_name || booking.customerName || 'Valued Passenger';
     const passengerFirstName = passengerName.split(' ')[0] || 'Passenger';
     const amountPaid = parseFloat(booking.customer_price || booking.total_amount || 0).toFixed(2);
     const currency = (booking.currency || 'USD').toUpperCase();
+    const ticketNumber = booking.ticket_number || `TKT-${Date.now().toString().slice(-8)}`;
 
     const relations = await bookingRepository.getRelations(booking.id);
     const flights = relations.flights || booking.flights || [];
     const travellers = relations.travellers || booking.travellers || [];
 
-    const outboundFlight = flights.find(f => f.journey_direction === 'outbound') || flights[0] || {};
-    const returnFlight = flights.find(f => f.journey_direction === 'return') || flights[1] || null;
+    const itineraryHtml = renderFlightItineraryHtml(flights, currency);
 
     const subject = `Official Flight E-Ticket & Confirmation — Booking ID ${bookingReference} | The Final Seat`;
 
@@ -871,20 +941,11 @@ Dear ${passengerFirstName},
 Your flight ticket has been issued successfully. Below are your official booking and e-ticket details:
 
 BOOKING ID: ${bookingReference}
+AIRLINE CONFIRMATION (PNR): ${airlinePnr}
+TICKET NUMBER: ${ticketNumber}
 Passenger: ${passengerName} (${travellers.length || 1} Traveler(s))
 Contact Email: ${customerEmail}
 
-FLIGHT ITINERARY:
-Outbound: ${outboundFlight.carrier_name || outboundFlight.carrier || 'Commercial Airline'} #${outboundFlight.flight_number || '101'}
-From: ${outboundFlight.origin_airport || 'DEP'} (${outboundFlight.departure_date || 'Scheduled'})
-To: ${outboundFlight.destination_airport || 'ARR'} (${outboundFlight.arrival_date || 'Scheduled'})
-Cabin: ${outboundFlight.cabin || 'Economy'}
-
-${returnFlight ? `Return: ${returnFlight.carrier_name || returnFlight.carrier || 'Commercial Airline'} #${returnFlight.flight_number || '202'}
-From: ${returnFlight.origin_airport || 'ARR'} (${returnFlight.departure_date || 'Scheduled'})
-To: ${returnFlight.destination_airport || 'DEP'} (${returnFlight.arrival_date || 'Scheduled'})
-Cabin: ${returnFlight.cabin || 'Economy'}
-` : ''}
 PAYMENT SUMMARY:
 Total Amount Paid: $${amountPaid} ${currency}
 Payment Status: PAID & VERIFIED
@@ -910,8 +971,6 @@ Thank you for choosing The Final Seat! Have a wonderful trip.
     .box { background: #fffaf0; border: 1px dashed #e2b84d; border-radius: 12px; padding: 16px; text-align: center; margin: 16px 0; }
     .box-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #8b6b16; font-weight: 700; }
     .box-code { font-size: 26px; font-weight: 800; color: #7f0d2f; margin: 4px 0; }
-    .flight-section { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
-    .flight-title { font-weight: bold; color: #1e3a5f; margin-bottom: 6px; font-size: 14px; }
     .footer { background: #fbf8f9; padding: 20px; text-align: center; font-size: 12px; color: #748596; border-top: 1px solid #eadfe3; }
   </style>
 </head>
@@ -925,34 +984,22 @@ Thank you for choosing The Final Seat! Have a wonderful trip.
       <div class="ticket-badge">✓ E-Ticket Issued Successfully</div>
       <p style="font-size: 15px; color: #475569; line-height: 1.5;">
         Dear <strong>${passengerFirstName}</strong>,<br>
-        Your flight booking is confirmed and ticketed. Below are your official reservation details:
+        Your flight booking is confirmed and ticketed. Below are your official reservation and ticket details:
       </p>
 
       <div class="box">
         <div class="box-title">Booking ID</div>
         <div class="box-code">${bookingReference}</div>
-        <div style="font-size: 13px; color: #6b5b43;">Passenger: <strong>${passengerName}</strong></div>
-      </div>
-
-      <div class="flight-section">
-        <div class="flight-title">🛫 Outbound Flight: ${outboundFlight.carrier_name || 'Commercial Airline'} #${outboundFlight.flight_number || '101'}</div>
-        <div style="font-size: 13px; color: #475569; line-height: 1.6;">
-          <strong>From:</strong> ${outboundFlight.origin_airport || 'DEP'} (${outboundFlight.departure_date || 'Scheduled'} ${outboundFlight.departure_time || ''})<br>
-          <strong>To:</strong> ${outboundFlight.destination_airport || 'ARR'} (${outboundFlight.arrival_date || 'Scheduled'} ${outboundFlight.arrival_time || ''})<br>
-          <strong>Cabin:</strong> ${outboundFlight.cabin || 'Economy'}
+        <div style="font-size: 14px; color: #1e3a5f; margin-top: 6px;">
+          Airline Confirmation (PNR): <strong>${airlinePnr}</strong>
+        </div>
+        <div style="font-size: 13px; color: #64748b; margin-top: 2px;">
+          Ticket #: <strong>${ticketNumber}</strong> &middot; Passenger: <strong>${passengerName}</strong>
         </div>
       </div>
 
-      ${returnFlight ? `
-      <div class="flight-section">
-        <div class="flight-title">🛬 Return Flight: ${returnFlight.carrier_name || 'Commercial Airline'} #${returnFlight.flight_number || '202'}</div>
-        <div style="font-size: 13px; color: #475569; line-height: 1.6;">
-          <strong>From:</strong> ${returnFlight.origin_airport || 'ARR'} (${returnFlight.departure_date || 'Scheduled'} ${returnFlight.departure_time || ''})<br>
-          <strong>To:</strong> ${returnFlight.destination_airport || 'DEP'} (${returnFlight.arrival_date || 'Scheduled'} ${returnFlight.arrival_time || ''})<br>
-          <strong>Cabin:</strong> ${returnFlight.cabin || 'Economy'}
-        </div>
-      </div>
-      ` : ''}
+      <h4 style="color: #1e3a5f; margin: 20px 0 10px 0; font-size: 14px;">Flight Itinerary</h4>
+      ${itineraryHtml}
 
       <div style="background: #f1f5f9; border-radius: 8px; padding: 12px; font-size: 13px; color: #334155; margin-top: 16px;">
         <strong>Payment Status:</strong> Paid &amp; Confirmed ($${amountPaid} ${currency})
@@ -1002,6 +1049,7 @@ Thank you for choosing The Final Seat! Have a wonderful trip.
     return { success: false, error: errorMsg };
   }
 };
+
 
 
 

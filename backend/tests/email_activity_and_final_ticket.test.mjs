@@ -13,7 +13,9 @@ async function runEmailActivityAndFinalTicketTests() {
     confirmation_code: testCode,
     status: 'TICKETED',
     payment_status: 'PAID',
+    airline_pnr: 'UA1029',
     total_amount: 1250.00,
+
     original_api_price: 1250.00,
     currency: 'USD',
     passenger_name: 'Sophia Anderson',

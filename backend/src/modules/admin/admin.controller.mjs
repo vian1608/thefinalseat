@@ -120,8 +120,13 @@ export const adminController = {
       if (customerName !== undefined) updatePayload.passenger_name = customerName;
       if (email !== undefined) updatePayload.email = email;
       if (phone !== undefined) updatePayload.phone = phone;
+      if (req.body.airline_pnr !== undefined) updatePayload.airline_pnr = req.body.airline_pnr;
+      if (req.body.airline_name !== undefined) updatePayload.airline_name = req.body.airline_name;
+      if (req.body.ticket_number !== undefined) updatePayload.ticket_number = req.body.ticket_number;
+      if (req.body.ticket_issue_date !== undefined) updatePayload.ticket_issue_date = req.body.ticket_issue_date;
 
       const updated = await bookingRepository.updateStatus(id, updatePayload);
+
 
       if (targetStatus && targetStatus !== existingBooking.status) {
         await bookingRepository.recordStatusAudit({
