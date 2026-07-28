@@ -104,15 +104,27 @@ export const adminController = {
         });
       }
 
-      if (targetStatus === 'TICKETED' && !override && !existingBooking.supplier_confirmation && !existingBooking.airline_pnr) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'TRANSITION_BLOCKED',
-            message: 'Setting status to TICKETED requires a supplier confirmation code or admin override.'
-          }
-        });
+      if (targetStatus === 'TICKETED' && !override) {
+        if (!['AUTHORIZED', 'READY_FOR_TICKETING'].includes(existingBooking.status)) {
+          return res.status(400).json({
+            success: false,
+            error: {
+              code: 'TRANSITION_BLOCKED',
+              message: 'Cannot transition directly from PENDING to TICKETED without prior passenger authorization or admin override.'
+            }
+          });
+        }
+        if (!existingBooking.supplier_confirmation && !existingBooking.airline_pnr && !req.body.airline_pnr) {
+          return res.status(400).json({
+            success: false,
+            error: {
+              code: 'TRANSITION_BLOCKED',
+              message: 'Setting status to TICKETED requires an Airline Confirmation Number (PNR) or admin override.'
+            }
+          });
+        }
       }
+
 
       const updatePayload = {};
       if (targetStatus) updatePayload.status = targetStatus;
