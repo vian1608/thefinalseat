@@ -22,7 +22,8 @@ export async function generateAuthorizationPdfBuffer(evidence) {
       doc.fill('#1e293b');
 
       // Title & Booking Reference
-      doc.fontSize(14).font('Helvetica-Bold').text(`Confirmation Code: ${evidence.confirmationCode || 'N/A'}`, 40, 115);
+      doc.fontSize(14).font('Helvetica-Bold').text(`Booking ID: ${evidence.confirmationCode || 'N/A'}`, 40, 115);
+
       doc.fontSize(9).font('Helvetica').fillColor('#64748b').text(`Generated On: ${new Date().toUTCString()} | Evidence ID: ${evidence.evidenceId || 'N/A'}`, 40, 133);
       doc.fillColor('#1e293b');
 

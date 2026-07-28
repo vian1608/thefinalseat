@@ -2,7 +2,8 @@ import adminService from './admin.service.mjs';
 import bookingRepository from '../bookings/booking.repository.mjs';
 import bookingMapper from '../bookings/booking.mapper.mjs';
 import { BOOKING_STATUSES, PAYMENT_OPERATIONAL_STATES } from '../bookings/booking.constants.mjs';
-import { sendBookingConfirmation, sendBookingRequestReceivedEmail, sendPassengerAuthorizationEmail } from '../../integrations/resend/resend.service.mjs';
+import { sendBookingConfirmation, sendBookingRequestReceivedEmail, sendPassengerAuthorizationEmail, sendFinalTicketEmail } from '../../integrations/resend/resend.service.mjs';
+
 import passengerAuthorizationService from '../authorizations/passenger-authorization.service.mjs';
 import { generateAuthorizationPdfBuffer } from '../authorizations/authorization-pdf.service.mjs';
 import logger from '../../config/logger.mjs';
@@ -450,6 +451,23 @@ export const adminController = {
           message: `Booking request email resent cleanly to ${booking.email || booking.contacts?.[0]?.email}`
         });
       }
+
+      if (action === 'send_final_ticket_email') {
+        const ticketRes = await sendFinalTicketEmail(booking);
+        if (!ticketRes.success) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'TICKET_EMAIL_FAILED', message: ticketRes.error || 'Final ticket email failed to send.' }
+          });
+        }
+        const updated = await bookingRepository.getById(booking.id);
+        return res.json({
+          success: true,
+          booking: updated,
+          message: `Final ticket email sent cleanly to ${updated.final_confirmation_email_recipient || booking.email}`
+        });
+      }
+
 
       // Enforce 5 canonical operational payment states
       if (desiredState && !PAYMENT_OPERATIONAL_STATES.includes(desiredState)) {

@@ -217,7 +217,8 @@ function PaymentSuccess() {
         <p className="minimal-subtitle">Your payment was successful.</p>
 
         <div className="minimal-ref-box">
-          <span className="minimal-ref-label">Temporary Confirmation Number</span>
+          <span className="minimal-ref-label">Booking ID</span>
+
           <strong className="minimal-ref-code">{confirmationCode}</strong>
         </div>
 

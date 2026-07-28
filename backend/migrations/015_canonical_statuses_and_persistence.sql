@@ -7,9 +7,14 @@
 ALTER TABLE public.bookings
 ADD COLUMN IF NOT EXISTS authorization_token VARCHAR(255);
 
+ALTER TABLE public.bookings
+ALTER COLUMN status TYPE VARCHAR(50),
+ALTER COLUMN payment_status TYPE VARCHAR(50);
+
 CREATE INDEX IF NOT EXISTS idx_bookings_authorization_token ON public.bookings(authorization_token);
 
 -- 2. Ensure bookings_status_check accepts all 9 canonical booking statuses
+
 ALTER TABLE public.bookings
 DROP CONSTRAINT IF EXISTS bookings_status_check;
 

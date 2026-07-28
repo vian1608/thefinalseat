@@ -1432,96 +1432,126 @@ function AdminDashboard() {
                           Email Delivery Activity
                         </span>
                         <span className="accordion-summary-right">
-                          {(selectedBooking.authorization_email_status || 'NOT_SENT') === 'SENT' ? '1 Sent' : '0 Sent'}
+                          {(() => {
+                            let count = 0;
+                            if ((selectedBooking.booking_request_email_status || '').toUpperCase() === 'SENT') count++;
+                            if ((selectedBooking.authorization_email_status || '').toUpperCase() === 'SENT') count++;
+                            if ((selectedBooking.final_confirmation_email_status || '').toUpperCase() === 'SENT') count++;
+                            return `${count} Sent`;
+                          })()}
                         </span>
                       </button>
 
                       {openAccordion === 'email_activity' && (
                         <div className="admin-accordion-body" style={{ padding: '12px' }}>
-                          {/* 1. Booking Request Email */}
-                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px', marginBottom: '8px', fontSize: '0.78rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                              <strong>Booking Request Email:</strong>
+                          {/* 1. Booking Request Email Card */}
+                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '10px', fontSize: '0.8rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                              <strong style={{ color: '#1e293b', fontSize: '0.85rem' }}>Booking Request Email</strong>
                               <span className={`status-badge status-badge--${(selectedBooking.booking_request_email_status || 'NOT_SENT') === 'SENT' ? 'done' : ((selectedBooking.booking_request_email_status || 'NOT_SENT') === 'FAILED' ? 'failed' : 'pending')}`}>
                                 {selectedBooking.booking_request_email_status || 'NOT_SENT'}
                               </span>
                             </div>
-                            <div style={{ color: '#64748b', fontSize: '0.72rem' }}>
-                              Recipient: {selectedBooking.booking_request_email_recipient || selectedBooking.email || 'N/A'}<br />
-                              Sent At: {selectedBooking.booking_request_email_sent_at ? new Date(selectedBooking.booking_request_email_sent_at).toLocaleString() : 'N/A'}<br />
-                              {selectedBooking.booking_request_email_error && <span style={{ color: '#dc2626' }}>Error: {selectedBooking.booking_request_email_error}<br /></span>}
-                              Msg ID: {selectedBooking.booking_request_email_id || 'N/A'}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', color: '#64748b', fontSize: '0.75rem', marginBottom: '10px' }}>
+                              <div><strong>Recipient:</strong> {selectedBooking.booking_request_email_recipient || selectedBooking.email || 'N/A'}</div>
+                              <div><strong>Sent:</strong> {selectedBooking.booking_request_email_sent_at ? new Date(selectedBooking.booking_request_email_sent_at).toLocaleString() : 'N/A'}</div>
+                              <div style={{ gridColumn: '1 / -1' }}><strong>Provider ID:</strong> {selectedBooking.booking_request_email_id || 'N/A'}</div>
+                              {selectedBooking.booking_request_email_error && <div style={{ color: '#dc2626', gridColumn: '1 / -1' }}><strong>Error:</strong> {selectedBooking.booking_request_email_error}</div>}
                             </div>
-                            <button type="button" onClick={() => handlePaymentActionSubmit('resend_booking_request_email')} className="admin-secondary-btn" style={{ width: '100%', marginTop: '6px', fontSize: '0.72rem', padding: '4px' }}>
+                            <button type="button" onClick={() => handlePaymentActionSubmit('resend_booking_request_email')} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
                               <i className="fas fa-redo" style={{ marginRight: '4px' }}></i> Resend Booking Request Email
                             </button>
                           </div>
 
-                          {/* 2. Authorization Email */}
-                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px', marginBottom: '8px', fontSize: '0.78rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                              <strong>Authorization Email:</strong>
+                          {/* 2. Authorization Email Card */}
+                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '10px', fontSize: '0.8rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                              <strong style={{ color: '#1e293b', fontSize: '0.85rem' }}>Authorization Email</strong>
                               <span className={`status-badge status-badge--${(selectedBooking.authorization_email_status || 'NOT_SENT') === 'SENT' ? 'done' : ((selectedBooking.authorization_email_status || 'NOT_SENT') === 'FAILED' ? 'failed' : 'pending')}`}>
                                 {selectedBooking.authorization_email_status || 'NOT_SENT'}
                               </span>
                             </div>
-                            <div style={{ color: '#64748b', fontSize: '0.72rem', marginBottom: '6px' }}>
-                              Recipient: {selectedBooking.authorization_email_recipient || selectedBooking.email || 'N/A'}<br />
-                              Sent At: {selectedBooking.authorization_email_sent_at ? new Date(selectedBooking.authorization_email_sent_at).toLocaleString() : 'N/A'}<br />
-                              {selectedBooking.authorization_email_error && <span style={{ color: '#dc2626' }}>Error: {selectedBooking.authorization_email_error}<br /></span>}
-                              Expires At: {selectedBooking.authorization_expires_at ? new Date(selectedBooking.authorization_expires_at).toLocaleString() : 'N/A'}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', color: '#64748b', fontSize: '0.75rem', marginBottom: '10px' }}>
+                              <div><strong>Recipient:</strong> {selectedBooking.authorization_email_recipient || selectedBooking.email || 'N/A'}</div>
+                              <div><strong>Sent:</strong> {selectedBooking.authorization_email_sent_at ? new Date(selectedBooking.authorization_email_sent_at).toLocaleString() : 'N/A'}</div>
+                              <div><strong>Expires:</strong> {selectedBooking.authorization_expires_at ? new Date(selectedBooking.authorization_expires_at).toLocaleString() : 'N/A'}</div>
+                              <div><strong>Provider ID:</strong> {selectedBooking.authorization_email_id || 'N/A'}</div>
+                              {selectedBooking.authorization_email_error && <div style={{ color: '#dc2626', gridColumn: '1 / -1' }}><strong>Error:</strong> {selectedBooking.authorization_email_error}</div>}
                             </div>
 
-                            {/* Authorization Email Action Buttons */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              {['PENDING', 'NOT_COLLECTED', 'PAYMENT_METHOD_SECURED'].includes(selectedBooking.status) && (
-                                <button type="button" onClick={() => handlePaymentActionSubmit('send_authorization')} className="admin-primary-btn" style={{ background: '#9f1239', fontSize: '0.72rem', padding: '5px' }}>
+                            {/* Authorization State-based Actions */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              {['AUTHORIZED', 'READY_FOR_TICKETING', 'TICKETED', 'DONE'].includes(selectedBooking.status) ? (
+                                <>
+                                  <div style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', padding: '6px', borderRadius: '6px', fontWeight: '700', textAlign: 'center', fontSize: '0.78rem' }}>
+                                    ✓ Authorization Completed
+                                  </div>
+                                  <button type="button" onClick={() => handleDownloadEvidence(selectedBooking.id)} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
+                                    <i className="fas fa-file-pdf" style={{ marginRight: '4px', color: '#8B1236' }}></i> Download Authorization Evidence (PDF)
+                                  </button>
+                                </>
+                              ) : (selectedBooking.status === 'EXPIRED' || selectedBooking.authorization_email_status === 'EXPIRED') ? (
+                                <>
+                                  <button type="button" onClick={() => handlePaymentActionSubmit('send_authorization')} className="admin-primary-btn" style={{ background: '#b45309', width: '100%', fontSize: '0.78rem', height: '34px' }}>
+                                    <i className="fas fa-paper-plane" style={{ marginRight: '4px' }}></i> Send New Authorization Email
+                                  </button>
+                                </>
+                              ) : (selectedBooking.authorization_email_status === 'SENT' || ['AWAITING_AUTH', 'AWAITING_AUTHORIZATION', 'REAUTHORIZATION_REQUIRED'].includes(selectedBooking.status)) ? (
+                                <>
+                                  <button type="button" onClick={() => handlePaymentActionSubmit('resend_authorization')} className="admin-primary-btn" style={{ background: '#b45309', width: '100%', fontSize: '0.78rem', height: '34px' }}>
+                                    <i className="fas fa-sync" style={{ marginRight: '4px' }}></i> Resend Authorization Email
+                                  </button>
+                                  {selectedBooking.authorization_token && (
+                                    <button type="button" onClick={() => {
+                                      const link = `https://www.thefinalseat.com/authorize/${selectedBooking.authorization_token}`;
+                                      navigator.clipboard.writeText(link);
+                                      alert(`Authorization link copied to clipboard:\n${link}`);
+                                    }} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
+                                      <i className="fas fa-copy" style={{ marginRight: '4px' }}></i> Copy Authorization Link
+                                    </button>
+                                  )}
+                                  <button type="button" onClick={() => handleDownloadEvidence(selectedBooking.id)} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
+                                    <i className="fas fa-file-pdf" style={{ marginRight: '4px', color: '#8B1236' }}></i> Download Authorization Evidence (PDF)
+                                  </button>
+                                </>
+                              ) : (
+                                <button type="button" onClick={() => handlePaymentActionSubmit('send_authorization')} className="admin-primary-btn" style={{ background: '#8B1236', width: '100%', fontSize: '0.78rem', height: '34px' }}>
                                   <i className="fas fa-paper-plane" style={{ marginRight: '4px' }}></i> Send Authorization Email
                                 </button>
                               )}
-
-                              {['AWAITING_AUTH', 'AWAITING_AUTHORIZATION', 'REAUTHORIZATION_REQUIRED'].includes(selectedBooking.status) && (
-                                <button type="button" onClick={() => handlePaymentActionSubmit('resend_authorization')} className="admin-primary-btn" style={{ background: '#b45309', fontSize: '0.72rem', padding: '5px' }}>
-                                  <i className="fas fa-sync" style={{ marginRight: '4px' }}></i> Resend Authorization Email
-                                </button>
-                              )}
-
-                              {selectedBooking.authorization_token && (
-                                <button type="button" onClick={() => {
-                                  const link = `https://www.thefinalseat.com/authorize/${selectedBooking.authorization_token}`;
-                                  navigator.clipboard.writeText(link);
-                                  alert(`Authorization URL copied:\n${link}`);
-                                }} className="admin-secondary-btn" style={{ fontSize: '0.72rem', padding: '4px' }}>
-                                  <i className="fas fa-copy" style={{ marginRight: '4px' }}></i> Copy Authorization Link
-                                </button>
-                              )}
-
-                              <button type="button" onClick={() => handleDownloadEvidence(selectedBooking.id)} className="admin-secondary-btn" style={{ fontSize: '0.72rem', padding: '4px' }}>
-                                <i className="fas fa-file-pdf" style={{ marginRight: '4px', color: '#9f1239' }}></i> Download Authorization Evidence (PDF)
-                              </button>
                             </div>
                           </div>
 
-                          {/* 3. Final Confirmation Email */}
-                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px', fontSize: '0.78rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                              <strong>Final Ticket Email:</strong>
+                          {/* 3. Final Ticket Email Card */}
+                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', fontSize: '0.8rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                              <strong style={{ color: '#1e293b', fontSize: '0.85rem' }}>Final Ticket Email</strong>
                               <span className={`status-badge status-badge--${(selectedBooking.final_confirmation_email_status || 'NOT_SENT') === 'SENT' ? 'done' : ((selectedBooking.final_confirmation_email_status || 'NOT_SENT') === 'FAILED' ? 'failed' : 'pending')}`}>
                                 {selectedBooking.final_confirmation_email_status || 'NOT_SENT'}
                               </span>
                             </div>
-                            <div style={{ color: '#64748b', fontSize: '0.72rem' }}>
-                              Recipient: {selectedBooking.final_confirmation_email_recipient || selectedBooking.email || 'N/A'}<br />
-                              Sent At: {selectedBooking.final_confirmation_email_sent_at ? new Date(selectedBooking.final_confirmation_email_sent_at).toLocaleString() : 'N/A'}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', color: '#64748b', fontSize: '0.75rem', marginBottom: '10px' }}>
+                              <div><strong>Recipient:</strong> {selectedBooking.final_confirmation_email_recipient || selectedBooking.email || 'N/A'}</div>
+                              <div><strong>Sent:</strong> {selectedBooking.final_confirmation_email_sent_at ? new Date(selectedBooking.final_confirmation_email_sent_at).toLocaleString() : 'N/A'}</div>
+                              <div style={{ gridColumn: '1 / -1' }}><strong>Message ID:</strong> {selectedBooking.final_confirmation_email_id || 'N/A'}</div>
+                              {selectedBooking.final_confirmation_email_error && <div style={{ color: '#dc2626', gridColumn: '1 / -1' }}><strong>Error:</strong> {selectedBooking.final_confirmation_email_error}</div>}
                             </div>
+
+                            {['TICKETED', 'DONE'].includes(selectedBooking.status) && (
+                              <button
+                                type="button"
+                                onClick={() => handlePaymentActionSubmit('send_final_ticket_email')}
+                                className={selectedBooking.final_confirmation_email_status === 'SENT' ? "admin-secondary-btn" : "admin-primary-btn"}
+                                style={{ width: '100%', background: selectedBooking.final_confirmation_email_status === 'SENT' ? '#f1f5f9' : '#047857', fontSize: '0.78rem', height: '34px' }}
+                              >
+                                <i className={`fas ${selectedBooking.final_confirmation_email_status === 'SENT' ? 'fa-redo' : 'fa-ticket-alt'}`} style={{ marginRight: '4px' }}></i>
+                                {selectedBooking.final_confirmation_email_status === 'SENT' ? 'Resend Final Ticket Email' : 'Send Final Ticket Email'}
+                              </button>
+                            )}
                           </div>
                         </div>
                       )}
                     </div>
-
-
-
-
                   </div>
 
                   {/* STICKY DRAWER FOOTER */}
@@ -1533,15 +1563,16 @@ function AdminDashboard() {
                         <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Synced</span>
                       )}
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button type="button" onClick={() => setSelectedBooking(null)} className="admin-secondary-btn">
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <button type="button" onClick={() => setSelectedBooking(null)} className="drawer-footer-cancel-btn">
                         Cancel
                       </button>
-                      <button type="button" onClick={handleSavePricing} className="admin-primary-btn" disabled={!hasUnsavedEdits || updatingRecord}>
+                      <button type="button" onClick={handleSavePricing} className="drawer-footer-save-btn" disabled={!hasUnsavedEdits || updatingRecord}>
                         Save Changes
                       </button>
                     </div>
                   </div>
+
 
                   {/* COMPACT ITINERARY REVIEW MODAL */}
                   {showReviewModal && (

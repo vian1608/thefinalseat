@@ -781,7 +781,7 @@ export const sendPaymentFailedEmail = async (booking, reason = 'Payment processi
     const textBody = `
 Dear ${customerName},
 
-We were unable to process your payment for booking confirmation reference ${bookingReference}.
+We were unable to process your payment for Booking ID ${bookingReference}.
 
 Reason: ${reason}
 
@@ -790,7 +790,7 @@ ${retryUrl}
 
 If you require assistance, contact our 24/7 support desk:
 Email: support@thefinalseat.com
-Phone: +1 (888) 210-8656
+Phone: +1 (213) 965-9727
 
 The Final Seat LLC
     `.trim();
@@ -799,7 +799,7 @@ The Final Seat LLC
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
   <h2 style="color: #dc2626;">Payment Action Required</h2>
   <p>Dear ${customerName},</p>
-  <p>We were unable to process your payment for reservation <strong>${bookingReference}</strong>.</p>
+  <p>We were unable to process your payment for Booking ID <strong>${bookingReference}</strong>.</p>
   <p style="background: #fef2f2; border: 1px solid #fecaca; padding: 12px; border-radius: 8px; color: #991b1b;">
     <strong>Details:</strong> ${reason}
   </p>
@@ -809,7 +809,7 @@ The Final Seat LLC
   </p>
   <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
   <p style="font-size: 12px; color: #64748b;">
-    The Final Seat LLC &middot; Support: support@thefinalseat.com | +1 (888) 210-8656
+    The Final Seat LLC &middot; Support: support@thefinalseat.com | +1 (213) 965-9727
   </p>
 </div>
     `.trim();
@@ -818,7 +818,7 @@ The Final Seat LLC
     if (env.resendApiKey?.trim()) {
       const res = await sendViaResend({
         recipients: [email],
-        subject: `Payment Failed — ${bookingReference} | The Final Seat`,
+        subject: `Payment Action Required — Booking ID ${bookingReference} | The Final Seat`,
         textBody,
         htmlBody,
         replyTo: 'support@thefinalseat.com'
@@ -832,5 +832,176 @@ The Final Seat LLC
     return { success: false, error: err.message };
   }
 };
+
+export const sendFinalTicketEmail = async (bookingInput) => {
+  try {
+    const booking = typeof bookingInput === 'object' ? bookingInput : await bookingRepository.getById(bookingInput);
+    if (!booking) return { success: false, error: 'Booking not found' };
+
+    const customerEmail = booking.email || booking.customerEmail || booking.contacts?.[0]?.email || booking.travellers?.[0]?.email;
+    if (!customerEmail || !customerEmail.includes('@')) {
+      const errMsg = 'This booking does not have a valid passenger email address.';
+      await bookingRepository.updateBookingStatus(booking.id, {
+        final_confirmation_email_status: 'FAILED',
+        final_confirmation_email_error: errMsg
+      });
+      return { success: false, error: errMsg };
+    }
+
+    const bookingReference = booking.confirmation_code || booking.bookingReference || booking.id;
+    const passengerName = booking.passenger_name || booking.customerName || 'Valued Passenger';
+    const passengerFirstName = passengerName.split(' ')[0] || 'Passenger';
+    const amountPaid = parseFloat(booking.customer_price || booking.total_amount || 0).toFixed(2);
+    const currency = (booking.currency || 'USD').toUpperCase();
+
+    const relations = await bookingRepository.getRelations(booking.id);
+    const flights = relations.flights || booking.flights || [];
+    const travellers = relations.travellers || booking.travellers || [];
+
+    const outboundFlight = flights.find(f => f.journey_direction === 'outbound') || flights[0] || {};
+    const returnFlight = flights.find(f => f.journey_direction === 'return') || flights[1] || null;
+
+    const subject = `Official Flight E-Ticket & Confirmation — Booking ID ${bookingReference} | The Final Seat`;
+
+    const textBody = `
+THE FINAL SEAT — OFFICIAL FLIGHT E-TICKET CONFIRMATION
+
+Dear ${passengerFirstName},
+
+Your flight ticket has been issued successfully. Below are your official booking and e-ticket details:
+
+BOOKING ID: ${bookingReference}
+Passenger: ${passengerName} (${travellers.length || 1} Traveler(s))
+Contact Email: ${customerEmail}
+
+FLIGHT ITINERARY:
+Outbound: ${outboundFlight.carrier_name || outboundFlight.carrier || 'Commercial Airline'} #${outboundFlight.flight_number || '101'}
+From: ${outboundFlight.origin_airport || 'DEP'} (${outboundFlight.departure_date || 'Scheduled'})
+To: ${outboundFlight.destination_airport || 'ARR'} (${outboundFlight.arrival_date || 'Scheduled'})
+Cabin: ${outboundFlight.cabin || 'Economy'}
+
+${returnFlight ? `Return: ${returnFlight.carrier_name || returnFlight.carrier || 'Commercial Airline'} #${returnFlight.flight_number || '202'}
+From: ${returnFlight.origin_airport || 'ARR'} (${returnFlight.departure_date || 'Scheduled'})
+To: ${returnFlight.destination_airport || 'DEP'} (${returnFlight.arrival_date || 'Scheduled'})
+Cabin: ${returnFlight.cabin || 'Economy'}
+` : ''}
+PAYMENT SUMMARY:
+Total Amount Paid: $${amountPaid} ${currency}
+Payment Status: PAID & VERIFIED
+
+Thank you for choosing The Final Seat! Have a wonderful trip.
+
+24/7 Support Desk: +1 (213) 965-9727 | support@thefinalseat.com
+    `.trim();
+
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; background: #f8f4f5; margin: 0; padding: 20px; }
+    .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 24px rgba(79,16,43,0.12); }
+    .header { background: #7f0d2f; color: #ffffff; padding: 24px; text-align: center; }
+    .header h2 { margin: 0; font-size: 24px; color: #ffffff; }
+    .sub { color: #f8dfe8; font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; margin-top: 4px; }
+    .body { padding: 28px; }
+    .ticket-badge { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; text-align: center; margin-bottom: 20px; color: #166534; font-weight: bold; }
+    .box { background: #fffaf0; border: 1px dashed #e2b84d; border-radius: 12px; padding: 16px; text-align: center; margin: 16px 0; }
+    .box-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #8b6b16; font-weight: 700; }
+    .box-code { font-size: 26px; font-weight: 800; color: #7f0d2f; margin: 4px 0; }
+    .flight-section { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+    .flight-title { font-weight: bold; color: #1e3a5f; margin-bottom: 6px; font-size: 14px; }
+    .footer { background: #fbf8f9; padding: 20px; text-align: center; font-size: 12px; color: #748596; border-top: 1px solid #eadfe3; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h2>✈ The Final Seat</h2>
+      <div class="sub">Official E-Ticket & Confirmation</div>
+    </div>
+    <div class="body">
+      <div class="ticket-badge">✓ E-Ticket Issued Successfully</div>
+      <p style="font-size: 15px; color: #475569; line-height: 1.5;">
+        Dear <strong>${passengerFirstName}</strong>,<br>
+        Your flight booking is confirmed and ticketed. Below are your official reservation details:
+      </p>
+
+      <div class="box">
+        <div class="box-title">Booking ID</div>
+        <div class="box-code">${bookingReference}</div>
+        <div style="font-size: 13px; color: #6b5b43;">Passenger: <strong>${passengerName}</strong></div>
+      </div>
+
+      <div class="flight-section">
+        <div class="flight-title">🛫 Outbound Flight: ${outboundFlight.carrier_name || 'Commercial Airline'} #${outboundFlight.flight_number || '101'}</div>
+        <div style="font-size: 13px; color: #475569; line-height: 1.6;">
+          <strong>From:</strong> ${outboundFlight.origin_airport || 'DEP'} (${outboundFlight.departure_date || 'Scheduled'} ${outboundFlight.departure_time || ''})<br>
+          <strong>To:</strong> ${outboundFlight.destination_airport || 'ARR'} (${outboundFlight.arrival_date || 'Scheduled'} ${outboundFlight.arrival_time || ''})<br>
+          <strong>Cabin:</strong> ${outboundFlight.cabin || 'Economy'}
+        </div>
+      </div>
+
+      ${returnFlight ? `
+      <div class="flight-section">
+        <div class="flight-title">🛬 Return Flight: ${returnFlight.carrier_name || 'Commercial Airline'} #${returnFlight.flight_number || '202'}</div>
+        <div style="font-size: 13px; color: #475569; line-height: 1.6;">
+          <strong>From:</strong> ${returnFlight.origin_airport || 'ARR'} (${returnFlight.departure_date || 'Scheduled'} ${returnFlight.departure_time || ''})<br>
+          <strong>To:</strong> ${returnFlight.destination_airport || 'DEP'} (${returnFlight.arrival_date || 'Scheduled'} ${returnFlight.arrival_time || ''})<br>
+          <strong>Cabin:</strong> ${returnFlight.cabin || 'Economy'}
+        </div>
+      </div>
+      ` : ''}
+
+      <div style="background: #f1f5f9; border-radius: 8px; padding: 12px; font-size: 13px; color: #334155; margin-top: 16px;">
+        <strong>Payment Status:</strong> Paid &amp; Confirmed ($${amountPaid} ${currency})
+      </div>
+    </div>
+    <div class="footer">
+      The Final Seat LLC &middot; 24/7 Customer Support: support@thefinalseat.com &middot; +1 (213) 965-9727
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
+
+    let emailMessageId = `ticket_log_${Date.now()}`;
+    if (env.resendApiKey?.trim()) {
+      const result = await sendViaResend({
+        recipients: [customerEmail],
+        subject,
+        textBody,
+        htmlBody,
+        replyTo: 'support@thefinalseat.com'
+      });
+      if (result?.messageId) emailMessageId = result.messageId;
+    }
+
+    const sentAt = new Date().toISOString();
+    await bookingRepository.updateBookingStatus(booking.id, {
+      final_confirmation_email_status: 'SENT',
+      final_confirmation_email_id: emailMessageId,
+      final_confirmation_email_sent_at: sentAt,
+      final_confirmation_email_recipient: customerEmail,
+      final_confirmation_email_error: null
+    });
+
+    logger.info(`[Email Log] bookingId=${booking.id} confirmationCode=${bookingReference} emailType=final_confirmation recipient=${customerEmail} providerMessageId=${emailMessageId} result=success`);
+    return { success: true, emailId: emailMessageId, sentAt };
+  } catch (err) {
+    const errorMsg = err.message || 'Final ticket email dispatch failed';
+    logger.error(`[Email Log] emailType=final_confirmation result=failed error=${errorMsg}`);
+    if (typeof bookingInput === 'string' || bookingInput?.id) {
+      const targetId = typeof bookingInput === 'string' ? bookingInput : bookingInput.id;
+      await bookingRepository.updateBookingStatus(targetId, {
+        final_confirmation_email_status: 'FAILED',
+        final_confirmation_email_error: errorMsg
+      });
+    }
+    return { success: false, error: errorMsg };
+  }
+};
+
 
 
