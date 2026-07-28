@@ -30,6 +30,44 @@ function AdminDashboard() {
   const [newStatus, setNewStatus] = useState('');
   const [updatingRecord, setUpdatingRecord] = useState(false);
 
+  // 3-Accordion States ('itinerary' | 'pricing' | 'payment' | null)
+  const [openAccordion, setOpenAccordion] = useState(null);
+  const [hasUnsavedEdits, setHasUnsavedEdits] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+
+
+  // Itinerary Editor State
+  const [segments, setSegments] = useState([]);
+
+  // Pricing Editor State
+  const [pricingForm, setPricingForm] = useState({
+    supplierFare: 0,
+    baseFare: 0,
+    taxes: 0,
+    serviceFee: 0,
+    discount: 0,
+    customerTotal: 0,
+    currency: 'USD',
+    margin: 0,
+    reason: ''
+  });
+
+  // Payment Editor State
+  const [paymentForm, setPaymentForm] = useState({
+    paymentStatus: 'PENDING',
+    provider: 'Whop',
+    methodType: 'card',
+    brand: 'Visa',
+    last4: '4242',
+    authorizedAmount: 0,
+    capturedAmount: 0,
+    refundedAmount: 0,
+    referenceId: '',
+    reason: '',
+    password: ''
+  });
+
+
   const loadAllDashboardData = useCallback(async (activeFilters = filters, days = timeframe) => {
     try {
       setLoading(true);
@@ -102,7 +140,182 @@ function AdminDashboard() {
     setSelectedBooking(booking);
     setInternalNotes(booking.internal_notes || booking.internalNotes || '');
     setNewStatus(booking.status || booking.bookingStatus || 'PENDING');
+    setHasUnsavedEdits(false);
+    setOpenAccordion(null);
+
+    // Initial itinerary segments setup
+    const rawFlights = booking.flights || [];
+    if (rawFlights.length > 0) {
+      setSegments(rawFlights.map((f, i) => ({
+        trip_type: booking.trip_type || 'one_way',
+        direction: f.direction || (i === 0 ? 'outbound' : 'return'),
+        carrier_name: f.airline || f.carrier || 'Commercial Airline',
+        carrier_code: f.carrier_code || 'UA',
+        flight_number: f.flight_number || f.flightNumber || 'UA 100',
+        origin_airport: f.departure_airport || f.origin_code || 'LAX',
+        origin_city: f.origin_city || f.departure_city || 'Los Angeles',
+        destination_airport: f.arrival_airport || f.destination_code || 'MIA',
+        destination_city: f.destination_city || f.arrival_city || 'Miami',
+        departure_date: f.departure_date || '2026-09-10',
+        departure_time: f.departure_time || '09:00 AM',
+        arrival_date: f.arrival_date || '2026-09-10',
+        arrival_time: f.arrival_time || '05:00 PM',
+        cabin: f.cabin || 'Economy',
+        booking_class: 'Y',
+        terminal: 'T1',
+        baggage_allowance: '1 Bag',
+        stop_count: 0
+      })));
+    } else {
+      setSegments([{
+        trip_type: 'one_way',
+        direction: 'outbound',
+        carrier_name: booking.carrier || 'Commercial Airline',
+        carrier_code: 'UA',
+        flight_number: 'UA 100',
+        origin_airport: booking.origin_code || 'LAX',
+        origin_city: 'Los Angeles',
+        destination_airport: booking.destination_code || 'MIA',
+        destination_city: 'Miami',
+        departure_date: '2026-09-10',
+        departure_time: '09:00 AM',
+        arrival_date: '2026-09-10',
+        arrival_time: '05:00 PM',
+        cabin: 'Economy',
+        booking_class: 'Y',
+        terminal: 'T1',
+        baggage_allowance: '1 Bag',
+        stop_count: 0
+      }]);
+    }
+
+    // Initial pricing setup
+    const total = parseFloat(booking.customer_price || booking.total_amount || 0);
+    const supplier = parseFloat(booking.supplier_price || booking.original_api_price || total);
+    const disc = parseFloat(booking.discount_amount || 0);
+    setPricingForm({
+      supplierFare: supplier,
+      baseFare: supplier,
+      taxes: 45.00,
+      serviceFee: 15.00,
+      discount: disc,
+      customerTotal: total,
+      currency: booking.currency || 'USD',
+      margin: total - supplier,
+      reason: ''
+    });
+
+    // Initial payment setup
+    setPaymentForm({
+      paymentStatus: (booking.payment_status || 'PENDING').toUpperCase(),
+      provider: 'Whop',
+      methodType: 'card',
+      brand: 'Visa',
+      last4: '4242',
+      authorizedAmount: total,
+      capturedAmount: booking.payment_status === 'paid' ? total : 0,
+      refundedAmount: 0,
+      referenceId: booking.transaction_id || '',
+      reason: '',
+      password: ''
+    });
   };
+
+  const handleConfirmItinerarySave = async () => {
+    if (!selectedBooking) return;
+    const adminToken = localStorage.getItem('token');
+    try {
+      setUpdatingRecord(true);
+      setShowReviewModal(false);
+
+      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/itinerary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          segments,
+          expectedVersion: selectedBooking.version || 1
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error?.message || 'Failed to save itinerary changes.');
+      }
+
+      setHasUnsavedEdits(false);
+      alert(data.message || 'Itinerary updated successfully!');
+      if (data.booking) setSelectedBooking(data.booking);
+      loadAllDashboardData();
+    } catch (err) {
+      alert(`Itinerary update error: ${err.message}`);
+    } finally {
+      setUpdatingRecord(false);
+    }
+  };
+
+  const handleSavePricing = async () => {
+    if (!selectedBooking) return;
+    const adminToken = localStorage.getItem('token');
+    try {
+      setUpdatingRecord(true);
+
+      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/pricing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          ...pricingForm,
+          expectedVersion: selectedBooking.version || 1
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error?.message || 'Failed to save pricing changes.');
+      }
+
+      setHasUnsavedEdits(false);
+      alert(data.message || 'Pricing revisions saved cleanly!');
+      if (data.booking) setSelectedBooking(data.booking);
+      loadAllDashboardData();
+    } catch (err) {
+      alert(`Pricing error: ${err.message}`);
+    } finally {
+      setUpdatingRecord(false);
+    }
+  };
+
+  const handlePaymentActionSubmit = async (actionName) => {
+    if (!selectedBooking) return;
+    const adminToken = localStorage.getItem('token');
+    try {
+      setUpdatingRecord(true);
+      setShowOverflowMenu(false);
+
+      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/payment-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          action: actionName,
+          ...paymentForm
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error?.message || 'Payment action failed.');
+      }
+
+      setHasUnsavedEdits(false);
+      alert(data.message || `Payment action '${actionName}' completed successfully!`);
+      if (data.booking) setSelectedBooking(data.booking);
+      loadAllDashboardData();
+    } catch (err) {
+      alert(`Payment action error: ${err.message}`);
+    } finally {
+      setUpdatingRecord(false);
+    }
+  };
+
 
   const handleUpdateStatusAndNotes = async (e) => {
     e.preventDefault();
@@ -496,12 +709,10 @@ function AdminDashboard() {
                   )}
                 </div>
               </div>
-            </div>
-
-            {/* DETAIL PANEL / DRAWER */}
+            </div>            {/* DETAIL PANEL / DRAWER */}
             <aside className="admin-detail-panel">
               {selectedBooking ? (
-                <div className="admin-detail-card">
+                <div className="admin-detail-card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                   <div className="detail-header">
                     <div>
                       <h3>Booking Detail</h3>
@@ -515,14 +726,18 @@ function AdminDashboard() {
                   {/* UPDATE STATUS & NOTES FORM */}
                   <form onSubmit={handleUpdateStatusAndNotes} className="detail-update-box">
                     <div className="detail-form-group">
-                      <label>Update Status</label>
+                      <label>Update Booking Status</label>
                       <select 
                         value={newStatus} 
-                        onChange={(e) => setNewStatus(e.target.value)} 
+                        onChange={(e) => { setNewStatus(e.target.value); setHasUnsavedEdits(true); }} 
                         className="admin-select"
                       >
                         <option value="PENDING">PENDING</option>
-                        <option value="DONE">CONFIRMED / DONE</option>
+                        <option value="AWAITING_AUTH">AWAITING_AUTHORIZATION</option>
+                        <option value="AUTHORIZED">AUTHORIZED</option>
+                        <option value="REAUTHORIZATION_REQUIRED">REAUTHORIZATION_REQUIRED</option>
+                        <option value="READY_FOR_TICKETING">READY_FOR_TICKETING</option>
+                        <option value="TICKETED">TICKETED / DONE</option>
                         <option value="FAILED">FAILED / CANCELLED</option>
                       </select>
                     </div>
@@ -530,145 +745,312 @@ function AdminDashboard() {
                     <div className="detail-form-group" style={{ marginTop: '10px' }}>
                       <label>Internal Consultant Notes</label>
                       <textarea 
-                        rows={3}
+                        rows={2}
                         value={internalNotes} 
-                        onChange={(e) => setInternalNotes(e.target.value)} 
-                        placeholder="Add internal notes for logistics..." 
+                        onChange={(e) => { setInternalNotes(e.target.value); setHasUnsavedEdits(true); }} 
+                        placeholder="Add internal notes..." 
                         className="admin-textarea"
                       />
                     </div>
 
                     <button type="submit" className="admin-primary-btn" style={{ width: '100%', marginTop: '10px' }} disabled={updatingRecord}>
-                      {updatingRecord ? 'Saving...' : 'Save Updates'}
+                      {updatingRecord ? 'Saving...' : 'Save Notes & Status'}
                     </button>
                   </form>
 
-                  {/* CUSTOMER CONTACT & PRICING INFORMATION */}
-                  <div className="detail-section">
-                    <h4>Customer Contact & Pricing Details</h4>
-                    <div className="meta-data-grid">
-                      <div>
-                        <span>Name</span>
-                        <strong>{selectedBooking.passenger_name || 'N/A'}</strong>
-                      </div>
-                      <div>
-                        <span>Email</span>
-                        <strong>{selectedBooking.email || 'N/A'}</strong>
-                      </div>
-                      <div>
-                        <span>Phone</span>
-                        <strong>{selectedBooking.phone || 'N/A'}</strong>
-                      </div>
-                      <div>
-                        <span>Supplier Airfare</span>
-                        <strong style={{ textDecoration: 'line-through', color: '#94a3b8' }}>
-                          ${parseFloat(selectedBooking.supplier_price || selectedBooking.original_api_price || selectedBooking.total_amount || 0).toFixed(2)}
-                        </strong>
-                      </div>
-                      <div>
-                        <span>Final Seat Subsidy (10% OFF)</span>
-                        <strong style={{ color: '#047857' }}>
-                          -${parseFloat(selectedBooking.discount_amount || Math.max(0, (selectedBooking.supplier_price || selectedBooking.original_api_price || selectedBooking.total_amount) - selectedBooking.total_amount)).toFixed(2)}
-                        </strong>
-                      </div>
-                      <div>
-                        <span>Total Customer Price</span>
-                        <strong style={{ color: '#0f172a', fontSize: '1.05rem' }}>
-                          ${parseFloat(selectedBooking.customer_price || selectedBooking.total_amount || 0).toFixed(2)}
-                        </strong>
-                      </div>
+                  {/* THREE COLLAPSED ACCORDIONS */}
+                  <div className="admin-accordion-container">
+                    
+                    {/* 1. ITINERARY ACCORDION */}
+                    <div className="admin-accordion-card">
+                      <button
+                        type="button"
+                        className="admin-accordion-header"
+                        onClick={() => setOpenAccordion(openAccordion === 'itinerary' ? null : 'itinerary')}
+                      >
+                        <span className="accordion-title-left">
+                          <i className={`fas ${openAccordion === 'itinerary' ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
+                          Itinerary
+                        </span>
+                        <span className="accordion-summary-right">
+                          {segments[0] ? `${segments[0].origin_airport || 'DEP'} → ${segments[0].destination_airport || 'ARR'}, ${segments.length} segment(s)` : 'No segments'}
+                        </span>
+                      </button>
+
+                      {openAccordion === 'itinerary' && (
+                        <div className="admin-accordion-body">
+                          {segments.map((seg, idx) => (
+                            <div key={idx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px', marginBottom: '10px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontWeight: '700', fontSize: '0.8rem', color: '#1e3a5f' }}>
+                                <span>Segment #{idx + 1} ({seg.direction || 'outbound'})</span>
+                                {segments.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => { setSegments(segments.filter((_, i) => i !== idx)); setHasUnsavedEdits(true); }}
+                                    style={{ color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.75rem' }}
+                                  >
+                                    Delete
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="drawer-grid-2col">
+                                <div className="drawer-form-field">
+                                  <label>Carrier</label>
+                                  <input type="text" value={seg.carrier_name} onChange={(e) => { const next = [...segments]; next[idx].carrier_name = e.target.value; setSegments(next); setHasUnsavedEdits(true); }} />
+                                </div>
+                                <div className="drawer-form-field">
+                                  <label>Flight #</label>
+                                  <input type="text" value={seg.flight_number} onChange={(e) => { const next = [...segments]; next[idx].flight_number = e.target.value; setSegments(next); setHasUnsavedEdits(true); }} />
+                                </div>
+                                <div className="drawer-form-field">
+                                  <label>Origin Code</label>
+                                  <input type="text" value={seg.origin_airport} onChange={(e) => { const next = [...segments]; next[idx].origin_airport = e.target.value; setSegments(next); setHasUnsavedEdits(true); }} />
+                                </div>
+                                <div className="drawer-form-field">
+                                  <label>Destination Code</label>
+                                  <input type="text" value={seg.destination_airport} onChange={(e) => { const next = [...segments]; next[idx].destination_airport = e.target.value; setSegments(next); setHasUnsavedEdits(true); }} />
+                                </div>
+                                <div className="drawer-form-field">
+                                  <label>Departure Date</label>
+                                  <input type="text" value={seg.departure_date} onChange={(e) => { const next = [...segments]; next[idx].departure_date = e.target.value; setSegments(next); setHasUnsavedEdits(true); }} />
+                                </div>
+                                <div className="drawer-form-field">
+                                  <label>Cabin Class</label>
+                                  <select value={seg.cabin} onChange={(e) => { const next = [...segments]; next[idx].cabin = e.target.value; setSegments(next); setHasUnsavedEdits(true); }}>
+                                    <option value="Economy">Economy</option>
+                                    <option value="Premium Economy">Premium Economy</option>
+                                    <option value="Business">Business</option>
+                                    <option value="First">First</option>
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSegments([...segments, {
+                                trip_type: 'one_way',
+                                direction: 'return',
+                                carrier_name: 'Commercial Airline',
+                                carrier_code: 'UA',
+                                flight_number: 'UA 200',
+                                origin_airport: segments[0]?.destination_airport || 'MIA',
+                                origin_city: 'Miami',
+                                destination_airport: segments[0]?.origin_airport || 'LAX',
+                                destination_city: 'Los Angeles',
+                                departure_date: '2026-09-17',
+                                departure_time: '10:00 AM',
+                                arrival_date: '2026-09-17',
+                                arrival_time: '02:00 PM',
+                                cabin: 'Economy',
+                                booking_class: 'Y',
+                                stop_count: 0
+                              }]);
+                              setHasUnsavedEdits(true);
+                            }}
+                            style={{ background: '#f1f5f9', border: '1px dashed #cbd5e1', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer', width: '100%', marginBottom: '10px' }}
+                          >
+                            + Add Flight Segment
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setShowReviewModal(true)}
+                            className="admin-primary-btn"
+                            style={{ width: '100%', background: '#1e3a5f' }}
+                          >
+                            Apply Itinerary Changes
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 2. PRICING ACCORDION */}
+                    <div className="admin-accordion-card">
+                      <button
+                        type="button"
+                        className="admin-accordion-header"
+                        onClick={() => setOpenAccordion(openAccordion === 'pricing' ? null : 'pricing')}
+                      >
+                        <span className="accordion-title-left">
+                          <i className={`fas ${openAccordion === 'pricing' ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
+                          Pricing
+                        </span>
+                        <span className="accordion-summary-right">
+                          Customer total: ${pricingForm.customerTotal.toFixed(2)} {pricingForm.currency}
+                        </span>
+                      </button>
+
+                      {openAccordion === 'pricing' && (
+                        <div className="admin-accordion-body">
+                          {/* Compact breakdown */}
+                          <div style={{ background: '#fffaf0', border: '1px solid #ecd6ad', borderRadius: '8px', padding: '8px 10px', fontSize: '0.8rem', marginBottom: '10px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>Supplier Fare (Internal):</span> <strong>${pricingForm.supplierFare.toFixed(2)}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>Taxes &amp; Fees:</span> <strong>${pricingForm.taxes.toFixed(2)}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ecd6ad', paddingTop: '4px', marginTop: '4px', fontWeight: '700' }}>
+                              <span>Customer Total:</span> <strong>${pricingForm.customerTotal.toFixed(2)} {pricingForm.currency}</strong>
+                            </div>
+                          </div>
+
+                          <div className="drawer-grid-2col">
+                            <div className="drawer-form-field">
+                              <label>Supplier Fare ($)</label>
+                              <input type="number" step="0.01" value={pricingForm.supplierFare} onChange={(e) => { const v = parseFloat(e.target.value || 0); setPricingForm({ ...pricingForm, supplierFare: v, margin: pricingForm.customerTotal - v }); setHasUnsavedEdits(true); }} />
+                            </div>
+                            <div className="drawer-form-field">
+                              <label>Customer Total ($)</label>
+                              <input type="number" step="0.01" value={pricingForm.customerTotal} onChange={(e) => { const v = parseFloat(e.target.value || 0); setPricingForm({ ...pricingForm, customerTotal: v, margin: v - pricingForm.supplierFare }); setHasUnsavedEdits(true); }} />
+                            </div>
+                          </div>
+
+                          <div className="drawer-form-field">
+                            <label>Mandatory Reason for Price Change</label>
+                            <input type="text" placeholder="Explain price revision reason..." value={pricingForm.reason} onChange={(e) => { setPricingForm({ ...pricingForm, reason: e.target.value }); setHasUnsavedEdits(true); }} />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleSavePricing}
+                            className="admin-primary-btn"
+                            style={{ width: '100%', marginTop: '6px' }}
+                            disabled={updatingRecord}
+                          >
+                            Save Pricing Revisions
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 3. PAYMENT ACCORDION */}
+                    <div className="admin-accordion-card">
+                      <button
+                        type="button"
+                        className="admin-accordion-header"
+                        onClick={() => setOpenAccordion(openAccordion === 'payment' ? null : 'payment')}
+                      >
+                        <span className="accordion-title-left">
+                          <i className={`fas ${openAccordion === 'payment' ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
+                          Payment
+                        </span>
+                        <span className="accordion-summary-right">
+                          {paymentForm.paymentStatus} · {paymentForm.brand} •••• {paymentForm.last4}
+                        </span>
+                      </button>
+
+                      {openAccordion === 'payment' && (
+                        <div className="admin-accordion-body">
+                          <div className="drawer-grid-2col">
+                            <div className="drawer-form-field">
+                              <label>Payment State</label>
+                              <select value={paymentForm.paymentStatus} onChange={(e) => { setPaymentForm({ ...paymentForm, paymentStatus: e.target.value }); setHasUnsavedEdits(true); }}>
+                                <option value="NOT_COLLECTED">NOT_COLLECTED</option>
+                                <option value="PAYMENT_METHOD_SECURED">PAYMENT_METHOD_SECURED</option>
+                                <option value="AWAITING_AUTHORIZATION">AWAITING_AUTHORIZATION</option>
+                                <option value="AUTHORIZED">AUTHORIZED</option>
+                                <option value="REAUTHORIZATION_REQUIRED">REAUTHORIZATION_REQUIRED</option>
+                                <option value="PROCESSING">PROCESSING</option>
+                                <option value="PAID">PAID</option>
+                                <option value="PARTIALLY_REFUNDED">PARTIALLY_REFUNDED</option>
+                                <option value="REFUNDED">REFUNDED</option>
+                                <option value="FAILED">FAILED</option>
+                                <option value="DISPUTED">DISPUTED</option>
+                              </select>
+                            </div>
+                            <div className="drawer-form-field">
+                              <label>Masked Card</label>
+                              <input type="text" readOnly value={`${paymentForm.brand} •••• ${paymentForm.last4}`} />
+                            </div>
+                          </div>
+
+                          <div className="drawer-grid-2col">
+                            <div className="drawer-form-field">
+                              <label>Authorized Amount ($)</label>
+                              <input type="number" step="0.01" value={paymentForm.authorizedAmount} onChange={(e) => { setPaymentForm({ ...paymentForm, authorizedAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); }} />
+                            </div>
+                            <div className="drawer-form-field">
+                              <label>Transaction / Ref ID</label>
+                              <input type="text" value={paymentForm.referenceId} onChange={(e) => { setPaymentForm({ ...paymentForm, referenceId: e.target.value }); setHasUnsavedEdits(true); }} />
+                            </div>
+                          </div>
+
+                          {/* Context-Sensitive Action Buttons */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px' }}>
+                            {['PENDING', 'NOT_COLLECTED', 'PAYMENT_METHOD_SECURED'].includes(selectedBooking.status) && (
+                              <button type="button" onClick={() => handlePaymentActionSubmit('send_authorization')} className="admin-primary-btn" style={{ background: '#9f1239' }}>
+                                <i className="fas fa-paper-plane" style={{ marginRight: '4px' }}></i> Send Authorization Email
+                              </button>
+                            )}
+
+                            {['AWAITING_AUTH', 'AWAITING_AUTHORIZATION', 'REAUTHORIZATION_REQUIRED'].includes(selectedBooking.status) && (
+                              <button type="button" onClick={() => handlePaymentActionSubmit('resend_authorization')} className="admin-primary-btn" style={{ background: '#b45309' }}>
+                                <i className="fas fa-sync" style={{ marginRight: '4px' }}></i> Resend Authorization Email
+                              </button>
+                            )}
+
+                            {['AUTHORIZED', 'READY_FOR_TICKETING'].includes(selectedBooking.status) && (
+                              <button type="button" onClick={() => handleProcessAuthorizedBooking(selectedBooking.id)} className="admin-primary-btn" style={{ background: '#047857' }}>
+                                <i className="fas fa-bolt" style={{ marginRight: '4px' }}></i> Process Authorized Booking
+                              </button>
+                            )}
+
+                            <button type="button" onClick={() => handleDownloadEvidence(selectedBooking.id)} className="admin-secondary-btn" style={{ textAlign: 'center', cursor: 'pointer' }}>
+                              <i className="fas fa-file-download" style={{ marginRight: '4px' }}></i> Download Authorization Evidence
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+
+                  {/* STICKY DRAWER FOOTER */}
+                  <div className="sticky-drawer-footer">
+                    <div>
+                      {hasUnsavedEdits ? (
+                        <span className="unsaved-badge">● Unsaved Edits</span>
+                      ) : (
+                        <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Synced</span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button type="button" onClick={() => setSelectedBooking(null)} className="admin-secondary-btn">
+                        Cancel
+                      </button>
+                      <button type="button" onClick={handleSavePricing} className="admin-primary-btn" disabled={!hasUnsavedEdits || updatingRecord}>
+                        Save Changes
+                      </button>
                     </div>
                   </div>
 
-                  {/* FLIGHT DETAILS */}
-                  <div className="detail-section">
-                    <h4>Flight Itinerary</h4>
-                    {selectedBooking.flights && selectedBooking.flights.length > 0 ? (
-                      selectedBooking.flights.map((f, idx) => (
-                        <div key={idx} className="flight-item-card">
-                          <strong>{f.airline || 'Carrier'} · {f.flight_number || 'N/A'}</strong>
-                          <p>{f.departure_airport} to {f.arrival_airport} ({f.departure_date || 'Date N/A'})</p>
+                  {/* COMPACT ITINERARY REVIEW MODAL */}
+                  {showReviewModal && (
+                    <div className="review-modal-backdrop">
+                      <div className="review-modal-card">
+                        <h3 style={{ color: '#1e3a5f', margin: '0 0 8px' }}>Review Itinerary Changes</h3>
+                        <p style={{ fontSize: '0.88rem', color: '#475569', lineHeight: '1.5', margin: '0 0 12px' }}>
+                          Any material change to flight numbers, travel dates, airports, or cabin class will automatically <strong>invalidate any existing passenger authorization</strong> and change status to <strong>REAUTHORIZATION_REQUIRED</strong>.
+                        </p>
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px', fontSize: '0.82rem', marginBottom: '14px' }}>
+                          <strong>New Route Summary:</strong> {segments[0]?.origin_airport} &rarr; {segments[0]?.destination_airport} ({segments.length} segment(s))
                         </div>
-                      ))
-                    ) : (
-                      <p className="subtext">{selectedBooking.origin_code || 'N/A'} to {selectedBooking.destination_code || 'N/A'}</p>
-                    )}
-                  </div>
-
-                  {/* TRAVELLER LIST */}
-                  {selectedBooking.travellers && selectedBooking.travellers.length > 0 && (
-                    <div className="detail-section">
-                      <h4>Traveller Details ({selectedBooking.travellers.length})</h4>
-                      <ul className="travellers-mini-list">
-                        {selectedBooking.travellers.map((t, idx) => (
-                          <li key={idx}>
-                            <span>{t.first_name} {t.last_name}</span>
-                            <small>{t.gender || ''} · Passport: {t.passport_number || 'N/A'}</small>
-                          </li>
-                        ))}
-                      </ul>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                          <button type="button" onClick={() => setShowReviewModal(false)} className="admin-secondary-btn">
+                            Cancel
+                          </button>
+                          <button type="button" onClick={handleConfirmItinerarySave} className="admin-primary-btn" style={{ background: '#9f1239' }}>
+                            Confirm &amp; Apply Itinerary
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
-
-                  {/* PASSENGER AUTHORIZATION DETAILS & ACTIONS */}
-                  <div className="detail-section" style={{ backgroundColor: '#fffaf0', border: '1px solid #ecd6ad', borderRadius: '10px', padding: '1rem' }}>
-                    <h4 style={{ color: '#7f0d2f', margin: '0 0 0.65rem' }}>
-                      <i className="fas fa-shield-alt" style={{ marginRight: '0.4rem' }}></i> Passenger Authorization &amp; Vault
-                    </h4>
-                    <div className="meta-data-grid" style={{ marginBottom: '1rem' }}>
-                      <div>
-                        <span>Authorization Status</span>
-                        <strong style={{ color: selectedBooking.status === 'AUTHORIZED' ? '#047857' : '#b45309' }}>
-                          {selectedBooking.status === 'AUTHORIZED' ? '✓ AUTHORIZED & READY FOR TICKETING' : (selectedBooking.status || 'PENDING')}
-                        </strong>
-                      </div>
-                      <div>
-                        <span>Masked Vaulted Card</span>
-                        <strong>Visa •••• 4242</strong>
-                      </div>
-                      <div>
-                        <span>Authorized Amount</span>
-                        <strong>${parseFloat(selectedBooking.customer_price || selectedBooking.total_amount || 0).toFixed(2)} USD</strong>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      <button
-                        type="button"
-                        onClick={() => handleProcessAuthorizedBooking(selectedBooking.id)}
-                        className="admin-primary-btn"
-                        style={{ background: '#9f1239', borderColor: '#9f1239' }}
-                        disabled={updatingRecord}
-                      >
-                        <i className="fas fa-bolt" style={{ marginRight: '0.4rem' }}></i> Process Authorized Booking &amp; Issue Tickets
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadEvidence(selectedBooking.id)}
-                        className="admin-secondary-btn"
-                        style={{ textAlign: 'center', cursor: 'pointer' }}
-                      >
-                        <i className="fas fa-file-download" style={{ marginRight: '0.4rem' }}></i> Download Audit Evidence Export (JSON)
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* PAYMENT DETAILS */}
-                  <div className="detail-section">
-                    <h4>Payment Transaction</h4>
-                    <div className="meta-data-grid">
-                      <div>
-                        <span>Payment Status</span>
-                        <strong>{(selectedBooking.payment_status || 'unpaid').toUpperCase()}</strong>
-                      </div>
-                      <div>
-                        <span>Currency</span>
-                        <strong>{selectedBooking.currency || 'USD'}</strong>
-                      </div>
-                    </div>
-                  </div>
-
 
                 </div>
               ) : (
@@ -680,6 +1062,7 @@ function AdminDashboard() {
               )}
             </aside>
           </div>
+
         )}
 
         {/* TAB 2: GOOGLE ANALYTICS 4 WEB METRICS */}

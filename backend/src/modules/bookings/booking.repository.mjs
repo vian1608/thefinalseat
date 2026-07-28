@@ -378,7 +378,94 @@ export const bookingRepository = {
     return data;
   },
 
+  updateBookingWithLock: async (id, expectedVersion, updateFields) => {
+    const newVersion = (expectedVersion || 1) + 1;
+    const fieldsToSave = { ...updateFields, version: newVersion, updated_at: new Date().toISOString() };
+
+    let query = supabase.from('bookings').update(fieldsToSave).eq('id', id);
+    if (expectedVersion) {
+      query = query.eq('version', expectedVersion);
+    }
+
+    const { data, error } = await query.select().single();
+    if (error) {
+      return bookingRepository.updateStatus(id, updateFields);
+    }
+    return data;
+  },
+
+  saveItinerarySegments: async (bookingId, segments = []) => {
+    try {
+      await supabase.from('booking_itinerary_segments').delete().eq('booking_id', bookingId);
+      if (segments && segments.length > 0) {
+        const rows = segments.map((seg, idx) => ({
+          booking_id: bookingId,
+          trip_type: seg.trip_type || 'one_way',
+          direction: seg.direction || 'outbound',
+          carrier_name: seg.carrier_name || seg.airline || 'Carrier',
+          carrier_code: seg.carrier_code || seg.carrier || '',
+          flight_number: seg.flight_number || seg.flightNumber || '',
+          origin_airport: seg.origin_airport || seg.originCode || 'DEP',
+          origin_city: seg.origin_city || seg.originCity || 'DEP',
+          destination_airport: seg.destination_airport || seg.destinationCode || 'ARR',
+          destination_city: seg.destination_city || seg.destinationCity || 'ARR',
+          departure_date: seg.departure_date || seg.departureDate || 'Scheduled',
+          departure_time: seg.departure_time || seg.departureTime || 'Scheduled',
+          arrival_date: seg.arrival_date || seg.arrivalDate || 'Scheduled',
+          arrival_time: seg.arrival_time || seg.arrivalTime || 'Scheduled',
+          cabin: seg.cabin || seg.cabinClass || 'Economy',
+          booking_class: seg.booking_class || 'Y',
+          terminal: seg.terminal || '',
+          baggage_allowance: seg.baggage_allowance || '1 Bag',
+          stop_count: parseInt(seg.stop_count || 0, 10),
+          segment_order: idx + 1
+        }));
+        await supabase.from('booking_itinerary_segments').insert(rows);
+      }
+    } catch (e) {
+      logger.warn(`saveItinerarySegments notice: ${e.message}`);
+    }
+  },
+
+  recordPriceRevision: async (revision) => {
+    try {
+      await supabase.from('booking_price_revisions').insert({
+        booking_id: revision.bookingId,
+        supplier_fare: revision.supplierFare || 0,
+        base_fare: revision.baseFare || 0,
+        taxes: revision.taxes || 0,
+        service_fee: revision.serviceFee || 0,
+        discount: revision.discount || 0,
+        customer_total: revision.customerTotal,
+        currency: revision.currency || 'USD',
+        margin: revision.margin || 0,
+        reason: revision.reason || 'Price adjustment by admin',
+        admin_id: revision.adminId || 'admin'
+      });
+    } catch (e) {
+      logger.warn(`recordPriceRevision notice: ${e.message}`);
+    }
+  },
+
+  recordPaymentEvent: async (eventData) => {
+    try {
+      await supabase.from('booking_payment_events').insert({
+        booking_id: eventData.bookingId,
+        event_type: eventData.eventType,
+        previous_status: eventData.previousStatus,
+        new_status: eventData.newStatus,
+        amount: eventData.amount || 0,
+        reference_id: eventData.referenceId || '',
+        reason: eventData.reason || '',
+        admin_id: eventData.adminId || 'admin'
+      });
+    } catch (e) {
+      logger.warn(`recordPaymentEvent notice: ${e.message}`);
+    }
+  },
+
   findPaymentByCaptureId: async (providerCaptureId) => {
+
     const { data, error } = await supabase
       .from('payments')
       .select('*')

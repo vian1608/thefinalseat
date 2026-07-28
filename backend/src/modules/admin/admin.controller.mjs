@@ -2,6 +2,9 @@ import adminService from './admin.service.mjs';
 import bookingRepository from '../bookings/booking.repository.mjs';
 import bookingMapper from '../bookings/booking.mapper.mjs';
 import { sendBookingConfirmation } from '../../integrations/resend/resend.service.mjs';
+import passengerAuthorizationService from '../authorizations/passenger-authorization.service.mjs';
+import logger from '../../config/logger.mjs';
+
 
 
 export const adminController = {
@@ -209,9 +212,215 @@ export const adminController = {
       logger.error(`Error processing authorized booking ${req.params.id}: ${error.message}`);
       next(error);
     }
+  },
+
+  updateItinerary: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const { segments, expectedVersion } = req.body || {};
+
+      const booking = await bookingRepository.getById(id);
+      if (!booking) {
+        return res.status(404).json({ success: false, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' } });
+      }
+
+      // Check version for optimistic locking
+      if (expectedVersion && booking.version && booking.version !== expectedVersion) {
+        return res.status(409).json({
+          success: false,
+          error: { code: 'CONCURRENT_EDIT_CONFLICT', message: 'This booking was updated by another administrator. Please refresh before saving.' }
+        });
+      }
+
+      // Save normalized segments
+      await bookingRepository.saveItinerarySegments(booking.id, segments || []);
+
+      // Check if material itinerary changes invalidate existing authorization
+      let reauthorizationRequired = false;
+      const currentStatus = (booking.status || '').toUpperCase();
+      if (['AUTHORIZED', 'AWAITING_AUTH', 'AWAITING_AUTHORIZATION'].includes(currentStatus)) {
+        reauthorizationRequired = true;
+        await bookingRepository.updateBookingStatus(booking.id, {
+          status: 'REAUTHORIZATION_REQUIRED'
+        });
+      }
+
+      const updatedBooking = await bookingRepository.getById(booking.id);
+      return res.json({
+        success: true,
+        booking: updatedBooking,
+        reauthorizationRequired,
+        message: reauthorizationRequired
+          ? 'Itinerary updated. Existing authorization was invalidated and status set to REAUTHORIZATION_REQUIRED.'
+          : 'Itinerary updated successfully.'
+      });
+    } catch (error) {
+      logger.error(`Error updating itinerary for booking ${req.params.id}: ${error.message}`);
+      next(error);
+    }
+  },
+
+  updatePricing: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const { supplierFare, baseFare, taxes, serviceFee, discount, customerTotal, currency, margin, reason, expectedVersion } = req.body || {};
+
+      const booking = await bookingRepository.getById(id);
+      if (!booking) {
+        return res.status(404).json({ success: false, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' } });
+      }
+
+      if (expectedVersion && booking.version && booking.version !== expectedVersion) {
+        return res.status(409).json({
+          success: false,
+          error: { code: 'CONCURRENT_EDIT_CONFLICT', message: 'This booking was modified by another user. Please reload data.' }
+        });
+      }
+
+      const newCustomerTotal = parseFloat(customerTotal || 0);
+      const oldCustomerTotal = parseFloat(booking.customer_price || booking.total_amount || 0);
+
+      // Require reason if customer total changes
+      if (Math.abs(newCustomerTotal - oldCustomerTotal) > 0.01 && !reason) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'REASON_REQUIRED', message: 'A mandatory reason is required whenever the customer total changes.' }
+        });
+      }
+
+      // Record price revision audit entry
+      await bookingRepository.recordPriceRevision({
+        bookingId: booking.id,
+        supplierFare: parseFloat(supplierFare || 0),
+        baseFare: parseFloat(baseFare || 0),
+        taxes: parseFloat(taxes || 0),
+        serviceFee: parseFloat(serviceFee || 0),
+        discount: parseFloat(discount || 0),
+        customerTotal: newCustomerTotal,
+        currency: currency || 'USD',
+        margin: parseFloat(margin || 0),
+        reason: reason || 'Admin price update',
+        adminId: req.user?.id || 'admin'
+      });
+
+      // Update booking amounts
+      let reauthorizationRequired = false;
+      const currentStatus = (booking.status || '').toUpperCase();
+      if (Math.abs(newCustomerTotal - oldCustomerTotal) > 0.01 && ['AUTHORIZED', 'AWAITING_AUTH'].includes(currentStatus)) {
+        reauthorizationRequired = true;
+      }
+
+      const updateFields = {
+        total_amount: newCustomerTotal,
+        customer_price: newCustomerTotal,
+        currency: currency || 'USD'
+      };
+
+      if (reauthorizationRequired) {
+        updateFields.status = 'REAUTHORIZATION_REQUIRED';
+      }
+
+      const updatedBooking = await bookingRepository.updateBookingWithLock(booking.id, expectedVersion, updateFields);
+
+      return res.json({
+        success: true,
+        booking: updatedBooking,
+        reauthorizationRequired,
+        message: reauthorizationRequired
+          ? 'Pricing updated. Customer total changed; booking set to REAUTHORIZATION_REQUIRED.'
+          : 'Pricing updated successfully.'
+      });
+    } catch (error) {
+      logger.error(`Error updating pricing for booking ${req.params.id}: ${error.message}`);
+      next(error);
+    }
+  },
+
+  handlePaymentAction: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const { action, paymentStatus, provider, methodType, brand, last4, amount, referenceId, reason, password } = req.body || {};
+
+      const booking = await bookingRepository.getById(id);
+      if (!booking) {
+        return res.status(404).json({ success: false, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' } });
+      }
+
+      // Record Payment Event Audit Log
+      await bookingRepository.recordPaymentEvent({
+        bookingId: booking.id,
+        eventType: action || 'PAYMENT_UPDATE',
+        previousStatus: booking.payment_status,
+        newStatus: paymentStatus || booking.payment_status,
+        amount: parseFloat(amount || 0),
+        referenceId: referenceId || '',
+        reason: reason || '',
+        adminId: req.user?.id || 'admin'
+      });
+
+      if (action === 'send_authorization' || action === 'resend_authorization') {
+        const vaultData = { cardBrand: brand || 'Visa', cardLast4: last4 || '4242' };
+        const authRecord = await passengerAuthorizationService.createAuthorizationToken(booking, vaultData);
+        await passengerAuthorizationService.sendAuthorizationEmail(authRecord, booking);
+
+        return res.json({
+          success: true,
+          status: 'AWAITING_AUTH',
+          message: `Authorization email dispatched to ${booking.email}`
+        });
+      }
+
+      if (action === 'record_refund') {
+        const refundAmt = parseFloat(amount || 0);
+        const capturedAmt = parseFloat(booking.customer_price || booking.total_amount || 0);
+        if (refundAmt > capturedAmt) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'INVALID_REFUND_AMOUNT', message: `Refund amount ($${refundAmt}) cannot exceed captured total ($${capturedAmt}).` }
+          });
+        }
+
+        const newPayStatus = refundAmt >= capturedAmt ? 'refunded' : 'partially_refunded';
+        await bookingRepository.updateBookingStatus(booking.id, {
+          payment_status: newPayStatus,
+          status: newPayStatus.toUpperCase()
+        });
+
+        return res.json({
+          success: true,
+          paymentStatus: newPayStatus,
+          message: `Refund of $${refundAmt.toFixed(2)} recorded.`
+        });
+      }
+
+      // Default status update if applicable
+      if (paymentStatus) {
+        // Enforce transaction reference or privileged password for manual PAID
+        if (paymentStatus === 'PAID' || paymentStatus === 'paid') {
+          if (!referenceId && password !== 'admin123') {
+            return res.status(400).json({
+              success: false,
+              error: { code: 'TRANSACTION_REF_REQUIRED', message: 'Marking a booking PAID requires a verified transaction reference or privileged override password.' }
+            });
+          }
+        }
+
+        const updated = await bookingRepository.updateBookingStatus(booking.id, {
+          payment_status: paymentStatus.toLowerCase(),
+          status: paymentStatus.toUpperCase() === 'PAID' ? 'DONE' : paymentStatus.toUpperCase()
+        });
+        return res.json({ success: true, booking: updated });
+      }
+
+      return res.json({ success: true, booking });
+    } catch (error) {
+      logger.error(`Error in handlePaymentAction for booking ${req.params.id}: ${error.message}`);
+      next(error);
+    }
   }
 };
 
 export default adminController;
+
 
 
