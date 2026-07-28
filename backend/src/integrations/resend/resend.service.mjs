@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url';
 import env from '../../config/env.mjs';
 import logger from '../../config/logger.mjs';
 import bookingRepository from '../../modules/bookings/booking.repository.mjs';
+import passengerAuthorizationService from '../../modules/authorizations/passenger-authorization.service.mjs';
+
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -515,6 +517,254 @@ Support 24/7: Call +1 (213) 965-9727 or Email support@thefinalseat.com
     return { success: false, error: error.message };
   }
 };
+
+export const sendBookingRequestReceivedEmail = async (bookingId, { force = false } = {}) => {
+  try {
+    const booking = await bookingRepository.getById(bookingId);
+    if (!booking) return { success: false, error: 'Booking not found' };
+
+    if (!force && booking.booking_request_email_status === 'SENT') {
+      logger.info(`[Email] sendBookingRequestReceivedEmail skipped (already sent) for ${booking.confirmation_code}`);
+      return { success: true, emailId: booking.booking_request_email_id, skipped: true };
+    }
+
+    const customerEmail = booking.email || booking.contacts?.[0]?.email || booking.travellers?.[0]?.email;
+    if (!customerEmail || !customerEmail.includes('@')) {
+      const errMsg = 'This booking does not have a valid passenger email address.';
+      await bookingRepository.updateBookingStatus(bookingId, {
+        booking_request_email_status: 'FAILED',
+        booking_request_email_error: errMsg
+      });
+      return { success: false, error: errMsg };
+    }
+
+    const confirmationCode = booking.confirmation_code || booking.confirmationCode || 'TFS-PENDING';
+    const passengerName = booking.passenger_name || 'Valued Passenger';
+    const passengerFirstName = passengerName.split(' ')[0] || 'Passenger';
+    const passengerCount = (booking.travellers?.length || 1).toString();
+    const currency = booking.currency || 'USD';
+    const currencySymbol = currency === 'EUR' ? '€' : (currency === 'GBP' ? '£' : '$');
+    const customerTotal = parseFloat(booking.customer_price || booking.total_amount || 0).toFixed(2);
+    const bookingDate = booking.created_at ? new Date(booking.created_at).toLocaleDateString() : new Date().toLocaleDateString();
+
+    const outboundSegs = booking.outbound_segments || (booking.itinerary_segments ? booking.itinerary_segments.filter(s => s.journey_direction === 'outbound') : []);
+    const returnSegs = booking.return_segments || (booking.itinerary_segments ? booking.itinerary_segments.filter(s => s.journey_direction === 'return') : []);
+
+    const templatePath = path.join(__dirname, 'templates', 'booking-confirmation.html');
+    let html = await fs.readFile(templatePath, 'utf8').catch(() => null);
+
+    if (!html) {
+      html = `<h2>Booking Request Received</h2><p>Thank you ${passengerFirstName}! Confirmation Number: <strong>${confirmationCode}</strong></p>`;
+    }
+
+    html = html.replace('Payment Confirmation', 'Booking Request Received');
+    html = html.replace('Payment Successfully Received', 'Booking Request Received');
+    html = html.replace('Your payment has been successfully processed.', 'Your booking request has been received.');
+    html = html.replace(/This temporary confirmation number is not the airline's final PNR[\s\S]*?processing\./g, '');
+
+    const replacements = {
+      '{{confirmationCode}}': confirmationCode,
+      '{{passengerFirstName}}': passengerFirstName,
+      '{{passengerName}}': passengerName,
+      '{{currencySymbol}}': currencySymbol,
+      '{{amountPaid}}': customerTotal,
+      '{{currency}}': currency,
+      '{{paymentMethod}}': 'Card Authorization Pending',
+      '{{paymentDate}}': bookingDate,
+      '{{passengerCount}}': passengerCount,
+      '{{customerEmail}}': customerEmail,
+      '{{outboundAirline}}': outboundSegs[0]?.carrier_name || booking.carrier || 'Commercial Airline',
+      '{{outboundFlightNumber}}': outboundSegs[0]?.flight_number || 'Scheduled',
+      '{{outboundOriginCity}}': outboundSegs[0]?.origin_city || outboundSegs[0]?.origin_airport || 'Origin',
+      '{{outboundOriginCode}}': outboundSegs[0]?.origin_airport || 'DEP',
+      '{{outboundDestinationCity}}': outboundSegs[outboundSegs.length - 1]?.destination_city || outboundSegs[0]?.destination_airport || 'Destination',
+      '{{outboundDestinationCode}}': outboundSegs[outboundSegs.length - 1]?.destination_airport || 'ARR',
+      '{{outboundDepartureDate}}': outboundSegs[0]?.departure_date || 'Scheduled',
+      '{{outboundDepartureTime}}': outboundSegs[0]?.departure_time || 'Scheduled',
+      '{{outboundArrivalDate}}': outboundSegs[0]?.arrival_date || 'Scheduled',
+      '{{outboundArrivalTime}}': outboundSegs[0]?.arrival_time || 'Scheduled',
+      '{{outboundCabin}}': outboundSegs[0]?.cabin || 'Economy',
+      '{{outboundStops}}': outboundSegs.length > 1 ? `${outboundSegs.length - 1} Stop(s)` : 'Nonstop'
+    };
+
+    for (const [key, val] of Object.entries(replacements)) {
+      html = html.replaceAll(key, val || '');
+    }
+
+    if (returnSegs.length > 0) {
+      const returnReplacements = {
+        '{{returnAirline}}': returnSegs[0]?.carrier_name || 'Commercial Airline',
+        '{{returnFlightNumber}}': returnSegs[0]?.flight_number || 'Scheduled',
+        '{{returnOriginCity}}': returnSegs[0]?.origin_city || returnSegs[0]?.origin_airport || 'Origin',
+        '{{returnOriginCode}}': returnSegs[0]?.origin_airport || 'DEP',
+        '{{returnDestinationCity}}': returnSegs[returnSegs.length - 1]?.destination_city || returnSegs[0]?.destination_airport || 'Destination',
+        '{{returnDestinationCode}}': returnSegs[returnSegs.length - 1]?.destination_airport || 'ARR',
+        '{{returnDepartureDate}}': returnSegs[0]?.departure_date || 'Scheduled',
+        '{{returnDepartureTime}}': returnSegs[0]?.departure_time || 'Scheduled',
+        '{{returnArrivalDate}}': returnSegs[0]?.arrival_date || 'Scheduled',
+        '{{returnArrivalTime}}': returnSegs[0]?.arrival_time || 'Scheduled',
+        '{{returnCabin}}': returnSegs[0]?.cabin || 'Economy',
+        '{{returnStops}}': returnSegs.length > 1 ? `${returnSegs.length - 1} Stop(s)` : 'Nonstop'
+      };
+      for (const [key, val] of Object.entries(returnReplacements)) {
+        html = html.replaceAll(key, val || '');
+      }
+    } else {
+      html = html.replace(/\{\{#if hasReturnFlight\}\}[\s\S]*?\{\{\/if\}\}/g, '');
+    }
+
+    html = html.replace(/\{\{[^}]+\\}\}/g, '');
+
+    const textBody = `
+THE FINAL SEAT — BOOKING REQUEST RECEIVED
+
+Thank you, ${passengerFirstName}!
+
+Your booking request has been received for processing.
+
+TEMPORARY CONFIRMATION NUMBER: ${confirmationCode}
+
+PASSENGER DETAILS:
+Primary Passenger: ${passengerName}
+Number of Passengers: ${passengerCount}
+Contact Email: ${customerEmail}
+
+IMPORTANT NOTICE:
+This temporary confirmation number is not the airline's final PNR or electronic ticket. Final airline confirmation and ticket details will be sent separately after processing.
+
+Track your booking request at: https://www.thefinalseat.com/my-bookings?code=${confirmationCode}
+Support: +1 (213) 965-9727 | support@thefinalseat.com
+    `.trim();
+
+    const subject = `Booking Request Received — ${confirmationCode}`;
+    const result = await sendViaResend({
+      recipients: [customerEmail],
+      subject,
+      textBody,
+      htmlBody: html,
+      replyTo: 'support@thefinalseat.com'
+    });
+
+    const emailId = result?.messageId || `msg_${Date.now()}`;
+    const sentAt = new Date().toISOString();
+
+    await bookingRepository.updateBookingStatus(bookingId, {
+      booking_request_email_status: 'SENT',
+      booking_request_email_id: emailId,
+      booking_request_email_sent_at: sentAt,
+      booking_request_email_recipient: customerEmail,
+      booking_request_email_error: null
+    });
+
+    logger.info(`[Email Log] bookingId=${bookingId} confirmationCode=${confirmationCode} emailType=booking_request recipient=${customerEmail} providerMessageId=${emailId} result=success`);
+
+    return { success: true, emailId };
+  } catch (err) {
+    const errorMsg = err.message || 'Email dispatch failed';
+    logger.error(`[Email Log] bookingId=${bookingId} emailType=booking_request result=failed error=${errorMsg}`);
+    await bookingRepository.updateBookingStatus(bookingId, {
+      booking_request_email_status: 'FAILED',
+      booking_request_email_error: errorMsg
+    });
+    return { success: false, error: errorMsg };
+  }
+};
+
+export const sendPassengerAuthorizationEmail = async (bookingId) => {
+  try {
+    const booking = await bookingRepository.getById(bookingId);
+    if (!booking) return { success: false, error: 'Booking not found' };
+
+    const customerEmail = booking.email || booking.contacts?.[0]?.email || booking.travellers?.[0]?.email;
+    if (!customerEmail || !customerEmail.includes('@')) {
+      const errMsg = 'This booking does not have a valid passenger email address.';
+      await bookingRepository.updateBookingStatus(bookingId, {
+        authorization_email_status: 'FAILED',
+        authorization_email_error: errMsg
+      });
+      return { success: false, error: errMsg };
+    }
+
+    const authResult = await passengerAuthorizationService.createAuthorizationToken(booking);
+    const token = authResult.token;
+    const authUrl = `https://www.thefinalseat.com/authorize/${token}`;
+
+    const confirmationCode = booking.confirmation_code || 'TFS-PENDING';
+    const passengerName = booking.passenger_name || 'Valued Passenger';
+    const passengerFirstName = passengerName.split(' ')[0] || 'Passenger';
+    const amount = parseFloat(booking.customer_price || booking.total_amount || 0).toFixed(2);
+    const currency = booking.currency || 'USD';
+
+    const subject = `Action Required — Authorize Booking ${confirmationCode}`;
+    const textBody = `
+THE FINAL SEAT — ACTION REQUIRED: AUTHORIZE FLIGHT RESERVATION
+
+Dear ${passengerFirstName},
+
+Please review and authorize your flight reservation ${confirmationCode} for a total charge of $${amount} ${currency}.
+
+Click the secure authorization link below to confirm your itinerary:
+${authUrl}
+
+This single-use link expires in 24 hours.
+
+Support 24/7: +1 (213) 965-9727 | support@thefinalseat.com
+    `.trim();
+
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+        <div style="background-color: #7f0d2f; padding: 24px; text-align: center; color: #ffffff;">
+          <h1 style="margin: 0; font-size: 22px;">The Final Seat</h1>
+          <p style="margin: 4px 0 0; color: #e2b84d; font-size: 13px;">Passenger Authorization Request</p>
+        </div>
+        <div style="padding: 24px; color: #334155;">
+          <h2 style="color: #7f0d2f; margin-top: 0;">Action Required: Authorize Reservation</h2>
+          <p>Dear <strong>${passengerFirstName}</strong>,</p>
+          <p>Please review and confirm your flight details for temporary confirmation <strong>${confirmationCode}</strong>. Total authorized charge: <strong>$${amount} ${currency}</strong>.</p>
+          <div style="text-align: center; margin: 28px 0;">
+            <a href="${authUrl}" style="background-color: #7f0d2f; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: bold; display: inline-block;">Review &amp; Authorize Booking &rarr;</a>
+          </div>
+          <p style="font-size: 12px; color: #64748b;">This secure, single-use authorization link expires in 24 hours. Your saved card will only be processed after you review and authorize.</p>
+        </div>
+      </div>
+    `;
+
+    const result = await sendViaResend({
+      recipients: [customerEmail],
+      subject,
+      textBody,
+      htmlBody,
+      replyTo: 'support@thefinalseat.com'
+    });
+
+    const emailId = result?.messageId || `msg_${Date.now()}`;
+    const sentAt = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    await bookingRepository.updateBookingStatus(bookingId, {
+      status: 'AWAITING_AUTHORIZATION',
+      authorization_email_status: 'SENT',
+      authorization_email_id: emailId,
+      authorization_email_sent_at: sentAt,
+      authorization_email_recipient: customerEmail,
+      authorization_email_error: null,
+      authorization_expires_at: expiresAt
+    });
+
+    logger.info(`[Email Log] bookingId=${bookingId} confirmationCode=${confirmationCode} emailType=authorization recipient=${customerEmail} providerMessageId=${emailId} result=success`);
+
+    return { success: true, emailId, authUrl };
+  } catch (err) {
+    const errorMsg = err.message || 'Authorization email dispatch failed';
+    logger.error(`[Email Log] bookingId=${bookingId} emailType=authorization result=failed error=${errorMsg}`);
+    await bookingRepository.updateBookingStatus(bookingId, {
+      authorization_email_status: 'FAILED',
+      authorization_email_error: errorMsg
+    });
+    return { success: false, error: errorMsg };
+  }
+};
+
 
 
 export const sendPaymentFailedEmail = async (booking, reason = 'Payment processing failed') => {

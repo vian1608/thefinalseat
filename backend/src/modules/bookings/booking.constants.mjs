@@ -23,15 +23,26 @@ export const BOOKING_STATUS = {
   INCOMPLETE: 'INCOMPLETE'
 };
 
-export const PAYMENT_STATUS = {
-  PAID: 'paid',
-  PENDING: 'pending',
-  FAILED: 'failed',
-  REFUNDED: 'refunded'
-};
+export const PAYMENT_OPERATIONAL_STATES = [
+  'PENDING',
+  'PROCESSING',
+  'PAID',
+  'FAILED',
+  'REFUNDED'
+];
 
-export default {
-  BOOKING_STATUSES,
-  BOOKING_STATUS,
-  PAYMENT_STATUS
+export const AUTHORIZATION_STATES = [
+  'NOT_SENT',
+  'AWAITING_PASSENGER',
+  'AUTHORIZED',
+  'REAUTHORIZATION_REQUIRED',
+  'EXPIRED'
+];
+
+export const PAYMENT_STATUS = {
+  PENDING: 'PENDING',
+  PROCESSING: 'PROCESSING',
+  PAID: 'PAID',
+  FAILED: 'FAILED',
+  REFUNDED: 'REFUNDED'
 };

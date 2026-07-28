@@ -1,10 +1,12 @@
 import adminService from './admin.service.mjs';
 import bookingRepository from '../bookings/booking.repository.mjs';
 import bookingMapper from '../bookings/booking.mapper.mjs';
-import { BOOKING_STATUSES } from '../bookings/booking.constants.mjs';
-import { sendBookingConfirmation } from '../../integrations/resend/resend.service.mjs';
+import { BOOKING_STATUSES, PAYMENT_OPERATIONAL_STATES } from '../bookings/booking.constants.mjs';
+import { sendBookingConfirmation, sendBookingRequestReceivedEmail, sendPassengerAuthorizationEmail } from '../../integrations/resend/resend.service.mjs';
 import passengerAuthorizationService from '../authorizations/passenger-authorization.service.mjs';
+import { generateAuthorizationPdfBuffer } from '../authorizations/authorization-pdf.service.mjs';
 import logger from '../../config/logger.mjs';
+
 
 
 
@@ -406,88 +408,166 @@ export const adminController = {
   handlePaymentAction: async (req, res, next) => {
     try {
       const { id } = req.params;
-      const { action, paymentStatus, provider, methodType, brand, last4, amount, referenceId, reason, password } = req.body || {};
+      const { action, paymentStatus, targetState, amount, paidAmount, refundAmount, referenceId, refundReferenceId, reason, overrideReason, isOverride, password } = req.body || {};
 
       const booking = await bookingRepository.getById(id);
       if (!booking) {
         return res.status(404).json({ success: false, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' } });
       }
 
-      // Record Payment Event Audit Log
-      await bookingRepository.recordPaymentEvent({
-        bookingId: booking.id,
-        eventType: action || 'PAYMENT_UPDATE',
-        previousStatus: booking.payment_status,
-        newStatus: paymentStatus || booking.payment_status,
-        amount: parseFloat(amount || 0),
-        referenceId: referenceId || '',
-        reason: reason || '',
-        adminId: req.user?.id || 'admin'
-      });
+      const desiredState = String(targetState || paymentStatus || action || '').toUpperCase();
 
       if (action === 'send_authorization' || action === 'resend_authorization') {
-        const vaultData = { cardBrand: brand || 'Visa', cardLast4: last4 || '4242' };
-        const authRecord = await passengerAuthorizationService.createAuthorizationToken(booking, vaultData);
-        await passengerAuthorizationService.sendAuthorizationEmail(authRecord, booking);
-
-        return res.json({
-          success: true,
-          status: 'AWAITING_AUTH',
-          message: `Authorization email dispatched to ${booking.email}`
-        });
-      }
-
-      if (action === 'record_refund') {
-        const refundAmt = parseFloat(amount || 0);
-        const capturedAmt = parseFloat(booking.customer_price || booking.total_amount || 0);
-        if (refundAmt > capturedAmt) {
+        const emailRes = await sendPassengerAuthorizationEmail(booking.id);
+        if (!emailRes.success) {
           return res.status(400).json({
             success: false,
-            error: { code: 'INVALID_REFUND_AMOUNT', message: `Refund amount ($${refundAmt}) cannot exceed captured total ($${capturedAmt}).` }
+            error: { code: 'EMAIL_DISPATCH_FAILED', message: emailRes.error || 'Authorization email failed to send.' }
           });
         }
 
-        const newPayStatus = refundAmt >= capturedAmt ? 'refunded' : 'partially_refunded';
-        await bookingRepository.updateBookingStatus(booking.id, {
-          payment_status: newPayStatus,
-          status: newPayStatus.toUpperCase()
-        });
-
+        const updated = await bookingRepository.getById(booking.id);
         return res.json({
           success: true,
-          paymentStatus: newPayStatus,
-          message: `Refund of $${refundAmt.toFixed(2)} recorded.`
+          status: 'AWAITING_AUTHORIZATION',
+          booking: updated,
+          message: `Authorization email dispatched cleanly to ${booking.email || booking.contacts?.[0]?.email}`
         });
       }
 
-      // Default status update if applicable
-      if (paymentStatus) {
-        // Enforce transaction reference or privileged password for manual PAID
-        if (paymentStatus === 'PAID' || paymentStatus === 'paid') {
-          if (!referenceId && password !== 'admin123') {
-            return res.status(400).json({
-              success: false,
-              error: { code: 'TRANSACTION_REF_REQUIRED', message: 'Marking a booking PAID requires a verified transaction reference or privileged override password.' }
-            });
-          }
+      if (action === 'resend_booking_request_email') {
+        const emailRes = await sendBookingRequestReceivedEmail(booking.id, { force: true });
+        if (!emailRes.success) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'EMAIL_DISPATCH_FAILED', message: emailRes.error || 'Booking request email failed to send.' }
+          });
+        }
+        const updated = await bookingRepository.getById(booking.id);
+        return res.json({
+          success: true,
+          booking: updated,
+          message: `Booking request email resent cleanly to ${booking.email || booking.contacts?.[0]?.email}`
+        });
+      }
+
+      // Enforce 5 canonical operational payment states
+      if (desiredState && !PAYMENT_OPERATIONAL_STATES.includes(desiredState)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_PAYMENT_STATE', message: `Unsupported payment state '${desiredState}'. Allowed: ${PAYMENT_OPERATIONAL_STATES.join(', ')}.` }
+        });
+      }
+
+      const currentState = String(booking.payment_status || 'PENDING').toUpperCase();
+
+      // Validate transitions
+      if (desiredState === 'PAID') {
+        const isPrivileged = isOverride || password === 'admin123';
+        if (!referenceId && !isPrivileged) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'TRANSACTION_ID_REQUIRED', message: 'Setting status to PAID requires a valid transaction/reference ID or privileged admin override.' }
+          });
+        }
+        if (isPrivileged && !overrideReason && !reason) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'OVERRIDE_REASON_REQUIRED', message: 'Privileged manual override to PAID requires a mandatory reason.' }
+          });
+        }
+        if (currentState === 'REFUNDED' && !isPrivileged) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'INVALID_TRANSITION', message: 'Transition from REFUNDED to PAID requires a new payment record or privileged override.' }
+          });
+        }
+      }
+
+      if (desiredState === 'REFUNDED') {
+        if (currentState !== 'PAID' && currentState !== 'PARTIALLY_REFUNDED' && !isOverride) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'REFUND_NOT_ALLOWED', message: 'A booking can only be set to REFUNDED if it was previously PAID.' }
+          });
         }
 
-        const updated = await bookingRepository.updateBookingStatus(booking.id, {
-          payment_status: paymentStatus.toLowerCase(),
-          status: paymentStatus.toUpperCase() === 'PAID' ? 'DONE' : paymentStatus.toUpperCase()
-        });
-        return res.json({ success: true, booking: updated });
+        const refAmt = parseFloat(refundAmount || amount || 0);
+        const pdAmt = parseFloat(booking.paid_amount || booking.customer_price || booking.total_amount || 0);
+
+        if (refAmt > pdAmt && !isOverride) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'REFUND_EXCEEDS_PAID', message: `Refund amount ($${refAmt.toFixed(2)}) cannot exceed paid amount ($${pdAmt.toFixed(2)}).` }
+          });
+        }
       }
 
-      return res.json({ success: true, booking });
+      // Record Payment Event Audit Log
+      await bookingRepository.recordPaymentEvent({
+        bookingId: booking.id,
+        eventType: desiredState || 'PAYMENT_STATE_UPDATE',
+        previousStatus: currentState,
+        newStatus: desiredState,
+        amount: parseFloat(paidAmount || refundAmount || amount || 0),
+        referenceId: referenceId || refundReferenceId || '',
+        reason: reason || overrideReason || '',
+        adminId: req.user?.id || 'admin'
+      });
+
+      const updatePayload = {
+        payment_status: desiredState
+      };
+
+      if (desiredState === 'PAID') {
+        updatePayload.paid_amount = parseFloat(paidAmount || amount || booking.total_amount || 0);
+        updatePayload.payment_reference_id = referenceId || `TXN_${Date.now()}`;
+        updatePayload.paid_at = new Date().toISOString();
+      }
+
+      if (desiredState === 'REFUNDED') {
+        updatePayload.refund_amount = parseFloat(refundAmount || amount || booking.total_amount || 0);
+        updatePayload.refund_reference_id = refundReferenceId || `REF_${Date.now()}`;
+        updatePayload.refund_reason = reason || 'Admin recorded refund';
+        updatePayload.refund_timestamp = new Date().toISOString();
+      }
+
+      const updated = await bookingRepository.updateBookingStatus(booking.id, updatePayload);
+
+      return res.json({
+        success: true,
+        paymentStatus: desiredState,
+        booking: updated,
+        message: `Payment state updated to ${desiredState} cleanly.`
+      });
     } catch (error) {
       logger.error(`Error in handlePaymentAction for booking ${req.params.id}: ${error.message}`);
+      next(error);
+    }
+  },
+
+  downloadAuthorizationPdf: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const evidence = await passengerAuthorizationService.getAuditEvidenceByBookingId(id);
+      if (!evidence) {
+        return res.status(404).json({ success: false, error: { code: 'EVIDENCE_NOT_FOUND', message: 'No authorization evidence found for this booking.' } });
+      }
+
+      const pdfBuffer = await generateAuthorizationPdfBuffer(evidence);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="authorization-${evidence.confirmationCode || id}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      logger.error(`Error generating authorization PDF for booking ${req.params.id}: ${error.message}`);
       next(error);
     }
   }
 };
 
 export default adminController;
+
 
 
 

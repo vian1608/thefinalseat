@@ -26,7 +26,9 @@ router.post('/bookings/:id/itinerary', authenticate, authorize(['admin']), admin
 router.post('/bookings/:id/pricing', authenticate, authorize(['admin']), adminController.updatePricing);
 router.post('/bookings/:id/payment-action', authenticate, authorize(['admin']), adminController.handlePaymentAction);
 router.get('/bookings/:id/authorization-evidence', authenticate, authorize(['admin']), passengerAuthorizationController.getEvidenceExport);
+router.get('/bookings/:id/authorization-pdf', authenticate, authorize(['admin']), adminController.downloadAuthorizationPdf);
 router.get('/stats', authenticate, authorize(['admin']), adminController.getStats);
+
 
 
 

@@ -1,10 +1,20 @@
 import bookingService from './booking.service.mjs';
-import { sendBookingConfirmation } from '../../integrations/resend/resend.service.mjs';
+import { sendBookingConfirmation, sendBookingRequestReceivedEmail } from '../../integrations/resend/resend.service.mjs';
+import logger from '../../config/logger.mjs';
 
 export const bookingController = {
   create: async (req, res, next) => {
     try {
       const result = await bookingService.create(req.body);
+
+      // Trigger idempotent booking request received email after DB commit
+      const bookingId = result?.booking?.id || result?.id;
+      if (bookingId) {
+        sendBookingRequestReceivedEmail(bookingId).catch(err => {
+          logger.error(`[Email] Non-blocking sendBookingRequestReceivedEmail error for ${bookingId}: ${err.message}`);
+        });
+      }
+
       res.status(201).json({
         success: true,
         message: 'Booking request created successfully.',
@@ -14,6 +24,7 @@ export const bookingController = {
       next(error);
     }
   },
+
 
   getByReference: async (req, res, next) => {
     try {

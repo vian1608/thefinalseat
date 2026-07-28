@@ -476,27 +476,28 @@ function AdminDashboard() {
   const handleDownloadEvidence = async (bookingId) => {
     const adminToken = localStorage.getItem('token');
     try {
-      const res = await fetch(`/api/admin/bookings/${bookingId}/authorization-evidence`, {
+      const res = await fetch(`/api/admin/bookings/${bookingId}/authorization-pdf`, {
         headers: { Authorization: `Bearer ${adminToken}` }
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error?.message || 'Failed to fetch evidence export.');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error?.message || 'Failed to generate authorization PDF evidence document.');
       }
 
-      const jsonStr = JSON.stringify(data.evidence, null, 2);
-      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `evidence_export_${bookingId}.json`;
+      const code = selectedBooking?.confirmation_code || selectedBooking?.confirmationCode || bookingId;
+      link.download = `authorization-${code}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     } catch (err) {
-      alert(`Evidence Export Error: ${err.message}`);
+      alert(`Authorization PDF Export Error: ${err.message}`);
     }
   };
+
 
 
   if (loading && bookings.length === 0 && !analytics) {
@@ -1268,38 +1269,101 @@ function AdminDashboard() {
                             <div className="drawer-form-field">
                               <label>Payment State</label>
                               <select value={paymentForm.paymentStatus} onChange={(e) => { setPaymentForm({ ...paymentForm, paymentStatus: e.target.value }); setHasUnsavedEdits(true); }}>
-                                <option value="NOT_COLLECTED">NOT_COLLECTED</option>
-                                <option value="PAYMENT_METHOD_SECURED">PAYMENT_METHOD_SECURED</option>
-                                <option value="AWAITING_AUTHORIZATION">AWAITING_AUTHORIZATION</option>
-                                <option value="AUTHORIZED">AUTHORIZED</option>
-                                <option value="REAUTHORIZATION_REQUIRED">REAUTHORIZATION_REQUIRED</option>
-                                <option value="PROCESSING">PROCESSING</option>
-                                <option value="PAID">PAID</option>
-                                <option value="PARTIALLY_REFUNDED">PARTIALLY_REFUNDED</option>
-                                <option value="REFUNDED">REFUNDED</option>
-                                <option value="FAILED">FAILED</option>
-                                <option value="DISPUTED">DISPUTED</option>
+                                <option value="PENDING">Pending</option>
+                                <option value="PROCESSING">Processing</option>
+                                <option value="PAID">Paid</option>
+                                <option value="FAILED">Failed</option>
+                                <option value="REFUNDED">Refunded</option>
                               </select>
                             </div>
                             <div className="drawer-form-field">
                               <label>Masked Card</label>
-                              <input type="text" readOnly value={`${paymentForm.brand} •••• ${paymentForm.last4}`} />
+                              <input type="text" readOnly value={`${paymentForm.brand || 'Visa'} •••• ${paymentForm.last4 || '4242'}`} />
                             </div>
                           </div>
 
-                          <div className="drawer-grid-2col">
-                            <div className="drawer-form-field">
-                              <label>Authorized Amount ($)</label>
-                              <input type="number" step="0.01" value={paymentForm.authorizedAmount} onChange={(e) => { setPaymentForm({ ...paymentForm, authorizedAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); }} />
+                          {paymentForm.paymentStatus === 'PENDING' && (
+                            <div className="drawer-grid-2col">
+                              <div className="drawer-form-field">
+                                <label>Authorized Amount ($)</label>
+                                <input type="number" step="0.01" value={paymentForm.authorizedAmount} onChange={(e) => { setPaymentForm({ ...paymentForm, authorizedAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); }} />
+                              </div>
+                              <div className="drawer-form-field">
+                                <label>Payment Method</label>
+                                <input type="text" readOnly value="Card Authorization Vault" />
+                              </div>
                             </div>
-                            <div className="drawer-form-field">
-                              <label>Transaction / Ref ID</label>
-                              <input type="text" value={paymentForm.referenceId} onChange={(e) => { setPaymentForm({ ...paymentForm, referenceId: e.target.value }); setHasUnsavedEdits(true); }} />
-                            </div>
-                          </div>
+                          )}
 
-                          {/* Context-Sensitive Action Buttons */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px' }}>
+                          {paymentForm.paymentStatus === 'PROCESSING' && (
+                            <div className="drawer-grid-2col">
+                              <div className="drawer-form-field">
+                                <label>Transaction / Ref ID</label>
+                                <input type="text" value={paymentForm.referenceId} onChange={(e) => { setPaymentForm({ ...paymentForm, referenceId: e.target.value }); setHasUnsavedEdits(true); }} placeholder="TXN-PROCESSING-001" />
+                              </div>
+                              <div className="drawer-form-field">
+                                <label>Authorized Amount ($)</label>
+                                <input type="number" step="0.01" value={paymentForm.authorizedAmount} readOnly />
+                              </div>
+                            </div>
+                          )}
+
+                          {paymentForm.paymentStatus === 'PAID' && (
+                            <>
+                              <div className="drawer-grid-2col">
+                                <div className="drawer-form-field">
+                                  <label>Paid Amount ($)</label>
+                                  <input type="number" step="0.01" value={paymentForm.paidAmount || selectedBooking.total_amount || 0} onChange={(e) => { setPaymentForm({ ...paymentForm, paidAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); }} />
+                                </div>
+                                <div className="drawer-form-field">
+                                  <label>Transaction / Ref ID *</label>
+                                  <input type="text" value={paymentForm.referenceId} onChange={(e) => { setPaymentForm({ ...paymentForm, referenceId: e.target.value }); setHasUnsavedEdits(true); }} placeholder="Required TXN ID" />
+                                </div>
+                              </div>
+                              <div className="drawer-form-field">
+                                <label>Paid Timestamp</label>
+                                <input type="text" readOnly value={selectedBooking.paid_at ? new Date(selectedBooking.paid_at).toLocaleString() : 'Just Now (Pending Save)'} />
+                              </div>
+                            </>
+                          )}
+
+                          {paymentForm.paymentStatus === 'FAILED' && (
+                            <div className="drawer-grid-2col">
+                              <div className="drawer-form-field">
+                                <label>Failure Reason</label>
+                                <input type="text" value={paymentForm.reason} onChange={(e) => { setPaymentForm({ ...paymentForm, reason: e.target.value }); setHasUnsavedEdits(true); }} placeholder="Card declined by issuing bank" />
+                              </div>
+                              <div className="drawer-form-field">
+                                <label>Failed Timestamp</label>
+                                <input type="text" readOnly value={new Date().toLocaleString()} />
+                              </div>
+                            </div>
+                          )}
+
+                          {paymentForm.paymentStatus === 'REFUNDED' && (
+                            <>
+                              <div className="drawer-grid-2col">
+                                <div className="drawer-form-field">
+                                  <label>Refunded Amount ($) *</label>
+                                  <input type="number" step="0.01" value={paymentForm.refundAmount || selectedBooking.total_amount || 0} onChange={(e) => { setPaymentForm({ ...paymentForm, refundAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); }} />
+                                </div>
+                                <div className="drawer-form-field">
+                                  <label>Refund Reference ID *</label>
+                                  <input type="text" value={paymentForm.refundReferenceId} onChange={(e) => { setPaymentForm({ ...paymentForm, refundReferenceId: e.target.value }); setHasUnsavedEdits(true); }} placeholder="REF-883921" />
+                                </div>
+                              </div>
+                              <div className="drawer-form-field">
+                                <label>Refund Reason *</label>
+                                <input type="text" value={paymentForm.reason} onChange={(e) => { setPaymentForm({ ...paymentForm, reason: e.target.value }); setHasUnsavedEdits(true); }} placeholder="Customer requested cancellation" />
+                              </div>
+                            </>
+                          )}
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '12px' }}>
+                            <button type="button" onClick={() => handlePaymentActionSubmit(paymentForm.paymentStatus)} className="admin-primary-btn" style={{ background: '#7f0d2f' }}>
+                              <i className="fas fa-save" style={{ marginRight: '4px' }}></i> Save Payment State &amp; Audit Event
+                            </button>
+
                             {['PENDING', 'NOT_COLLECTED', 'PAYMENT_METHOD_SECURED'].includes(selectedBooking.status) && (
                               <button type="button" onClick={() => handlePaymentActionSubmit('send_authorization')} className="admin-primary-btn" style={{ background: '#9f1239' }}>
                                 <i className="fas fa-paper-plane" style={{ marginRight: '4px' }}></i> Send Authorization Email
@@ -1318,34 +1382,74 @@ function AdminDashboard() {
                               </button>
                             )}
 
-                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
-                              <button type="button" onClick={() => handleDownloadEvidence(selectedBooking.id)} className="admin-secondary-btn" style={{ flex: 1, textAlign: 'center', cursor: 'pointer' }}>
-                                <i className="fas fa-file-download" style={{ marginRight: '4px' }}></i> Download Authorization Evidence
-                              </button>
-
-                              <div className="overflow-menu-wrapper">
-                                <button type="button" onClick={() => setShowOverflowMenu(!showOverflowMenu)} className="admin-secondary-btn" title="More Options" style={{ padding: '6px 10px' }}>
-                                  <i className="fas fa-ellipsis-v"></i>
-                                </button>
-                                {showOverflowMenu && (
-                                  <div className="overflow-dropdown">
-                                    <button type="button" className="overflow-item" onClick={() => handlePaymentActionSubmit('mark_received')}>
-                                      <i className="fas fa-check-double" style={{ marginRight: '6px' }}></i> Mark Auth Received
-                                    </button>
-                                    <button type="button" className="overflow-item" onClick={() => handlePaymentActionSubmit('record_payment')}>
-                                      <i className="fas fa-dollar-sign" style={{ marginRight: '6px' }}></i> Record External Payment
-                                    </button>
-                                    <button type="button" className="overflow-item" onClick={() => handlePaymentActionSubmit('record_refund')}>
-                                      <i className="fas fa-undo" style={{ marginRight: '6px' }}></i> Record Refund
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                            <button type="button" onClick={() => handleDownloadEvidence(selectedBooking.id)} className="admin-secondary-btn" style={{ width: '100%', textAlign: 'center', cursor: 'pointer', marginTop: '4px' }}>
+                              <i className="fas fa-file-pdf" style={{ marginRight: '4px', color: '#9f1239' }}></i> Download Authorization Evidence (PDF)
+                            </button>
                           </div>
                         </div>
                       )}
                     </div>
+
+                    {/* EMAIL DELIVERY ACTIVITY SUBSECTION */}
+                    <div className="admin-accordion-card" style={{ marginTop: '12px' }}>
+                      <div className="admin-accordion-header" style={{ cursor: 'default' }}>
+                        <span className="accordion-title-left">
+                          <i className="fas fa-envelope-open-text" style={{ color: '#7f0d2f', marginRight: '6px' }}></i>
+                          Email Delivery Activity
+                        </span>
+                      </div>
+                      <div className="admin-accordion-body" style={{ display: 'block', padding: '12px' }}>
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px', marginBottom: '8px', fontSize: '0.78rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                            <strong>Booking Request Email:</strong>
+                            <span className={`status-badge status-badge--${(selectedBooking.booking_request_email_status || 'NOT_SENT') === 'SENT' ? 'done' : ((selectedBooking.booking_request_email_status || 'NOT_SENT') === 'FAILED' ? 'failed' : 'pending')}`}>
+                              {selectedBooking.booking_request_email_status || 'NOT_SENT'}
+                            </span>
+                          </div>
+                          <div style={{ color: '#64748b', fontSize: '0.72rem' }}>
+                            Recipient: {selectedBooking.booking_request_email_recipient || selectedBooking.email || 'N/A'}<br />
+                            Sent At: {selectedBooking.booking_request_email_sent_at ? new Date(selectedBooking.booking_request_email_sent_at).toLocaleString() : 'N/A'}<br />
+                            {selectedBooking.booking_request_email_error && <span style={{ color: '#dc2626' }}>Error: {selectedBooking.booking_request_email_error}<br /></span>}
+                            Msg ID: {selectedBooking.booking_request_email_id || 'N/A'}
+                          </div>
+                          <button type="button" onClick={() => handlePaymentActionSubmit('resend_booking_request_email')} className="admin-secondary-btn" style={{ width: '100%', marginTop: '6px', fontSize: '0.72rem', padding: '4px' }}>
+                            <i className="fas fa-redo" style={{ marginRight: '4px' }}></i> Resend Booking Request Email
+                          </button>
+                        </div>
+
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px', marginBottom: '8px', fontSize: '0.78rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                            <strong>Authorization Email:</strong>
+                            <span className={`status-badge status-badge--${(selectedBooking.authorization_email_status || 'NOT_SENT') === 'SENT' ? 'done' : ((selectedBooking.authorization_email_status || 'NOT_SENT') === 'FAILED' ? 'failed' : 'pending')}`}>
+                              {selectedBooking.authorization_email_status || 'NOT_SENT'}
+                            </span>
+                          </div>
+                          <div style={{ color: '#64748b', fontSize: '0.72rem' }}>
+                            Recipient: {selectedBooking.authorization_email_recipient || selectedBooking.email || 'N/A'}<br />
+                            Sent At: {selectedBooking.authorization_email_sent_at ? new Date(selectedBooking.authorization_email_sent_at).toLocaleString() : 'N/A'}<br />
+                            {selectedBooking.authorization_email_error && <span style={{ color: '#dc2626' }}>Error: {selectedBooking.authorization_email_error}<br /></span>}
+                            Expires At: {selectedBooking.authorization_expires_at ? new Date(selectedBooking.authorization_expires_at).toLocaleString() : 'N/A'}
+                          </div>
+                          <button type="button" onClick={() => handlePaymentActionSubmit('resend_authorization')} className="admin-secondary-btn" style={{ width: '100%', marginTop: '6px', fontSize: '0.72rem', padding: '4px' }}>
+                            <i className="fas fa-paper-plane" style={{ marginRight: '4px' }}></i> Resend Authorization Email
+                          </button>
+                        </div>
+
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px', fontSize: '0.78rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                            <strong>Final Ticket Email:</strong>
+                            <span className={`status-badge status-badge--${(selectedBooking.final_confirmation_email_status || 'NOT_SENT') === 'SENT' ? 'done' : ((selectedBooking.final_confirmation_email_status || 'NOT_SENT') === 'FAILED' ? 'failed' : 'pending')}`}>
+                              {selectedBooking.final_confirmation_email_status || 'NOT_SENT'}
+                            </span>
+                          </div>
+                          <div style={{ color: '#64748b', fontSize: '0.72rem' }}>
+                            Recipient: {selectedBooking.final_confirmation_email_recipient || selectedBooking.email || 'N/A'}<br />
+                            Sent At: {selectedBooking.final_confirmation_email_sent_at ? new Date(selectedBooking.final_confirmation_email_sent_at).toLocaleString() : 'N/A'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
 
 
                   </div>
