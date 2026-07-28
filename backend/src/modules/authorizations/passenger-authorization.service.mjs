@@ -54,16 +54,28 @@ export const passengerAuthorizationService = {
       ? rawPassengers
       : (typeof rawPassengers === 'string' ? JSON.parse(rawPassengers || '[]') : []);
 
+    const splits = booking.payment_splits && booking.payment_splits.length > 0
+      ? booking.payment_splits
+      : await bookingRepository.getPaymentSplits(bookingId);
+
     const customerPrice = parseFloat(booking.customer_price || booking.displayedWebsitePrice || booking.total_amount || booking.amount || 0);
+    const splitTotal = splits.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0);
+    const authorizedAmountNum = splitTotal > 0 ? splitTotal : customerPrice;
 
     const quoteSnapshot = {
-      amount: customerPrice.toFixed(2),
+      amount: authorizedAmountNum.toFixed(2),
       currency: (booking.currency || 'USD').toUpperCase(),
       originalPrice: (booking.supplier_price || booking.original_api_price || customerPrice).toString(),
       discountAmount: (booking.discount_amount || 0).toString(),
       passengersCount: passengers.length || 1,
+      splits: splits.map(s => ({
+        merchant_name: s.merchant_name || s.merchantName || 'Merchant',
+        amount: parseFloat(s.amount || 0).toFixed(2),
+        currency: (s.currency || booking.currency || 'USD').toUpperCase()
+      })),
       createdAt: new Date().toISOString()
     };
+
 
     const outboundSegs = booking.outbound_segments || (booking.itinerary_segments ? booking.itinerary_segments.filter(s => s.journey_direction === 'outbound') : (outbound.origin_code ? [outbound] : []));
     const returnSegs = booking.return_segments || (booking.itinerary_segments ? booking.itinerary_segments.filter(s => s.journey_direction === 'return') : (returnFlight ? [returnFlight] : []));

@@ -707,8 +707,37 @@ export const sendPassengerAuthorizationEmail = async (bookingId) => {
     const confirmationCode = booking.confirmation_code || 'TFS-PENDING';
     const passengerName = booking.passenger_name || 'Valued Passenger';
     const passengerFirstName = passengerName.split(' ')[0] || 'Passenger';
-    const amount = parseFloat(booking.customer_price || booking.total_amount || 0).toFixed(2);
-    const currency = booking.currency || 'USD';
+    const splits = booking.payment_splits && booking.payment_splits.length > 0
+      ? booking.payment_splits
+      : await bookingRepository.getPaymentSplits(booking.id);
+
+    const splitTotal = splits.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0);
+    const totalAmountNum = splitTotal > 0 ? splitTotal : parseFloat(booking.customer_price || booking.total_amount || 0);
+    const amount = totalAmountNum.toFixed(2);
+    const currency = (booking.currency || 'USD').toUpperCase();
+
+    let splitsHtml = '';
+    if (splits && splits.length > 0) {
+      splitsHtml = `
+        <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin: 20px 0;">
+          <div style="font-size: 12px; font-weight: 800; text-transform: uppercase; color: #8b1236; letter-spacing: 0.8px; margin-bottom: 12px;">
+            Payment Authorization Breakdown
+          </div>
+          ${splits.map((s, idx) => `
+            <div style="padding: 8px 0; ${idx > 0 ? 'border-top: 1px dashed #e2e8f0;' : ''}">
+              <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Merchant:</div>
+              <div style="font-size: 14px; font-weight: 800; color: #1e293b; margin-top: 2px;">${s.merchant_name || s.merchantName || 'Merchant'}</div>
+              <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 6px;">Amount:</div>
+              <div style="font-size: 15px; font-weight: 800; color: #8b1236; margin-top: 2px;">$${parseFloat(s.amount || 0).toFixed(2)} ${(s.currency || currency).toUpperCase()}</div>
+            </div>
+          `).join('')}
+          <div style="border-top: 2px solid #8b1236; margin-top: 12px; padding-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 13px; font-weight: 800; color: #1e293b; text-transform: uppercase;">Total Authorized Amount:</span>
+            <span style="font-size: 16px; font-weight: 900; color: #8b1236;">$${amount} ${currency}</span>
+          </div>
+        </div>
+      `;
+    }
 
     const subject = `Action Required — Authorize Booking ${confirmationCode}`;
     const textBody = `
@@ -717,6 +746,9 @@ THE FINAL SEAT — ACTION REQUIRED: AUTHORIZE FLIGHT RESERVATION
 Dear ${passengerFirstName},
 
 Please review and authorize your flight reservation ${confirmationCode} for a total charge of $${amount} ${currency}.
+${splits.map(s => `\nMerchant: ${s.merchant_name || s.merchantName}\nAmount: $${parseFloat(s.amount || 0).toFixed(2)} ${(s.currency || currency).toUpperCase()}`).join('\n')}
+
+Total Authorized Amount: $${amount} ${currency}
 
 Click the secure authorization link below to confirm your itinerary:
 ${authUrl}
@@ -748,6 +780,8 @@ Support 24/7: +1 (213) 965-9727 | support@thefinalseat.com
             ${itineraryHtml}
           </div>
 
+          ${splitsHtml}
+
           <div style="text-align: center; margin: 28px 0;">
             <a href="${authUrl}" style="background-color: #8b1236; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 800; font-size: 15px; display: inline-block; letter-spacing: 0.5px;">Review &amp; Authorize Booking &rarr;</a>
           </div>
@@ -758,6 +792,7 @@ Support 24/7: +1 (213) 965-9727 | support@thefinalseat.com
         </div>
       </div>
     `.trim();
+
 
     const result = await sendViaResend({
       recipients: [customerEmail],

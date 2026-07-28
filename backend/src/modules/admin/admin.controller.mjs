@@ -137,7 +137,12 @@ export const adminController = {
       if (req.body.ticket_number !== undefined) updatePayload.ticket_number = req.body.ticket_number;
       if (req.body.ticket_issue_date !== undefined) updatePayload.ticket_issue_date = req.body.ticket_issue_date;
 
+      if (Array.isArray(req.body.payment_splits)) {
+        await bookingRepository.savePaymentSplits(id, req.body.payment_splits);
+      }
+
       const updated = await bookingRepository.updateStatus(id, updatePayload);
+
 
 
       if (targetStatus && targetStatus !== existingBooking.status) {

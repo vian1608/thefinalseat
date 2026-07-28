@@ -137,7 +137,25 @@ export async function generateAuthorizationPdfBuffer(evidence) {
       y += 14;
       doc.text(`Vault Token ID: ${auth.paymentMethodToken || 'pm_vault_verified'}`, 40, y);
       doc.text(`Price Guarantee: Guaranteed 24 Hours`, 300, y);
-      y += 22;
+      y += 18;
+
+      const splits = (auth.quoteSnapshot && auth.quoteSnapshot.splits) || auth.splits || (evidence && evidence.paymentSplits) || [];
+
+      if (Array.isArray(splits) && splits.length > 0) {
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#8b1236').text('Merchant Payment Authorization Splits:', 40, y);
+        y += 13;
+        splits.forEach((s) => {
+          const mName = s.merchant_name || s.merchantName || 'Merchant';
+          const mAmt = parseFloat(s.amount || 0).toFixed(2);
+          const mCurr = (s.currency || currency).toUpperCase();
+          doc.fontSize(8.5).font('Helvetica').fillColor('#1e293b');
+          doc.text(`• Merchant: ${mName}`, 50, y);
+          doc.text(`Amount: $${mAmt} ${mCurr}`, 300, y);
+          y += 12;
+        });
+        y += 4;
+      }
+
 
       // 4. AUDIT INFORMATION
       doc.fontSize(10.5).font('Helvetica-Bold').fillColor('#8b1236').text('4. AUDIT INFORMATION', 40, y);

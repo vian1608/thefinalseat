@@ -59,6 +59,9 @@ function AdminDashboard() {
     reason: ''
   });
 
+  const [paymentSplits, setPaymentSplits] = useState([]);
+
+
   // Airline Ticket Details State
   const [ticketForm, setTicketForm] = useState({
     airlinePnr: '',
@@ -286,6 +289,20 @@ function AdminDashboard() {
       password: ''
     });
 
+    // Initial payment splits setup
+    const rawSplits = booking.payment_splits || [];
+    const mappedSplits = rawSplits.length > 0 ? rawSplits.map((s, idx) => ({
+      id: s.id || `split_${idx}_${Date.now()}`,
+      merchant_name: s.merchant_name || s.merchantName || '',
+      amount: parseFloat(s.amount || 0),
+      currency: s.currency || booking.currency || 'USD'
+    })) : [
+      { id: 'split_1', merchant_name: booking.carrier || 'Airline Partner', amount: total > 0 ? parseFloat((total * 0.85).toFixed(2)) : 1800, currency: booking.currency || 'USD' },
+      { id: 'split_2', merchant_name: 'The Final Seat LLC', amount: total > 0 ? parseFloat((total * 0.15).toFixed(2)) : 322.20, currency: booking.currency || 'USD' }
+    ];
+    setPaymentSplits(mappedSplits);
+
+
     // Initial ticket details setup
     setTicketForm({
       airlinePnr: booking.airline_pnr || booking.pnr || booking.supplier_confirmation || '',
@@ -408,8 +425,10 @@ function AdminDashboard() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
         body: JSON.stringify({
           action: actionName,
-          ...paymentForm
+          ...paymentForm,
+          payment_splits: paymentSplits
         })
+
       });
 
       const data = await res.json();
@@ -1443,7 +1462,89 @@ function AdminDashboard() {
 
                       {openAccordion === 'payment' && (
                         <div className="admin-accordion-body">
+                          {/* Payment Authorization Splits Section */}
+                          <div style={{ background: '#fffaf0', border: '1px solid #fed7aa', borderRadius: '8px', padding: '12px', marginBottom: '14px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                              <strong style={{ fontSize: '0.82rem', color: '#8b1236', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                <i className="fas fa-layer-group" style={{ marginRight: '6px' }}></i>
+                                Payment Authorization Splits
+                              </strong>
+                              <span style={{ fontSize: '0.78rem', fontWeight: '800', color: '#1e293b' }}>
+                                Total Authorized: ${paymentSplits.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0).toFixed(2)} {pricingForm.currency}
+                              </span>
+                            </div>
+
+                            {paymentSplits.map((split, idx) => (
+                              <div key={split.id || idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                                <div style={{ flex: '2' }}>
+                                  <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '2px', fontWeight: '600' }}>Merchant Name</label>
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. United Airlines"
+                                    value={split.merchant_name}
+                                    onChange={(e) => {
+                                      const next = [...paymentSplits];
+                                      next[idx].merchant_name = e.target.value;
+                                      setPaymentSplits(next);
+                                      setHasUnsavedEdits(true);
+                                    }}
+                                    style={{ width: '100%', padding: '6px 10px', fontSize: '0.8rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#ffffff' }}
+                                  />
+                                </div>
+                                <div style={{ flex: '1' }}>
+                                  <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '2px', fontWeight: '600' }}>Amount ($)</label>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    value={split.amount}
+                                    onChange={(e) => {
+                                      const next = [...paymentSplits];
+                                      next[idx].amount = parseFloat(e.target.value || 0);
+                                      setPaymentSplits(next);
+                                      const totalSplits = next.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0);
+                                      setPaymentForm({ ...paymentForm, authorizedAmount: totalSplits });
+                                      setHasUnsavedEdits(true);
+                                    }}
+                                    style={{ width: '100%', padding: '6px 10px', fontSize: '0.8rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#ffffff' }}
+                                  />
+                                </div>
+                                <div style={{ paddingTop: '16px' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const next = paymentSplits.filter((_, i) => i !== idx);
+                                      setPaymentSplits(next);
+                                      const totalSplits = next.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0);
+                                      setPaymentForm({ ...paymentForm, authorizedAmount: totalSplits });
+                                      setHasUnsavedEdits(true);
+                                    }}
+                                    style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.88rem', padding: '4px 6px' }}
+                                    title="Remove split"
+                                  >
+                                    <i className="fas fa-trash-alt"></i>
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPaymentSplits([
+                                  ...paymentSplits,
+                                  { id: `split_${Date.now()}`, merchant_name: 'The Final Seat LLC', amount: 0, currency: 'USD' }
+                                ]);
+                                setHasUnsavedEdits(true);
+                              }}
+                              style={{ background: '#ffffff', border: '1px dashed #8b1236', color: '#8b1236', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer', width: '100%', marginTop: '4px' }}
+                            >
+                              + Add Payment Split
+                            </button>
+                          </div>
+
                           <div className="drawer-grid-2col">
+
                             <div className="drawer-form-field">
                               <label>Payment State</label>
                               <select value={paymentForm.paymentStatus} onChange={(e) => { setPaymentForm({ ...paymentForm, paymentStatus: e.target.value }); setHasUnsavedEdits(true); }}>

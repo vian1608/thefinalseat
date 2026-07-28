@@ -3,6 +3,8 @@ import logger from '../../config/logger.mjs';
 
 const segmentsMemoryStore = new Map();
 const bookingsMemoryStore = new Map();
+const splitsMemoryStore = new Map();
+
 
 export const bookingRepository = {
 
@@ -133,18 +135,20 @@ export const bookingRepository = {
     const memorySegs = segmentsMemoryStore.get(bookingId) || [];
     const dbSegs = itinerarySegments.data || [];
     const finalSegs = dbSegs.length > 0 ? dbSegs : memorySegs;
+    const paymentSplits = await bookingRepository.getPaymentSplits(bookingId);
 
     return {
       travellers: travellers.data || [],
       contacts: contacts.data || [],
       flights: flights.data || [],
       payments: payments.data || [],
-      itinerarySegments: finalSegs
+      itinerarySegments: finalSegs,
+      paymentSplits: paymentSplits || []
     };
   },
 
 
-  enrichBookingRecord: (booking, relations = { travellers: [], contacts: [], flights: [], payments: [], itinerarySegments: [] }) => {
+  enrichBookingRecord: (booking, relations = { travellers: [], contacts: [], flights: [], payments: [], itinerarySegments: [], paymentSplits: [] }) => {
     if (!booking) return null;
     const segments = relations.itinerarySegments || [];
     const outboundSegs = segments.filter(s => (s.journey_direction || s.direction) === 'outbound');
@@ -174,6 +178,8 @@ export const bookingRepository = {
       itinerary_segments: segments,
       outbound_segments: outboundSegs,
       return_segments: returnSegs,
+      payment_splits: relations.paymentSplits || [],
+
       flight_details: outboundFlight ? {
         airline: carrier,
         departure: {
@@ -482,6 +488,50 @@ export const bookingRepository = {
       logger.warn(`saveItinerarySegments notice: ${e.message}`);
     }
   },
+
+  savePaymentSplits: async (bookingId, splits = []) => {
+
+    try {
+      const formatted = (splits || []).map((s) => ({
+        booking_id: bookingId,
+        merchant_name: s.merchant_name || s.merchantName || 'Merchant',
+        amount: parseFloat(s.amount || 0),
+        currency: (s.currency || 'USD').toUpperCase()
+      }));
+
+      splitsMemoryStore.set(bookingId, formatted);
+
+      await supabase.from('payment_authorization_splits').delete().eq('booking_id', bookingId);
+      if (formatted.length > 0) {
+        const { error } = await supabase.from('payment_authorization_splits').insert(formatted);
+        if (error) logger.warn(`savePaymentSplits notice: ${error.message}`);
+      }
+    } catch (e) {
+      logger.warn(`savePaymentSplits notice: ${e.message}`);
+    }
+  },
+
+  getPaymentSplits: async (bookingId) => {
+    try {
+      const inMem = splitsMemoryStore.get(bookingId);
+      if (inMem && inMem.length > 0) return inMem;
+
+      const { data } = await supabase
+        .from('payment_authorization_splits')
+        .select('*')
+        .eq('booking_id', bookingId);
+
+      if (data && data.length > 0) {
+        splitsMemoryStore.set(bookingId, data);
+        return data;
+      }
+    } catch (e) {
+      /* non-blocking fallback */
+    }
+    return splitsMemoryStore.get(bookingId) || [];
+  },
+
+
 
 
 
