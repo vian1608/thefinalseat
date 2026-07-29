@@ -136,7 +136,7 @@ export const bookingRepository = {
   },
 
   getRelations: async (bookingId) => {
-    const [travellers, contacts, flights, payments, itinerarySegments] = await Promise.all([
+    const [travellers, contacts, flights, payments, itinerarySegmentsResult] = await Promise.all([
       supabase.from('travellers').select('*').eq('booking_id', bookingId),
       supabase.from('contacts').select('*').eq('booking_id', bookingId),
       supabase.from('flights').select('*').eq('booking_id', bookingId),
@@ -145,8 +145,56 @@ export const bookingRepository = {
     ]);
 
     const memorySegs = segmentsMemoryStore.get(bookingId) || [];
-    const dbSegs = itinerarySegments.data || [];
-    const finalSegs = dbSegs.length > 0 ? dbSegs : memorySegs;
+    const normalizedDbSegs = itinerarySegmentsResult.data || [];
+
+    // PRODUCTION FALLBACK: If booking_itinerary_segments table doesn't exist (schema not migrated yet)
+    // or returned 0 rows, map the legacy `flights` table rows to the canonical segment shape.
+    // The flights table uses: leg ('outbound'/'return'), departure_airport, arrival_airport,
+    // airline_name, flight_number, departure_date, departure_time_str, arrival_date,
+    // arrival_time_str, cabin_class, stops.
+    let finalSegs;
+    const flightRows = flights.data || [];
+    if (normalizedDbSegs.length > 0) {
+      finalSegs = normalizedDbSegs;
+    } else if (memorySegs.length > 0) {
+      finalSegs = memorySegs;
+    } else if (flightRows.length > 0) {
+      // Map legacy flights table to canonical segment shape so buildCanonicalItinerary can read it
+      let outSeq = 1;
+      let retSeq = 1;
+      finalSegs = flightRows.map((f) => {
+        const dir = (f.leg === 'return' || f.leg === 'inbound') ? 'return' : 'outbound';
+        const seq = dir === 'return' ? retSeq++ : outSeq++;
+        return {
+          id: f.id,
+          booking_id: f.booking_id,
+          journey_direction: dir,
+          direction: dir,
+          segment_sequence: seq,
+          carrier_name: f.airline_name || f.carrier_name || '',
+          carrier_code: f.carrier_code || f.marketing_carrier_code || '',
+          marketing_carrier_code: f.carrier_code || f.marketing_carrier_code || '',
+          airline_name: f.airline_name || '',
+          flight_number: f.flight_number || '',
+          origin_airport: f.departure_airport || f.origin_airport || '',
+          destination_airport: f.arrival_airport || f.destination_airport || '',
+          origin_city: f.departure_airport || '',
+          destination_city: f.arrival_airport || '',
+          departure_date: f.departure_date || '',
+          departure_time: f.departure_time_str || f.departure_time || '',
+          arrival_date: f.arrival_date || '',
+          arrival_time: f.arrival_time_str || f.arrival_time || '',
+          cabin: f.cabin_class || f.cabin || 'Economy',
+          stop_count: parseInt(f.stops || 0, 10),
+          // source marker so we can distinguish
+          _source: 'flights_table'
+        };
+      });
+      logger.info(`[getRelations] Booking ${bookingId}: booking_itinerary_segments empty — using ${finalSegs.length} rows from flights table as canonical segments.`);
+    } else {
+      finalSegs = [];
+    }
+
     const paymentSplits = await bookingRepository.getPaymentSplits(bookingId);
 
     return {
@@ -599,59 +647,111 @@ export const bookingRepository = {
 
   saveItinerarySegments: async (bookingId, segments = []) => {
     try {
-      await supabase.from('booking_itinerary_segments').delete().eq('booking_id', bookingId);
-      if (segments && segments.length > 0) {
-        let outboundSeq = 1;
-        let returnSeq = 1;
+      let outboundSeq = 1;
+      let returnSeq = 1;
 
-        const rows = segments.map((seg, idx) => {
-          const dir = seg.journey_direction || seg.direction || (idx === 0 ? 'outbound' : (seg.trip_type === 'round_trip' ? 'return' : 'outbound'));
-          const seq = seg.segment_sequence || (dir === 'outbound' ? outboundSeq++ : returnSeq++);
+      const rows = (segments || []).map((seg, idx) => {
+        const dir = seg.journey_direction || seg.direction || (idx === 0 ? 'outbound' : 'outbound');
+        const seq = seg.segment_sequence || (dir === 'outbound' ? outboundSeq++ : returnSeq++);
+        const code = (seg.marketing_carrier_code || seg.carrier_code || seg.carrier || seg.airline_code || '').trim().toUpperCase();
+        const origCode = (seg.origin_airport || seg.origin_code || seg.originCode || seg.origin || '').trim().toUpperCase();
+        const destCode = (seg.destination_airport || seg.destination_code || seg.destinationCode || seg.destination || '').trim().toUpperCase();
 
-          const code = (seg.marketing_carrier_code || seg.carrier_code || seg.carrier || seg.airline_code || '').trim().toUpperCase();
-          const origCode = (seg.origin_airport || seg.origin_code || seg.originCode || seg.origin || '').trim().toUpperCase();
-          const destCode = (seg.destination_airport || seg.destination_code || seg.destinationCode || seg.destination || '').trim().toUpperCase();
+        return {
+          booking_id: bookingId,
+          trip_type: seg.trip_type || 'one_way',
+          direction: dir,
+          journey_direction: dir,
+          segment_sequence: seq,
+          carrier_name: seg.carrier_name || seg.airline_name || seg.airline || (code ? `${code} Airlines` : ''),
+          carrier_code: code,
+          marketing_carrier_code: code,
+          operating_carrier: seg.operating_carrier || seg.operatingCarrier || null,
+          flight_number: seg.flight_number || seg.flightNumber || '',
+          origin_airport: origCode,
+          origin_city: seg.origin_city || seg.originCity || origCode,
+          destination_airport: destCode,
+          destination_city: seg.destination_city || seg.destinationCity || destCode,
+          departure_date: seg.departure_date || seg.departureDate || '',
+          departure_time: seg.departure_time || seg.departureTime || '',
+          arrival_date: seg.arrival_date || seg.arrivalDate || '',
+          arrival_time: seg.arrival_time || seg.arrivalTime || '',
+          arrival_next_day: !!(seg.arrival_next_day || seg.arrivalNextDay),
+          cabin: seg.cabin || seg.cabin_class || seg.class || 'Economy',
+          booking_class: seg.booking_class || 'Y',
+          terminal: seg.terminal || '',
+          baggage_allowance: seg.baggage_allowance || '1 Bag',
+          aircraft: seg.aircraft || null,
+          layover_duration: seg.layover_duration || seg.layoverDuration || null,
+          duration: seg.duration || null,
+          stop_count: parseInt(seg.stop_count || 0, 10),
+          segment_order: idx + 1
+        };
+      });
 
-          return {
-            booking_id: bookingId,
-            trip_type: seg.trip_type || 'one_way',
-            direction: dir,
-            journey_direction: dir,
-            segment_sequence: seq,
-            carrier_name: seg.carrier_name || seg.airline_name || seg.airline || (code ? `${code} Airlines` : ''),
-            carrier_code: code,
-            marketing_carrier_code: code,
-            operating_carrier: seg.operating_carrier || seg.operatingCarrier || null,
-            flight_number: seg.flight_number || seg.flightNumber || '',
-            origin_airport: origCode,
-            origin_city: seg.origin_city || seg.originCity || origCode,
-            destination_airport: destCode,
-            destination_city: seg.destination_city || seg.destinationCity || destCode,
-            departure_date: seg.departure_date || seg.departureDate || '',
-            departure_time: seg.departure_time || seg.departureTime || '',
-            arrival_date: seg.arrival_date || seg.arrivalDate || '',
-            arrival_time: seg.arrival_time || seg.arrivalTime || '',
-            arrival_next_day: !!(seg.arrival_next_day || seg.arrivalNextDay),
-            cabin: seg.cabin || seg.cabin_class || seg.class || 'Economy',
-            booking_class: seg.booking_class || 'Y',
-            terminal: seg.terminal || '',
-            baggage_allowance: seg.baggage_allowance || '1 Bag',
-            aircraft: seg.aircraft || null,
-            layover_duration: seg.layover_duration || seg.layoverDuration || null,
-            duration: seg.duration || null,
-            stop_count: parseInt(seg.stop_count || 0, 10),
-            segment_order: idx + 1
-          };
-        });
-
+      // Always save to memory store first (immediate availability)
+      if (rows.length > 0) {
         segmentsMemoryStore.set(bookingId, rows);
-        const { error } = await supabase.from('booking_itinerary_segments').insert(rows);
-        if (error) logger.warn(`saveItinerarySegments insert warning: ${error.message}. Saved to resilience memory store.`);
       } else {
         segmentsMemoryStore.delete(bookingId);
       }
+
+      // Attempt 1: Save to booking_itinerary_segments (normalized table)
+      const { error: deleteErr } = await supabase.from('booking_itinerary_segments').delete().eq('booking_id', bookingId);
+      if (!deleteErr && rows.length > 0) {
+        const { error: insertErr } = await supabase.from('booking_itinerary_segments').insert(rows);
+        if (!insertErr) {
+          logger.info(`[saveItinerarySegments] Saved ${rows.length} segments to booking_itinerary_segments for ${bookingId}.`);
+          // Also persist to flights table for maximum redundancy
+          await bookingRepository._persistToFlightsTable(bookingId, rows);
+          return;
+        }
+        logger.warn(`[saveItinerarySegments] booking_itinerary_segments insert failed: ${insertErr.message}. Falling back to flights table.`);
+      } else if (deleteErr) {
+        logger.warn(`[saveItinerarySegments] booking_itinerary_segments unavailable: ${deleteErr.message}. Using flights table as production store.`);
+      }
+
+      // Attempt 2: Persist to the production flights table (always exists in production)
+      await bookingRepository._persistToFlightsTable(bookingId, rows);
     } catch (e) {
-      logger.warn(`saveItinerarySegments notice: ${e.message}`);
+      logger.warn(`saveItinerarySegments error: ${e.message}`);
+    }
+  },
+
+  // Persist segment rows to the legacy flights table using its column schema
+  _persistToFlightsTable: async (bookingId, canonicalRows = []) => {
+    try {
+      // Delete existing flights for this booking
+      await supabase.from('flights').delete().eq('booking_id', bookingId);
+
+      if (canonicalRows.length === 0) return;
+
+      const flightRows = canonicalRows.map((seg) => ({
+        booking_id: bookingId,
+        leg: seg.journey_direction === 'return' ? 'return' : 'outbound',
+        trip_type: seg.direction === 'return' ? 'round-trip' : 'one-way',
+        airline_name: seg.carrier_name || seg.airline_name || '',
+        carrier_code: seg.carrier_code || seg.marketing_carrier_code || '',
+        flight_number: seg.flight_number || '',
+        departure_airport: seg.origin_airport || '',
+        arrival_airport: seg.destination_airport || '',
+        departure_date: seg.departure_date || '',
+        arrival_date: seg.arrival_date || '',
+        departure_time_str: seg.departure_time || '',
+        arrival_time_str: seg.arrival_time || '',
+        cabin_class: seg.cabin || 'Economy',
+        stops: parseInt(seg.stop_count || 0, 10),
+        duration: seg.duration || null
+      }));
+
+      const { error } = await supabase.from('flights').insert(flightRows);
+      if (error) {
+        logger.warn(`[_persistToFlightsTable] flights insert warning: ${error.message}`);
+      } else {
+        logger.info(`[_persistToFlightsTable] Saved ${flightRows.length} rows to flights table for ${bookingId}.`);
+      }
+    } catch (e) {
+      logger.warn(`[_persistToFlightsTable] error: ${e.message}`);
     }
   },
 

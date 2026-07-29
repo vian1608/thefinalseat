@@ -96,15 +96,47 @@ export function buildCanonicalItinerary(bookingOrSegments) {
     rawSegments = bookingOrSegments;
   } else if (bookingOrSegments && typeof bookingOrSegments === 'object') {
     const b = bookingOrSegments;
-    rawSegments = b.itinerary_segments || b.outbound_segments || b.segments || [];
+
+    // Priority 1: normalized itinerary_segments table (booking_itinerary_segments)
+    rawSegments = b.itinerary_segments || [];
+
+    // Priority 2: outbound + return already split (enrichBookingRecord output)
     if (rawSegments.length === 0) {
-      if (Array.isArray(b.flights) && b.flights.length > 0) {
-        rawSegments = b.flights;
-      } else if (b.flight_details || b.outbound_flight) {
-        const candidate = b.flight_details || b.outbound_flight;
-        if (candidate && (candidate.airline || candidate.carrier || candidate.departure?.airport || candidate.origin_airport || candidate.origin_code)) {
-          rawSegments.push(candidate);
-        }
+      const out = b.outbound_segments || [];
+      const ret = b.return_segments || [];
+      if (out.length > 0 || ret.length > 0) {
+        rawSegments = [
+          ...out.map(s => ({ ...s, journey_direction: s.journey_direction || s.direction || 'outbound' })),
+          ...ret.map(s => ({ ...s, journey_direction: s.journey_direction || s.direction || 'return' }))
+        ];
+      }
+    }
+
+    // Priority 3: flights table rows (production legacy store)
+    // Columns: leg, airline_name, carrier_code, flight_number, departure_airport, arrival_airport,
+    //          departure_date, arrival_date, departure_time_str, arrival_time_str, cabin_class, stops
+    if (rawSegments.length === 0 && Array.isArray(b.flights) && b.flights.length > 0) {
+      rawSegments = b.flights.map(f => ({
+        ...f,
+        // Map flights table columns to canonical segment fields
+        journey_direction: (f.leg === 'return' || f.leg === 'inbound') ? 'return' : 'outbound',
+        direction: (f.leg === 'return' || f.leg === 'inbound') ? 'return' : 'outbound',
+        origin_airport: f.departure_airport || f.origin_airport || f.origin || '',
+        destination_airport: f.arrival_airport || f.destination_airport || f.destination || '',
+        airline_name: f.airline_name || f.carrier_name || '',
+        carrier_code: f.carrier_code || f.marketing_carrier_code || '',
+        departure_time: f.departure_time_str || f.departure_time || '',
+        arrival_time: f.arrival_time_str || f.arrival_time || '',
+        cabin: f.cabin_class || f.cabin || 'Economy',
+        stop_count: parseInt(f.stops || 0, 10)
+      }));
+    }
+
+    // Priority 4: single flight_details object
+    if (rawSegments.length === 0 && (b.flight_details || b.outbound_flight)) {
+      const candidate = b.flight_details || b.outbound_flight;
+      if (candidate && (candidate.airline || candidate.carrier || candidate.departure?.airport || candidate.origin_airport || candidate.origin_code)) {
+        rawSegments.push(candidate);
       }
     }
   }
@@ -112,18 +144,18 @@ export function buildCanonicalItinerary(bookingOrSegments) {
   // Filter out completely empty dummy objects
   rawSegments = rawSegments.filter(s => {
     if (!s || typeof s !== 'object') return false;
-    const hasOrigin = !!(s.origin_airport || s.origin_code || s.originCode || s.origin || s.departure?.airport);
-    const hasDest = !!(s.destination_airport || s.destination_code || s.destinationCode || s.destination || s.arrival?.airport);
-    const hasCarrier = !!(s.marketing_carrier_code || s.carrier_code || s.carrier || s.airline_code || s.airline);
+    const hasOrigin = !!(s.origin_airport || s.origin_code || s.originCode || s.origin || s.departure?.airport || s.departure_airport);
+    const hasDest = !!(s.destination_airport || s.destination_code || s.destinationCode || s.destination || s.arrival?.airport || s.arrival_airport);
+    const hasCarrier = !!(s.marketing_carrier_code || s.carrier_code || s.carrier || s.airline_code || s.airline || s.airline_name);
     return hasOrigin || hasDest || hasCarrier;
   });
 
   const mapSegment = (s, idx, totalInDir) => {
     const code = (s.marketing_carrier_code || s.carrier_code || s.carrier || s.airline_code || '').trim().toUpperCase();
     const name = resolveAirlineName(code, s.airline_name || s.carrier_name || s.airline);
-    const originCode = (s.origin_airport || s.origin_code || s.originCode || s.origin || (s.departure?.airport) || '').trim().toUpperCase();
+    const originCode = (s.origin_airport || s.departure_airport || s.origin_code || s.originCode || s.origin || (s.departure?.airport) || '').trim().toUpperCase();
     const originName = s.origin_city || s.originCity || (s.departure?.city) || originCode;
-    const destinationCode = (s.destination_airport || s.destination_code || s.destinationCode || s.destination || (s.arrival?.airport) || '').trim().toUpperCase();
+    const destinationCode = (s.destination_airport || s.arrival_airport || s.destination_code || s.destinationCode || s.destination || (s.arrival?.airport) || '').trim().toUpperCase();
     const destinationName = s.destination_city || s.destinationCity || (s.arrival?.city) || destinationCode;
 
     return {
@@ -138,19 +170,19 @@ export function buildCanonicalItinerary(bookingOrSegments) {
       originName,
       destinationCode,
       destinationName,
-      departureAt: s.departure_date || s.departure_time || (s.departure?.date) || '',
-      arrivalAt: s.arrival_date || s.arrival_time || (s.arrival?.date) || '',
+      departureAt: s.departure_date || s.departure_time || s.departure_time_str || (s.departure?.date) || '',
+      arrivalAt: s.arrival_date || s.arrival_time || s.arrival_time_str || (s.arrival?.date) || '',
       departureDate: s.departure_date || (s.departure?.date) || '',
-      departureTime: s.departure_time || (s.departure?.time) || '',
+      departureTime: s.departure_time || s.departure_time_str || (s.departure?.time) || '',
       arrivalDate: s.arrival_date || (s.arrival?.date) || '',
-      arrivalTime: s.arrival_time || (s.arrival?.time) || '',
+      arrivalTime: s.arrival_time || s.arrival_time_str || (s.arrival?.time) || '',
       cabinClass: s.cabin || s.cabin_class || s.class || 'Economy',
       stops: s.stops !== undefined ? parseInt(s.stops, 10) : (s.stop_count !== undefined ? parseInt(s.stop_count, 10) : (totalInDir > 1 ? totalInDir - 1 : 0))
     };
   };
 
-  const outboundSegs = rawSegments.filter(s => (s.journey_direction || s.direction) !== 'return');
-  const returnSegs = rawSegments.filter(s => (s.journey_direction || s.direction) === 'return');
+  const outboundSegs = rawSegments.filter(s => (s.journey_direction || s.direction || s.leg) !== 'return' && (s.journey_direction || s.direction || s.leg) !== 'inbound');
+  const returnSegs = rawSegments.filter(s => (s.journey_direction || s.direction || s.leg) === 'return' || (s.journey_direction || s.direction || s.leg) === 'inbound');
   if (outboundSegs.length === 0 && rawSegments.length > 0) {
     outboundSegs.push(...rawSegments);
   }
@@ -160,6 +192,7 @@ export function buildCanonicalItinerary(bookingOrSegments) {
     return: returnSegs.map((s, i) => mapSegment(s, i, returnSegs.length))
   };
 }
+
 
 export function calculateTripSummary(bookingOrItinerary) {
   const itinerary = buildCanonicalItinerary(bookingOrItinerary);

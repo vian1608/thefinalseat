@@ -218,6 +218,8 @@ function AdminDashboard() {
   const [editingTicketField, setEditingTicketField] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [showThreeDotMenu, setShowThreeDotMenu] = useState(false);
+  const [finalTicketEmailError, setFinalTicketEmailError] = useState('');
+  const [finalTicketEmailSuccess, setFinalTicketEmailSuccess] = useState('');
 
 
 
@@ -313,6 +315,8 @@ function AdminDashboard() {
     setNewStatus(booking.status || booking.bookingStatus || 'PENDING');
     setHasUnsavedEdits(false);
     setOpenAccordion(null);
+    setFinalTicketEmailError('');
+    setFinalTicketEmailSuccess('');
 
     // Initial itinerary segments setup (Journey Grouped)
     let rawOutbound = booking.outbound_segments || [];
@@ -632,6 +636,8 @@ function AdminDashboard() {
   const handleSendFinalTicketEmail = async () => {
     if (!selectedBooking) return;
     const adminToken = localStorage.getItem('token');
+    setFinalTicketEmailError('');
+    setFinalTicketEmailSuccess('');
     try {
       setUpdatingRecord(true);
       const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/send-final-ticket`, {
@@ -644,10 +650,10 @@ function AdminDashboard() {
         throw new Error(data.error?.message || 'Failed to send final ticket email.');
       }
 
-      alert('Final E-Ticket email sent successfully.');
+      setFinalTicketEmailSuccess('Final E-Ticket email sent successfully.');
       loadAllDashboardData();
     } catch (err) {
-      alert(`Final Ticket Email Error: ${err.message}`);
+      setFinalTicketEmailError(err.message);
     } finally {
       setUpdatingRecord(false);
     }
@@ -2672,7 +2678,15 @@ function AdminDashboard() {
                           {(() => {
                             const pnrVal = (selectedBooking?.airline_confirmation_number || selectedBooking?.airlineConfirmationNumber || selectedBooking?.airline_pnr || '').trim().toUpperCase();
                             const isPnrValid = /^[A-Z0-9]{6}$/.test(pnrVal);
-                            const hasItinerary = !!(selectedBooking?.itinerary?.outbound?.length || selectedBooking?.outbound_segments?.length || selectedBooking?.flights?.length);
+                            // Check all possible segment sources: itinerary.outbound from getCompleteBookingById,
+                            // outbound_segments (mapped from flights table fallback), or raw flights array
+                            const outboundSegCount = (
+                              selectedBooking?.itinerary?.outbound?.length ||
+                              selectedBooking?.outbound_segments?.length ||
+                              selectedBooking?.flights?.filter(f => (f.leg || f.journey_direction || f.direction) !== 'return').length ||
+                              0
+                            );
+                            const hasItinerary = outboundSegCount > 0;
                             const recipientEmail = selectedBooking?.email || selectedBooking?.contacts?.[0]?.email || selectedBooking?.travellers?.[0]?.email || '';
                             const canSendFinalEmail = isPnrValid && hasItinerary && recipientEmail.includes('@');
 
@@ -2691,6 +2705,18 @@ function AdminDashboard() {
                                   {selectedBooking.final_confirmation_email_error && <div style={{ color: '#dc2626', gridColumn: '1 / -1' }}><strong>Error:</strong> {selectedBooking.final_confirmation_email_error}</div>}
                                 </div>
 
+                                {/* Inline success / error feedback (replaces alert()) */}
+                                {finalTicketEmailSuccess && (
+                                  <div style={{ background: '#dcfce7', border: '1px solid #16a34a', borderRadius: '6px', padding: '8px 10px', fontSize: '0.78rem', color: '#15803d', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <i className="fas fa-check-circle"></i> {finalTicketEmailSuccess}
+                                  </div>
+                                )}
+                                {finalTicketEmailError && (
+                                  <div style={{ background: '#fee2e2', border: '1px solid #dc2626', borderRadius: '6px', padding: '8px 10px', fontSize: '0.78rem', color: '#991b1b', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <i className="fas fa-exclamation-triangle"></i> {finalTicketEmailError}
+                                  </div>
+                                )}
+
                                 <button
                                   type="button"
                                   onClick={handleSendFinalTicketEmail}
@@ -2708,14 +2734,36 @@ function AdminDashboard() {
                                   <i className={`fas ${selectedBooking.final_confirmation_email_status === 'SENT' ? 'fa-redo' : 'fa-ticket-alt'}`} style={{ marginRight: '4px' }}></i>
                                   {selectedBooking.final_confirmation_email_status === 'SENT' ? 'Resend Final Ticket Email' : 'Send Final Ticket Email'}
                                 </button>
-                                {!canSendFinalEmail && (
-                                  <div style={{ color: '#94a3b8', fontSize: '0.72rem', marginTop: '4px', fontStyle: 'italic' }}>
-                                    * Requires valid saved 6-character PNR, itinerary, and recipient email.
+
+                                {/* Blocking reason hints */}
+                                {!isPnrValid && (
+                                  <div style={{ color: '#b45309', fontSize: '0.72rem', marginTop: '6px', fontStyle: 'italic' }}>
+                                    ⚠ No valid 6-character PNR saved. Add in Airline Ticket Details above.
+                                  </div>
+                                )}
+                                {!hasItinerary && (
+                                  <div style={{ marginTop: '6px' }}>
+                                    <div style={{ color: '#b45309', fontSize: '0.72rem', fontStyle: 'italic', marginBottom: '4px' }}>
+                                      ⚠ No itinerary segments found ({outboundSegCount} outbound segments). Complete and save the itinerary before sending.
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => { setIsEditMode(true); setOpenAccordion('itinerary'); }}
+                                      style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '5px', padding: '5px 10px', fontSize: '0.73rem', cursor: 'pointer', fontWeight: 600 }}
+                                    >
+                                      <i className="fas fa-route" style={{ marginRight: '4px' }}></i>Complete Itinerary
+                                    </button>
+                                  </div>
+                                )}
+                                {hasItinerary && !recipientEmail.includes('@') && (
+                                  <div style={{ color: '#b45309', fontSize: '0.72rem', marginTop: '6px', fontStyle: 'italic' }}>
+                                    ⚠ No valid recipient email found for this booking.
                                   </div>
                                 )}
                               </div>
                             );
                           })()}
+
 
                         </div>
                       )}
