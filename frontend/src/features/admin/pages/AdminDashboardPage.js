@@ -448,6 +448,53 @@ function AdminDashboard() {
   };
 
 
+  const handleSavePaymentSplits = async () => {
+    if (!selectedBooking) return;
+    const adminToken = localStorage.getItem('token');
+    try {
+      setUpdatingRecord(true);
+      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/payment-splits`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          splits: paymentSplits
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error?.message || data.message || 'Failed to update payment splits.');
+      }
+
+      const updated = data.booking || data.data;
+      if (updated) {
+        setSelectedBooking(updated);
+        const newTotal = parseFloat(updated.customer_price || updated.total_amount || 0);
+        setPricingForm(prev => ({
+          ...prev,
+          customerTotal: newTotal,
+          margin: newTotal - prev.supplierFare
+        }));
+        setPaymentForm(prev => ({
+          ...prev,
+          authorizedAmount: newTotal
+        }));
+
+        setBookings(prevList => prevList.map(b => b.id === updated.id ? { ...b, ...updated } : b));
+      }
+
+      setHasUnsavedEdits(false);
+      alert('Payment authorization splits and customer total updated successfully!');
+      loadAllDashboardData();
+    } catch (err) {
+      alert(`Payment split save error: ${err.message}`);
+    } finally {
+      setUpdatingRecord(false);
+    }
+  };
+
+
+
   const handleUpdateStatusAndNotes = async (e) => {
     e.preventDefault();
     if (!selectedBooking) return;
@@ -1528,20 +1575,32 @@ function AdminDashboard() {
                               </div>
                             ))}
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPaymentSplits([
-                                  ...paymentSplits,
-                                  { id: `split_${Date.now()}`, merchant_name: 'The Final Seat LLC', amount: 0, currency: 'USD' }
-                                ]);
-                                setHasUnsavedEdits(true);
-                              }}
-                              style={{ background: '#ffffff', border: '1px dashed #8b1236', color: '#8b1236', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer', width: '100%', marginTop: '4px' }}
-                            >
-                              + Add Payment Split
-                            </button>
+                            <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPaymentSplits([
+                                    ...paymentSplits,
+                                    { id: `split_${Date.now()}`, merchant_name: 'The Final Seat LLC', amount: 0, currency: 'USD' }
+                                  ]);
+                                  setHasUnsavedEdits(true);
+                                }}
+                                style={{ flex: 1, background: '#ffffff', border: '1px dashed #8b1236', color: '#8b1236', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer' }}
+                              >
+                                + Add Payment Split
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleSavePaymentSplits}
+                                disabled={updatingRecord}
+                                style={{ flex: 1, background: '#8b1236', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer' }}
+                              >
+                                <i className="fas fa-save" style={{ marginRight: '4px' }}></i>
+                                Save Splits & Total
+                              </button>
+                            </div>
                           </div>
+
 
                           <div className="drawer-grid-2col">
 

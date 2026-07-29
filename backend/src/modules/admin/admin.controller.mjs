@@ -165,6 +165,33 @@ export const adminController = {
     }
   },
 
+  updatePaymentSplits: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const splits = req.body.splits || req.body.payment_splits;
+      const adminId = req.user?.email || 'admin';
+      const reason = req.body.reason || 'Payment split breakdown update';
+
+      const updatedBooking = await bookingRepository.updatePaymentSplitsAndTotal(id, splits, adminId, reason);
+
+      res.json({
+        success: true,
+        message: 'Payment splits and customer total updated successfully.',
+        data: updatedBooking,
+        booking: updatedBooking
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'PAYMENT_SPLIT_ERROR',
+          message: error.message
+        }
+      });
+    }
+  },
+
+
 
   getStats: async (req, res, next) => {
     try {

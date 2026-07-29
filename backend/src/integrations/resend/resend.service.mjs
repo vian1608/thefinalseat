@@ -6,7 +6,8 @@ import env from '../../config/env.mjs';
 import logger from '../../config/logger.mjs';
 import bookingRepository from '../../modules/bookings/booking.repository.mjs';
 import passengerAuthorizationService from '../../modules/authorizations/passenger-authorization.service.mjs';
-import { resolveAirlineName, getCarrierLogoUrl } from '../../shared/utils/airline-lookup.mjs';
+import { resolveAirlineName, getCarrierLogoUrl, buildCanonicalItinerary } from '../../shared/utils/airline-lookup.mjs';
+
 
 
 
@@ -302,29 +303,39 @@ function formatUsTime(timeVal) {
   return str;
 }
 
-export const sendBookingConfirmation = async (booking, options = {}) => {
+export const sendBookingConfirmation = async (bookingInput, options = {}) => {
   try {
-    const bookingId = booking.id || booking.booking_id;
+    const rawId = typeof bookingInput === 'object' ? (bookingInput.id || bookingInput.booking_id || bookingInput.confirmation_code) : bookingInput;
+    const booking = await bookingRepository.getById(rawId);
+    if (!booking) return { success: false, error: 'Booking not found' };
+
+    const bookingId = booking.id;
     const sentAt = booking.confirmation_email_sent_at || booking.confirmationEmailSentAt;
 
-    // Idempotency check: Skip duplicate sends unless forced (e.g. admin action)
     if (sentAt && !options.force) {
       logger.info(`[Email] Skipping duplicate confirmation email for booking ${bookingId} (already sent at ${sentAt})`);
       return { success: true, duplicate: true, sentAt };
     }
 
-    const rawPassengers = booking.passengers || booking.traveller_details || booking.travellers;
+    const itinerary = buildCanonicalItinerary(booking);
+    if (!itinerary.outbound || itinerary.outbound.length === 0) {
+      const errMsg = 'BOOKING_ITINERARY_MISSING: Cannot dispatch email for booking without committed flight segments.';
+      logger.error(`[Email] ${errMsg} (bookingId=${bookingId})`);
+      return { success: false, error: 'BOOKING_ITINERARY_MISSING' };
+    }
+
+    const rawPassengers = booking.passengers || booking.traveller_details || booking.travellers || [];
     const passengers = Array.isArray(rawPassengers)
       ? rawPassengers
       : (typeof rawPassengers === 'string' ? JSON.parse(rawPassengers || '[]') : []);
 
     const firstPassenger = passengers[0] || {};
-    const passengerName = booking.customerName || booking.passenger_name || `${firstPassenger.firstName || firstPassenger.first_name || ''} ${firstPassenger.lastName || firstPassenger.last_name || ''}`.trim() || 'Valued Customer';
+    const passengerName = booking.passenger_name || `${firstPassenger.firstName || firstPassenger.first_name || ''} ${firstPassenger.lastName || firstPassenger.last_name || ''}`.trim() || 'Valued Customer';
     const passengerFirstName = firstPassenger.firstName || firstPassenger.first_name || passengerName.split(' ')[0] || 'Valued Customer';
-    const confirmationCode = booking.bookingReference || booking.confirmation_code || booking.confirmationCode || 'TFS-PENDING';
+    const confirmationCode = booking.confirmation_code || booking.confirmationCode || 'TFS-PENDING';
     const customerEmail = booking.email || booking.customerEmail || '';
 
-    const customerPrice = parseFloat(booking.customer_price || booking.displayedWebsitePrice || booking.total_amount || booking.amount || 0);
+    const customerPrice = parseFloat(booking.customer_price || booking.total_amount || 0);
     const amountPaid = customerPrice.toFixed(2);
     const currency = (booking.currency || 'USD').toUpperCase();
     const currencySymbol = currency === 'USD' ? '$' : (currency === 'EUR' ? '€' : (currency === 'GBP' ? '£' : '$'));
@@ -339,77 +350,39 @@ export const sendBookingConfirmation = async (booking, options = {}) => {
 
     const rawDate = booking.paid_at || booking.bookingDate || booking.created_at || new Date().toISOString();
     const paymentDate = formatUsDate(rawDate);
-
     const passengerCount = passengers.length > 0 ? `${passengers.length}` : '1';
 
-    // Extract flights
-    const flightsList = Array.isArray(booking.flights) ? booking.flights : [];
-    const outbound = flightsList.find(f => f.direction === 'outbound') || flightsList[0] || booking.flight || booking.flight_details || booking.outbound_flight || {};
-    const returnFlight = flightsList.find(f => f.direction === 'return') || flightsList[1] || booking.returnFlight || booking.return_flight || null;
-    const hasReturnFlight = !!returnFlight && Object.keys(returnFlight).length > 0;
+    const outboundSegs = itinerary.outbound;
+    const returnSegs = itinerary.return;
+    const outSeg = outboundSegs[0];
+    const retSeg = returnSegs[0] || null;
 
-    // Outbound Flight Fields
-    const outboundCode = outbound.carrier_code || outbound.marketing_carrier_code || outbound.carrier || '';
-    const outboundAirline = resolveAirlineName(outboundCode, outbound.carrier || outbound.airline || booking.carrier || booking.airline);
-    const outboundFlightNumber = outbound.flight_number || outbound.flightNumber || outbound.number || '';
-    const outboundOriginCode = outbound.origin_code || outbound.departure_airport || outbound.departure?.airport || outbound.origin || 'LAX';
-    const outboundOriginCity = outbound.origin_city || outbound.departure_city || outbound.departure?.city || 'Los Angeles';
-    const outboundDestinationCode = outbound.destination_code || outbound.arrival_airport || outbound.arrival?.airport || outbound.destination || 'MIA';
-    const outboundDestinationCity = outbound.destination_city || outbound.arrival_city || outbound.arrival?.city || 'Miami';
-    const outboundDepartureDate = formatUsDate(outbound.departure_date || outbound.departure_time || outbound.departureTime);
-    const outboundDepartureTime = formatUsTime(outbound.departure_time || outbound.departureTime || outbound.departure_date);
-    const outboundArrivalDate = formatUsDate(outbound.arrival_date || outbound.arrival_time || outbound.arrivalTime);
-    const outboundArrivalTime = formatUsTime(outbound.arrival_time || outbound.arrivalTime || outbound.arrival_date);
-    const outboundCabin = outbound.cabin_class || outbound.cabin || outbound.class || 'Economy';
-    const outboundStops = outbound.stops !== undefined ? (outbound.stops === 0 ? 'Nonstop' : `${outbound.stops} Stop${outbound.stops > 1 ? 's' : ''}`) : 'Nonstop';
-
-    // Load HTML Template
     const templatePath = path.join(__dirname, 'templates/booking-confirmation.html');
     let html = await fs.readFile(templatePath, 'utf8');
 
-    // Handle {{#if hasReturnFlight}}...{{/if}}
-    if (hasReturnFlight) {
-      // Unwrap block
+    if (retSeg) {
       html = html.replace(/\{\{#if hasReturnFlight\}\}/g, '').replace(/\{\{\/if\}\}/g, '');
-
-      const returnCode = returnFlight.carrier_code || returnFlight.marketing_carrier_code || returnFlight.carrier || '';
-      const returnAirline = resolveAirlineName(returnCode, returnFlight.carrier || returnFlight.airline || outboundAirline);
-      const returnFlightNumber = returnFlight.flight_number || returnFlight.flightNumber || returnFlight.number || '';
-      const returnOriginCode = returnFlight.origin_code || returnFlight.departure_airport || returnFlight.departure?.airport || outboundDestinationCode;
-      const returnOriginCity = returnFlight.origin_city || returnFlight.departure_city || returnFlight.departure?.city || 'Miami';
-      const returnDestinationCode = returnFlight.destination_code || returnFlight.arrival_airport || returnFlight.arrival?.airport || outboundOriginCode;
-      const returnDestinationCity = returnFlight.destination_city || returnFlight.arrival_city || returnFlight.arrival?.city || 'Los Angeles';
-      const returnDepartureDate = formatUsDate(returnFlight.departure_date || returnFlight.departure_time || returnFlight.departureTime);
-      const returnDepartureTime = formatUsTime(returnFlight.departure_time || returnFlight.departureTime || returnFlight.departure_date);
-      const returnArrivalDate = formatUsDate(returnFlight.arrival_date || returnFlight.arrival_time || returnFlight.arrivalTime);
-      const returnArrivalTime = formatUsTime(returnFlight.arrival_time || returnFlight.arrivalTime || returnFlight.arrival_date);
-      const returnCabin = returnFlight.cabin_class || returnFlight.cabin || returnFlight.class || outboundCabin;
-      const returnStops = returnFlight.stops !== undefined ? (returnFlight.stops === 0 ? 'Nonstop' : `${returnFlight.stops} Stop${returnFlight.stops > 1 ? 's' : ''}`) : 'Nonstop';
-
       const returnReplacements = {
-        '{{returnAirline}}': returnAirline,
-        '{{returnFlightNumber}}': returnFlightNumber,
-        '{{returnOriginCity}}': returnOriginCity,
-        '{{returnOriginCode}}': returnOriginCode,
-        '{{returnDestinationCity}}': returnDestinationCity,
-        '{{returnDestinationCode}}': returnDestinationCode,
-        '{{returnDepartureDate}}': returnDepartureDate,
-        '{{returnDepartureTime}}': returnDepartureTime,
-        '{{returnArrivalDate}}': returnArrivalDate,
-        '{{returnArrivalTime}}': returnArrivalTime,
-        '{{returnCabin}}': returnCabin,
-        '{{returnStops}}': returnStops
+        '{{returnAirline}}': retSeg.airlineName,
+        '{{returnFlightNumber}}': retSeg.flightNumber,
+        '{{returnOriginCity}}': retSeg.originName,
+        '{{returnOriginCode}}': retSeg.originCode,
+        '{{returnDestinationCity}}': returnSegs[returnSegs.length - 1].destinationName,
+        '{{returnDestinationCode}}': returnSegs[returnSegs.length - 1].destinationCode,
+        '{{returnDepartureDate}}': formatUsDate(retSeg.departureDate),
+        '{{returnDepartureTime}}': formatUsTime(retSeg.departureTime),
+        '{{returnArrivalDate}}': formatUsDate(retSeg.arrivalDate),
+        '{{returnArrivalTime}}': formatUsTime(retSeg.arrivalTime),
+        '{{returnCabin}}': retSeg.cabinClass,
+        '{{returnStops}}': returnSegs.length > 1 ? `${returnSegs.length - 1} Stop(s)` : (retSeg.stops === 0 ? 'Nonstop' : `${retSeg.stops} Stop(s)`)
       };
-
       for (const [key, val] of Object.entries(returnReplacements)) {
         html = html.replaceAll(key, val || '');
       }
     } else {
-      // Remove return flight block entirely for one-way trips
       html = html.replace(/\{\{#if hasReturnFlight\}\}[\s\S]*?\{\{\/if\}\}/g, '');
     }
 
-    // Standard Replacements
     const replacements = {
       '{{emailHeaderSubtitle}}': 'FLIGHT RESERVATION CONFIRMATION',
       '{{confirmationCode}}': confirmationCode,
@@ -422,26 +395,24 @@ export const sendBookingConfirmation = async (booking, options = {}) => {
       '{{paymentDate}}': paymentDate,
       '{{passengerCount}}': passengerCount,
       '{{customerEmail}}': customerEmail,
-      '{{outboundAirline}}': outboundAirline,
-      '{{outboundFlightNumber}}': outboundFlightNumber,
-      '{{outboundOriginCity}}': outboundOriginCity,
-      '{{outboundOriginCode}}': outboundOriginCode,
-      '{{outboundDestinationCity}}': outboundDestinationCity,
-      '{{outboundDestinationCode}}': outboundDestinationCode,
-      '{{outboundDepartureDate}}': outboundDepartureDate,
-      '{{outboundDepartureTime}}': outboundDepartureTime,
-      '{{outboundArrivalDate}}': outboundArrivalDate,
-      '{{outboundArrivalTime}}': outboundArrivalTime,
-      '{{outboundCabin}}': outboundCabin,
-      '{{outboundStops}}': outboundStops
+      '{{outboundAirline}}': outSeg.airlineName,
+      '{{outboundFlightNumber}}': outSeg.flightNumber,
+      '{{outboundOriginCity}}': outSeg.originName,
+      '{{outboundOriginCode}}': outSeg.originCode,
+      '{{outboundDestinationCity}}': outboundSegs[outboundSegs.length - 1].destinationName,
+      '{{outboundDestinationCode}}': outboundSegs[outboundSegs.length - 1].destinationCode,
+      '{{outboundDepartureDate}}': formatUsDate(outSeg.departureDate),
+      '{{outboundDepartureTime}}': formatUsTime(outSeg.departureTime),
+      '{{outboundArrivalDate}}': formatUsDate(outSeg.arrivalDate),
+      '{{outboundArrivalTime}}': formatUsTime(outSeg.arrivalTime),
+      '{{outboundCabin}}': outSeg.cabinClass,
+      '{{outboundStops}}': outboundSegs.length > 1 ? `${outboundSegs.length - 1} Stop(s)` : (outSeg.stops === 0 ? 'Nonstop' : `${outSeg.stops} Stop(s)`)
     };
-
 
     for (const [key, val] of Object.entries(replacements)) {
       html = html.replaceAll(key, val || '');
     }
 
-    // Safety clean any residual template placeholders
     html = html.replace(/\{\{[^}]+\\}\}/g, '');
 
     // Plaintext Fallback
@@ -524,14 +495,29 @@ Support 24/7: Call +1 (213) 965-9727 or Email support@thefinalseat.com
   }
 };
 
-export const sendBookingRequestReceivedEmail = async (bookingId, { force = false } = {}) => {
+export const sendBookingRequestReceivedEmail = async (bookingIdInput, { force = false } = {}) => {
+  let bookingId = typeof bookingIdInput === 'object' ? (bookingIdInput.id || bookingIdInput.booking_id || bookingIdInput.confirmation_code) : bookingIdInput;
   try {
     const booking = await bookingRepository.getById(bookingId);
     if (!booking) return { success: false, error: 'Booking not found' };
 
+    bookingId = booking.id;
+
+
     if (!force && booking.booking_request_email_status === 'SENT') {
       logger.info(`[Email] sendBookingRequestReceivedEmail skipped (already sent) for ${booking.confirmation_code}`);
       return { success: true, emailId: booking.booking_request_email_id, skipped: true };
+    }
+
+    const itinerary = buildCanonicalItinerary(booking);
+    if (!itinerary.outbound || itinerary.outbound.length === 0) {
+      const errMsg = 'BOOKING_ITINERARY_MISSING: Cannot dispatch email for booking without committed flight segments.';
+      logger.error(`[Email] ${errMsg} (bookingId=${bookingId})`);
+      await bookingRepository.updateBookingStatus(bookingId, {
+        booking_request_email_status: 'FAILED',
+        booking_request_email_error: 'BOOKING_ITINERARY_MISSING'
+      });
+      return { success: false, error: 'BOOKING_ITINERARY_MISSING' };
     }
 
     const customerEmail = booking.email || booking.contacts?.[0]?.email || booking.travellers?.[0]?.email;
@@ -548,13 +534,15 @@ export const sendBookingRequestReceivedEmail = async (bookingId, { force = false
     const passengerName = booking.passenger_name || 'Valued Passenger';
     const passengerFirstName = passengerName.split(' ')[0] || 'Passenger';
     const passengerCount = (booking.travellers?.length || 1).toString();
-    const currency = booking.currency || 'USD';
+    const currency = (booking.currency || 'USD').toUpperCase();
     const currencySymbol = currency === 'EUR' ? '€' : (currency === 'GBP' ? '£' : '$');
     const customerTotal = parseFloat(booking.customer_price || booking.total_amount || 0).toFixed(2);
-    const bookingDate = booking.created_at ? new Date(booking.created_at).toLocaleDateString() : new Date().toLocaleDateString();
+    const bookingDate = booking.created_at ? formatUsDate(booking.created_at) : formatUsDate(new Date());
 
-    const outboundSegs = booking.outbound_segments || (booking.itinerary_segments ? booking.itinerary_segments.filter(s => s.journey_direction === 'outbound') : []);
-    const returnSegs = booking.return_segments || (booking.itinerary_segments ? booking.itinerary_segments.filter(s => s.journey_direction === 'return') : []);
+    const outboundSegs = itinerary.outbound;
+    const returnSegs = itinerary.return;
+    const outSeg = outboundSegs[0];
+    const retSeg = returnSegs[0] || null;
 
     const templatePath = path.join(__dirname, 'templates', 'booking-confirmation.html');
     let html = await fs.readFile(templatePath, 'utf8').catch(() => null);
@@ -568,13 +556,6 @@ export const sendBookingRequestReceivedEmail = async (bookingId, { force = false
     html = html.replace('Your payment has been successfully processed.', 'Your booking request has been received.');
     html = html.replace(/This temporary confirmation number is not the airline's final PNR[\s\S]*?processing\./g, '');
 
-    const outSeg = outboundSegs[0] || {};
-    const retSeg = returnSegs[0] || {};
-    const outCarrierCode = outSeg.carrier_code || outSeg.marketing_carrier_code || outSeg.carrier || '';
-    const outAirline = resolveAirlineName(outCarrierCode, outSeg.carrier_name || booking.carrier);
-    const retCarrierCode = retSeg.carrier_code || retSeg.marketing_carrier_code || retSeg.carrier || '';
-    const retAirline = resolveAirlineName(retCarrierCode, retSeg.carrier_name || outAirline);
-
     const replacements = {
       '{{emailHeaderSubtitle}}': 'FLIGHT RESERVATION CONFIRMATION',
       '{{confirmationCode}}': confirmationCode,
@@ -587,38 +568,38 @@ export const sendBookingRequestReceivedEmail = async (bookingId, { force = false
       '{{paymentDate}}': bookingDate,
       '{{passengerCount}}': passengerCount,
       '{{customerEmail}}': customerEmail,
-      '{{outboundAirline}}': outAirline,
-      '{{outboundFlightNumber}}': outSeg.flight_number || 'UA 100',
-      '{{outboundOriginCity}}': outSeg.origin_city || outSeg.origin_airport || 'Los Angeles',
-      '{{outboundOriginCode}}': outSeg.origin_airport || 'LAX',
-      '{{outboundDestinationCity}}': outboundSegs[outboundSegs.length - 1]?.destination_city || outSeg.destination_airport || 'Miami',
-      '{{outboundDestinationCode}}': outboundSegs[outboundSegs.length - 1]?.destination_airport || 'MIA',
-      '{{outboundDepartureDate}}': outSeg.departure_date || '2026-09-10',
-      '{{outboundDepartureTime}}': outSeg.departure_time || '09:00 AM',
-      '{{outboundArrivalDate}}': outSeg.arrival_date || '2026-09-10',
-      '{{outboundArrivalTime}}': outSeg.arrival_time || '05:00 PM',
-      '{{outboundCabin}}': outSeg.cabin || 'Economy',
-      '{{outboundStops}}': outboundSegs.length > 1 ? `${outboundSegs.length - 1} Stop(s)` : 'Nonstop'
+      '{{outboundAirline}}': outSeg.airlineName,
+      '{{outboundFlightNumber}}': outSeg.flightNumber,
+      '{{outboundOriginCity}}': outSeg.originName,
+      '{{outboundOriginCode}}': outSeg.originCode,
+      '{{outboundDestinationCity}}': outboundSegs[outboundSegs.length - 1].destinationName,
+      '{{outboundDestinationCode}}': outboundSegs[outboundSegs.length - 1].destinationCode,
+      '{{outboundDepartureDate}}': formatUsDate(outSeg.departureDate),
+      '{{outboundDepartureTime}}': formatUsTime(outSeg.departureTime),
+      '{{outboundArrivalDate}}': formatUsDate(outSeg.arrivalDate),
+      '{{outboundArrivalTime}}': formatUsTime(outSeg.arrivalTime),
+      '{{outboundCabin}}': outSeg.cabinClass,
+      '{{outboundStops}}': outboundSegs.length > 1 ? `${outboundSegs.length - 1} Stop(s)` : (outSeg.stops === 0 ? 'Nonstop' : `${outSeg.stops} Stop(s)`)
     };
 
     for (const [key, val] of Object.entries(replacements)) {
       html = html.replaceAll(key, val || '');
     }
 
-    if (returnSegs.length > 0) {
+    if (retSeg) {
       const returnReplacements = {
-        '{{returnAirline}}': retAirline,
-        '{{returnFlightNumber}}': retSeg.flight_number || 'UA 200',
-        '{{returnOriginCity}}': retSeg.origin_city || retSeg.origin_airport || 'Miami',
-        '{{returnOriginCode}}': retSeg.origin_airport || 'MIA',
-        '{{returnDestinationCity}}': returnSegs[returnSegs.length - 1]?.destination_city || retSeg.destination_airport || 'Los Angeles',
-        '{{returnDestinationCode}}': returnSegs[returnSegs.length - 1]?.destination_airport || 'LAX',
-        '{{returnDepartureDate}}': retSeg.departure_date || '2026-09-17',
-        '{{returnDepartureTime}}': retSeg.departure_time || '10:00 AM',
-        '{{returnArrivalDate}}': retSeg.arrival_date || '2026-09-17',
-        '{{returnArrivalTime}}': retSeg.arrival_time || '02:00 PM',
-        '{{returnCabin}}': retSeg.cabin || 'Economy',
-        '{{returnStops}}': returnSegs.length > 1 ? `${returnSegs.length - 1} Stop(s)` : 'Nonstop'
+        '{{returnAirline}}': retSeg.airlineName,
+        '{{returnFlightNumber}}': retSeg.flightNumber,
+        '{{returnOriginCity}}': retSeg.originName,
+        '{{returnOriginCode}}': retSeg.originCode,
+        '{{returnDestinationCity}}': returnSegs[returnSegs.length - 1].destinationName,
+        '{{returnDestinationCode}}': returnSegs[returnSegs.length - 1].destinationCode,
+        '{{returnDepartureDate}}': formatUsDate(retSeg.departureDate),
+        '{{returnDepartureTime}}': formatUsTime(retSeg.departureTime),
+        '{{returnArrivalDate}}': formatUsDate(retSeg.arrivalDate),
+        '{{returnArrivalTime}}': formatUsTime(retSeg.arrivalTime),
+        '{{returnCabin}}': retSeg.cabinClass,
+        '{{returnStops}}': returnSegs.length > 1 ? `${returnSegs.length - 1} Stop(s)` : (retSeg.stops === 0 ? 'Nonstop' : `${retSeg.stops} Stop(s)`)
       };
       for (const [key, val] of Object.entries(returnReplacements)) {
         html = html.replaceAll(key, val || '');
@@ -627,8 +608,8 @@ export const sendBookingRequestReceivedEmail = async (bookingId, { force = false
       html = html.replace(/\{\{#if hasReturnFlight\}\}[\s\S]*?\{\{\/if\}\}/g, '');
     }
 
-
     html = html.replace(/\{\{[^}]+\\}\}/g, '');
+
 
     const textBody = `
 THE FINAL SEAT — BOOKING REQUEST RECEIVED

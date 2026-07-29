@@ -31,7 +31,21 @@ async function runPaymentAndEmailTests() {
 
   const bookingId = testBooking.id;
 
+  await bookingRepository.saveItinerarySegments(bookingId, [
+    {
+      journey_direction: 'outbound',
+      segment_sequence: 1,
+      marketing_carrier_code: 'UA',
+      flight_number: 'UA 100',
+      origin_airport: 'LAX',
+      destination_airport: 'MIA',
+      departure_date: '2026-10-01',
+      departure_time: '08:00 AM'
+    }
+  ]);
+
   // Test 2: Idempotent Booking Request Email Dispatch
+
   console.log('Test 2: Testing sendBookingRequestReceivedEmail idempotency...');
   const firstEmailRes = await sendBookingRequestReceivedEmail(bookingId);
   assert.strictEqual(firstEmailRes.success, true);

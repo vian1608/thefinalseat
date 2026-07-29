@@ -40,12 +40,22 @@ export const bookingRepository = {
         const fallbackId = dbRow.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `bk_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`);
         const fallbackRecord = { id: fallbackId, created_at: new Date().toISOString(), ...dbRow };
         bookingsMemoryStore.set(fallbackId, fallbackRecord);
+        if (fallbackRecord.confirmation_code) bookingsMemoryStore.set(fallbackRecord.confirmation_code, fallbackRecord);
         return fallbackRecord;
+      }
+      if (coreData) {
+        if (coreData.id) bookingsMemoryStore.set(coreData.id, coreData);
+        if (coreData.confirmation_code) bookingsMemoryStore.set(coreData.confirmation_code, coreData);
       }
       return coreData;
     }
+    if (data) {
+      if (data.id) bookingsMemoryStore.set(data.id, data);
+      if (data.confirmation_code) bookingsMemoryStore.set(data.confirmation_code, data);
+    }
     return data;
   },
+
 
 
 
@@ -195,15 +205,18 @@ export const bookingRepository = {
 
 
   findBookingByCode: async (code) => {
+
+    const memOverridden = bookingsMemoryStore.get(code);
     const { data, error } = await supabase
       .from('bookings')
       .select('*')
       .eq('confirmation_code', code)
       .maybeSingle();
 
-    if (error || !data) return data;
-    const relations = await bookingRepository.getRelations(data.id);
-    return bookingRepository.enrichBookingRecord(data, relations);
+    const baseData = (data || memOverridden) ? { ...(data || {}), ...(memOverridden || {}) } : null;
+    if (!baseData) return null;
+    const relations = await bookingRepository.getRelations(baseData.id);
+    return bookingRepository.enrichBookingRecord(baseData, relations);
   },
 
   getByReference: async (code) => {
@@ -211,24 +224,30 @@ export const bookingRepository = {
   },
 
   findBookingById: async (id) => {
+    const memOverridden = bookingsMemoryStore.get(id);
     const { data, error } = await supabase
       .from('bookings')
       .select('*')
       .eq('id', id)
       .maybeSingle();
 
-    const memOverridden = bookingsMemoryStore.get(id);
     const baseData = (data || memOverridden) ? { ...(data || {}), ...(memOverridden || {}) } : null;
+
 
     if (!baseData) return null;
     const relations = await bookingRepository.getRelations(baseData.id);
     return bookingRepository.enrichBookingRecord(baseData, relations);
   },
 
-
-  getById: async (id) => {
-    return bookingRepository.findBookingById(id);
+  getById: async (idOrCode) => {
+    if (!idOrCode) return null;
+    let b = await bookingRepository.findBookingById(idOrCode);
+    if (!b) {
+      b = await bookingRepository.findBookingByCode(idOrCode);
+    }
+    return b;
   },
+
 
   findBookingsByEmail: async (email) => {
     const { data, error } = await supabase
@@ -352,28 +371,30 @@ export const bookingRepository = {
     delete cleanFields.crm_status;
     delete cleanFields.price_checked_at;
 
+    const existing = bookingsMemoryStore.get(id) || {};
+    const updatedMem = { ...existing, ...cleanFields };
+    bookingsMemoryStore.set(id, updatedMem);
+    if (existing.confirmation_code) {
+      bookingsMemoryStore.set(existing.confirmation_code, updatedMem);
+    }
+
     const { data, error } = await supabase
       .from('bookings')
       .update(cleanFields)
       .eq('id', id)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.message && (error.message.includes('value too long') || error.message.includes('bookings_status_check') || error.message.includes('check constraint') || error.message.includes('schema cache') || error.message.includes('invalid input syntax') || error.message.includes('Cannot coerce') || error.message.includes('JSON object requested'))) {
-        logger.warn(`Supabase schema notice: ${error.message}.`);
-        const existing = await bookingRepository.getById(id);
-        const updatedRecord = { ...(existing || {}), ...cleanFields };
-        bookingsMemoryStore.set(id, updatedRecord);
-        return updatedRecord;
-      }
-      throw new Error(`Failed to update booking status: ${error.message}`);
+      logger.warn(`Supabase schema notice: ${error.message}.`);
+      return updatedMem;
     }
 
-
-
-    return data;
+    const finalRec = data ? { ...updatedMem, ...data } : updatedMem;
+    bookingsMemoryStore.set(id, finalRec);
+    return finalRec;
   },
+
 
 
 
@@ -530,6 +551,87 @@ export const bookingRepository = {
     }
     return splitsMemoryStore.get(bookingId) || [];
   },
+
+  updatePaymentSplitsAndTotal: async (bookingId, splitsInput = [], adminId = 'admin', reason = 'Payment splits update') => {
+    const booking = await bookingRepository.getById(bookingId);
+    if (!booking) throw new Error('Booking not found');
+    const realId = booking.id;
+
+    if (!Array.isArray(splitsInput) || splitsInput.length === 0) {
+      throw new Error('At least one payment split row is required.');
+    }
+
+    const currencies = new Set();
+    const formattedSplits = splitsInput.map((s, idx) => {
+      const mName = String(s.merchantName || s.merchant_name || '').trim();
+      if (!mName) {
+        throw new Error(`Split #${idx + 1}: Merchant name cannot be empty.`);
+      }
+      const rawAmt = Number(s.amount);
+      if (isNaN(rawAmt) || rawAmt <= 0) {
+        throw new Error(`Split #${idx + 1} (${mName}): Amount must be greater than zero.`);
+      }
+      const amtStr = String(s.amount);
+      if (amtStr.includes('.') && amtStr.split('.')[1].length > 2) {
+        throw new Error(`Split #${idx + 1} (${mName}): Amount cannot have more than 2 decimal places.`);
+      }
+      const curr = (s.currency || booking.currency || 'USD').toUpperCase().trim();
+      currencies.add(curr);
+
+      return {
+        booking_id: realId,
+        merchant_name: mName,
+        amount: Math.round(rawAmt * 100) / 100,
+        currency: curr
+      };
+    });
+
+    if (currencies.size > 1) {
+      throw new Error('Mixed currencies within one booking payment split are not allowed.');
+    }
+
+    const totalCents = formattedSplits.reduce(
+      (sum, s) => sum + Math.round(Number(s.amount) * 100),
+      0
+    );
+    const calculatedTotal = totalCents / 100;
+    const oldTotal = parseFloat(booking.customer_price || booking.total_amount || 0);
+
+    // Save splits
+    await bookingRepository.savePaymentSplits(realId, formattedSplits);
+
+    let newStatus = booking.status;
+    let newAuthStatus = booking.authorization_status;
+
+    // Automatic reauthorization trigger if authorized total changed
+    if (Math.abs(oldTotal - calculatedTotal) > 0.001 && (booking.status === 'AUTHORIZED' || booking.status === 'READY_FOR_TICKETING' || booking.authorization_status === 'AUTHORIZED')) {
+      newStatus = 'REAUTHORIZATION_REQUIRED';
+      newAuthStatus = 'REAUTHORIZATION_REQUIRED';
+    }
+
+    const updatePayload = {
+      total_amount: calculatedTotal,
+      customer_price: calculatedTotal,
+      amount: calculatedTotal,
+      status: newStatus,
+      authorization_status: newAuthStatus
+    };
+
+    await bookingRepository.updateStatus(realId, updatePayload);
+
+    await bookingRepository.recordPaymentEvent({
+      bookingId: realId,
+      eventType: 'SPLIT_PAYMENT_UPDATE',
+      previousStatus: booking.status,
+      newStatus,
+      amount: calculatedTotal,
+      reason: `${reason}. Old Total: $${oldTotal.toFixed(2)}, New Total: $${calculatedTotal.toFixed(2)}`,
+      adminId
+    });
+
+    return bookingRepository.getById(realId);
+  },
+
 
 
 
