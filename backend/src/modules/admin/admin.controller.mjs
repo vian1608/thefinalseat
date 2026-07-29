@@ -630,10 +630,96 @@ export const adminController = {
       logger.error(`Error generating authorization PDF for booking ${req.params.id}: ${error.message}`);
       next(error);
     }
+  },
+
+  saveTicketDetails: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const ticketData = req.body || {};
+      const adminId = req.user?.id || 'admin';
+
+      const updatedBooking = await bookingRepository.saveTicketDetails(id, ticketData, adminId);
+      return res.json({
+        success: true,
+        message: 'Airline ticket details saved.',
+        data: updatedBooking,
+        booking: updatedBooking
+      });
+    } catch (error) {
+      logger.error(`Error saving ticket details for booking ${req.params.id}: ${error.message}`);
+      return res.status(400).json({
+        success: false,
+        error: { code: 'TICKET_DETAILS_ERROR', message: `Unable to save airline ticket details: ${error.message}` }
+      });
+    }
+  },
+
+  sendFinalTicketEmail: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const emailResult = await sendFinalTicketEmail(id);
+      if (emailResult.success) {
+        return res.json({
+          success: true,
+          message: 'Final E-Ticket email sent successfully.',
+          emailId: emailResult.emailId
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'FINAL_TICKET_EMAIL_FAILED', message: emailResult.error || 'Failed to send final ticket email.' }
+        });
+      }
+    } catch (error) {
+      logger.error(`Error sending final ticket email for booking ${req.params.id}: ${error.message}`);
+      next(error);
+    }
+  },
+
+  getBookingDiagnosticData: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const booking = await bookingRepository.getCompleteBookingById(id);
+      if (!booking) {
+        return res.status(404).json({ success: false, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' } });
+      }
+
+      const segments = [
+        ...(booking.itinerary?.outbound || []),
+        ...(booking.itinerary?.return || [])
+      ].map((s, idx) => ({
+        segmentIndex: idx + 1,
+        journeyDirection: s.journey_direction || (idx === 0 ? 'outbound' : 'outbound'),
+        segmentSequence: s.sequence,
+        originCode: s.originCode,
+        destinationCode: s.destinationCode,
+        carrierCode: s.carrierCode,
+        airlineName: s.airlineName,
+        flightNumber: s.flightNumber
+      }));
+
+      return res.json({
+        success: true,
+        data: {
+          bookingId: booking.confirmation_code || booking.id,
+          resolvedInternalUuid: booking.id,
+          status: booking.status,
+          paymentStatus: booking.payment_status,
+          customerTotal: parseFloat(booking.customer_price || booking.total_amount || 0),
+          currency: booking.currency || 'USD',
+          itineraryRowCount: segments.length,
+          segments
+        }
+      });
+    } catch (error) {
+      logger.error(`Error getting diagnostic data for booking ${req.params.id}: ${error.message}`);
+      next(error);
+    }
   }
 };
 
 export default adminController;
+
 
 
 

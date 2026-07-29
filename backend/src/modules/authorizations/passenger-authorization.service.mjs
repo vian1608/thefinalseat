@@ -3,8 +3,7 @@ import supabase from '../../integrations/supabase/supabase.client.mjs';
 import env from '../../config/env.mjs';
 import logger from '../../config/logger.mjs';
 import bookingRepository from '../bookings/booking.repository.mjs';
-import { resolveAirlineName } from '../../shared/utils/airline-lookup.mjs';
-
+import { resolveAirlineName, buildCanonicalItinerary } from '../../shared/utils/airline-lookup.mjs';
 
 // In-memory fallback map for offline / stub testing when remote DB table schema is updating
 const memoryAuthStore = new Map();
@@ -39,84 +38,86 @@ export const passengerAuthorizationService = {
   /**
    * Create single-use 24-hour authorization token and snapshot
    */
-  createAuthorizationToken: async (booking, vaultData = {}) => {
-    const bookingId = booking.id || booking.booking_id;
+  createAuthorizationToken: async (bookingInput, vaultData = {}) => {
+    const rawId = typeof bookingInput === 'object' ? (bookingInput.id || bookingInput.booking_id || bookingInput.confirmation_code) : bookingInput;
+    const completeBooking = await bookingRepository.getCompleteBookingById(rawId) || (typeof bookingInput === 'object' ? bookingInput : null);
+    if (!completeBooking) throw new Error('Booking not found');
+
+    const bookingId = completeBooking.id;
     const expiresAtMs = Date.now() + 24 * 60 * 60 * 1000;
     const token = generateStatelessToken(bookingId, expiresAtMs);
     const expiresAt = new Date(expiresAtMs).toISOString();
 
-    const flightsList = Array.isArray(booking.flights) ? booking.flights : [];
-    const outbound = flightsList.find(f => f.direction === 'outbound') || flightsList[0] || booking.flight || booking.flight_details || {};
-    const returnFlight = flightsList.find(f => f.direction === 'return') || flightsList[1] || booking.returnFlight || booking.return_flight || null;
 
-    const rawPassengers = booking.passengers || booking.traveller_details || booking.travellers || [];
+    const canonicalItinerary = buildCanonicalItinerary(completeBooking);
+    const outboundSegs = canonicalItinerary.outbound || [];
+    const returnSegs = canonicalItinerary.return || [];
+
+    const rawPassengers = completeBooking.passengers || completeBooking.traveller_details || completeBooking.travellers || [];
     const passengers = Array.isArray(rawPassengers)
       ? rawPassengers
       : (typeof rawPassengers === 'string' ? JSON.parse(rawPassengers || '[]') : []);
 
-    const splits = booking.payment_splits && booking.payment_splits.length > 0
-      ? booking.payment_splits
-      : await bookingRepository.getPaymentSplits(bookingId);
+    const splits = completeBooking.payment_splits && completeBooking.payment_splits.length > 0
+      ? completeBooking.payment_splits
+      : await bookingRepository.getPaymentSplits(completeBooking.id);
 
-    const customerPrice = parseFloat(booking.customer_price || booking.displayedWebsitePrice || booking.total_amount || booking.amount || 0);
+    const customerPrice = parseFloat(completeBooking.customer_price || completeBooking.displayedWebsitePrice || completeBooking.total_amount || completeBooking.amount || 0);
     const splitTotal = splits.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0);
     const authorizedAmountNum = splitTotal > 0 ? splitTotal : customerPrice;
 
     const quoteSnapshot = {
       amount: authorizedAmountNum.toFixed(2),
-      currency: (booking.currency || 'USD').toUpperCase(),
-      originalPrice: (booking.supplier_price || booking.original_api_price || customerPrice).toString(),
-      discountAmount: (booking.discount_amount || 0).toString(),
+      currency: (completeBooking.currency || 'USD').toUpperCase(),
+      originalPrice: (completeBooking.supplier_price || completeBooking.original_api_price || customerPrice).toString(),
+      discountAmount: (completeBooking.discount_amount || 0).toString(),
       passengersCount: passengers.length || 1,
       splits: splits.map(s => ({
         merchant_name: s.merchant_name || s.merchantName || 'Merchant',
         amount: parseFloat(s.amount || 0).toFixed(2),
-        currency: (s.currency || booking.currency || 'USD').toUpperCase()
+        currency: (s.currency || completeBooking.currency || 'USD').toUpperCase()
       })),
       createdAt: new Date().toISOString()
     };
 
-
-    const outboundSegs = booking.outbound_segments || (booking.itinerary_segments ? booking.itinerary_segments.filter(s => s.journey_direction === 'outbound') : (outbound.origin_code ? [outbound] : []));
-    const returnSegs = booking.return_segments || (booking.itinerary_segments ? booking.itinerary_segments.filter(s => s.journey_direction === 'return') : (returnFlight ? [returnFlight] : []));
-
-    const mapSegSnap = (seg) => {
-      const code = (seg.marketing_carrier_code || seg.carrier_code || seg.carrier || seg.airline_code || '').trim().toUpperCase();
-      const name = resolveAirlineName(code, seg.carrier_name || seg.airline_name || seg.airline);
-      return {
-        carrier_code: code,
-        carrier_name: name,
-        airline: name,
-        flight_number: seg.flight_number || seg.flightNumber || seg.number || '',
-        flightNumber: seg.flight_number || seg.flightNumber || seg.number || '',
-        origin_airport: seg.origin_airport || seg.origin_code || seg.originCode || seg.origin || 'LAX',
-        originCode: seg.origin_airport || seg.origin_code || seg.originCode || seg.origin || 'LAX',
-        origin_city: seg.origin_city || seg.originCity || 'Los Angeles',
-        originCity: seg.origin_city || seg.originCity || 'Los Angeles',
-        destination_airport: seg.destination_airport || seg.destination_code || seg.destinationCode || seg.destination || 'MIA',
-        destinationCode: seg.destination_airport || seg.destination_code || seg.destinationCode || seg.destination || 'MIA',
-        destination_city: seg.destination_city || seg.destinationCity || 'Miami',
-        destinationCity: seg.destination_city || seg.destinationCity || 'Miami',
-        departure_date: seg.departure_date || seg.departure_time || '2026-09-10',
-        departureDate: seg.departure_date || seg.departure_time || '2026-09-10',
-        departure_time: seg.departure_time || '09:00 AM',
-        departureTime: seg.departure_time || '09:00 AM',
-        arrival_date: seg.arrival_date || seg.arrival_time || '2026-09-10',
-        arrivalDate: seg.arrival_date || seg.arrival_time || '2026-09-10',
-        arrival_time: seg.arrival_time || '05:00 PM',
-        arrivalTime: seg.arrival_time || '05:00 PM',
-        cabin: seg.cabin || seg.cabin_class || seg.class || 'Economy',
-        cabinClass: seg.cabin || seg.cabin_class || seg.class || 'Economy',
-        stops: seg.stops !== undefined ? seg.stops : 0
-      };
-    };
+    const mapSegSnap = (s) => ({
+      id: s.id,
+      sequence: s.sequence,
+      carrier_code: s.carrierCode,
+      carrier_name: s.airlineName,
+      airline: s.airlineName,
+      airlineLogoUrl: s.airlineLogoUrl,
+      flight_number: s.flightNumber,
+      flightNumber: s.flightNumber,
+      origin_airport: s.originCode,
+      originCode: s.originCode,
+      origin_city: s.originName,
+      originCity: s.originName,
+      destination_airport: s.destinationCode,
+      destinationCode: s.destinationCode,
+      destination_city: s.destinationName,
+      destinationCity: s.destinationName,
+      departure_date: s.departureDate || s.departureAt,
+      departureDate: s.departureDate || s.departureAt,
+      departure_time: s.departureTime,
+      departureTime: s.departureTime,
+      arrival_date: s.arrivalDate || s.arrivalAt,
+      arrivalDate: s.arrivalDate || s.arrivalAt,
+      arrival_time: s.arrivalTime,
+      arrivalTime: s.arrivalTime,
+      cabin: s.cabinClass,
+      cabinClass: s.cabinClass,
+      stops: s.stops
+    });
 
     const itinerarySnapshot = {
       outboundSegments: outboundSegs.map(mapSegSnap),
       returnSegments: returnSegs.map(mapSegSnap),
-      outbound: outboundSegs.length > 0 ? mapSegSnap(outboundSegs[0]) : mapSegSnap(outbound),
-      return: returnSegs.length > 0 ? mapSegSnap(returnSegs[0]) : (returnFlight ? mapSegSnap(returnFlight) : null)
+      outbound: outboundSegs.length > 0 ? mapSegSnap(outboundSegs[0]) : null,
+      return: returnSegs.length > 0 ? mapSegSnap(returnSegs[0]) : null,
+      canonical: canonicalItinerary
     };
+
 
 
     const policiesSnapshot = {
@@ -130,7 +131,8 @@ export const passengerAuthorizationService = {
       token,
       status: 'pending',
       authorized_amount: customerPrice,
-      currency: (booking.currency || 'USD').toUpperCase(),
+      currency: (completeBooking.currency || 'USD').toUpperCase(),
+
       payment_method_token: vaultData.paymentMethodToken || vaultData.token || `pm_vault_${Date.now()}`,
       card_brand: vaultData.cardBrand || vaultData.brand || 'Visa',
       card_last4: vaultData.cardLast4 || vaultData.last4 || '4242',
@@ -586,6 +588,9 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
       confirmationCode: booking.confirmation_code,
       passengerName: booking.passenger_name,
       customerEmail: booking.email,
+      authorizedAmount: parseFloat(authRecord.authorized_amount || authRecord.quote_snapshot?.amount || booking.customer_price || booking.total_amount || 0).toFixed(2),
+
+      currency: authRecord.currency || booking.currency || 'USD',
       booking: {
         id: booking.id,
         confirmationCode: booking.confirmation_code,
@@ -597,6 +602,7 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
         totalAmount: booking.total_amount,
         currency: booking.currency || 'USD'
       },
+
       authorization: {
         token: authRecord.token,
         status: (authRecord.status || 'ACCEPTED').toUpperCase(),

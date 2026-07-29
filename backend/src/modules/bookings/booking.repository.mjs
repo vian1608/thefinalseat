@@ -1,5 +1,7 @@
 import supabase from '../../integrations/supabase/supabase.client.mjs';
 import logger from '../../config/logger.mjs';
+import { buildCanonicalItinerary } from '../../shared/utils/airline-lookup.mjs';
+
 
 const segmentsMemoryStore = new Map();
 const bookingsMemoryStore = new Map();
@@ -248,6 +250,88 @@ export const bookingRepository = {
     return b;
   },
 
+  getCompleteBookingById: async (idOrCode) => {
+    if (!idOrCode) return null;
+    let baseBooking = await bookingRepository.findBookingById(idOrCode);
+    if (!baseBooking) {
+      baseBooking = await bookingRepository.findBookingByCode(idOrCode);
+    }
+    if (!baseBooking) return null;
+
+    const realId = baseBooking.id;
+    const relations = await bookingRepository.getRelations(realId);
+    const enriched = bookingRepository.enrichBookingRecord(baseBooking, relations);
+    const itinerary = buildCanonicalItinerary(enriched);
+
+    return {
+      ...enriched,
+      itinerary,
+      outbound_segments: itinerary.outbound,
+      return_segments: itinerary.return
+    };
+  },
+
+  saveTicketDetails: async (bookingId, ticketData = {}, adminId = 'admin') => {
+    const booking = await bookingRepository.getById(bookingId);
+    if (!booking) throw new Error('Booking not found');
+    const realId = booking.id;
+
+    const {
+      airlineCode,
+      airlineName,
+      airlineConfirmationNumber,
+      ticketNumber,
+      ticketIssuedAt,
+      ticketNotes,
+      supplierConfirmation
+    } = ticketData;
+
+    if (airlineConfirmationNumber) {
+      const pnr = String(airlineConfirmationNumber).trim().toUpperCase();
+      if (!/^[A-Z0-9]{6}$/.test(pnr)) {
+        throw new Error('Airline confirmation number must contain exactly 6 letters or numbers.');
+      }
+    }
+
+    if (ticketNumber) {
+      const tkt = String(ticketNumber).trim();
+      if (!/^\d{1,13}$/.test(tkt)) {
+        throw new Error('Ticket number must contain digits only and cannot exceed 13 digits.');
+      }
+    }
+
+    const cleanPnr = airlineConfirmationNumber !== undefined ? String(airlineConfirmationNumber).trim().toUpperCase() : (booking.airline_confirmation_number || null);
+    const cleanTkt = ticketNumber !== undefined ? String(ticketNumber).trim() : (booking.ticket_number || null);
+    const cleanCode = airlineCode !== undefined ? String(airlineCode).trim().toUpperCase() : (booking.airline_code || null);
+    const cleanName = airlineName !== undefined ? String(airlineName).trim() : (booking.airline_name || null);
+    const cleanSupp = supplierConfirmation !== undefined ? String(supplierConfirmation).trim() : (booking.supplier_confirmation || null);
+    const cleanNotes = ticketNotes !== undefined ? String(ticketNotes).trim() : (booking.ticket_notes || null);
+    const cleanIssuedAt = ticketIssuedAt || new Date().toISOString();
+
+    const updatePayload = {
+      airline_code: cleanCode,
+      airline_name: cleanName,
+      airline_confirmation_number: cleanPnr,
+      ticket_number: cleanTkt,
+      ticket_issued_at: cleanIssuedAt,
+      ticket_notes: cleanNotes,
+      supplier_confirmation: cleanSupp
+    };
+
+    await bookingRepository.updateStatus(realId, updatePayload);
+
+    await bookingRepository.recordStatusAudit({
+      bookingId: realId,
+      oldStatus: booking.status,
+      newStatus: booking.status,
+      adminId,
+      reason: `Ticket details updated. PNR: ${cleanPnr || 'N/A'}, Ticket: ${cleanTkt || 'N/A'}, Supplier Ref: ${cleanSupp || 'N/A'}`
+    });
+
+    return bookingRepository.getCompleteBookingById(realId);
+  },
+
+
 
   findBookingsByEmail: async (email) => {
     const { data, error } = await supabase
@@ -468,32 +552,37 @@ export const bookingRepository = {
           const dir = seg.journey_direction || seg.direction || (idx === 0 ? 'outbound' : (seg.trip_type === 'round_trip' ? 'return' : 'outbound'));
           const seq = seg.segment_sequence || (dir === 'outbound' ? outboundSeq++ : returnSeq++);
 
+          const code = (seg.marketing_carrier_code || seg.carrier_code || seg.carrier || seg.airline_code || '').trim().toUpperCase();
+          const origCode = (seg.origin_airport || seg.origin_code || seg.originCode || seg.origin || '').trim().toUpperCase();
+          const destCode = (seg.destination_airport || seg.destination_code || seg.destinationCode || seg.destination || '').trim().toUpperCase();
+
           return {
             booking_id: bookingId,
             trip_type: seg.trip_type || 'one_way',
             direction: dir,
             journey_direction: dir,
             segment_sequence: seq,
-            carrier_name: seg.carrier_name || seg.airline || 'Airline information unavailable',
-            carrier_code: seg.carrier_code || seg.carrier || '',
+            carrier_name: seg.carrier_name || seg.airline_name || seg.airline || (code ? `${code} Airlines` : ''),
+            carrier_code: code,
+            marketing_carrier_code: code,
             operating_carrier: seg.operating_carrier || seg.operatingCarrier || null,
             flight_number: seg.flight_number || seg.flightNumber || '',
-            origin_airport: seg.origin_airport || seg.originCode || 'LAX',
-            origin_city: seg.origin_city || seg.originCity || 'Los Angeles',
-            destination_airport: seg.destination_airport || seg.destinationCode || 'MIA',
-            destination_city: seg.destination_city || seg.destinationCity || 'Miami',
-            departure_date: seg.departure_date || seg.departureDate || '2026-09-10',
-            departure_time: seg.departure_time || seg.departureTime || '09:00 AM',
-            arrival_date: seg.arrival_date || seg.arrivalDate || '2026-09-10',
-            arrival_time: seg.arrival_time || seg.arrivalTime || '05:00 PM',
-
+            origin_airport: origCode,
+            origin_city: seg.origin_city || seg.originCity || origCode,
+            destination_airport: destCode,
+            destination_city: seg.destination_city || seg.destinationCity || destCode,
+            departure_date: seg.departure_date || seg.departureDate || '',
+            departure_time: seg.departure_time || seg.departureTime || '',
+            arrival_date: seg.arrival_date || seg.arrivalDate || '',
+            arrival_time: seg.arrival_time || seg.arrivalTime || '',
             arrival_next_day: !!(seg.arrival_next_day || seg.arrivalNextDay),
-            cabin: seg.cabin || seg.cabinClass || 'Economy',
+            cabin: seg.cabin || seg.cabin_class || seg.class || 'Economy',
             booking_class: seg.booking_class || 'Y',
             terminal: seg.terminal || '',
             baggage_allowance: seg.baggage_allowance || '1 Bag',
             aircraft: seg.aircraft || null,
             layover_duration: seg.layover_duration || seg.layoverDuration || null,
+            duration: seg.duration || null,
             stop_count: parseInt(seg.stop_count || 0, 10),
             segment_order: idx + 1
           };

@@ -84,21 +84,26 @@ export async function generateAuthorizationPdfBuffer(evidence) {
       doc.fontSize(8.5).font('Helvetica').fillColor('#334155');
       if (outboundSegs.length > 0) {
         outboundSegs.forEach((seg, idx) => {
-          const carrier = seg.carrier_name || seg.airline || 'United Airlines';
-          const flightNum = seg.flight_number || seg.flightNumber || 'UA 100';
-          const orig = seg.origin_airport || seg.originCode || 'LAX';
-          const dest = seg.destination_airport || seg.destinationCode || 'MIA';
-          const dep = `${seg.departure_date || '2026-09-10'} ${seg.departure_time || '09:00 AM'}`;
-          const arr = `${seg.arrival_date || '2026-09-10'} ${seg.arrival_time || '05:00 PM'}`;
+          const carrierCode = (seg.carrier_code || seg.carrierCode || '').trim().toUpperCase();
+          const carrier = seg.carrier_name || seg.airline || (carrierCode ? `${carrierCode} Airlines` : 'Airline');
+          const flightNum = seg.flight_number || seg.flightNumber || '';
+          const orig = seg.origin_airport || seg.originCode || '';
+          const dest = seg.destination_airport || seg.destinationCode || '';
+          const depDate = seg.departure_date || seg.departureDate || '';
+          const depTime = seg.departure_time || seg.departureTime || '';
+          const dep = `${depDate} ${depTime}`.trim();
+          const arrDate = seg.arrival_date || seg.arrivalDate || '';
+          const arrTime = seg.arrival_time || seg.arrivalTime || '';
+          const arr = `${arrDate} ${arrTime}`.trim();
           const cabin = seg.cabin || seg.cabinClass || 'Economy';
           const stops = seg.stops !== undefined ? (seg.stops === 0 ? 'Nonstop' : `${seg.stops} Stop(s)`) : 'Nonstop';
 
-          const line = `Segment #${idx + 1}: ${carrier} (${flightNum}) | ${orig} -> ${dest} | Dep: ${dep} | Arr: ${arr} | ${cabin} | ${stops}`;
+          const line = `Segment #${idx + 1}: ${carrier} (${carrierCode} ${flightNum}) | ${orig} -> ${dest} | Dep: ${dep} | Arr: ${arr} | ${cabin} | ${stops}`;
           doc.text(line, 50, y);
           y += 13;
         });
       } else {
-        doc.text('Segment #1: United Airlines (UA 100) | LAX -> MIA | Dep: 2026-09-10 09:00 AM | Economy | Nonstop', 50, y);
+        doc.text('Itinerary details pending airline confirmation.', 50, y);
         y += 13;
       }
 
@@ -109,20 +114,26 @@ export async function generateAuthorizationPdfBuffer(evidence) {
         y += 14;
         doc.fontSize(8.5).font('Helvetica').fillColor('#334155');
         returnSegs.forEach((seg, idx) => {
-          const carrier = seg.carrier_name || seg.airline || 'United Airlines';
-          const flightNum = seg.flight_number || seg.flightNumber || 'UA 200';
-          const orig = seg.origin_airport || seg.originCode || 'MIA';
-          const dest = seg.destination_airport || seg.destinationCode || 'LAX';
-          const dep = `${seg.departure_date || '2026-09-17'} ${seg.departure_time || '10:00 AM'}`;
-          const arr = `${seg.arrival_date || '2026-09-17'} ${seg.arrival_time || '02:00 PM'}`;
+          const carrierCode = (seg.carrier_code || seg.carrierCode || '').trim().toUpperCase();
+          const carrier = seg.carrier_name || seg.airline || (carrierCode ? `${carrierCode} Airlines` : 'Airline');
+          const flightNum = seg.flight_number || seg.flightNumber || '';
+          const orig = seg.origin_airport || seg.originCode || '';
+          const dest = seg.destination_airport || seg.destinationCode || '';
+          const depDate = seg.departure_date || seg.departureDate || '';
+          const depTime = seg.departure_time || seg.departureTime || '';
+          const dep = `${depDate} ${depTime}`.trim();
+          const arrDate = seg.arrival_date || seg.arrivalDate || '';
+          const arrTime = seg.arrival_time || seg.arrivalTime || '';
+          const arr = `${arrDate} ${arrTime}`.trim();
           const cabin = seg.cabin || seg.cabinClass || 'Economy';
           const stops = seg.stops !== undefined ? (seg.stops === 0 ? 'Nonstop' : `${seg.stops} Stop(s)`) : 'Nonstop';
 
-          const line = `Segment #${idx + 1}: ${carrier} (${flightNum}) | ${orig} -> ${dest} | Dep: ${dep} | Arr: ${arr} | ${cabin} | ${stops}`;
+          const line = `Segment #${idx + 1}: ${carrier} (${carrierCode} ${flightNum}) | ${orig} -> ${dest} | Dep: ${dep} | Arr: ${arr} | ${cabin} | ${stops}`;
           doc.text(line, 50, y);
           y += 13;
         });
       }
+
 
       y += 16;
 

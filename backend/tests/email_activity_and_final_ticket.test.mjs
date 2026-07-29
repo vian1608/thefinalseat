@@ -25,6 +25,23 @@ async function runEmailActivityAndFinalTicketTests() {
 
   const bookingId = testBooking.id;
 
+  await bookingRepository.saveItinerarySegments(bookingId, [
+    {
+      journey_direction: 'outbound',
+      segment_sequence: 1,
+      marketing_carrier_code: 'UA',
+      airline_name: 'United Airlines',
+      flight_number: 'UA 1029',
+      origin_airport: 'SFO',
+      origin_city: 'San Francisco',
+      destination_airport: 'JFK',
+      destination_city: 'New York',
+      departure_date: '2026-11-15',
+      departure_time: '09:00 AM'
+    }
+  ]);
+
+
   // Test 1: Send Final Ticket Email
   console.log('Test 1: Dispatching Final E-Ticket Email...');
   const ticketRes = await sendFinalTicketEmail(testBooking);

@@ -22,7 +22,11 @@ router.get('/bookings', authenticate, authorize(['admin']), adminController.getB
 router.get('/bookings/:id', authenticate, authorize(['admin']), adminController.getBookingDetail);
 router.put('/bookings/:id', authenticate, authorize(['admin']), adminController.updateBooking);
 router.put('/bookings/:id/payment-splits', authenticate, authorize(['admin']), adminController.updatePaymentSplits);
+router.put('/bookings/:id/ticket-details', authenticate, authorize(['admin']), adminController.saveTicketDetails);
+router.post('/bookings/:id/send-final-ticket', authenticate, authorize(['admin']), adminController.sendFinalTicketEmail);
+router.get('/bookings/:id/diagnostic', authenticate, authorize(['admin']), adminController.getBookingDiagnosticData);
 router.post('/bookings/:id/process-authorized', authenticate, authorize(['admin']), adminController.processAuthorizedBooking);
+
 
 router.post('/bookings/:id/itinerary', authenticate, authorize(['admin']), adminController.updateItinerary);
 router.post('/bookings/:id/pricing', authenticate, authorize(['admin']), adminController.updatePricing);

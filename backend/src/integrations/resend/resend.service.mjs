@@ -666,10 +666,23 @@ Support: +1 (213) 965-9727 | support@thefinalseat.com
   }
 };
 
-export const sendPassengerAuthorizationEmail = async (bookingId) => {
+export const sendPassengerAuthorizationEmail = async (bookingIdInput) => {
+  let bookingId = bookingIdInput;
   try {
-    const booking = await bookingRepository.getById(bookingId);
+    const booking = await bookingRepository.getCompleteBookingById(bookingIdInput);
     if (!booking) return { success: false, error: 'Booking not found' };
+    bookingId = booking.id;
+
+
+    if (!booking.itinerary || !booking.itinerary.outbound || booking.itinerary.outbound.length === 0) {
+      const errMsg = 'BOOKING_ITINERARY_MISSING: Cannot dispatch authorization email for booking without committed flight segments.';
+      logger.error(`[Email] ${errMsg} (bookingId=${bookingId})`);
+      await bookingRepository.updateBookingStatus(bookingId, {
+        authorization_email_status: 'FAILED',
+        authorization_email_error: errMsg
+      });
+      return { success: false, error: errMsg };
+    }
 
     const customerEmail = booking.email || booking.contacts?.[0]?.email || booking.travellers?.[0]?.email;
     if (!customerEmail || !customerEmail.includes('@')) {
@@ -696,6 +709,7 @@ export const sendPassengerAuthorizationEmail = async (bookingId) => {
     const totalAmountNum = splitTotal > 0 ? splitTotal : parseFloat(booking.customer_price || booking.total_amount || 0);
     const amount = totalAmountNum.toFixed(2);
     const currency = (booking.currency || 'USD').toUpperCase();
+
 
     let splitsHtml = '';
     if (splits && splits.length > 0) {
@@ -880,30 +894,13 @@ The Final Seat LLC
 };
 
 export function renderFlightItineraryHtml(bookingOrSegments) {
-  let segments = [];
-  if (Array.isArray(bookingOrSegments)) {
-    segments = bookingOrSegments;
-  } else if (bookingOrSegments && typeof bookingOrSegments === 'object') {
-    const b = bookingOrSegments;
-    segments = b.itinerary_segments || b.outbound_segments || b.segments || [];
-    if (segments.length === 0) {
-      if (Array.isArray(b.flights)) {
-        segments = b.flights;
-      } else if (b.flight_details || b.outbound_flight) {
-        segments = [b.flight_details || b.outbound_flight];
-        if (b.returnFlight || b.return_flight) segments.push(b.returnFlight || b.return_flight);
-      }
-    }
-  }
 
-  if (!segments || segments.length === 0) {
+  const itinerary = buildCanonicalItinerary(bookingOrSegments);
+  const outboundSegs = itinerary.outbound || [];
+  const returnSegs = itinerary.return || [];
+
+  if (outboundSegs.length === 0 && returnSegs.length === 0) {
     return `<div style="padding: 14px; background: #f8fafc; border-radius: 8px; color: #64748b; font-size: 13px; text-align: center;">Flight itinerary details will be updated upon final airline confirmation.</div>`;
-  }
-
-  const outboundSegs = segments.filter(s => (s.journey_direction || s.direction) !== 'return');
-  const returnSegs = segments.filter(s => (s.journey_direction || s.direction) === 'return');
-  if (outboundSegs.length === 0 && segments.length > 0) {
-    outboundSegs.push(...segments);
   }
 
   function renderGroup(segList, title) {
@@ -915,33 +912,37 @@ export function renderFlightItineraryHtml(bookingOrSegments) {
       </div>
     `;
 
-    segList.forEach((s, idx) => {
-      const code = (s.marketing_carrier_code || s.carrier_code || s.carrier || s.airline_code || 'UA').trim().toUpperCase();
-      const carrierName = resolveAirlineName(code, s.carrier_name || s.airline_name || s.airline);
-      const logoUrl = getCarrierLogoUrl(code);
-      const flightNum = s.flight_number || s.flightNumber || s.number || '100';
+    segList.forEach((s) => {
+      const code = (s.carrierCode || '').trim().toUpperCase();
+      const carrierName = s.airlineName || (code ? `${code} Airlines` : 'Airline');
+      const logoUrl = s.airlineLogoUrl || getCarrierLogoUrl(code);
+      const flightNum = s.flightNumber || '';
       const flightDesignator = `${code} ${flightNum}`.trim();
 
-      const origCode = s.origin_airport || s.origin_code || s.originCode || s.origin || 'LAX';
-      const origCity = s.origin_city || s.originCity || 'Los Angeles';
-      const destCode = s.destination_airport || s.destination_code || s.destinationCode || s.destination || 'MIA';
-      const destCity = s.destination_city || s.destinationCity || 'Miami';
+      const origCode = s.originCode || '';
+      const origCity = s.originName || origCode;
+      const destCode = s.destinationCode || '';
+      const destCity = s.destinationName || destCode;
 
-      const depDate = s.departure_date || '2026-09-10';
-      const depTime = s.departure_time || '09:00 AM';
-      const arrDate = s.arrival_date || '2026-09-10';
-      const arrTime = s.arrival_time || '05:00 PM';
+      const depDate = s.departureDate || (s.departureAt ? String(s.departureAt).split('T')[0] : '');
+      const depTime = s.departureTime || '';
+      const arrDate = s.arrivalDate || (s.arrivalAt ? String(s.arrivalAt).split('T')[0] : '');
+      const arrTime = s.arrivalTime || '';
 
-      const cabin = s.cabin || s.cabin_class || s.class || 'Economy';
+      const cabin = s.cabinClass || 'Economy';
       const stopsCount = s.stops !== undefined ? s.stops : 0;
       const stopsLabel = stopsCount === 0 ? 'Nonstop' : `${stopsCount} Stop${stopsCount > 1 ? 's' : ''}`;
+
+      const logoHtml = logoUrl
+        ? `<img src="${logoUrl}" alt="${carrierName}" width="34" height="34" style="border-radius: 50%; display: block; border: 1px solid #f1f5f9;" />`
+        : `<div style="width: 34px; height: 34px; border-radius: 50%; background: #8b1236; color: #ffffff; font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center;">${code || 'FLT'}</div>`;
 
       html += `
         <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-bottom: 10px; background: #ffffff;">
           <table role="presentation" width="100%" style="width: 100%; border-collapse: collapse;">
             <tr>
               <td style="vertical-align: middle; width: 42px; padding-right: 10px;">
-                <img src="${logoUrl}" alt="${carrierName}" width="34" height="34" style="border-radius: 50%; display: block; border: 1px solid #f1f5f9;" />
+                ${logoHtml}
               </td>
               <td style="vertical-align: middle;">
                 <div style="font-size: 13px; font-weight: 700; color: #1e293b;">${carrierName}</div>
@@ -986,35 +987,31 @@ export function renderFlightItineraryHtml(bookingOrSegments) {
 }
 
 export function renderFlightItineraryText(bookingOrSegments) {
-  let segments = [];
-  if (Array.isArray(bookingOrSegments)) {
-    segments = bookingOrSegments;
-  } else if (bookingOrSegments && typeof bookingOrSegments === 'object') {
-    const b = bookingOrSegments;
-    segments = b.itinerary_segments || b.outbound_segments || b.segments || b.flights || [];
-  }
-
-  if (!segments || segments.length === 0) return 'Flight itinerary details will be updated upon final airline confirmation.';
+  const itinerary = buildCanonicalItinerary(bookingOrSegments);
+  const segments = [...(itinerary.outbound || []), ...(itinerary.return || [])];
+  if (segments.length === 0) return 'Flight itinerary details will be updated upon final airline confirmation.';
 
   return segments.map((s, idx) => {
-    const code = (s.marketing_carrier_code || s.carrier_code || s.carrier || 'UA').trim().toUpperCase();
-    const carrierName = resolveAirlineName(code, s.carrier_name || s.airline_name || s.airline);
-    const flightNum = s.flight_number || s.flightNumber || s.number || '100';
-    const orig = s.origin_airport || s.origin_code || s.origin || 'LAX';
-    const dest = s.destination_airport || s.destination_code || s.destination || 'MIA';
-    const dep = s.departure_date || s.departure_time || '2026-09-10';
-    const arr = s.arrival_date || s.arrival_time || '2026-09-10';
-    const cabin = s.cabin || s.cabin_class || 'Economy';
-    return `Flight #${idx + 1}: ${carrierName} (${code} ${flightNum}) | ${orig} -> ${dest} | Dep: ${dep} | Arr: ${arr} | ${cabin}`;
+    return `Flight #${idx + 1}: ${s.airlineName} (${s.carrierCode} ${s.flightNumber}) | ${s.originCode} -> ${s.destinationCode} | Dep: ${s.departureDate || s.departureAt} ${s.departureTime || ''} | Arr: ${s.arrivalDate || s.arrivalAt} ${s.arrivalTime || ''} | ${s.cabinClass}`;
   }).join('\n');
 }
 
 
-export const sendFinalTicketEmail = async (bookingInput) => {
 
+export const sendFinalTicketEmail = async (bookingInput) => {
   try {
-    const booking = typeof bookingInput === 'object' ? bookingInput : await bookingRepository.getById(bookingInput);
+    const bookingId = typeof bookingInput === 'object' ? (bookingInput.id || bookingInput.booking_id) : bookingInput;
+    const booking = await bookingRepository.getCompleteBookingById(bookingId);
     if (!booking) return { success: false, error: 'Booking not found' };
+
+    const airlinePnr = (booking.airline_confirmation_number || booking.airline_pnr || booking.pnr || '').trim().toUpperCase();
+    if (!airlinePnr || !/^[A-Z0-9]{6}$/.test(airlinePnr)) {
+      return { success: false, error: 'Final ticket email cannot be sent because the airline PNR is missing or invalid.' };
+    }
+
+    if (!booking.itinerary || !booking.itinerary.outbound || booking.itinerary.outbound.length === 0) {
+      return { success: false, error: 'Final ticket email cannot be sent because no itinerary segments were found.' };
+    }
 
     const customerEmail = booking.email || booking.customerEmail || booking.contacts?.[0]?.email || booking.travellers?.[0]?.email;
     if (!customerEmail || !customerEmail.includes('@')) {
@@ -1026,23 +1023,17 @@ export const sendFinalTicketEmail = async (bookingInput) => {
       return { success: false, error: errMsg };
     }
 
-    const airlinePnr = booking.airline_pnr || booking.pnr || booking.supplier_confirmation || booking.confirmation_code;
-    if (!booking.airline_pnr && !booking.pnr && !booking.supplier_confirmation) {
-      return { success: false, error: 'Cannot send Final Ticket Email until Airline Confirmation Number (PNR) is saved.' };
-    }
-
     const bookingReference = booking.confirmation_code || booking.bookingReference || booking.id;
     const passengerName = booking.passenger_name || booking.customerName || 'Valued Passenger';
     const passengerFirstName = passengerName.split(' ')[0] || 'Passenger';
+    const travellers = booking.passengers || booking.travellers || booking.traveller_details || [];
     const amountPaid = parseFloat(booking.customer_price || booking.total_amount || 0).toFixed(2);
     const currency = (booking.currency || 'USD').toUpperCase();
     const ticketNumber = booking.ticket_number || `TKT-${Date.now().toString().slice(-8)}`;
 
-    const relations = await bookingRepository.getRelations(booking.id);
-    const flights = relations.flights || booking.flights || [];
-    const travellers = relations.travellers || booking.travellers || [];
+    const itineraryHtml = renderFlightItineraryHtml(booking);
 
-    const itineraryHtml = renderFlightItineraryHtml(flights, currency);
+
 
     const subject = `Official Flight E-Ticket & Confirmation — Booking ID ${bookingReference} | The Final Seat`;
 

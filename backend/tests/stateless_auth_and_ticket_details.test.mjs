@@ -24,6 +24,23 @@ async function runStatelessAuthAndTicketDetailsTests() {
 
   const bookingId = testBooking.id;
 
+  await bookingRepository.saveItinerarySegments(bookingId, [
+    {
+      journey_direction: 'outbound',
+      segment_sequence: 1,
+      marketing_carrier_code: 'UA',
+      airline_name: 'United Airlines',
+      flight_number: 'UA 100',
+      origin_airport: 'LAX',
+      origin_city: 'Los Angeles',
+      destination_airport: 'ORD',
+      destination_city: 'Chicago',
+      departure_date: '2026-11-10',
+      departure_time: '08:00 AM'
+    }
+  ]);
+
+
   // Test 1: Stateless Token Generation & Resolution
   console.log('Test 1: Stateless Signed Authorization Token Generation & Resolution...');
   const authRecord = await passengerAuthorizationService.createAuthorizationToken(testBooking);
@@ -40,7 +57,8 @@ async function runStatelessAuthAndTicketDetailsTests() {
   console.log('Test 2: Verifying Final Ticket Email is gated until Airline PNR exists...');
   const ticketWithoutPnr = await sendFinalTicketEmail(testBooking);
   assert.strictEqual(ticketWithoutPnr.success, false);
-  assert.ok(ticketWithoutPnr.error.includes('Airline Confirmation Number (PNR)'));
+  assert.ok(ticketWithoutPnr.error.includes('airline PNR') || ticketWithoutPnr.error.includes('Airline Confirmation Number (PNR)'));
+
   console.log('  ✔ Final Ticket Email correctly blocked when Airline PNR is missing\n');
 
   // Test 3: Save Airline Ticket Details (PNR, Airline Name, Ticket #)

@@ -71,7 +71,22 @@ async function runPaymentAndEmailTests() {
   });
 
 
+  await bookingRepository.saveItinerarySegments(noEmailBooking.id, [
+    {
+      journey_direction: 'outbound',
+      segment_sequence: 1,
+      marketing_carrier_code: 'UA',
+      airline_name: 'United Airlines',
+      flight_number: 'UA 100',
+      origin_airport: 'LAX',
+      destination_airport: 'ORD',
+      departure_date: '2026-11-10',
+      departure_time: '08:00 AM'
+    }
+  ]);
+
   const authNoEmailRes = await sendPassengerAuthorizationEmail(noEmailBooking.id);
+
   assert.strictEqual(authNoEmailRes.success, false);
   assert.strictEqual(authNoEmailRes.error, 'This booking does not have a valid passenger email address.');
   console.log('  ✔ Missing email correctly rejected with sanitized admin error message\n');

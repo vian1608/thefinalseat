@@ -4,7 +4,31 @@ import { Helmet } from 'react-helmet-async';
 import { adminAPI } from '../../../shared/api/api';
 import './AdminDashboardPage.css';
 
+const AIRLINE_DIRECTORY = [
+  { name: 'United Airlines', iataCode: 'UA' },
+  { name: 'Delta Air Lines', iataCode: 'DL' },
+  { name: 'American Airlines', iataCode: 'AA' },
+  { name: 'Southwest Airlines', iataCode: 'WN' },
+  { name: 'Alaska Airlines', iataCode: 'AS' },
+  { name: 'JetBlue Airways', iataCode: 'B6' },
+  { name: 'Spirit Airlines', iataCode: 'NK' },
+  { name: 'Frontier Airlines', iataCode: 'F9' },
+  { name: 'Air Canada', iataCode: 'AC' },
+  { name: 'British Airways', iataCode: 'BA' },
+  { name: 'Virgin Atlantic', iataCode: 'VS' },
+  { name: 'Lufthansa', iataCode: 'LH' },
+  { name: 'Emirates', iataCode: 'EK' },
+  { name: 'Qatar Airways', iataCode: 'QR' },
+  { name: 'Turkish Airlines', iataCode: 'TK' },
+  { name: 'Air France', iataCode: 'AF' },
+  { name: 'KLM Royal Dutch Airlines', iataCode: 'KL' },
+  { name: 'Singapore Airlines', iataCode: 'SQ' },
+  { name: 'Cathay Pacific', iataCode: 'CX' },
+  { name: 'Qantas', iataCode: 'QF' }
+];
+
 function AdminDashboard() {
+
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [abandonedBookings, setAbandonedBookings] = useState([]);
@@ -64,11 +88,15 @@ function AdminDashboard() {
 
   // Airline Ticket Details State
   const [ticketForm, setTicketForm] = useState({
-    airlinePnr: '',
+    airlineCode: '',
     airlineName: '',
+    airlineConfirmationNumber: '',
     ticketNumber: '',
-    ticketIssueDate: ''
+    ticketIssuedAt: '',
+    ticketNotes: '',
+    supplierConfirmation: ''
   });
+
 
 
   // Payment Editor State
@@ -305,43 +333,94 @@ function AdminDashboard() {
 
     // Initial ticket details setup
     setTicketForm({
-      airlinePnr: booking.airline_pnr || booking.pnr || booking.supplier_confirmation || '',
+      airlineCode: booking.airline_code || '',
       airlineName: booking.airline_name || booking.carrier || '',
+      airlineConfirmationNumber: booking.airline_confirmation_number || booking.airline_pnr || booking.pnr || '',
+      supplierConfirmation: booking.supplier_confirmation || '',
       ticketNumber: booking.ticket_number || '',
-      ticketIssueDate: booking.ticket_issue_date ? String(booking.ticket_issue_date).substring(0, 10) : ''
+      ticketIssuedAt: booking.ticket_issued_at ? String(booking.ticket_issued_at).slice(0, 16) : '',
+      ticketNotes: booking.ticket_notes || ''
     });
   };
-
 
   const handleSaveTicketDetails = async (e) => {
     if (e) e.preventDefault();
     if (!selectedBooking) return;
-    setUpdatingRecord(true);
 
+    const pnr = (ticketForm.airlineConfirmationNumber || '').trim().toUpperCase();
+    if (pnr && !/^[A-Z0-9]{6}$/.test(pnr)) {
+      alert('Airline confirmation number must contain exactly 6 letters or numbers.');
+      return;
+    }
+
+    const tkt = (ticketForm.ticketNumber || '').trim();
+    if (tkt && !/^\d{1,13}$/.test(tkt)) {
+      alert('Ticket number must contain digits only and cannot exceed 13 digits.');
+      return;
+    }
+
+    const adminToken = localStorage.getItem('token');
     try {
-      const response = await adminAPI.updateBooking(selectedBooking.id, {
-        airline_pnr: ticketForm.airlinePnr,
-        airline_name: ticketForm.airlineName,
-        ticket_number: ticketForm.ticketNumber,
-        ticket_issue_date: ticketForm.ticketIssueDate || new Date().toISOString()
+      setUpdatingRecord(true);
+      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/ticket-details`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({
+          airlineCode: ticketForm.airlineCode,
+          airlineName: ticketForm.airlineName,
+          airlineConfirmationNumber: pnr,
+          ticketNumber: tkt,
+          ticketIssuedAt: ticketForm.ticketIssuedAt || new Date().toISOString(),
+          ticketNotes: ticketForm.ticketNotes,
+          supplierConfirmation: ticketForm.supplierConfirmation
+        })
       });
 
-      if (response.success && (response.data || response.booking)) {
-        const updated = response.data || response.booking;
-        setSelectedBooking(updated);
-        setHasUnsavedEdits(false);
-        loadAllDashboardData();
-        alert('Airline ticket details saved successfully.');
-      } else {
-        alert(response.error?.message || response.message || 'Failed to save airline ticket details.');
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error?.message || data.message || 'Unable to save airline ticket details.');
       }
+
+      const updated = data.booking || data.data;
+      if (updated) {
+        setSelectedBooking(updated);
+        setBookings(prevList => prevList.map(b => b.id === updated.id ? { ...b, ...updated } : b));
+      }
+
+      setHasUnsavedEdits(false);
+      alert('Airline ticket details saved.');
+      loadAllDashboardData();
     } catch (err) {
-      console.error('Save ticket details failed:', err);
-      alert(`Error saving ticket details: ${err.message}`);
+      alert(`Unable to save airline ticket details: ${err.message}`);
     } finally {
       setUpdatingRecord(false);
     }
   };
+
+  const handleSendFinalTicketEmail = async () => {
+    if (!selectedBooking) return;
+    const adminToken = localStorage.getItem('token');
+    try {
+      setUpdatingRecord(true);
+      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/send-final-ticket`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error?.message || 'Failed to send final ticket email.');
+      }
+
+      alert('Final E-Ticket email sent successfully.');
+      loadAllDashboardData();
+    } catch (err) {
+      alert(`Final Ticket Email Error: ${err.message}`);
+    } finally {
+      setUpdatingRecord(false);
+    }
+  };
+
 
 
   const handleConfirmItinerarySave = async () => {
@@ -1704,6 +1783,148 @@ function AdminDashboard() {
                       )}
                     </div>
 
+                    {/* 4.5 AIRLINE TICKET DETAILS ACCORDION */}
+                    <div className="admin-accordion-card">
+                      <button
+                        type="button"
+                        className="admin-accordion-header"
+                        onClick={() => setOpenAccordion(openAccordion === 'ticket_details' ? null : 'ticket_details')}
+                      >
+                        <span className="accordion-title-left">
+                          <i className={`fas ${openAccordion === 'ticket_details' ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
+                          Airline Ticket Details
+                        </span>
+                        <span className="accordion-summary-right">
+                          {ticketForm.airlineConfirmationNumber ? `PNR: ${ticketForm.airlineConfirmationNumber}` : 'Not Ticketed'}
+                        </span>
+                      </button>
+
+                      {openAccordion === 'ticket_details' && (
+                        <div className="admin-accordion-body" style={{ padding: '12px' }}>
+                          <div className="drawer-grid-2col">
+                            <div className="drawer-form-field">
+                              <label>Airline Name / Search</label>
+                              <input
+                                type="text"
+                                list="airline-directory-list"
+                                value={ticketForm.airlineName}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const match = AIRLINE_DIRECTORY.find(a => a.name.toLowerCase() === val.toLowerCase() || a.iataCode.toLowerCase() === val.toLowerCase());
+                                  setTicketForm({
+                                    ...ticketForm,
+                                    airlineName: match ? match.name : val,
+                                    airlineCode: match ? match.iataCode : ticketForm.airlineCode
+                                  });
+                                  setHasUnsavedEdits(true);
+                                }}
+                                placeholder="Search airline (e.g. United, BA)"
+                              />
+                              <datalist id="airline-directory-list">
+                                {AIRLINE_DIRECTORY.map(a => (
+                                  <option key={a.iataCode} value={`${a.name} (${a.iataCode})`} />
+                                ))}
+                              </datalist>
+                            </div>
+                            <div className="drawer-form-field">
+                              <label>Carrier Code (IATA)</label>
+                              <input
+                                type="text"
+                                maxLength={3}
+                                value={ticketForm.airlineCode}
+                                onChange={(e) => {
+                                  const code = e.target.value.toUpperCase();
+                                  setTicketForm({ ...ticketForm, airlineCode: code });
+                                  setHasUnsavedEdits(true);
+                                }}
+                                placeholder="UA, BA, DL"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="drawer-grid-2col">
+                            <div className="drawer-form-field">
+                              <label>Airline PNR (6 Alphanumeric) *</label>
+                              <input
+                                type="text"
+                                maxLength={6}
+                                value={ticketForm.airlineConfirmationNumber}
+                                onChange={(e) => {
+                                  const pnr = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                                  setTicketForm({ ...ticketForm, airlineConfirmationNumber: pnr });
+                                  setHasUnsavedEdits(true);
+                                }}
+                                placeholder="AB12CD"
+                              />
+                            </div>
+                            <div className="drawer-form-field">
+                              <label>Supplier Confirmation Ref</label>
+                              <input
+                                type="text"
+                                value={ticketForm.supplierConfirmation}
+                                onChange={(e) => {
+                                  setTicketForm({ ...ticketForm, supplierConfirmation: e.target.value });
+                                  setHasUnsavedEdits(true);
+                                }}
+                                placeholder="SUP-998822 (GDS / Provider)"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="drawer-grid-2col">
+                            <div className="drawer-form-field">
+                              <label>Ticket Number (Digits only, max 13)</label>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                maxLength={13}
+                                value={ticketForm.ticketNumber}
+                                onChange={(e) => {
+                                  const digits = e.target.value.replace(/\D/g, '');
+                                  setTicketForm({ ...ticketForm, ticketNumber: digits });
+                                  setHasUnsavedEdits(true);
+                                }}
+                                placeholder="1252410982341"
+                              />
+                            </div>
+                            <div className="drawer-form-field">
+                              <label>Issued At</label>
+                              <input
+                                type="datetime-local"
+                                value={ticketForm.ticketIssuedAt}
+                                onChange={(e) => {
+                                  setTicketForm({ ...ticketForm, ticketIssuedAt: e.target.value });
+                                  setHasUnsavedEdits(true);
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="drawer-form-field">
+                            <label>Ticket Notes</label>
+                            <input
+                              type="text"
+                              value={ticketForm.ticketNotes}
+                              onChange={(e) => {
+                                setTicketForm({ ...ticketForm, ticketNotes: e.target.value });
+                                setHasUnsavedEdits(true);
+                              }}
+                              placeholder="e.g. Issued via British Airways NDC Portal"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleSaveTicketDetails}
+                            className="admin-primary-btn"
+                            style={{ width: '100%', background: '#047857', marginTop: '8px' }}
+                          >
+                            <i className="fas fa-save" style={{ marginRight: '4px' }}></i> Save Airline Ticket Details
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
                     {/* 5. EMAIL DELIVERY ACTIVITY ACCORDION */}
                     <div className="admin-accordion-card">
                       <button
@@ -1821,18 +2042,17 @@ function AdminDashboard() {
                               {selectedBooking.final_confirmation_email_error && <div style={{ color: '#dc2626', gridColumn: '1 / -1' }}><strong>Error:</strong> {selectedBooking.final_confirmation_email_error}</div>}
                             </div>
 
-                            {['TICKETED', 'DONE'].includes(selectedBooking.status) && (
-                              <button
-                                type="button"
-                                onClick={() => handlePaymentActionSubmit('send_final_ticket_email')}
-                                className={selectedBooking.final_confirmation_email_status === 'SENT' ? "admin-secondary-btn" : "admin-primary-btn"}
-                                style={{ width: '100%', background: selectedBooking.final_confirmation_email_status === 'SENT' ? '#f1f5f9' : '#047857', fontSize: '0.78rem', height: '34px' }}
-                              >
-                                <i className={`fas ${selectedBooking.final_confirmation_email_status === 'SENT' ? 'fa-redo' : 'fa-ticket-alt'}`} style={{ marginRight: '4px' }}></i>
-                                {selectedBooking.final_confirmation_email_status === 'SENT' ? 'Resend Final Ticket Email' : 'Send Final Ticket Email'}
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={handleSendFinalTicketEmail}
+                              className={selectedBooking.final_confirmation_email_status === 'SENT' ? "admin-secondary-btn" : "admin-primary-btn"}
+                              style={{ width: '100%', background: selectedBooking.final_confirmation_email_status === 'SENT' ? '#f1f5f9' : '#047857', fontSize: '0.78rem', height: '34px' }}
+                            >
+                              <i className={`fas ${selectedBooking.final_confirmation_email_status === 'SENT' ? 'fa-redo' : 'fa-ticket-alt'}`} style={{ marginRight: '4px' }}></i>
+                              {selectedBooking.final_confirmation_email_status === 'SENT' ? 'Resend Final Ticket Email' : 'Send Final Ticket Email'}
+                            </button>
                           </div>
+
                         </div>
                       )}
                     </div>
