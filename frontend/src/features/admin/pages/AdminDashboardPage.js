@@ -1206,7 +1206,8 @@ function AdminDashboard() {
                   )}
                 </div>
               </div>
-            </div>            {/* DETAIL PANEL / DRAWER */}
+            </div>
+            {/* DETAIL PANEL / DRAWER */}
             <aside className="admin-detail-panel booking-details-panel booking-overview-panel" style={{ width: '500px', flex: '0 0 500px', maxHeight: 'calc(100vh - 24px)', overflowY: 'auto', position: 'sticky', top: '12px' }}>
 
               {selectedBooking ? (
@@ -1259,7 +1260,7 @@ function AdminDashboard() {
                               <div style={{ position: 'absolute', right: 0, top: '36px', width: '220px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', zIndex: 90, padding: '6px 0' }}>
                                 <button
                                   type="button"
-                                  onClick={() => { setShowThreeDotMenu(false); handleResendAuthorization(); }}
+                                  onClick={() => { setShowThreeDotMenu(false); handlePaymentActionSubmit('send_authorization'); }}
                                   style={{ width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: '0.8rem', color: '#1e293b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
                                 >
                                   <i className="fas fa-paper-plane" style={{ color: '#2563eb' }}></i> Send Authorization
@@ -1273,7 +1274,7 @@ function AdminDashboard() {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => { setShowThreeDotMenu(false); handleDownloadPdf(); }}
+                                  onClick={() => { setShowThreeDotMenu(false); handleDownloadEvidence(selectedBooking.id); }}
                                   style={{ width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: '0.8rem', color: '#1e293b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
                                 >
                                   <i className="fas fa-file-pdf" style={{ color: '#dc2626' }}></i> Download Authorization Evidence
@@ -1281,7 +1282,7 @@ function AdminDashboard() {
                                 <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }}></div>
                                 <button
                                   type="button"
-                                  onClick={() => { setShowThreeDotMenu(false); handleCancelBooking(); }}
+                                  onClick={() => { setShowThreeDotMenu(false); handlePaymentActionSubmit('cancel_booking'); }}
                                   style={{ width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: '0.8rem', color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
                                 >
                                   <i className="fas fa-ban" style={{ color: '#dc2626' }}></i> Cancel Booking
@@ -1334,7 +1335,11 @@ function AdminDashboard() {
 
                       {/* TRIP SUMMARY BANNER */}
                       {(() => {
-                        const trip = selectedBooking.trip_summary || selectedBooking.tripSummary || calculateTripSummary(selectedBooking);
+                        const trip = selectedBooking.trip_summary || selectedBooking.tripSummary || {
+                          bannerText: selectedBooking.trip_type === 'round_trip' || returnSegments.length > 0 ? 'Round Trip' : 'One Way',
+                          routeSummary: `${outboundSegments[0]?.origin_airport || 'LHR'} → ${outboundSegments[outboundSegments.length - 1]?.destination_airport || 'GEG'}`,
+                          passengerText: '1 Passenger'
+                        };
                         return (
                           <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)', color: '#ffffff', borderRadius: '10px', padding: '14px 16px', boxShadow: '0 4px 12px rgba(15,23,42,0.15)' }}>
                             <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.8px', color: '#94a3b8', fontWeight: 700, marginBottom: '4px' }}>
@@ -1358,7 +1363,7 @@ function AdminDashboard() {
                         </h4>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.82rem' }}>
                           <div><span style={{ color: '#64748b' }}>Primary Passenger:</span> <br/><strong>{selectedBooking.passenger_name || 'Ravi Bishnoi'}</strong></div>
-                          <div><span style={{ color: '#64748b' }}>Passenger Count:</span> <br/><strong>{travellers.length || 1}</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Passenger Count:</span> <br/><strong>{(selectedBooking.travellers || selectedBooking.passengers || []).length || 1}</strong></div>
                           <div><span style={{ color: '#64748b' }}>Email:</span> <br/><strong style={{ wordBreak: 'break-all' }}>{selectedBooking.email || 'N/A'}</strong></div>
                           <div><span style={{ color: '#64748b' }}>Phone:</span> <br/><strong>{selectedBooking.phone || 'N/A'}</strong></div>
                         </div>
@@ -2769,6 +2774,8 @@ function AdminDashboard() {
                       )}
                     </div>
                   </div>
+                </div>
+              )}
 
                   {/* STICKY DRAWER FOOTER */}
                   <div className="sticky-drawer-footer">
