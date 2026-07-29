@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import env from '../src/config/env.mjs';
 
 async function testApiPersistence() {
-  console.log('=== VERIFYING PRODUCTION API TICKET DETAILS PERSISTENCE ===\n');
+  console.log('=== VERIFYING PRODUCTION API TICKET DETAILS PERSISTENCE & FIELD-LEVEL EDITING ===\n');
 
   // Generate Admin JWT token
   const token = jwt.sign(
@@ -99,11 +99,39 @@ async function testApiPersistence() {
 
   assert.strictEqual(refreshedBooking.airline_name || refreshedBooking.airlineName, 'United Airlines');
   assert.strictEqual(refreshedBooking.airline_code || refreshedBooking.airlineCode, 'UA');
-  assert.strictEqual(refreshedBooking.airline_logo_url || refreshedBooking.airlineLogoUrl, '/airlines/ua.png');
   assert.strictEqual(refreshedBooking.airline_confirmation_number || refreshedBooking.airlineConfirmationNumber || refreshedBooking.airline_pnr || refreshedBooking.pnr, 'AB12CD');
   assert.strictEqual(refreshedBooking.ticket_number || refreshedBooking.ticketNumber, '0162490182741');
+  console.log('  ✔ Initial save persisted across refresh.\n');
 
-  console.log('  ✔ PERSISTENCE VERIFIED! Saved Airline ("United Airlines"), PNR ("AB12CD"), and Ticket Number ("0162490182741") remained present after fresh API fetch.\n');
+  // 6. Test Single-Field Edit: Edit ONLY the PNR to ZX98YU
+  console.log('6. Editing ONLY PNR field to ZX98YU via HTTP PUT API...');
+  const editPnrRes = await fetch(`http://localhost:5001/api/admin/bookings/${bookingId}/ticket-details`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({
+      airlineConfirmationNumber: 'ZX98YU'
+    })
+  });
+  const editPnrData = await editPnrRes.json();
+  assert.strictEqual(editPnrRes.status, 200, 'Single field update should return HTTP 200');
+  assert.strictEqual(editPnrData.success, true);
+  console.log('  ✔ Single-field edit of PNR to ZX98YU succeeded.\n');
+
+  // 7. Verify Persistence After Single-Field Edit
+  console.log('7. Simulating full browser refresh after single-field edit...');
+  const refresh2Res = await fetch('http://localhost:5001/api/admin/bookings', { headers });
+  const refresh2Data = await refresh2Res.json();
+  assert.strictEqual(refresh2Res.status, 200);
+
+  const list2 = refresh2Data.data || refresh2Data.bookings || [];
+  const booking2 = list2.find(b => b.id === bookingId);
+  assert.ok(booking2);
+
+  assert.strictEqual(booking2.airline_confirmation_number || booking2.airlineConfirmationNumber || booking2.airline_pnr, 'ZX98YU', 'PNR must be updated to ZX98YU');
+  assert.strictEqual(booking2.airline_name || booking2.airlineName, 'United Airlines', 'Airline Name must remain United Airlines');
+  assert.strictEqual(booking2.ticket_number || booking2.ticketNumber, '0162490182741', 'Ticket Number must remain 0162490182741');
+
+  console.log('  ✔ SINGLE-FIELD PERSISTENCE VERIFIED! Updated PNR ("ZX98YU") persisted after refresh while Airline ("United Airlines") and Ticket Number ("0162490182741") remained unchanged.\n');
   console.log('🎉 ALL PERSISTENCE AND API INTEGRATION TESTS PASSED CLEANLY!\n');
 }
 

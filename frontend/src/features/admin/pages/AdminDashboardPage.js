@@ -215,6 +215,7 @@ function AdminDashboard() {
   });
   const [ticketDetailsError, setTicketDetailsError] = useState('');
   const [ticketDetailsSuccess, setTicketDetailsSuccess] = useState('');
+  const [editingTicketField, setEditingTicketField] = useState(null);
 
 
 
@@ -463,6 +464,7 @@ function AdminDashboard() {
       ticketIssuedAt: booking.ticket_issued_at ? String(booking.ticket_issued_at).slice(0, 10) : (booking.ticketIssuedAt ? String(booking.ticketIssuedAt).slice(0, 10) : ''),
       ticketNotes: booking.ticket_notes || booking.ticketNotes || ''
     });
+    setEditingTicketField(null);
     setTicketDetailsError('');
     setTicketDetailsSuccess('');
   };
@@ -527,10 +529,97 @@ function AdminDashboard() {
         });
       }
 
+      setEditingTicketField(null);
       setHasUnsavedEdits(false);
       setTicketDetailsSuccess('Airline ticket details saved.');
     } catch (err) {
       setTicketDetailsError(`Unable to save airline ticket details: ${err.message}`);
+    } finally {
+      setUpdatingRecord(false);
+    }
+  };
+
+  const handleSaveSingleField = async (fieldName) => {
+    if (!selectedBooking) return;
+    setTicketDetailsError('');
+    setTicketDetailsSuccess('');
+
+    const adminToken = localStorage.getItem('token');
+    const payload = {};
+
+    if (fieldName === 'pnr') {
+      const pnr = (ticketForm.airlineConfirmationNumber || '').trim().toUpperCase();
+      if (!pnr || !/^[A-Z0-9]{6}$/.test(pnr)) {
+        setTicketDetailsError('Airline confirmation number must contain exactly 6 letters or numbers.');
+        return;
+      }
+      payload.airlineConfirmationNumber = pnr;
+    } else if (fieldName === 'airline') {
+      if (!ticketForm.airlineName || !ticketForm.airlineName.trim()) {
+        setTicketDetailsError('Airline name cannot be empty.');
+        return;
+      }
+      payload.airlineName = ticketForm.airlineName;
+      payload.airlineCode = ticketForm.airlineCode;
+      payload.airlineLogoUrl = ticketForm.airlineLogoUrl;
+    } else if (fieldName === 'ticketNumber') {
+      const tkt = (ticketForm.ticketNumber || '').trim().replace(/\D/g, '').slice(0, 13);
+      if (tkt && !/^\d{1,13}$/.test(tkt)) {
+        setTicketDetailsError('Ticket number must contain digits only and cannot exceed 13 digits.');
+        return;
+      }
+      payload.ticketNumber = tkt;
+    } else if (fieldName === 'ticketIssuedAt') {
+      payload.ticketIssuedAt = ticketForm.ticketIssuedAt || new Date().toISOString().slice(0, 10);
+    }
+
+    try {
+      setUpdatingRecord(true);
+      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/ticket-details`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error?.message || data.message || 'Unable to update field.');
+      }
+
+      const updated = data.booking || data.data;
+      if (updated) {
+        setSelectedBooking(updated);
+        setBookings(prevList => prevList.map(b => b.id === updated.id ? { ...b, ...updated } : b));
+        setTicketForm({
+          airlineCode: updated.airline_code || updated.airlineCode || '',
+          airlineName: updated.airline_name || updated.airlineName || '',
+          airlineLogoUrl: updated.airline_logo_url || updated.airlineLogoUrl || '',
+          airlineConfirmationNumber: updated.airline_confirmation_number || updated.airlineConfirmationNumber || '',
+          airlinePnr: updated.airline_confirmation_number || updated.airlineConfirmationNumber || '',
+          supplierConfirmation: updated.supplier_confirmation || updated.supplierConfirmation || '',
+          ticketNumber: updated.ticket_number || updated.ticketNumber || '',
+          ticketIssuedAt: updated.ticket_issued_at ? String(updated.ticket_issued_at).slice(0, 10) : '',
+          ticketNotes: updated.ticket_notes || updated.ticketNotes || ''
+        });
+      }
+
+      // Re-fetch once to confirm DB persistence
+      try {
+        const fresh = await adminAPI.getBookingDetails(selectedBooking.id);
+        if (fresh && (fresh.data || fresh.booking)) {
+          const freshData = fresh.data || fresh.booking;
+          setSelectedBooking(freshData);
+          setBookings(prevList => prevList.map(b => b.id === freshData.id ? { ...b, ...freshData } : b));
+        }
+      } catch (e) {
+        console.warn('Re-fetch notice:', e.message);
+      }
+
+      setEditingTicketField(null);
+      setHasUnsavedEdits(false);
+      setTicketDetailsSuccess('Field updated successfully.');
+    } catch (err) {
+      setTicketDetailsError(`Unable to save: ${err.message}`);
     } finally {
       setUpdatingRecord(false);
     }
@@ -1601,100 +1690,260 @@ function AdminDashboard() {
 
                       {openAccordion === 'ticket_details' && (
                         <div className="admin-accordion-body">
-                          <div className="drawer-grid-2col">
-                            <div className="drawer-form-field">
-                              <label>Airline Confirmation Number / PNR *</label>
-                              <input
-                                type="text"
-                                maxLength={6}
-                                placeholder="6-char PNR (e.g. AB12CD)"
-                                value={ticketForm.airlineConfirmationNumber || ticketForm.airlinePnr || ''}
-                                onChange={(e) => {
-                                  const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
-                                  setTicketForm({ ...ticketForm, airlineConfirmationNumber: val, airlinePnr: val });
-                                  setHasUnsavedEdits(true);
-                                  setTicketDetailsError('');
-                                }}
-                              />
-                            </div>
-                            <div className="drawer-form-field">
-                              <label>Airline Name</label>
-                              <AirlineCombobox
-                                valueName={ticketForm.airlineName}
-                                valueCode={ticketForm.airlineCode}
-                                valueLogoUrl={ticketForm.airlineLogoUrl}
-                                onChange={(selected) => {
-                                  setTicketForm({
-                                    ...ticketForm,
-                                    airlineName: selected.airlineName,
-                                    airlineCode: selected.airlineCode,
-                                    airlineLogoUrl: selected.airlineLogoUrl
-                                  });
-                                  setHasUnsavedEdits(true);
-                                  setTicketDetailsError('');
-                                }}
-                              />
-                            </div>
-                          </div>
-
-                          <div className="drawer-grid-2col">
-                            <div className="drawer-form-field">
-                              <label>Ticket Number</label>
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                maxLength={13}
-                                placeholder="e.g. 0162490182741"
-                                value={ticketForm.ticketNumber || ''}
-                                onChange={(e) => {
-                                  const val = e.target.value.replace(/\D/g, '').slice(0, 13);
-                                  setTicketForm({ ...ticketForm, ticketNumber: val });
-                                  setHasUnsavedEdits(true);
-                                  setTicketDetailsError('');
-                                }}
-                              />
-                            </div>
-                            <div className="drawer-form-field">
-                              <label>Ticket Issue Date</label>
-                              <input
-                                type="date"
-                                value={ticketForm.ticketIssuedAt || ''}
-                                onChange={(e) => {
-                                  setTicketForm({ ...ticketForm, ticketIssuedAt: e.target.value });
-                                  setHasUnsavedEdits(true);
-                                  setTicketDetailsError('');
-                                }}
-                              />
-                            </div>
-                          </div>
-
                           {ticketDetailsError && (
-                            <div style={{ color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', marginTop: '10px' }}>
+                            <div style={{ color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', marginBottom: '12px' }}>
                               <i className="fas fa-exclamation-circle" style={{ marginRight: '6px' }}></i>
                               {ticketDetailsError}
                             </div>
                           )}
 
                           {ticketDetailsSuccess && (
-                            <div style={{ color: '#166534', background: '#f0fdf4', border: '1px solid #86efac', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', marginTop: '10px' }}>
+                            <div style={{ color: '#166534', background: '#f0fdf4', border: '1px solid #86efac', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', marginBottom: '12px' }}>
                               <i className="fas fa-check-circle" style={{ marginRight: '6px' }}></i>
                               {ticketDetailsSuccess}
                             </div>
                           )}
 
-                          <button
-                            type="button"
-                            onClick={handleSaveTicketDetails}
-                            className="admin-primary-btn"
-                            style={{ width: '100%', marginTop: '12px', background: '#1e3a5f' }}
-                            disabled={updatingRecord}
-                          >
-                            {updatingRecord ? (
-                              <><i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i> Saving...</>
-                            ) : (
-                              <><i className="fas fa-ticket-alt" style={{ marginRight: '6px' }}></i> Save Airline Ticket Details</>
-                            )}
-                          </button>
+                          {!(selectedBooking?.airline_confirmation_number || selectedBooking?.airlineConfirmationNumber || selectedBooking?.ticket_number) ? (
+                            /* INITIAL UNSAVED STATE FORM */
+                            <div>
+                              <div className="drawer-grid-2col">
+                                <div className="drawer-form-field">
+                                  <label>Airline Confirmation Number / PNR *</label>
+                                  <input
+                                    type="text"
+                                    maxLength={6}
+                                    placeholder="6-char PNR (e.g. AB12CD)"
+                                    value={ticketForm.airlineConfirmationNumber || ticketForm.airlinePnr || ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+                                      setTicketForm({ ...ticketForm, airlineConfirmationNumber: val, airlinePnr: val });
+                                      setHasUnsavedEdits(true);
+                                      setTicketDetailsError('');
+                                    }}
+                                  />
+                                </div>
+                                <div className="drawer-form-field">
+                                  <label>Airline Name</label>
+                                  <AirlineCombobox
+                                    valueName={ticketForm.airlineName}
+                                    valueCode={ticketForm.airlineCode}
+                                    valueLogoUrl={ticketForm.airlineLogoUrl}
+                                    onChange={(selected) => {
+                                      setTicketForm({
+                                        ...ticketForm,
+                                        airlineName: selected.airlineName,
+                                        airlineCode: selected.airlineCode,
+                                        airlineLogoUrl: selected.airlineLogoUrl
+                                      });
+                                      setHasUnsavedEdits(true);
+                                      setTicketDetailsError('');
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="drawer-grid-2col">
+                                <div className="drawer-form-field">
+                                  <label>Ticket Number</label>
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    maxLength={13}
+                                    placeholder="e.g. 0162490182741"
+                                    value={ticketForm.ticketNumber || ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value.replace(/\D/g, '').slice(0, 13);
+                                      setTicketForm({ ...ticketForm, ticketNumber: val });
+                                      setHasUnsavedEdits(true);
+                                      setTicketDetailsError('');
+                                    }}
+                                  />
+                                </div>
+                                <div className="drawer-form-field">
+                                  <label>Ticket Issue Date</label>
+                                  <input
+                                    type="date"
+                                    value={ticketForm.ticketIssuedAt || ''}
+                                    onChange={(e) => {
+                                      setTicketForm({ ...ticketForm, ticketIssuedAt: e.target.value });
+                                      setHasUnsavedEdits(true);
+                                      setTicketDetailsError('');
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={handleSaveTicketDetails}
+                                className="admin-primary-btn"
+                                style={{ width: '100%', marginTop: '12px', background: '#1e3a5f' }}
+                                disabled={updatingRecord}
+                              >
+                                {updatingRecord ? (
+                                  <><i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i> Saving...</>
+                                ) : (
+                                  <><i className="fas fa-ticket-alt" style={{ marginRight: '6px' }}></i> Save Airline Ticket Details</>
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            /* POST-SAVE READ-ONLY SUMMARY WITH INDIVIDUAL EDIT BUTTONS */
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+
+                              {/* 1. Airline Confirmation / PNR */}
+                              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ flex: 1, marginRight: '12px' }}>
+                                  <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>
+                                    Airline Confirmation / PNR
+                                  </div>
+                                  {editingTicketField === 'pnr' ? (
+                                    <input
+                                      type="text"
+                                      maxLength={6}
+                                      placeholder="6-char PNR (e.g. AB12CD)"
+                                      value={ticketForm.airlineConfirmationNumber || ''}
+                                      onChange={(e) => {
+                                        const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+                                        setTicketForm({ ...ticketForm, airlineConfirmationNumber: val });
+                                        setTicketDetailsError('');
+                                      }}
+                                      style={{ width: '100%', padding: '4px 8px', fontSize: '0.88rem', fontWeight: 600 }}
+                                    />
+                                  ) : (
+                                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', letterSpacing: '0.5px' }}>
+                                      {ticketForm.airlineConfirmationNumber || selectedBooking.airline_confirmation_number || 'Not Set'}
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  {editingTicketField === 'pnr' ? (
+                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                      <button type="button" onClick={() => handleSaveSingleField('pnr')} className="admin-primary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }} disabled={updatingRecord}>Save</button>
+                                      <button type="button" onClick={() => setEditingTicketField(null)} className="admin-secondary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }}>Cancel</button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => setEditingTicketField('pnr')} className="admin-secondary-btn" style={{ padding: '3px 10px', fontSize: '0.75rem', height: '26px' }}>Edit</button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* 2. Airline */}
+                              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ flex: 1, marginRight: '12px' }}>
+                                  <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>
+                                    Airline
+                                  </div>
+                                  {editingTicketField === 'airline' ? (
+                                    <AirlineCombobox
+                                      valueName={ticketForm.airlineName}
+                                      valueCode={ticketForm.airlineCode}
+                                      valueLogoUrl={ticketForm.airlineLogoUrl}
+                                      onChange={(selected) => {
+                                        setTicketForm({
+                                          ...ticketForm,
+                                          airlineName: selected.airlineName,
+                                          airlineCode: selected.airlineCode,
+                                          airlineLogoUrl: selected.airlineLogoUrl
+                                        });
+                                        setTicketDetailsError('');
+                                      }}
+                                    />
+                                  ) : (
+                                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#1e293b' }}>
+                                      {ticketForm.airlineName ? (ticketForm.airlineCode ? `${ticketForm.airlineName} — ${ticketForm.airlineCode}` : ticketForm.airlineName) : (selectedBooking.airline_name ? `${selectedBooking.airline_name}${selectedBooking.airline_code ? ` — ${selectedBooking.airline_code}` : ''}` : 'Not Set')}
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  {editingTicketField === 'airline' ? (
+                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                      <button type="button" onClick={() => handleSaveSingleField('airline')} className="admin-primary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }} disabled={updatingRecord}>Save</button>
+                                      <button type="button" onClick={() => setEditingTicketField(null)} className="admin-secondary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }}>Cancel</button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => setEditingTicketField('airline')} className="admin-secondary-btn" style={{ padding: '3px 10px', fontSize: '0.75rem', height: '26px' }}>Edit</button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* 3. Ticket Number */}
+                              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ flex: 1, marginRight: '12px' }}>
+                                  <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>
+                                    Ticket Number
+                                  </div>
+                                  {editingTicketField === 'ticketNumber' ? (
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      maxLength={13}
+                                      placeholder="e.g. 0162490182741"
+                                      value={ticketForm.ticketNumber || ''}
+                                      onChange={(e) => {
+                                        const val = e.target.value.replace(/\D/g, '').slice(0, 13);
+                                        setTicketForm({ ...ticketForm, ticketNumber: val });
+                                        setTicketDetailsError('');
+                                      }}
+                                      style={{ width: '100%', padding: '4px 8px', fontSize: '0.88rem', fontWeight: 600 }}
+                                    />
+                                  ) : (
+                                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#1e293b' }}>
+                                      {ticketForm.ticketNumber || selectedBooking.ticket_number || 'Not Set'}
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  {editingTicketField === 'ticketNumber' ? (
+                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                      <button type="button" onClick={() => handleSaveSingleField('ticketNumber')} className="admin-primary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }} disabled={updatingRecord}>Save</button>
+                                      <button type="button" onClick={() => setEditingTicketField(null)} className="admin-secondary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }}>Cancel</button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => setEditingTicketField('ticketNumber')} className="admin-secondary-btn" style={{ padding: '3px 10px', fontSize: '0.75rem', height: '26px' }}>Edit</button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* 4. Ticket Issue Date */}
+                              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ flex: 1, marginRight: '12px' }}>
+                                  <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>
+                                    Ticket Issue Date
+                                  </div>
+                                  {editingTicketField === 'ticketIssuedAt' ? (
+                                    <input
+                                      type="date"
+                                      value={ticketForm.ticketIssuedAt || ''}
+                                      onChange={(e) => {
+                                        setTicketForm({ ...ticketForm, ticketIssuedAt: e.target.value });
+                                        setTicketDetailsError('');
+                                      }}
+                                      style={{ width: '100%', padding: '4px 8px', fontSize: '0.85rem' }}
+                                    />
+                                  ) : (
+                                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#1e293b' }}>
+                                      {ticketForm.ticketIssuedAt
+                                        ? new Date(ticketForm.ticketIssuedAt + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                                        : (selectedBooking.ticket_issued_at ? new Date(String(selectedBooking.ticket_issued_at).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Not Set')}
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  {editingTicketField === 'ticketIssuedAt' ? (
+                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                      <button type="button" onClick={() => handleSaveSingleField('ticketIssuedAt')} className="admin-primary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }} disabled={updatingRecord}>Save</button>
+                                      <button type="button" onClick={() => setEditingTicketField(null)} className="admin-secondary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }}>Cancel</button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => setEditingTicketField('ticketIssuedAt')} className="admin-secondary-btn" style={{ padding: '3px 10px', fontSize: '0.75rem', height: '26px' }}>Edit</button>
+                                  )}
+                                </div>
+                              </div>
+
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

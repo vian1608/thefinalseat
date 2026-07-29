@@ -302,6 +302,7 @@ export const bookingRepository = {
     const booking = await bookingRepository.getById(bookingId);
     if (!booking) throw new Error('Booking not found');
     const realId = booking.id;
+    const publicRef = booking.confirmation_code || booking.bookingReference || realId;
 
     const {
       airlineCode,
@@ -332,32 +333,50 @@ export const bookingRepository = {
       cleanTkt = rawTkt;
     }
 
-    const cleanCode = airlineCode !== undefined ? String(airlineCode).trim().toUpperCase() : (booking.airline_code || null);
-    const cleanName = airlineName !== undefined ? String(airlineName).trim() : (booking.airline_name || null);
-    const cleanLogo = airlineLogoUrl !== undefined ? String(airlineLogoUrl).trim() : (booking.airline_logo_url || null);
-    const cleanSupp = supplierConfirmation !== undefined ? String(supplierConfirmation).trim() : (booking.supplier_confirmation || null);
-    const cleanNotes = ticketNotes !== undefined ? String(ticketNotes).trim() : (booking.ticket_notes || null);
-    const cleanIssuedAt = ticketIssuedAt ? String(ticketIssuedAt).slice(0, 10) : (booking.ticket_issued_at ? String(booking.ticket_issued_at).slice(0, 10) : new Date().toISOString().slice(0, 10));
+    const cleanCode = airlineCode !== undefined ? (airlineCode ? String(airlineCode).trim().toUpperCase() : null) : (booking.airline_code || null);
+    const cleanName = airlineName !== undefined ? (airlineName ? String(airlineName).trim() : null) : (booking.airline_name || null);
+    const cleanLogo = airlineLogoUrl !== undefined ? (airlineLogoUrl ? String(airlineLogoUrl).trim() : null) : (booking.airline_logo_url || null);
+    const cleanSupp = supplierConfirmation !== undefined ? (supplierConfirmation ? String(supplierConfirmation).trim() : null) : (booking.supplier_confirmation || null);
+    const cleanNotes = ticketNotes !== undefined ? (ticketNotes ? String(ticketNotes).trim() : null) : (booking.ticket_notes || null);
+    const cleanIssuedAt = ticketIssuedAt !== undefined ? (ticketIssuedAt ? String(ticketIssuedAt).slice(0, 10) : null) : (booking.ticket_issued_at ? String(booking.ticket_issued_at).slice(0, 10) : null);
 
     const updatePayload = {
-      airline_code: cleanCode,
-      airline_name: cleanName,
-      airline_logo_url: cleanLogo,
-      airline_confirmation_number: cleanPnr,
-      ticket_number: cleanTkt,
-      ticket_issued_at: cleanIssuedAt,
-      ticket_notes: cleanNotes,
-      supplier_confirmation: cleanSupp
+      updated_at: new Date().toISOString()
     };
 
+    if (airlineCode !== undefined) updatePayload.airline_code = cleanCode;
+    if (airlineName !== undefined) updatePayload.airline_name = cleanName;
+    if (airlineLogoUrl !== undefined) updatePayload.airline_logo_url = cleanLogo;
+    if (airlineConfirmationNumber !== undefined) updatePayload.airline_confirmation_number = cleanPnr;
+    if (ticketNumber !== undefined) updatePayload.ticket_number = cleanTkt;
+    if (ticketIssuedAt !== undefined) updatePayload.ticket_issued_at = cleanIssuedAt;
+    if (ticketNotes !== undefined) updatePayload.ticket_notes = cleanNotes;
+    if (supplierConfirmation !== undefined) updatePayload.supplier_confirmation = cleanSupp;
+
+    logger.info(`[TicketDetails Diagnostic] PublicID: ${publicRef} | InternalID: ${realId} | Table: bookings | RequestFields: ${Object.keys(ticketData).join(',')}`);
+
     await bookingRepository.updateStatus(realId, updatePayload);
+
+    // Audit event determination
+    let eventType = 'TICKET_DETAILS_UPDATED';
+    if (!booking.airline_confirmation_number && cleanPnr) {
+      eventType = 'TICKET_DETAILS_CREATED';
+    } else if (airlineConfirmationNumber !== undefined && cleanPnr !== booking.airline_confirmation_number) {
+      eventType = 'AIRLINE_PNR_UPDATED';
+    } else if ((airlineName !== undefined || airlineCode !== undefined) && (cleanName !== booking.airline_name || cleanCode !== booking.airline_code)) {
+      eventType = 'AIRLINE_UPDATED';
+    } else if (ticketNumber !== undefined && cleanTkt !== booking.ticket_number) {
+      eventType = 'TICKET_NUMBER_UPDATED';
+    } else if (ticketIssuedAt !== undefined && cleanIssuedAt !== booking.ticket_issued_at) {
+      eventType = 'TICKET_ISSUE_DATE_UPDATED';
+    }
 
     await bookingRepository.recordStatusAudit({
       bookingId: realId,
       oldStatus: booking.status,
       newStatus: booking.status,
       adminId,
-      reason: `Ticket details updated. PNR: ${cleanPnr || 'N/A'}, Airline: ${cleanName || 'N/A'} (${cleanCode || 'N/A'}), Ticket: ${cleanTkt || 'N/A'}, Supplier Ref: ${cleanSupp || 'N/A'}`
+      reason: `[${eventType}] PNR: ${cleanPnr || 'N/A'}, Airline: ${cleanName || 'N/A'} (${cleanCode || 'N/A'}), Ticket: ${cleanTkt || 'N/A'}, IssuedAt: ${cleanIssuedAt || 'N/A'}`
     });
 
     return bookingRepository.getCompleteBookingById(realId);
