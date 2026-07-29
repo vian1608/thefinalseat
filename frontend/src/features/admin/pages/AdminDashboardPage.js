@@ -24,8 +24,25 @@ const AIRLINE_DIRECTORY = [
   { name: 'Turkish Airlines', iataCode: 'TK', icaoCode: 'THY', logoUrl: '/airlines/tk.png' },
   { name: 'Singapore Airlines', iataCode: 'SQ', icaoCode: 'SIA', logoUrl: '/airlines/sq.png' },
   { name: 'Cathay Pacific', iataCode: 'CX', icaoCode: 'CPA', logoUrl: '/airlines/cx.png' },
-  { name: 'Qantas', iataCode: 'QF', icaoCode: 'QFA', logoUrl: '/airlines/qf.png' }
 ];
+
+const formatMoney = (value, currency = 'USD') => {
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount)) {
+    return 'Not available';
+  }
+
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: (currency || 'USD').toUpperCase()
+  }).format(amount);
+};
+
+const toFiniteNumber = (value, fallback = 0) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+};
 
 function AirlineCombobox({ valueName, valueCode, valueLogoUrl, onChange }) {
   const [query, setQuery] = React.useState(valueName || '');
@@ -415,37 +432,48 @@ function AdminDashboard() {
 
 
     // Initial pricing setup
-    const total = parseFloat(booking.customer_price || booking.total_amount || 0);
-    const supplier = parseFloat(booking.supplier_price || booking.original_api_price || total);
-    const disc = parseFloat(booking.discount_amount || 0);
+    const customerTotal = booking.pricing?.customerTotal ?? (typeof booking.customer_price === 'number' ? booking.customer_price : (typeof booking.total_amount === 'number' ? booking.total_amount : parseFloat(booking.customer_price || booking.total_amount || 0)));
+    const supplierCost = booking.pricing?.supplierCost ?? (typeof booking.supplier_price === 'number' ? booking.supplier_price : (typeof booking.original_api_price === 'number' ? booking.original_api_price : customerTotal));
+    const disc = booking.pricing?.discount ?? parseFloat(booking.discount_amount || 0);
+    const base = booking.pricing?.baseFare ?? supplierCost;
+    const tax = booking.pricing?.taxes ?? 45.00;
+    const fee = booking.pricing?.serviceFee ?? 15.00;
+    const mgn = booking.pricing?.margin ?? (customerTotal - supplierCost);
+
     setPricingForm({
-      supplierFare: supplier,
-      baseFare: supplier,
-      taxes: 45.00,
-      serviceFee: 15.00,
-      discount: disc,
-      customerTotal: total,
-      currency: booking.currency || 'USD',
-      margin: total - supplier,
+      supplierFare: toFiniteNumber(supplierCost, 0),
+      baseFare: toFiniteNumber(base, 0),
+      taxes: toFiniteNumber(tax, 45.00),
+      serviceFee: toFiniteNumber(fee, 15.00),
+      discount: toFiniteNumber(disc, 0),
+      customerTotal: toFiniteNumber(customerTotal, 0),
+      currency: booking.currency || booking.pricing?.currency || 'USD',
+      margin: toFiniteNumber(mgn, 0),
+      adminMargin: toFiniteNumber(mgn, 0),
       reason: ''
     });
 
     // Initial payment setup
+    const authAmount = booking.authorization?.authorizedAmount ?? (booking.payment?.paidAmount ?? customerTotal);
+    const paid = booking.payment?.paidAmount ?? ((booking.payment_status || '').toLowerCase() === 'paid' ? customerTotal : null);
+    const refunded = booking.payment?.refundedAmount ?? ((booking.payment_status || '').toLowerCase() === 'refunded' ? customerTotal : 0);
+
     setPaymentForm({
       paymentStatus: (booking.payment_status || 'PENDING').toUpperCase(),
-      provider: 'Whop',
+      provider: booking.payment?.provider || 'Whop',
       methodType: 'card',
       brand: 'Visa',
       last4: '4242',
-      authorizedAmount: total,
-      capturedAmount: booking.payment_status === 'paid' ? total : 0,
-      refundedAmount: 0,
-      referenceId: booking.transaction_id || '',
+      authorizedAmount: toFiniteNumber(authAmount, customerTotal),
+      capturedAmount: paid !== null ? toFiniteNumber(paid, 0) : 0,
+      refundedAmount: toFiniteNumber(refunded, 0),
+      referenceId: booking.transaction_id || booking.payment_intent_id || '',
       reason: '',
       password: ''
     });
 
     // Initial payment splits setup
+    const total = toFiniteNumber(customerTotal, 0);
     const rawSplits = booking.payment_splits || [];
     const mappedSplits = rawSplits.length > 0 ? rawSplits.map((s, idx) => ({
       id: s.id || `split_${idx}_${Date.now()}`,
@@ -453,8 +481,8 @@ function AdminDashboard() {
       amount: parseFloat(s.amount || 0),
       currency: s.currency || booking.currency || 'USD'
     })) : [
-      { id: 'split_1', merchant_name: booking.carrier || 'Airline Partner', amount: total > 0 ? parseFloat((total * 0.85).toFixed(2)) : 1800, currency: booking.currency || 'USD' },
-      { id: 'split_2', merchant_name: 'The Final Seat LLC', amount: total > 0 ? parseFloat((total * 0.15).toFixed(2)) : 322.20, currency: booking.currency || 'USD' }
+      { id: 'split_1', merchant_name: booking.carrier || 'Airline Partner', amount: total > 0 ? toFiniteNumber((total * 0.85).toFixed(2), 1800) : 1800, currency: booking.currency || 'USD' },
+      { id: 'split_2', merchant_name: 'The Final Seat LLC', amount: total > 0 ? toFiniteNumber((total * 0.15).toFixed(2), 322.20) : 322.20, currency: booking.currency || 'USD' }
     ];
     setPaymentSplits(mappedSplits);
 
@@ -1181,7 +1209,7 @@ function AdminDashboard() {
                                 {originCode} <i className="fas fa-arrow-right"></i> {destCode}
                               </td>
                               <td>{booking.passengers_count || booking.travellers?.length || 1}</td>
-                              <td>${parseFloat(booking.customer_price || booking.total_amount || 0).toFixed(2)}</td>
+                              <td>{formatMoney(booking.customer_price ?? booking.total_amount ?? booking.pricing?.customerTotal, booking.currency || 'USD')}</td>
                               <td>
                                 <span className={`status-badge ${badgeClass}`}>{statusStr}</span>
                               </td>
@@ -1440,13 +1468,15 @@ function AdminDashboard() {
                         </h4>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '8px 12px', borderRadius: '6px', marginBottom: '8px' }}>
                           <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#166534' }}>Customer Total:</span>
-                          <strong style={{ fontSize: '1.05rem', color: '#15803d' }}>${(pricingForm.customerTotal || 0).toFixed(2)} USD</strong>
+                          <strong style={{ fontSize: '1.05rem', color: '#15803d' }}>
+                            {formatMoney(selectedBooking.pricing?.customerTotal ?? selectedBooking.customer_price ?? selectedBooking.total_amount ?? pricingForm.customerTotal, selectedBooking.pricing?.currency || selectedBooking.currency || 'USD')}
+                          </strong>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px', fontSize: '0.78rem', color: '#475569' }}>
-                          <div>Base Fare: ${pricingForm.baseFare.toFixed(2)}</div>
-                          <div>Taxes &amp; Fees: ${pricingForm.taxes.toFixed(2)}</div>
-                          <div>Discount: ${pricingForm.discount.toFixed(2)}</div>
-                          <div style={{ color: '#0369a1', fontWeight: 600 }}>Admin Margin: ${pricingForm.adminMargin.toFixed(2)}</div>
+                          <div>Base Fare: {formatMoney(selectedBooking.pricing?.baseFare ?? pricingForm.baseFare, selectedBooking.pricing?.currency || selectedBooking.currency || 'USD')}</div>
+                          <div>Taxes &amp; Fees: {formatMoney(selectedBooking.pricing?.taxes ?? pricingForm.taxes, selectedBooking.pricing?.currency || selectedBooking.currency || 'USD')}</div>
+                          <div>Discount: {formatMoney(selectedBooking.pricing?.discount ?? pricingForm.discount, selectedBooking.pricing?.currency || selectedBooking.currency || 'USD')}</div>
+                          <div style={{ color: '#0369a1', fontWeight: 600 }}>Admin Margin: {formatMoney(selectedBooking.pricing?.margin ?? pricingForm.margin ?? pricingForm.adminMargin, selectedBooking.pricing?.currency || selectedBooking.currency || 'USD')}</div>
                         </div>
                       </div>
 
@@ -1456,8 +1486,8 @@ function AdminDashboard() {
                           <i className="fas fa-shield-alt" style={{ marginRight: '6px' }}></i> Passenger Authorization
                         </h4>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
-                          <div><span style={{ color: '#64748b' }}>Status:</span> <br/><strong>{selectedBooking.authorization_status === 'ACCEPTED' ? 'Authorized' : 'Awaiting Authorization'}</strong></div>
-                          <div><span style={{ color: '#64748b' }}>Authorized Amount:</span> <br/><strong>${(pricingForm.customerTotal || 0).toFixed(2)}</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Status:</span> <br/><strong>{selectedBooking.authorization?.status || (selectedBooking.authorization_status === 'ACCEPTED' ? 'Authorized' : 'Awaiting Authorization')}</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Authorized Amount:</span> <br/><strong>{formatMoney(selectedBooking.authorization?.authorizedAmount ?? paymentForm.authorizedAmount, selectedBooking.currency || 'USD')}</strong></div>
                           <div><span style={{ color: '#64748b' }}>Card Vault:</span> <br/><strong>Visa ending in 4242</strong></div>
                           <div><span style={{ color: '#64748b' }}>Email Sent:</span> <br/><strong>{selectedBooking.authorization_email_sent_at ? new Date(selectedBooking.authorization_email_sent_at).toLocaleDateString() : 'Not Sent'}</strong></div>
                         </div>
@@ -1469,10 +1499,10 @@ function AdminDashboard() {
                           <i className="fas fa-credit-card" style={{ marginRight: '6px' }}></i> Payment
                         </h4>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
-                          <div><span style={{ color: '#64748b' }}>Status:</span> <br/><strong style={{ color: selectedBooking.payment_status === 'paid' ? '#166534' : '#b45309' }}>{selectedBooking.payment_status === 'paid' ? 'Paid' : 'Pending'}</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Status:</span> <br/><strong style={{ color: (selectedBooking.payment_status || '').toLowerCase() === 'paid' ? '#166534' : '#b45309' }}>{(selectedBooking.payment_status || '').toLowerCase() === 'paid' ? 'Paid' : 'Pending'}</strong></div>
                           <div><span style={{ color: '#64748b' }}>Method:</span> <br/><strong>Card Authorization Vault</strong></div>
-                          <div><span style={{ color: '#64748b' }}>Paid Amount:</span> <br/><strong>{selectedBooking.payment_status === 'paid' ? `$${(pricingForm.customerTotal || 0).toFixed(2)}` : '—'}</strong></div>
-                          <div><span style={{ color: '#64748b' }}>Transaction Ref:</span> <br/><strong>{selectedBooking.payment_intent_id || '—'}</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Paid Amount:</span> <br/><strong>{selectedBooking.payment?.paidAmount !== null && selectedBooking.payment?.paidAmount !== undefined ? formatMoney(selectedBooking.payment.paidAmount, selectedBooking.currency || 'USD') : ((selectedBooking.payment_status || '').toLowerCase() === 'paid' ? formatMoney(selectedBooking.customer_price ?? selectedBooking.total_amount ?? pricingForm.customerTotal, selectedBooking.currency || 'USD') : 'Not available')}</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Transaction Ref:</span> <br/><strong>{selectedBooking.payment_intent_id || selectedBooking.transaction_id || '—'}</strong></div>
                         </div>
                       </div>
 
@@ -1947,7 +1977,7 @@ function AdminDashboard() {
                           Pricing
                         </span>
                         <span className="accordion-summary-right">
-                          Customer total: ${pricingForm.customerTotal.toFixed(2)} {pricingForm.currency}
+                          Customer total: {formatMoney(pricingForm.customerTotal, pricingForm.currency)}
                         </span>
                       </button>
 
@@ -1956,13 +1986,13 @@ function AdminDashboard() {
                           {/* Compact breakdown */}
                           <div style={{ background: '#fffaf0', border: '1px solid #ecd6ad', borderRadius: '8px', padding: '8px 10px', fontSize: '0.8rem', marginBottom: '10px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <span>Supplier Fare (Internal):</span> <strong>${pricingForm.supplierFare.toFixed(2)}</strong>
+                              <span>Supplier Fare (Internal):</span> <strong>{formatMoney(pricingForm.supplierFare, pricingForm.currency)}</strong>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <span>Taxes &amp; Fees:</span> <strong>${pricingForm.taxes.toFixed(2)}</strong>
+                              <span>Taxes &amp; Fees:</span> <strong>{formatMoney(pricingForm.taxes, pricingForm.currency)}</strong>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ecd6ad', paddingTop: '4px', marginTop: '4px', fontWeight: '700' }}>
-                              <span>Customer Total:</span> <strong>${pricingForm.customerTotal.toFixed(2)} {pricingForm.currency}</strong>
+                              <span>Customer Total:</span> <strong>{formatMoney(pricingForm.customerTotal, pricingForm.currency)}</strong>
                             </div>
                           </div>
 
@@ -2286,7 +2316,7 @@ function AdminDashboard() {
                           Passenger Authorization
                         </span>
                         <span className="accordion-summary-right">
-                          {selectedBooking.status || 'PENDING'} · ${pricingForm.customerTotal.toFixed(2)}
+                          {selectedBooking.status || 'PENDING'} · {formatMoney(pricingForm.customerTotal, pricingForm.currency)}
                         </span>
                       </button>
 
@@ -2299,7 +2329,7 @@ function AdminDashboard() {
                             </div>
                             <div className="drawer-form-field">
                               <label>Authorized Amount ($)</label>
-                              <input type="text" readOnly value={`$${paymentForm.authorizedAmount.toFixed(2)} ${pricingForm.currency}`} />
+                              <input type="text" readOnly value={`${formatMoney(paymentForm.authorizedAmount, pricingForm.currency)}`} />
                             </div>
                           </div>
 
@@ -2354,7 +2384,7 @@ function AdminDashboard() {
                                 Payment Authorization Splits
                               </strong>
                               <span style={{ fontSize: '0.78rem', fontWeight: '800', color: '#1e293b' }}>
-                                Total Authorized: ${paymentSplits.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0).toFixed(2)} {pricingForm.currency}
+                                Total Authorized: {formatMoney(paymentSplits.reduce((sum, s) => sum + toFiniteNumber(s.amount, 0), 0), pricingForm.currency)}
                               </span>
                             </div>
 

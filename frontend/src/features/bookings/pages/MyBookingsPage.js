@@ -216,7 +216,7 @@ function MyBookings() {
                               </div>
                               <div className="info-column">
                                 <span className="info-label">Total Amount</span>
-                                <strong className="info-value">${parseFloat(booking.customer_price || booking.amount || booking.total_amount || 0).toFixed(2)} {booking.currency || 'USD'}</strong>
+                                <strong className="info-value">{Number.isFinite(Number(booking.customer_price ?? booking.amount ?? booking.total_amount)) ? `$${Number(booking.customer_price ?? booking.amount ?? booking.total_amount).toFixed(2)}` : 'Not available'} {booking.currency || 'USD'}</strong>
                               </div>
                               <div className="info-column">
                                 <span className="info-label">Booking Date</span>
