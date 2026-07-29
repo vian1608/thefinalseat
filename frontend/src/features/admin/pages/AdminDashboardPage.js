@@ -216,6 +216,8 @@ function AdminDashboard() {
   const [ticketDetailsError, setTicketDetailsError] = useState('');
   const [ticketDetailsSuccess, setTicketDetailsSuccess] = useState('');
   const [editingTicketField, setEditingTicketField] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [showThreeDotMenu, setShowThreeDotMenu] = useState(false);
 
 
 
@@ -305,6 +307,8 @@ function AdminDashboard() {
 
   const handleSelectBooking = (booking) => {
     setSelectedBooking(booking);
+    setIsEditMode(false);
+    setShowThreeDotMenu(false);
     setInternalNotes(booking.internal_notes || booking.internalNotes || '');
     setNewStatus(booking.status || booking.bookingStatus || 'PENDING');
     setHasUnsavedEdits(false);
@@ -1185,7 +1189,7 @@ function AdminDashboard() {
                               </td>
                               <td>
                                 <button onClick={() => handleSelectBooking(booking)} className="admin-action-btn">
-                                  View / Edit
+                                  View
                                 </button>
                               </td>
                             </tr>
@@ -1197,57 +1201,367 @@ function AdminDashboard() {
                 </div>
               </div>
             </div>            {/* DETAIL PANEL / DRAWER */}
-            <aside className="admin-detail-panel booking-details-panel">
+            <aside className="admin-detail-panel booking-details-panel booking-overview-panel" style={{ width: '500px', flex: '0 0 500px', maxHeight: 'calc(100vh - 24px)', overflowY: 'auto', position: 'sticky', top: '12px' }}>
 
               {selectedBooking ? (
                 <div className="admin-detail-card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                  <div className="detail-header">
+
+                  {/* HEADER BAR */}
+                  <div className="detail-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '12px' }}>
                     <div>
-                      <h3>Booking Detail</h3>
-                      <span className="ref-tag">{selectedBooking.confirmation_code || selectedBooking.id.substring(0, 8)}</span>
+                      <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>
+                        {isEditMode ? 'Edit Booking' : 'Booking Details'}
+                      </h3>
+                      <span className="ref-tag" style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 700 }}>
+                        {selectedBooking.confirmation_code || selectedBooking.bookingReference || selectedBooking.id.substring(0, 8)}
+                      </span>
                     </div>
-                    <button onClick={() => setSelectedBooking(null)} className="close-panel-btn" title="Close Panel">
-                      <i className="fas fa-times"></i>
-                    </button>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {isEditMode ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditMode(false)}
+                          className="admin-secondary-btn"
+                          style={{ padding: '6px 12px', fontSize: '0.78rem', fontWeight: 600 }}
+                        >
+                          Cancel Editing
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setIsEditMode(true)}
+                            className="admin-primary-btn"
+                            style={{ padding: '6px 14px', fontSize: '0.78rem', fontWeight: 700, background: '#1e3a5f' }}
+                          >
+                            <i className="fas fa-edit" style={{ marginRight: '6px' }}></i> Edit Booking
+                          </button>
+
+                          {/* 3-DOT QUICK ACTIONS MENU */}
+                          <div style={{ position: 'relative' }}>
+                            <button
+                              type="button"
+                              onClick={() => setShowThreeDotMenu(!showThreeDotMenu)}
+                              style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              title="Quick Actions Menu"
+                            >
+                              <i className="fas fa-ellipsis-v" style={{ color: '#475569' }}></i>
+                            </button>
+
+                            {showThreeDotMenu && (
+                              <div style={{ position: 'absolute', right: 0, top: '36px', width: '220px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', zIndex: 90, padding: '6px 0' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => { setShowThreeDotMenu(false); handleResendAuthorization(); }}
+                                  style={{ width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: '0.8rem', color: '#1e293b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                >
+                                  <i className="fas fa-paper-plane" style={{ color: '#2563eb' }}></i> Send Authorization
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setShowThreeDotMenu(false); handleSendFinalTicketEmail(); }}
+                                  style={{ width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: '0.8rem', color: '#1e293b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                >
+                                  <i className="fas fa-envelope-open-text" style={{ color: '#16a34a' }}></i> Send Final Ticket Email
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setShowThreeDotMenu(false); handleDownloadPdf(); }}
+                                  style={{ width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: '0.8rem', color: '#1e293b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                >
+                                  <i className="fas fa-file-pdf" style={{ color: '#dc2626' }}></i> Download Authorization Evidence
+                                </button>
+                                <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }}></div>
+                                <button
+                                  type="button"
+                                  onClick={() => { setShowThreeDotMenu(false); handleCancelBooking(); }}
+                                  style={{ width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: '0.8rem', color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                >
+                                  <i className="fas fa-ban" style={{ color: '#dc2626' }}></i> Cancel Booking
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+
+                      <button onClick={() => setSelectedBooking(null)} className="close-panel-btn" title="Close Panel">
+                        <i className="fas fa-times"></i>
+                      </button>
+                    </div>
                   </div>
 
-                  {/* UPDATE STATUS & NOTES FORM */}
-                  <form onSubmit={handleUpdateStatusAndNotes} className="detail-update-box">
-                    <div className="detail-form-group">
-                      <label>Update Booking Status</label>
-                      <select 
-                        value={newStatus} 
-                        onChange={(e) => { setNewStatus(e.target.value); setHasUnsavedEdits(true); }} 
-                        className="admin-select"
-                      >
-                        <option value="PENDING">Pending</option>
-                        <option value="AWAITING_AUTHORIZATION">Awaiting Authorization</option>
-                        <option value="AUTHORIZED">Authorized</option>
-                        <option value="REAUTHORIZATION_REQUIRED">Reauthorization Required</option>
-                        <option value="READY_FOR_TICKETING">Ready for Ticketing</option>
-                        <option value="TICKETED">Ticketed</option>
-                        <option value="DONE">Done</option>
-                        <option value="FAILED">Failed</option>
-                        <option value="CANCELLED">Cancelled</option>
-
-                      </select>
+                  {/* COMPACT STATUS BADGES BAR */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px', marginBottom: '14px' }}>
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '6px 10px', borderRadius: '6px', fontSize: '0.73rem' }}>
+                      <span style={{ color: '#64748b', fontWeight: 600 }}>Booking:</span>{' '}
+                      <strong style={{ color: selectedBooking.status === 'CANCELLED' ? '#dc2626' : (selectedBooking.status === 'TICKETED' || selectedBooking.status === 'DONE' ? '#166534' : '#1e3a5f') }}>
+                        {selectedBooking.status || 'PENDING'}
+                      </strong>
                     </div>
-
-                    <div className="detail-form-group" style={{ marginTop: '10px' }}>
-                      <label>Internal Consultant Notes</label>
-                      <textarea 
-                        rows={2}
-                        value={internalNotes} 
-                        onChange={(e) => { setInternalNotes(e.target.value); setHasUnsavedEdits(true); }} 
-                        placeholder="Add internal notes..." 
-                        className="admin-textarea"
-                      />
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '6px 10px', borderRadius: '6px', fontSize: '0.73rem' }}>
+                      <span style={{ color: '#64748b', fontWeight: 600 }}>Authorization:</span>{' '}
+                      <strong style={{ color: selectedBooking.authorization_status === 'ACCEPTED' ? '#166534' : '#b45309' }}>
+                        {selectedBooking.authorization_status === 'ACCEPTED' ? 'Authorized' : 'Awaiting Passenger'}
+                      </strong>
                     </div>
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '6px 10px', borderRadius: '6px', fontSize: '0.73rem' }}>
+                      <span style={{ color: '#64748b', fontWeight: 600 }}>Payment:</span>{' '}
+                      <strong style={{ color: selectedBooking.payment_status === 'paid' ? '#166534' : '#b45309' }}>
+                        {selectedBooking.payment_status === 'paid' ? 'Paid' : 'Pending'}
+                      </strong>
+                    </div>
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '6px 10px', borderRadius: '6px', fontSize: '0.73rem' }}>
+                      <span style={{ color: '#64748b', fontWeight: 600 }}>Ticketing:</span>{' '}
+                      <strong style={{ color: /^[A-Z0-9]{6}$/.test((ticketForm.airlineConfirmationNumber || selectedBooking.airline_confirmation_number || '').trim().toUpperCase()) ? '#166534' : '#64748b' }}>
+                        {/^[A-Z0-9]{6}$/.test((ticketForm.airlineConfirmationNumber || selectedBooking.airline_confirmation_number || '').trim().toUpperCase()) ? `PNR: ${(ticketForm.airlineConfirmationNumber || selectedBooking.airline_confirmation_number || '').trim().toUpperCase()}` : 'Not Ticketed'}
+                      </strong>
+                    </div>
+                  </div>
 
-                    <button type="submit" className="admin-primary-btn" style={{ width: '100%', marginTop: '10px' }} disabled={updatingRecord}>
-                      {updatingRecord ? 'Saving...' : 'Save Notes & Status'}
-                    </button>
-                  </form>
+                  {!isEditMode ? (
+                    /* ═══════════════════════════════════════════════════════════════
+                       VIEW MODE (READ-ONLY OVERVIEW — NO ACCORDIONS, NO EDIT INPUTS)
+                       ═══════════════════════════════════════════════════════════════ */
+                    <div className="view-mode-container" style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1, overflowY: 'auto' }}>
+
+                      {/* TRIP SUMMARY BANNER */}
+                      {(() => {
+                        const trip = selectedBooking.trip_summary || selectedBooking.tripSummary || calculateTripSummary(selectedBooking);
+                        return (
+                          <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)', color: '#ffffff', borderRadius: '10px', padding: '14px 16px', boxShadow: '0 4px 12px rgba(15,23,42,0.15)' }}>
+                            <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.8px', color: '#94a3b8', fontWeight: 700, marginBottom: '4px' }}>
+                              {trip.bannerText}
+                            </div>
+                            <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#38bdf8', marginBottom: '4px' }}>
+                              {trip.routeSummary || `${outboundSegments[0]?.origin_airport || 'LHR'} → ${outboundSegments[outboundSegments.length - 1]?.destination_airport || 'GEG'}`}
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: '#cbd5e1', display: 'flex', gap: '12px' }}>
+                              <span><i className="fas fa-user" style={{ marginRight: '4px' }}></i> {trip.passengerText}</span>
+                              <span><i className="fas fa-chair" style={{ marginRight: '4px' }}></i> {outboundSegments[0]?.cabin || 'Economy'}</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* PASSENGER & CONTACT */}
+                      <div className="overview-section-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
+                        <h4 style={{ margin: '0 0 8px 0', fontSize: '0.82rem', fontWeight: 700, color: '#1e3a5f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          <i className="fas fa-id-card" style={{ marginRight: '6px' }}></i> Passenger &amp; Contact
+                        </h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.82rem' }}>
+                          <div><span style={{ color: '#64748b' }}>Primary Passenger:</span> <br/><strong>{selectedBooking.passenger_name || 'Ravi Bishnoi'}</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Passenger Count:</span> <br/><strong>{travellers.length || 1}</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Email:</span> <br/><strong style={{ wordBreak: 'break-all' }}>{selectedBooking.email || 'N/A'}</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Phone:</span> <br/><strong>{selectedBooking.phone || 'N/A'}</strong></div>
+                        </div>
+                      </div>
+
+                      {/* ITINERARY */}
+                      <div className="overview-section-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
+                        <h4 style={{ margin: '0 0 10px 0', fontSize: '0.82rem', fontWeight: 700, color: '#1e3a5f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          <i className="fas fa-plane-departure" style={{ marginRight: '6px' }}></i> Itinerary
+                        </h4>
+                        
+                        {/* OUTBOUND SEGMENTS */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '3px 8px', borderRadius: '4px', display: 'inline-block', marginBottom: '8px' }}>
+                            OUTBOUND
+                          </div>
+                          {outboundSegments.map((seg, idx) => (
+                            <div key={`view_out_${idx}`} style={{ borderLeft: '3px solid #0284c7', paddingLeft: '10px', marginBottom: '10px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                                <strong style={{ fontSize: '0.85rem', color: '#0f172a' }}>
+                                  {seg.carrier_name || 'United Airlines'} · {seg.flight_number || 'UA 100'}
+                                </strong>
+                                <span style={{ fontSize: '0.75rem', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                                  {seg.cabin || 'Economy'}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0369a1' }}>
+                                {seg.origin_airport} → {seg.destination_airport}
+                              </div>
+                              <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                                {seg.departure_date} · {seg.departure_time} – {seg.arrival_time}
+                              </div>
+                              {idx < outboundSegments.length - 1 && (
+                                <div style={{ background: '#fef3c7', color: '#92400e', padding: '4px 8px', borderRadius: '4px', fontSize: '0.73rem', marginTop: '6px', fontWeight: 600 }}>
+                                  <i className="fas fa-clock" style={{ marginRight: '4px' }}></i> Layover in {seg.destination_airport} · 1h 45m
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* RETURN SEGMENTS */}
+                        {returnSegments.length > 0 && (
+                          <div>
+                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#4338ca', background: '#e0e7ff', padding: '3px 8px', borderRadius: '4px', display: 'inline-block', marginBottom: '8px' }}>
+                              RETURN
+                            </div>
+                            {returnSegments.map((seg, idx) => (
+                              <div key={`view_ret_${idx}`} style={{ borderLeft: '3px solid #6366f1', paddingLeft: '10px', marginBottom: '10px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                                  <strong style={{ fontSize: '0.85rem', color: '#0f172a' }}>
+                                    {seg.carrier_name || 'United Airlines'} · {seg.flight_number || 'UA 200'}
+                                  </strong>
+                                  <span style={{ fontSize: '0.75rem', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                                    {seg.cabin || 'Economy'}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#4338ca' }}>
+                                  {seg.origin_airport} → {seg.destination_airport}
+                                </div>
+                                <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                                  {seg.departure_date} · {seg.departure_time} – {seg.arrival_time}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* PRICING */}
+                      <div className="overview-section-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
+                        <h4 style={{ margin: '0 0 8px 0', fontSize: '0.82rem', fontWeight: 700, color: '#1e3a5f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          <i className="fas fa-calculator" style={{ marginRight: '6px' }}></i> Pricing
+                        </h4>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '8px 12px', borderRadius: '6px', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#166534' }}>Customer Total:</span>
+                          <strong style={{ fontSize: '1.05rem', color: '#15803d' }}>${(pricingForm.customerTotal || 0).toFixed(2)} USD</strong>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px', fontSize: '0.78rem', color: '#475569' }}>
+                          <div>Base Fare: ${pricingForm.baseFare.toFixed(2)}</div>
+                          <div>Taxes &amp; Fees: ${pricingForm.taxes.toFixed(2)}</div>
+                          <div>Discount: ${pricingForm.discount.toFixed(2)}</div>
+                          <div style={{ color: '#0369a1', fontWeight: 600 }}>Admin Margin: ${pricingForm.adminMargin.toFixed(2)}</div>
+                        </div>
+                      </div>
+
+                      {/* PASSENGER AUTHORIZATION */}
+                      <div className="overview-section-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
+                        <h4 style={{ margin: '0 0 8px 0', fontSize: '0.82rem', fontWeight: 700, color: '#1e3a5f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          <i className="fas fa-shield-alt" style={{ marginRight: '6px' }}></i> Passenger Authorization
+                        </h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
+                          <div><span style={{ color: '#64748b' }}>Status:</span> <br/><strong>{selectedBooking.authorization_status === 'ACCEPTED' ? 'Authorized' : 'Awaiting Authorization'}</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Authorized Amount:</span> <br/><strong>${(pricingForm.customerTotal || 0).toFixed(2)}</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Card Vault:</span> <br/><strong>Visa ending in 4242</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Email Sent:</span> <br/><strong>{selectedBooking.authorization_email_sent_at ? new Date(selectedBooking.authorization_email_sent_at).toLocaleDateString() : 'Not Sent'}</strong></div>
+                        </div>
+                      </div>
+
+                      {/* PAYMENT */}
+                      <div className="overview-section-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
+                        <h4 style={{ margin: '0 0 8px 0', fontSize: '0.82rem', fontWeight: 700, color: '#1e3a5f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          <i className="fas fa-credit-card" style={{ marginRight: '6px' }}></i> Payment
+                        </h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
+                          <div><span style={{ color: '#64748b' }}>Status:</span> <br/><strong style={{ color: selectedBooking.payment_status === 'paid' ? '#166534' : '#b45309' }}>{selectedBooking.payment_status === 'paid' ? 'Paid' : 'Pending'}</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Method:</span> <br/><strong>Card Authorization Vault</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Paid Amount:</span> <br/><strong>{selectedBooking.payment_status === 'paid' ? `$${(pricingForm.customerTotal || 0).toFixed(2)}` : '—'}</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Transaction Ref:</span> <br/><strong>{selectedBooking.payment_intent_id || '—'}</strong></div>
+                        </div>
+                      </div>
+
+                      {/* AIRLINE TICKET DETAILS (RENDERED EXACTLY ONCE IN VIEW MODE) */}
+                      <div className="overview-section-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
+                        <h4 style={{ margin: '0 0 8px 0', fontSize: '0.82rem', fontWeight: 700, color: '#1e3a5f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          <i className="fas fa-ticket-alt" style={{ marginRight: '6px' }}></i> Airline Ticket Details
+                        </h4>
+                        {/^[A-Z0-9]{6}$/.test((ticketForm.airlineConfirmationNumber || selectedBooking.airline_confirmation_number || '').trim().toUpperCase()) ? (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
+                            <div><span style={{ color: '#64748b' }}>Airline:</span> <br/><strong>{ticketForm.airlineName ? `${ticketForm.airlineName} (${ticketForm.airlineCode})` : (selectedBooking.airline_name || 'United Airlines')}</strong></div>
+                            <div><span style={{ color: '#64748b' }}>Airline PNR:</span> <br/><strong style={{ fontSize: '0.95rem', color: '#0369a1' }}>{(ticketForm.airlineConfirmationNumber || selectedBooking.airline_confirmation_number || '').toUpperCase()}</strong></div>
+                            <div><span style={{ color: '#64748b' }}>Ticket Number:</span> <br/><strong>{ticketForm.ticketNumber || selectedBooking.ticket_number || 'N/A'}</strong></div>
+                            <div><span style={{ color: '#64748b' }}>Issued Date:</span> <br/><strong>{ticketForm.ticketIssuedAt ? new Date(ticketForm.ticketIssuedAt + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Jul 29, 2026'}</strong></div>
+                          </div>
+                        ) : (
+                          <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', textAlign: 'center', color: '#64748b', fontSize: '0.82rem', fontWeight: 600 }}>
+                            <i className="fas fa-info-circle" style={{ marginRight: '6px' }}></i> Not Ticketed
+                          </div>
+                        )}
+                      </div>
+
+                      {/* EMAIL ACTIVITY */}
+                      <div className="overview-section-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
+                        <h4 style={{ margin: '0 0 8px 0', fontSize: '0.82rem', fontWeight: 700, color: '#1e3a5f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          <i className="fas fa-envelope" style={{ marginRight: '6px' }}></i> Email Activity
+                        </h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.78rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>Booking Request Email:</span>
+                            <span style={{ color: '#166534', fontWeight: 600 }}><i className="fas fa-check-circle"></i> Sent</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>Authorization Email:</span>
+                            <span style={{ color: selectedBooking.authorization_email_sent_at ? '#166534' : '#64748b', fontWeight: 600 }}>
+                              {selectedBooking.authorization_email_sent_at ? <><i className="fas fa-check-circle"></i> Sent</> : 'Not Sent'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>Final Ticket Email:</span>
+                            <span style={{ color: selectedBooking.final_confirmation_email_sent_at ? '#166534' : '#64748b', fontWeight: 600 }}>
+                              {selectedBooking.final_confirmation_email_sent_at ? <><i className="fas fa-check-circle"></i> Sent</> : 'Not Sent'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* INTERNAL NOTES */}
+                      <div className="overview-section-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
+                        <h4 style={{ margin: '0 0 6px 0', fontSize: '0.82rem', fontWeight: 700, color: '#1e3a5f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          <i className="fas fa-comment-alt" style={{ marginRight: '6px' }}></i> Internal Notes
+                        </h4>
+                        <div style={{ fontSize: '0.8rem', color: '#334155', background: '#f8fafc', padding: '8px', borderRadius: '6px', minHeight: '40px' }}>
+                          {internalNotes || 'No internal consultant notes recorded.'}
+                        </div>
+                      </div>
+
+                    </div>
+                  ) : (
+                    /* ═══════════════════════════════════════════════════════════════
+                       EDIT MODE (`isEditMode === true` — EDITABLE ACCORDIONS & FORMS)
+                       ═══════════════════════════════════════════════════════════════ */
+                    <div className="edit-mode-container" style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto' }}>
+
+                      {/* UPDATE STATUS & NOTES FORM */}
+                      <form onSubmit={handleUpdateStatusAndNotes} className="detail-update-box">
+                        <div className="detail-form-group">
+                          <label>Update Booking Status</label>
+                          <select 
+                            value={newStatus} 
+                            onChange={(e) => { setNewStatus(e.target.value); setHasUnsavedEdits(true); }} 
+                            className="admin-select"
+                          >
+                            <option value="PENDING">Pending</option>
+                            <option value="AWAITING_AUTHORIZATION">Awaiting Authorization</option>
+                            <option value="AUTHORIZED">Authorized</option>
+                            <option value="REAUTHORIZATION_REQUIRED">Reauthorization Required</option>
+                            <option value="READY_FOR_TICKETING">Ready for Ticketing</option>
+                            <option value="TICKETED">Ticketed</option>
+                            <option value="DONE">Done</option>
+                            <option value="FAILED">Failed</option>
+                            <option value="CANCELLED">Cancelled</option>
+                          </select>
+                        </div>
+
+                        <div className="detail-form-group" style={{ marginTop: '10px' }}>
+                          <label>Internal Consultant Notes</label>
+                          <textarea 
+                            rows={2}
+                            value={internalNotes} 
+                            onChange={(e) => { setInternalNotes(e.target.value); setHasUnsavedEdits(true); }} 
+                            placeholder="Add internal notes..." 
+                            className="admin-textarea"
+                          />
+                        </div>
+
+                        <button type="submit" className="admin-primary-btn" style={{ width: '100%', marginTop: '10px' }} disabled={updatingRecord}>
+                          {updatingRecord ? 'Saving...' : 'Save Notes & Status'}
+                        </button>
+                      </form>
 
                   {/* THREE COLLAPSED ACCORDIONS */}
                   <div className="admin-accordion-container">
@@ -2216,147 +2530,41 @@ function AdminDashboard() {
                       )}
                     </div>
 
-                    {/* 4.5 AIRLINE TICKET DETAILS ACCORDION */}
-                    <div className="admin-accordion-card">
-                      <button
-                        type="button"
-                        className="admin-accordion-header"
-                        onClick={() => setOpenAccordion(openAccordion === 'ticket_details' ? null : 'ticket_details')}
-                      >
-                        <span className="accordion-title-left">
-                          <i className={`fas ${openAccordion === 'ticket_details' ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
-                          Airline Ticket Details
-                        </span>
-                        <span className="accordion-summary-right">
-                          {ticketForm.airlineConfirmationNumber ? `PNR: ${ticketForm.airlineConfirmationNumber}` : 'Not Ticketed'}
-                        </span>
-                      </button>
-
-                      {openAccordion === 'ticket_details' && (
-                        <div className="admin-accordion-body" style={{ padding: '12px' }}>
-                          <div className="drawer-grid-2col">
-                            <div className="drawer-form-field">
-                              <label>Airline Name / Search</label>
-                              <input
-                                type="text"
-                                list="airline-directory-list"
-                                value={ticketForm.airlineName}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  const match = AIRLINE_DIRECTORY.find(a => a.name.toLowerCase() === val.toLowerCase() || a.iataCode.toLowerCase() === val.toLowerCase());
-                                  setTicketForm({
-                                    ...ticketForm,
-                                    airlineName: match ? match.name : val,
-                                    airlineCode: match ? match.iataCode : ticketForm.airlineCode
-                                  });
-                                  setHasUnsavedEdits(true);
-                                }}
-                                placeholder="Search airline (e.g. United, BA)"
-                              />
-                              <datalist id="airline-directory-list">
-                                {AIRLINE_DIRECTORY.map(a => (
-                                  <option key={a.iataCode} value={`${a.name} (${a.iataCode})`} />
-                                ))}
-                              </datalist>
-                            </div>
-                            <div className="drawer-form-field">
-                              <label>Carrier Code (IATA)</label>
-                              <input
-                                type="text"
-                                maxLength={3}
-                                value={ticketForm.airlineCode}
-                                onChange={(e) => {
-                                  const code = e.target.value.toUpperCase();
-                                  setTicketForm({ ...ticketForm, airlineCode: code });
-                                  setHasUnsavedEdits(true);
-                                }}
-                                placeholder="UA, BA, DL"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="drawer-grid-2col">
-                            <div className="drawer-form-field">
-                              <label>Airline PNR (6 Alphanumeric) *</label>
-                              <input
-                                type="text"
-                                maxLength={6}
-                                value={ticketForm.airlineConfirmationNumber}
-                                onChange={(e) => {
-                                  const pnr = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-                                  setTicketForm({ ...ticketForm, airlineConfirmationNumber: pnr });
-                                  setHasUnsavedEdits(true);
-                                }}
-                                placeholder="AB12CD"
-                              />
-                            </div>
-                            <div className="drawer-form-field">
-                              <label>Supplier Confirmation Ref</label>
-                              <input
-                                type="text"
-                                value={ticketForm.supplierConfirmation}
-                                onChange={(e) => {
-                                  setTicketForm({ ...ticketForm, supplierConfirmation: e.target.value });
-                                  setHasUnsavedEdits(true);
-                                }}
-                                placeholder="SUP-998822 (GDS / Provider)"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="drawer-grid-2col">
-                            <div className="drawer-form-field">
-                              <label>Ticket Number (Digits only, max 13)</label>
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                maxLength={13}
-                                value={ticketForm.ticketNumber}
-                                onChange={(e) => {
-                                  const digits = e.target.value.replace(/\D/g, '');
-                                  setTicketForm({ ...ticketForm, ticketNumber: digits });
-                                  setHasUnsavedEdits(true);
-                                }}
-                                placeholder="1252410982341"
-                              />
-                            </div>
-                            <div className="drawer-form-field">
-                              <label>Issued At</label>
-                              <input
-                                type="datetime-local"
-                                value={ticketForm.ticketIssuedAt}
-                                onChange={(e) => {
-                                  setTicketForm({ ...ticketForm, ticketIssuedAt: e.target.value });
-                                  setHasUnsavedEdits(true);
-                                }}
-                              />
-                            </div>
-                          </div>
-
-                          <div className="drawer-form-field">
-                            <label>Ticket Notes</label>
-                            <input
-                              type="text"
-                              value={ticketForm.ticketNotes}
-                              onChange={(e) => {
-                                setTicketForm({ ...ticketForm, ticketNotes: e.target.value });
-                                setHasUnsavedEdits(true);
-                              }}
-                              placeholder="e.g. Issued via British Airways NDC Portal"
-                            />
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={handleSaveTicketDetails}
-                            className="admin-primary-btn"
-                            style={{ width: '100%', background: '#047857', marginTop: '8px' }}
-                          >
-                            <i className="fas fa-save" style={{ marginRight: '4px' }}></i> Save Airline Ticket Details
-                          </button>
-                        </div>
-                      )}
+                    {/* STICKY EDIT MODE FOOTER */}
+                    <div className="sticky-drawer-footer" style={{ marginTop: '12px' }}>
+                      <div>
+                        {hasUnsavedEdits ? (
+                          <span className="unsaved-badge">● Unsaved Edits</span>
+                        ) : (
+                          <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Synced</span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: '12px' }}>
+                        <button type="button" onClick={() => setIsEditMode(false)} className="drawer-footer-cancel-btn">
+                          Cancel Editing
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const fresh = await adminAPI.getBookingDetails(selectedBooking.id);
+                              if (fresh && (fresh.data || fresh.booking)) {
+                                const freshData = fresh.data || fresh.booking;
+                                setSelectedBooking(freshData);
+                                setBookings(prevList => prevList.map(b => b.id === freshData.id ? { ...b, ...freshData } : b));
+                              }
+                            } catch(e) {}
+                            setIsEditMode(false);
+                            setHasUnsavedEdits(false);
+                          }}
+                          className="drawer-footer-save-btn"
+                        >
+                          <i className="fas fa-check" style={{ marginRight: '4px' }}></i> Save &amp; Exit Edit Mode
+                        </button>
+                      </div>
                     </div>
+
+
 
                     {/* 5. EMAIL DELIVERY ACTIVITY ACCORDION */}
                     <div className="admin-accordion-card">

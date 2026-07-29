@@ -1,6 +1,6 @@
 import supabase from '../../integrations/supabase/supabase.client.mjs';
 import logger from '../../config/logger.mjs';
-import { buildCanonicalItinerary } from '../../shared/utils/airline-lookup.mjs';
+import { buildCanonicalItinerary, calculateTripSummary } from '../../shared/utils/airline-lookup.mjs';
 
 
 const segmentsMemoryStore = new Map();
@@ -289,12 +289,15 @@ export const bookingRepository = {
     const relations = await bookingRepository.getRelations(realId);
     const enriched = bookingRepository.enrichBookingRecord(baseBooking, relations);
     const itinerary = buildCanonicalItinerary(enriched);
+    const tripSummary = calculateTripSummary(enriched);
 
     return {
       ...enriched,
       itinerary,
       outbound_segments: itinerary.outbound,
-      return_segments: itinerary.return
+      return_segments: itinerary.return,
+      trip_summary: tripSummary,
+      tripSummary: tripSummary
     };
   },
 

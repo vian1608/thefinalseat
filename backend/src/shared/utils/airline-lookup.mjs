@@ -160,3 +160,89 @@ export function buildCanonicalItinerary(bookingOrSegments) {
     return: returnSegs.map((s, i) => mapSegment(s, i, returnSegs.length))
   };
 }
+
+export function calculateTripSummary(bookingOrItinerary) {
+  const itinerary = buildCanonicalItinerary(bookingOrItinerary);
+  const outbound = itinerary.outbound || [];
+  const returnSegs = itinerary.return || [];
+
+  let tripType = 'One Way';
+  let isRoundTrip = false;
+  let isOpenJaw = false;
+
+  if (outbound.length > 0 && returnSegs.length > 0) {
+    const firstOutboundOrigin = outbound[0].originCode;
+    const lastReturnDest = returnSegs[returnSegs.length - 1].destinationCode;
+    if (firstOutboundOrigin && lastReturnDest && firstOutboundOrigin !== lastReturnDest) {
+      tripType = 'Open Jaw';
+      isOpenJaw = true;
+    } else {
+      tripType = 'Round Trip';
+      isRoundTrip = true;
+    }
+  }
+
+  // Compute stops
+  let stopsSummary = '';
+  if (isRoundTrip || isOpenJaw) {
+    const outboundStops = Math.max(0, outbound.length - 1);
+    const returnStops = Math.max(0, returnSegs.length - 1);
+
+    const outboundText = outboundStops === 0 ? 'Nonstop outbound' : (outboundStops === 1 ? '1 stop outbound' : `${outboundStops} stops outbound`);
+    const returnText = returnStops === 0 ? 'Nonstop return' : (returnStops === 1 ? '1 stop return' : `${returnStops} stops return`);
+
+    if (outboundStops === 0 && returnStops === 0) {
+      stopsSummary = 'Nonstop both ways';
+    } else {
+      stopsSummary = `${outboundText} · ${returnText}`;
+    }
+  } else {
+    const outboundStops = Math.max(0, outbound.length - 1);
+    if (outboundStops === 0) {
+      stopsSummary = 'Nonstop';
+    } else if (outboundStops === 1) {
+      stopsSummary = `${outbound.length} flights · 1 connection`;
+    } else {
+      stopsSummary = `${outbound.length} flights · ${outboundStops} connections`;
+    }
+  }
+
+  // Compute route string
+  let routeSummary = '';
+  if (outbound.length > 0) {
+    const outAirports = [outbound[0].originCode, ...outbound.map(s => s.destinationCode)].filter(Boolean);
+    const uniqueOutRoute = outAirports.join(' → ');
+    if (isRoundTrip || isOpenJaw) {
+      const retAirports = returnSegs.map(s => s.destinationCode).filter(Boolean);
+      routeSummary = `${uniqueOutRoute} → ${retAirports.join(' → ')}`;
+    } else {
+      routeSummary = uniqueOutRoute;
+    }
+  }
+
+  // Compute passenger count
+  let passengerCount = 1;
+  if (bookingOrItinerary && typeof bookingOrItinerary === 'object') {
+    const b = bookingOrItinerary;
+    if (Array.isArray(b.travellers) && b.travellers.length > 0) {
+      passengerCount = b.travellers.length;
+    } else if (b.passenger_count || b.passengerCount) {
+      passengerCount = parseInt(b.passenger_count || b.passengerCount, 10) || 1;
+    }
+  }
+
+  // PNR status
+  const pnr = (bookingOrItinerary.airline_confirmation_number || bookingOrItinerary.airlineConfirmationNumber || bookingOrItinerary.airline_pnr || bookingOrItinerary.pnr || '').trim().toUpperCase();
+  const isTicketed = /^[A-Z0-9]{6}$/.test(pnr);
+
+  return {
+    tripType,
+    routeSummary,
+    stopsSummary,
+    bannerText: `${tripType} · ${stopsSummary}`,
+    passengerCount,
+    passengerText: `${passengerCount} Passenger${passengerCount > 1 ? 's' : ''}`,
+    isTicketed,
+    pnr: isTicketed ? pnr : null
+  };
+}
