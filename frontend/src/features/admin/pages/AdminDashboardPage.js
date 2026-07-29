@@ -5,27 +5,142 @@ import { adminAPI } from '../../../shared/api/api';
 import './AdminDashboardPage.css';
 
 const AIRLINE_DIRECTORY = [
-  { name: 'United Airlines', iataCode: 'UA' },
-  { name: 'Delta Air Lines', iataCode: 'DL' },
-  { name: 'American Airlines', iataCode: 'AA' },
-  { name: 'Southwest Airlines', iataCode: 'WN' },
-  { name: 'Alaska Airlines', iataCode: 'AS' },
-  { name: 'JetBlue Airways', iataCode: 'B6' },
-  { name: 'Spirit Airlines', iataCode: 'NK' },
-  { name: 'Frontier Airlines', iataCode: 'F9' },
-  { name: 'Air Canada', iataCode: 'AC' },
-  { name: 'British Airways', iataCode: 'BA' },
-  { name: 'Virgin Atlantic', iataCode: 'VS' },
-  { name: 'Lufthansa', iataCode: 'LH' },
-  { name: 'Emirates', iataCode: 'EK' },
-  { name: 'Qatar Airways', iataCode: 'QR' },
-  { name: 'Turkish Airlines', iataCode: 'TK' },
-  { name: 'Air France', iataCode: 'AF' },
-  { name: 'KLM Royal Dutch Airlines', iataCode: 'KL' },
-  { name: 'Singapore Airlines', iataCode: 'SQ' },
-  { name: 'Cathay Pacific', iataCode: 'CX' },
-  { name: 'Qantas', iataCode: 'QF' }
+  { name: 'United Airlines', iataCode: 'UA', icaoCode: 'UAL', logoUrl: '/airlines/ua.png' },
+  { name: 'Delta Air Lines', iataCode: 'DL', icaoCode: 'DAL', logoUrl: '/airlines/dl.png' },
+  { name: 'American Airlines', iataCode: 'AA', icaoCode: 'AAL', logoUrl: '/airlines/aa.png' },
+  { name: 'Southwest Airlines', iataCode: 'WN', icaoCode: 'SWA', logoUrl: '/airlines/wn.png' },
+  { name: 'Alaska Airlines', iataCode: 'AS', icaoCode: 'ASA', logoUrl: '/airlines/as.png' },
+  { name: 'JetBlue', iataCode: 'B6', icaoCode: 'JBU', logoUrl: '/airlines/b6.png' },
+  { name: 'Spirit Airlines', iataCode: 'NK', icaoCode: 'NKS', logoUrl: '/airlines/nk.png' },
+  { name: 'Frontier Airlines', iataCode: 'F9', icaoCode: 'FFT', logoUrl: '/airlines/f9.png' },
+  { name: 'Air Canada', iataCode: 'AC', icaoCode: 'ACA', logoUrl: '/airlines/ac.png' },
+  { name: 'British Airways', iataCode: 'BA', icaoCode: 'BAW', logoUrl: '/airlines/ba.png' },
+  { name: 'Virgin Atlantic', iataCode: 'VS', icaoCode: 'VIR', logoUrl: '/airlines/vs.png' },
+  { name: 'Lufthansa', iataCode: 'LH', icaoCode: 'DLH', logoUrl: '/airlines/lh.png' },
+  { name: 'Air France', iataCode: 'AF', icaoCode: 'AFR', logoUrl: '/airlines/af.png' },
+  { name: 'KLM', iataCode: 'KL', icaoCode: 'KLM', logoUrl: '/airlines/kl.png' },
+  { name: 'Emirates', iataCode: 'EK', icaoCode: 'UAE', logoUrl: '/airlines/ek.png' },
+  { name: 'Qatar Airways', iataCode: 'QR', icaoCode: 'QTR', logoUrl: '/airlines/qr.png' },
+  { name: 'Turkish Airlines', iataCode: 'TK', icaoCode: 'THY', logoUrl: '/airlines/tk.png' },
+  { name: 'Singapore Airlines', iataCode: 'SQ', icaoCode: 'SIA', logoUrl: '/airlines/sq.png' },
+  { name: 'Cathay Pacific', iataCode: 'CX', icaoCode: 'CPA', logoUrl: '/airlines/cx.png' },
+  { name: 'Qantas', iataCode: 'QF', icaoCode: 'QFA', logoUrl: '/airlines/qf.png' }
 ];
+
+function AirlineCombobox({ valueName, valueCode, valueLogoUrl, onChange }) {
+  const [query, setQuery] = React.useState(valueName || '');
+  const [isOpen, setIsOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    setQuery(valueName || '');
+  }, [valueName]);
+
+  const filteredAirlines = React.useMemo(() => {
+    if (!query || !query.trim()) return AIRLINE_DIRECTORY;
+    const q = query.trim().toLowerCase();
+    return AIRLINE_DIRECTORY.filter(a => {
+      const nameMatch = a.name.toLowerCase().includes(q);
+      const codeMatch = a.iataCode.toLowerCase().includes(q);
+      const icaoMatch = (a.icaoCode || '').toLowerCase().includes(q);
+      const fuzzyUnited = q.startsWith('un') && a.name.toLowerCase().includes('united');
+      return nameMatch || codeMatch || icaoMatch || fuzzyUnited;
+    });
+  }, [query]);
+
+  const handleSelect = (airline) => {
+    setQuery(airline.name);
+    setIsOpen(false);
+    onChange({
+      airlineName: airline.name,
+      airlineCode: airline.iataCode,
+      airlineLogoUrl: airline.logoUrl
+    });
+  };
+
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    setQuery(val);
+    setIsOpen(true);
+    const exactMatch = AIRLINE_DIRECTORY.find(a => a.name.toLowerCase() === val.trim().toLowerCase() || a.iataCode.toLowerCase() === val.trim().toLowerCase());
+    if (exactMatch) {
+      onChange({
+        airlineName: exactMatch.name,
+        airlineCode: exactMatch.iataCode,
+        airlineLogoUrl: exactMatch.logoUrl
+      });
+    } else {
+      onChange({
+        airlineName: val,
+        airlineCode: '',
+        airlineLogoUrl: ''
+      });
+    }
+  };
+
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+        <input
+          type="text"
+          placeholder="Search airline or code (e.g. United, UA)"
+          value={query}
+          onFocus={() => setIsOpen(true)}
+          onChange={handleInputChange}
+          style={{ width: '100%', paddingRight: valueCode ? '55px' : '10px' }}
+        />
+        {valueCode && (
+          <span style={{ position: 'absolute', right: '10px', fontSize: '0.75rem', fontWeight: 600, background: '#e2e8f0', padding: '2px 6px', borderRadius: '4px', color: '#334155' }}>
+            {valueCode}
+          </span>
+        )}
+      </div>
+      {isOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            maxHeight: '180px',
+            overflowY: 'auto',
+            background: '#ffffff',
+            border: '1px solid #cbd5e1',
+            borderRadius: '6px',
+            zIndex: 1000,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            marginTop: '4px'
+          }}
+        >
+          {filteredAirlines.length > 0 ? (
+            filteredAirlines.map((airline) => (
+              <div
+                key={airline.iataCode}
+                onClick={() => handleSelect(airline)}
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  fontSize: '0.82rem',
+                  display: 'flex',
+                  justify: 'space-between',
+                  alignItems: 'center',
+                  borderBottom: '1px solid #f1f5f9',
+                  background: '#fff'
+                }}
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                <span>{airline.name} — <strong>{airline.iataCode}</strong></span>
+              </div>
+            ))
+          ) : (
+            <div style={{ padding: '8px 12px', fontSize: '0.8rem', color: '#64748b' }}>
+              Custom entry: "{query}"
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AdminDashboard() {
 
@@ -90,12 +205,16 @@ function AdminDashboard() {
   const [ticketForm, setTicketForm] = useState({
     airlineCode: '',
     airlineName: '',
+    airlineLogoUrl: '',
     airlineConfirmationNumber: '',
+    airlinePnr: '',
     ticketNumber: '',
     ticketIssuedAt: '',
     ticketNotes: '',
     supplierConfirmation: ''
   });
+  const [ticketDetailsError, setTicketDetailsError] = useState('');
+  const [ticketDetailsSuccess, setTicketDetailsSuccess] = useState('');
 
 
 
@@ -332,30 +451,39 @@ function AdminDashboard() {
 
 
     // Initial ticket details setup
+    const savedPnr = booking.airline_confirmation_number || booking.airlineConfirmationNumber || booking.airline_pnr || booking.pnr || '';
     setTicketForm({
-      airlineCode: booking.airline_code || '',
-      airlineName: booking.airline_name || booking.carrier || '',
-      airlineConfirmationNumber: booking.airline_confirmation_number || booking.airline_pnr || booking.pnr || '',
-      supplierConfirmation: booking.supplier_confirmation || '',
-      ticketNumber: booking.ticket_number || '',
-      ticketIssuedAt: booking.ticket_issued_at ? String(booking.ticket_issued_at).slice(0, 16) : '',
-      ticketNotes: booking.ticket_notes || ''
+      airlineCode: booking.airline_code || booking.airlineCode || '',
+      airlineName: booking.airline_name || booking.airlineName || booking.carrier || '',
+      airlineLogoUrl: booking.airline_logo_url || booking.airlineLogoUrl || '',
+      airlineConfirmationNumber: savedPnr,
+      airlinePnr: savedPnr,
+      supplierConfirmation: booking.supplier_confirmation || booking.supplierConfirmation || '',
+      ticketNumber: booking.ticket_number || booking.ticketNumber || '',
+      ticketIssuedAt: booking.ticket_issued_at ? String(booking.ticket_issued_at).slice(0, 10) : (booking.ticketIssuedAt ? String(booking.ticketIssuedAt).slice(0, 10) : ''),
+      ticketNotes: booking.ticket_notes || booking.ticketNotes || ''
     });
+    setTicketDetailsError('');
+    setTicketDetailsSuccess('');
   };
 
   const handleSaveTicketDetails = async (e) => {
     if (e) e.preventDefault();
     if (!selectedBooking) return;
 
-    const pnr = (ticketForm.airlineConfirmationNumber || '').trim().toUpperCase();
-    if (pnr && !/^[A-Z0-9]{6}$/.test(pnr)) {
-      alert('Airline confirmation number must contain exactly 6 letters or numbers.');
+    setTicketDetailsError('');
+    setTicketDetailsSuccess('');
+
+    const rawPnr = (ticketForm.airlineConfirmationNumber || ticketForm.airlinePnr || '').trim();
+    const pnr = rawPnr.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    if (!pnr || !/^[A-Z0-9]{6}$/.test(pnr)) {
+      setTicketDetailsError('Airline confirmation number must contain exactly 6 letters or numbers.');
       return;
     }
 
-    const tkt = (ticketForm.ticketNumber || '').trim();
+    const tkt = (ticketForm.ticketNumber || '').trim().replace(/\D/g, '').slice(0, 13);
     if (tkt && !/^\d{1,13}$/.test(tkt)) {
-      alert('Ticket number must contain digits only and cannot exceed 13 digits.');
+      setTicketDetailsError('Ticket number must contain digits only and cannot exceed 13 digits.');
       return;
     }
 
@@ -366,13 +494,14 @@ function AdminDashboard() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
         body: JSON.stringify({
-          airlineCode: ticketForm.airlineCode,
-          airlineName: ticketForm.airlineName,
+          airlineCode: ticketForm.airlineCode || '',
+          airlineName: ticketForm.airlineName || '',
+          airlineLogoUrl: ticketForm.airlineLogoUrl || '',
           airlineConfirmationNumber: pnr,
           ticketNumber: tkt,
-          ticketIssuedAt: ticketForm.ticketIssuedAt || new Date().toISOString(),
-          ticketNotes: ticketForm.ticketNotes,
-          supplierConfirmation: ticketForm.supplierConfirmation
+          ticketIssuedAt: ticketForm.ticketIssuedAt || new Date().toISOString().slice(0, 10),
+          ticketNotes: ticketForm.ticketNotes || '',
+          supplierConfirmation: ticketForm.supplierConfirmation || ''
         })
       });
 
@@ -385,13 +514,23 @@ function AdminDashboard() {
       if (updated) {
         setSelectedBooking(updated);
         setBookings(prevList => prevList.map(b => b.id === updated.id ? { ...b, ...updated } : b));
+        setTicketForm({
+          airlineCode: updated.airline_code || updated.airlineCode || '',
+          airlineName: updated.airline_name || updated.airlineName || '',
+          airlineLogoUrl: updated.airline_logo_url || updated.airlineLogoUrl || '',
+          airlineConfirmationNumber: updated.airline_confirmation_number || updated.airlineConfirmationNumber || '',
+          airlinePnr: updated.airline_confirmation_number || updated.airlineConfirmationNumber || '',
+          supplierConfirmation: updated.supplier_confirmation || updated.supplierConfirmation || '',
+          ticketNumber: updated.ticket_number || updated.ticketNumber || '',
+          ticketIssuedAt: updated.ticket_issued_at ? String(updated.ticket_issued_at).slice(0, 10) : '',
+          ticketNotes: updated.ticket_notes || updated.ticketNotes || ''
+        });
       }
 
       setHasUnsavedEdits(false);
-      alert('Airline ticket details saved.');
-      loadAllDashboardData();
+      setTicketDetailsSuccess('Airline ticket details saved.');
     } catch (err) {
-      alert(`Unable to save airline ticket details: ${err.message}`);
+      setTicketDetailsError(`Unable to save airline ticket details: ${err.message}`);
     } finally {
       setUpdatingRecord(false);
     }
@@ -1454,7 +1593,9 @@ function AdminDashboard() {
                           Airline Ticket Details
                         </span>
                         <span className="accordion-summary-right">
-                          {ticketForm.airlinePnr ? `PNR: ${ticketForm.airlinePnr}` : 'Pending Ticket Issue'}
+                          {/^[A-Z0-9]{6}$/.test((ticketForm.airlineConfirmationNumber || ticketForm.airlinePnr || selectedBooking?.airline_confirmation_number || selectedBooking?.airlineConfirmationNumber || '').trim().toUpperCase())
+                            ? `PNR: ${(ticketForm.airlineConfirmationNumber || ticketForm.airlinePnr || selectedBooking?.airline_confirmation_number || selectedBooking?.airlineConfirmationNumber || '').trim().toUpperCase()}`
+                            : 'Pending Ticket Issue'}
                         </span>
                       </button>
 
@@ -1465,18 +1606,33 @@ function AdminDashboard() {
                               <label>Airline Confirmation Number / PNR *</label>
                               <input
                                 type="text"
-                                placeholder="e.g. 6-char PNR (XYZ123)"
-                                value={ticketForm.airlinePnr}
-                                onChange={(e) => { setTicketForm({ ...ticketForm, airlinePnr: e.target.value }); setHasUnsavedEdits(true); }}
+                                maxLength={6}
+                                placeholder="6-char PNR (e.g. AB12CD)"
+                                value={ticketForm.airlineConfirmationNumber || ticketForm.airlinePnr || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+                                  setTicketForm({ ...ticketForm, airlineConfirmationNumber: val, airlinePnr: val });
+                                  setHasUnsavedEdits(true);
+                                  setTicketDetailsError('');
+                                }}
                               />
                             </div>
                             <div className="drawer-form-field">
                               <label>Airline Name</label>
-                              <input
-                                type="text"
-                                placeholder="e.g. United Airlines"
-                                value={ticketForm.airlineName}
-                                onChange={(e) => { setTicketForm({ ...ticketForm, airlineName: e.target.value }); setHasUnsavedEdits(true); }}
+                              <AirlineCombobox
+                                valueName={ticketForm.airlineName}
+                                valueCode={ticketForm.airlineCode}
+                                valueLogoUrl={ticketForm.airlineLogoUrl}
+                                onChange={(selected) => {
+                                  setTicketForm({
+                                    ...ticketForm,
+                                    airlineName: selected.airlineName,
+                                    airlineCode: selected.airlineCode,
+                                    airlineLogoUrl: selected.airlineLogoUrl
+                                  });
+                                  setHasUnsavedEdits(true);
+                                  setTicketDetailsError('');
+                                }}
                               />
                             </div>
                           </div>
@@ -1486,20 +1642,45 @@ function AdminDashboard() {
                               <label>Ticket Number</label>
                               <input
                                 type="text"
-                                placeholder="e.g. 016-2490182741"
-                                value={ticketForm.ticketNumber}
-                                onChange={(e) => { setTicketForm({ ...ticketForm, ticketNumber: e.target.value }); setHasUnsavedEdits(true); }}
+                                inputMode="numeric"
+                                maxLength={13}
+                                placeholder="e.g. 0162490182741"
+                                value={ticketForm.ticketNumber || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/\D/g, '').slice(0, 13);
+                                  setTicketForm({ ...ticketForm, ticketNumber: val });
+                                  setHasUnsavedEdits(true);
+                                  setTicketDetailsError('');
+                                }}
                               />
                             </div>
                             <div className="drawer-form-field">
                               <label>Ticket Issue Date</label>
                               <input
                                 type="date"
-                                value={ticketForm.ticketIssueDate}
-                                onChange={(e) => { setTicketForm({ ...ticketForm, ticketIssueDate: e.target.value }); setHasUnsavedEdits(true); }}
+                                value={ticketForm.ticketIssuedAt || ''}
+                                onChange={(e) => {
+                                  setTicketForm({ ...ticketForm, ticketIssuedAt: e.target.value });
+                                  setHasUnsavedEdits(true);
+                                  setTicketDetailsError('');
+                                }}
                               />
                             </div>
                           </div>
+
+                          {ticketDetailsError && (
+                            <div style={{ color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', marginTop: '10px' }}>
+                              <i className="fas fa-exclamation-circle" style={{ marginRight: '6px' }}></i>
+                              {ticketDetailsError}
+                            </div>
+                          )}
+
+                          {ticketDetailsSuccess && (
+                            <div style={{ color: '#166534', background: '#f0fdf4', border: '1px solid #86efac', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', marginTop: '10px' }}>
+                              <i className="fas fa-check-circle" style={{ marginRight: '6px' }}></i>
+                              {ticketDetailsSuccess}
+                            </div>
+                          )}
 
                           <button
                             type="button"
@@ -1508,8 +1689,11 @@ function AdminDashboard() {
                             style={{ width: '100%', marginTop: '12px', background: '#1e3a5f' }}
                             disabled={updatingRecord}
                           >
-                            <i className="fas fa-ticket-alt" style={{ marginRight: '6px' }}></i>
-                            Save Airline Ticket Details
+                            {updatingRecord ? (
+                              <><i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i> Saving...</>
+                            ) : (
+                              <><i className="fas fa-ticket-alt" style={{ marginRight: '6px' }}></i> Save Airline Ticket Details</>
+                            )}
                           </button>
                         </div>
                       )}
@@ -2028,30 +2212,53 @@ function AdminDashboard() {
                           </div>
 
                           {/* 3. Final Ticket Email Card */}
-                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', fontSize: '0.8rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                              <strong style={{ color: '#1e293b', fontSize: '0.85rem' }}>Final Ticket Email</strong>
-                              <span className={`status-badge status-badge--${(selectedBooking.final_confirmation_email_status || 'NOT_SENT') === 'SENT' ? 'done' : ((selectedBooking.final_confirmation_email_status || 'NOT_SENT') === 'FAILED' ? 'failed' : 'pending')}`}>
-                                {selectedBooking.final_confirmation_email_status || 'NOT_SENT'}
-                              </span>
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', color: '#64748b', fontSize: '0.75rem', marginBottom: '10px' }}>
-                              <div><strong>Recipient:</strong> {selectedBooking.final_confirmation_email_recipient || selectedBooking.email || 'N/A'}</div>
-                              <div><strong>Sent:</strong> {selectedBooking.final_confirmation_email_sent_at ? new Date(selectedBooking.final_confirmation_email_sent_at).toLocaleString() : 'N/A'}</div>
-                              <div style={{ gridColumn: '1 / -1' }}><strong>Message ID:</strong> {selectedBooking.final_confirmation_email_id || 'N/A'}</div>
-                              {selectedBooking.final_confirmation_email_error && <div style={{ color: '#dc2626', gridColumn: '1 / -1' }}><strong>Error:</strong> {selectedBooking.final_confirmation_email_error}</div>}
-                            </div>
+                          {(() => {
+                            const pnrVal = (selectedBooking?.airline_confirmation_number || selectedBooking?.airlineConfirmationNumber || selectedBooking?.airline_pnr || '').trim().toUpperCase();
+                            const isPnrValid = /^[A-Z0-9]{6}$/.test(pnrVal);
+                            const hasItinerary = !!(selectedBooking?.itinerary?.outbound?.length || selectedBooking?.outbound_segments?.length || selectedBooking?.flights?.length);
+                            const recipientEmail = selectedBooking?.email || selectedBooking?.contacts?.[0]?.email || selectedBooking?.travellers?.[0]?.email || '';
+                            const canSendFinalEmail = isPnrValid && hasItinerary && recipientEmail.includes('@');
 
-                            <button
-                              type="button"
-                              onClick={handleSendFinalTicketEmail}
-                              className={selectedBooking.final_confirmation_email_status === 'SENT' ? "admin-secondary-btn" : "admin-primary-btn"}
-                              style={{ width: '100%', background: selectedBooking.final_confirmation_email_status === 'SENT' ? '#f1f5f9' : '#047857', fontSize: '0.78rem', height: '34px' }}
-                            >
-                              <i className={`fas ${selectedBooking.final_confirmation_email_status === 'SENT' ? 'fa-redo' : 'fa-ticket-alt'}`} style={{ marginRight: '4px' }}></i>
-                              {selectedBooking.final_confirmation_email_status === 'SENT' ? 'Resend Final Ticket Email' : 'Send Final Ticket Email'}
-                            </button>
-                          </div>
+                            return (
+                              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', fontSize: '0.8rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                  <strong style={{ color: '#1e293b', fontSize: '0.85rem' }}>Final Ticket Email</strong>
+                                  <span className={`status-badge status-badge--${(selectedBooking.final_confirmation_email_status || 'NOT_SENT') === 'SENT' ? 'done' : ((selectedBooking.final_confirmation_email_status || 'NOT_SENT') === 'FAILED' ? 'failed' : 'pending')}`}>
+                                    {selectedBooking.final_confirmation_email_status || 'NOT_SENT'}
+                                  </span>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', color: '#64748b', fontSize: '0.75rem', marginBottom: '10px' }}>
+                                  <div><strong>Recipient:</strong> {selectedBooking.final_confirmation_email_recipient || recipientEmail || 'N/A'}</div>
+                                  <div><strong>Sent:</strong> {selectedBooking.final_confirmation_email_sent_at ? new Date(selectedBooking.final_confirmation_email_sent_at).toLocaleString() : 'N/A'}</div>
+                                  <div style={{ gridColumn: '1 / -1' }}><strong>Message ID:</strong> {selectedBooking.final_confirmation_email_id || 'N/A'}</div>
+                                  {selectedBooking.final_confirmation_email_error && <div style={{ color: '#dc2626', gridColumn: '1 / -1' }}><strong>Error:</strong> {selectedBooking.final_confirmation_email_error}</div>}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={handleSendFinalTicketEmail}
+                                  disabled={!canSendFinalEmail || updatingRecord}
+                                  className={selectedBooking.final_confirmation_email_status === 'SENT' ? "admin-secondary-btn" : "admin-primary-btn"}
+                                  style={{
+                                    width: '100%',
+                                    background: !canSendFinalEmail ? '#cbd5e1' : (selectedBooking.final_confirmation_email_status === 'SENT' ? '#f1f5f9' : '#047857'),
+                                    color: !canSendFinalEmail ? '#64748b' : undefined,
+                                    fontSize: '0.78rem',
+                                    height: '34px',
+                                    cursor: !canSendFinalEmail ? 'not-allowed' : 'pointer'
+                                  }}
+                                >
+                                  <i className={`fas ${selectedBooking.final_confirmation_email_status === 'SENT' ? 'fa-redo' : 'fa-ticket-alt'}`} style={{ marginRight: '4px' }}></i>
+                                  {selectedBooking.final_confirmation_email_status === 'SENT' ? 'Resend Final Ticket Email' : 'Send Final Ticket Email'}
+                                </button>
+                                {!canSendFinalEmail && (
+                                  <div style={{ color: '#94a3b8', fontSize: '0.72rem', marginTop: '4px', fontStyle: 'italic' }}>
+                                    * Requires valid saved 6-character PNR, itinerary, and recipient email.
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
 
                         </div>
                       )}

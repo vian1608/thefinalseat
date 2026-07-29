@@ -175,14 +175,41 @@ export const bookingRepository = {
     const destCode = outboundSegs.length > 0 ? outboundSegs[outboundSegs.length - 1].destination_airport : (outboundFlight.arrival_airport || outboundFlight.destination || null);
     const departureDate = outboundFlight.departure_date || outboundFlight.departure_time || null;
 
+    const pnrVal = booking.airline_confirmation_number || booking.airlineConfirmationNumber || booking.airline_pnr || booking.pnr || null;
+    const nameVal = booking.airline_name || booking.airlineName || null;
+    const codeVal = booking.airline_code || booking.airlineCode || null;
+    const logoVal = booking.airline_logo_url || booking.airlineLogoUrl || null;
+    const tktVal = booking.ticket_number || booking.ticketNumber || null;
+    const dateVal = booking.ticket_issued_at || booking.ticketIssuedAt || null;
+    const notesVal = booking.ticket_notes || booking.ticketNotes || null;
+    const suppVal = booking.supplier_confirmation || booking.supplierConfirmation || null;
+
     return {
       ...booking,
       passenger_name: masterName,
-      carrier,
-      airline: carrier,
+      carrier: carrier || nameVal,
+      airline: carrier || nameVal,
       origin_code: originCode,
       destination_code: destCode,
       departure_date: departureDate,
+      airline_name: nameVal,
+      airline_code: codeVal,
+      airline_logo_url: logoVal,
+      airline_confirmation_number: pnrVal,
+      airline_pnr: pnrVal,
+      pnr: pnrVal,
+      ticket_number: tktVal,
+      ticket_issued_at: dateVal,
+      ticket_notes: notesVal,
+      supplier_confirmation: suppVal,
+      airlineName: nameVal,
+      airlineCode: codeVal,
+      airlineLogoUrl: logoVal,
+      airlineConfirmationNumber: pnrVal,
+      ticketNumber: tktVal,
+      ticketIssuedAt: dateVal,
+      ticketNotes: notesVal,
+      supplierConfirmation: suppVal,
       travellers: relations.travellers || [],
       contacts: relations.contacts || [],
       flights: relations.flights || [],
@@ -193,7 +220,7 @@ export const bookingRepository = {
       payment_splits: relations.paymentSplits || [],
 
       flight_details: outboundFlight ? {
-        airline: carrier,
+        airline: carrier || nameVal,
         departure: {
           airport: originCode,
           date: departureDate
@@ -279,6 +306,7 @@ export const bookingRepository = {
     const {
       airlineCode,
       airlineName,
+      airlineLogoUrl,
       airlineConfirmationNumber,
       ticketNumber,
       ticketIssuedAt,
@@ -286,31 +314,35 @@ export const bookingRepository = {
       supplierConfirmation
     } = ticketData;
 
-    if (airlineConfirmationNumber) {
-      const pnr = String(airlineConfirmationNumber).trim().toUpperCase();
-      if (!/^[A-Z0-9]{6}$/.test(pnr)) {
+    let cleanPnr = booking.airline_confirmation_number || null;
+    if (airlineConfirmationNumber !== undefined && airlineConfirmationNumber !== null && String(airlineConfirmationNumber).trim() !== '') {
+      const rawPnr = String(airlineConfirmationNumber).trim().toUpperCase();
+      if (!/^[A-Z0-9]{6}$/.test(rawPnr)) {
         throw new Error('Airline confirmation number must contain exactly 6 letters or numbers.');
       }
+      cleanPnr = rawPnr;
     }
 
-    if (ticketNumber) {
-      const tkt = String(ticketNumber).trim();
-      if (!/^\d{1,13}$/.test(tkt)) {
+    let cleanTkt = booking.ticket_number || null;
+    if (ticketNumber !== undefined && ticketNumber !== null && String(ticketNumber).trim() !== '') {
+      const rawTkt = String(ticketNumber).trim();
+      if (!/^\d{1,13}$/.test(rawTkt)) {
         throw new Error('Ticket number must contain digits only and cannot exceed 13 digits.');
       }
+      cleanTkt = rawTkt;
     }
 
-    const cleanPnr = airlineConfirmationNumber !== undefined ? String(airlineConfirmationNumber).trim().toUpperCase() : (booking.airline_confirmation_number || null);
-    const cleanTkt = ticketNumber !== undefined ? String(ticketNumber).trim() : (booking.ticket_number || null);
     const cleanCode = airlineCode !== undefined ? String(airlineCode).trim().toUpperCase() : (booking.airline_code || null);
     const cleanName = airlineName !== undefined ? String(airlineName).trim() : (booking.airline_name || null);
+    const cleanLogo = airlineLogoUrl !== undefined ? String(airlineLogoUrl).trim() : (booking.airline_logo_url || null);
     const cleanSupp = supplierConfirmation !== undefined ? String(supplierConfirmation).trim() : (booking.supplier_confirmation || null);
     const cleanNotes = ticketNotes !== undefined ? String(ticketNotes).trim() : (booking.ticket_notes || null);
-    const cleanIssuedAt = ticketIssuedAt || new Date().toISOString();
+    const cleanIssuedAt = ticketIssuedAt ? String(ticketIssuedAt).slice(0, 10) : (booking.ticket_issued_at ? String(booking.ticket_issued_at).slice(0, 10) : new Date().toISOString().slice(0, 10));
 
     const updatePayload = {
       airline_code: cleanCode,
       airline_name: cleanName,
+      airline_logo_url: cleanLogo,
       airline_confirmation_number: cleanPnr,
       ticket_number: cleanTkt,
       ticket_issued_at: cleanIssuedAt,
@@ -325,7 +357,7 @@ export const bookingRepository = {
       oldStatus: booking.status,
       newStatus: booking.status,
       adminId,
-      reason: `Ticket details updated. PNR: ${cleanPnr || 'N/A'}, Ticket: ${cleanTkt || 'N/A'}, Supplier Ref: ${cleanSupp || 'N/A'}`
+      reason: `Ticket details updated. PNR: ${cleanPnr || 'N/A'}, Airline: ${cleanName || 'N/A'} (${cleanCode || 'N/A'}), Ticket: ${cleanTkt || 'N/A'}, Supplier Ref: ${cleanSupp || 'N/A'}`
     });
 
     return bookingRepository.getCompleteBookingById(realId);
@@ -414,8 +446,10 @@ export const bookingRepository = {
     if (error) throw new Error(error.message);
 
     const enrichedList = await Promise.all((data || []).map(async b => {
-      const rels = await bookingRepository.getRelations(b.id);
-      return bookingRepository.enrichBookingRecord(b, rels);
+      const memOverridden = bookingsMemoryStore.get(b.id) || (b.confirmation_code ? bookingsMemoryStore.get(b.confirmation_code) : null);
+      const merged = memOverridden ? { ...b, ...memOverridden } : b;
+      const rels = await bookingRepository.getRelations(merged.id);
+      return bookingRepository.enrichBookingRecord(merged, rels);
     }));
 
     return enrichedList;

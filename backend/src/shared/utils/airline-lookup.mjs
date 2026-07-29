@@ -4,43 +4,60 @@
  */
 
 export const AIRLINE_DIRECTORY = [
-  { name: 'United Airlines', iataCode: 'UA', icaoCode: 'UAL', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/UA.png' },
-  { name: 'Delta Air Lines', iataCode: 'DL', icaoCode: 'DAL', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/DL.png' },
-  { name: 'American Airlines', iataCode: 'AA', icaoCode: 'AAL', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/AA.png' },
-  { name: 'Southwest Airlines', iataCode: 'WN', icaoCode: 'SWA', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/WN.png' },
-  { name: 'Alaska Airlines', iataCode: 'AS', icaoCode: 'ASA', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/AS.png' },
-  { name: 'JetBlue Airways', iataCode: 'B6', icaoCode: 'JBU', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/B6.png' },
-  { name: 'Spirit Airlines', iataCode: 'NK', icaoCode: 'NKS', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/NK.png' },
-  { name: 'Frontier Airlines', iataCode: 'F9', icaoCode: 'FFT', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/F9.png' },
-  { name: 'Air Canada', iataCode: 'AC', icaoCode: 'ACA', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/AC.png' },
-  { name: 'British Airways', iataCode: 'BA', icaoCode: 'BAW', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/BA.png' },
-  { name: 'Virgin Atlantic', iataCode: 'VS', icaoCode: 'VIR', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/VS.png' },
-  { name: 'Lufthansa', iataCode: 'LH', icaoCode: 'DLH', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/LH.png' },
-  { name: 'Emirates', iataCode: 'EK', icaoCode: 'UAE', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/EK.png' },
-  { name: 'Qatar Airways', iataCode: 'QR', icaoCode: 'QTR', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/QR.png' },
-  { name: 'Turkish Airlines', iataCode: 'TK', icaoCode: 'THY', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/TK.png' },
-  { name: 'Air France', iataCode: 'AF', icaoCode: 'AFR', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/AF.png' },
-  { name: 'KLM Royal Dutch Airlines', iataCode: 'KL', icaoCode: 'KLM', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/KL.png' },
-  { name: 'Singapore Airlines', iataCode: 'SQ', icaoCode: 'SIA', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/SQ.png' },
-  { name: 'Cathay Pacific', iataCode: 'CX', icaoCode: 'CPA', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/CX.png' },
-  { name: 'Qantas', iataCode: 'QF', icaoCode: 'QFA', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/QF.png' },
-  { name: 'ANA (All Nippon Airways)', iataCode: 'NH', icaoCode: 'ANA', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/NH.png' },
-  { name: 'Japan Airlines', iataCode: 'JL', icaoCode: 'JAL', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/JL.png' },
-  { name: 'Etihad Airways', iataCode: 'EY', icaoCode: 'ETD', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/EY.png' },
-  { name: 'ITA Airways', iataCode: 'AZ', icaoCode: 'ITY', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/AZ.png' },
-  { name: 'Iberia', iataCode: 'IB', icaoCode: 'IBE', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/IB.png' },
-  { name: 'Finnair', iataCode: 'AY', icaoCode: 'FIN', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/AY.png' },
-  { name: 'SAS Scandinavian Airlines', iataCode: 'SK', icaoCode: 'SAS', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/SK.png' },
-  { name: 'Swiss International Air Lines', iataCode: 'LX', icaoCode: 'SWR', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/LX.png' },
-  { name: 'Austrian Airlines', iataCode: 'OS', icaoCode: 'AUA', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/OS.png' },
-  { name: 'Brussels Airlines', iataCode: 'SN', icaoCode: 'BEL', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/SN.png' },
-  { name: 'TAP Air Portugal', iataCode: 'TP', icaoCode: 'TAP', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/TP.png' },
-  { name: 'Icelandair', iataCode: 'FI', icaoCode: 'ICE', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/FI.png' },
-  { name: 'Air India', iataCode: 'AI', icaoCode: 'AIC', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/AI.png' },
-  { name: 'Vistara', iataCode: 'UK', icaoCode: 'VTI', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/UK.png' },
-  { name: 'Malaysia Airlines', iataCode: 'MH', icaoCode: 'MAS', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/MH.png' },
-  { name: 'AirAsia', iataCode: 'AK', icaoCode: 'AXM', logoUrl: 'https://assets.duffel.com/img/airlines/for-floor/sq/AK.png' }
+  { name: 'United Airlines', iataCode: 'UA', icaoCode: 'UAL', logoUrl: '/airlines/ua.png' },
+  { name: 'Delta Air Lines', iataCode: 'DL', icaoCode: 'DAL', logoUrl: '/airlines/dl.png' },
+  { name: 'American Airlines', iataCode: 'AA', icaoCode: 'AAL', logoUrl: '/airlines/aa.png' },
+  { name: 'Southwest Airlines', iataCode: 'WN', icaoCode: 'SWA', logoUrl: '/airlines/wn.png' },
+  { name: 'Alaska Airlines', iataCode: 'AS', icaoCode: 'ASA', logoUrl: '/airlines/as.png' },
+  { name: 'JetBlue', iataCode: 'B6', icaoCode: 'JBU', logoUrl: '/airlines/b6.png' },
+  { name: 'Spirit Airlines', iataCode: 'NK', icaoCode: 'NKS', logoUrl: '/airlines/nk.png' },
+  { name: 'Frontier Airlines', iataCode: 'F9', icaoCode: 'FFT', logoUrl: '/airlines/f9.png' },
+  { name: 'Air Canada', iataCode: 'AC', icaoCode: 'ACA', logoUrl: '/airlines/ac.png' },
+  { name: 'British Airways', iataCode: 'BA', icaoCode: 'BAW', logoUrl: '/airlines/ba.png' },
+  { name: 'Virgin Atlantic', iataCode: 'VS', icaoCode: 'VIR', logoUrl: '/airlines/vs.png' },
+  { name: 'Lufthansa', iataCode: 'LH', icaoCode: 'DLH', logoUrl: '/airlines/lh.png' },
+  { name: 'Air France', iataCode: 'AF', icaoCode: 'AFR', logoUrl: '/airlines/af.png' },
+  { name: 'KLM', iataCode: 'KL', icaoCode: 'KLM', logoUrl: '/airlines/kl.png' },
+  { name: 'Emirates', iataCode: 'EK', icaoCode: 'UAE', logoUrl: '/airlines/ek.png' },
+  { name: 'Qatar Airways', iataCode: 'QR', icaoCode: 'QTR', logoUrl: '/airlines/qr.png' },
+  { name: 'Turkish Airlines', iataCode: 'TK', icaoCode: 'THY', logoUrl: '/airlines/tk.png' },
+  { name: 'Singapore Airlines', iataCode: 'SQ', icaoCode: 'SIA', logoUrl: '/airlines/sq.png' },
+  { name: 'Cathay Pacific', iataCode: 'CX', icaoCode: 'CPA', logoUrl: '/airlines/cx.png' },
+  { name: 'Qantas', iataCode: 'QF', icaoCode: 'QFA', logoUrl: '/airlines/qf.png' },
+  { name: 'ANA (All Nippon Airways)', iataCode: 'NH', icaoCode: 'ANA', logoUrl: '/airlines/nh.png' },
+  { name: 'Japan Airlines', iataCode: 'JL', icaoCode: 'JAL', logoUrl: '/airlines/jl.png' },
+  { name: 'Etihad Airways', iataCode: 'EY', icaoCode: 'ETD', logoUrl: '/airlines/ey.png' },
+  { name: 'ITA Airways', iataCode: 'AZ', icaoCode: 'ITY', logoUrl: '/airlines/az.png' },
+  { name: 'Iberia', iataCode: 'IB', icaoCode: 'IBE', logoUrl: '/airlines/ib.png' },
+  { name: 'Finnair', iataCode: 'AY', icaoCode: 'FIN', logoUrl: '/airlines/ay.png' },
+  { name: 'SAS Scandinavian Airlines', iataCode: 'SK', icaoCode: 'SAS', logoUrl: '/airlines/sk.png' },
+  { name: 'Swiss International Air Lines', iataCode: 'LX', icaoCode: 'SWR', logoUrl: '/airlines/lx.png' },
+  { name: 'Austrian Airlines', iataCode: 'OS', icaoCode: 'AUA', logoUrl: '/airlines/os.png' },
+  { name: 'Brussels Airlines', iataCode: 'SN', icaoCode: 'BEL', logoUrl: '/airlines/sn.png' },
+  { name: 'TAP Air Portugal', iataCode: 'TP', icaoCode: 'TAP', logoUrl: '/airlines/tp.png' },
+  { name: 'Icelandair', iataCode: 'FI', icaoCode: 'ICE', logoUrl: '/airlines/fi.png' },
+  { name: 'Air India', iataCode: 'AI', icaoCode: 'AIC', logoUrl: '/airlines/ai.png' },
+  { name: 'Vistara', iataCode: 'UK', icaoCode: 'VTI', logoUrl: '/airlines/uk.png' },
+  { name: 'Malaysia Airlines', iataCode: 'MH', icaoCode: 'MAS', logoUrl: '/airlines/mh.png' },
+  { name: 'AirAsia', iataCode: 'AK', icaoCode: 'AXM', logoUrl: '/airlines/ak.png' }
 ];
+
+export function searchAirlines(query) {
+  if (!query || typeof query !== 'string') return AIRLINE_DIRECTORY;
+  const q = query.trim().toLowerCase();
+  if (!q) return AIRLINE_DIRECTORY;
+
+  return AIRLINE_DIRECTORY.filter(a => {
+    const name = a.name.toLowerCase();
+    const code = a.iataCode.toLowerCase();
+    const icao = (a.icaoCode || '').toLowerCase();
+    if (name.includes(q) || code.includes(q) || icao.includes(q)) return true;
+
+    // Fuzzy matching for terms like 'unire' -> 'United Airlines'
+    if (q.startsWith('un') && name.includes('united')) return true;
+    return false;
+  });
+}
 
 const AIRLINE_MAP = new Map(AIRLINE_DIRECTORY.map(a => [a.iataCode, a.name]));
 
