@@ -11,6 +11,7 @@ async function runAuthorizationTests() {
   // Test 1: Create single-use 24-hour authorization token
   console.log('Test 1: Single-use 24-hour authorization token & snapshot creation...');
   const testUuid = '8744e915-a566-41ea-a79a-fe2163bcaf31';
+  await bookingRepository.createBookingRecord({ id: testUuid, confirmation_code: 'TFS-2026-AUTH8899', customer_price: 489.60, total_amount: 489.60, currency: 'USD', passenger_name: 'Vinod Saini', email: 'viansaini1608@gmail.com', status: 'PENDING' });
   await bookingRepository.updateStatus(testUuid, { total_amount: 489.60, customer_price: 489.60 });
 
   const mockBooking = {
@@ -103,6 +104,83 @@ async function runAuthorizationTests() {
   assert.strictEqual(evidence.authorization.ipAddress, '198.51.100.45');
   assert.ok(evidence.authorization.authorizationTextHash, 'Text SHA-256 hash must be recorded in evidence');
   console.log(`✔ Test 5 Passed: Audit evidence generated (ID: ${evidence.evidenceId}) with full audit trail`);
+
+  // Test 6: Multi-merchant payment splits and PDF generation verification
+  console.log('\nTest 6: Multi-merchant payment splits and Authorization PDF generation...');
+  const multiSplitBookingUuid = '9855f915-b677-42ba-b88b-fe3264bdaf99';
+  const mockMultiBooking = {
+    id: multiSplitBookingUuid,
+    confirmation_code: 'TFS-2026-SPLIT77',
+    passenger_name: 'Jane Doe',
+    email: 'jane.doe@example.com',
+    customer_price: 2803.87,
+    total_amount: 2803.87,
+    currency: 'USD',
+    status: 'PENDING',
+    payment_splits: [
+      { merchant_name: 'Alaska Airlines', amount: 1803.87, currency: 'USD' },
+      { merchant_name: 'The Final Seat LLC', amount: 1000.00, currency: 'USD' }
+    ],
+    outbound_segments: [
+      {
+        carrier_name: 'Alaska Airlines',
+        carrier_code: 'AS',
+        flight_number: 'AS 123',
+        origin_airport: 'SEA',
+        destination_airport: 'ANC',
+        departure_date: '2026-08-15',
+        departure_time: '10:00',
+        arrival_date: '2026-08-15',
+        arrival_time: '13:30',
+        cabin: 'Main',
+        stops: 0
+      }
+    ]
+  };
+
+  const createdBooking = await bookingRepository.createBookingRecord(mockMultiBooking);
+  const realBookingId = createdBooking.id || multiSplitBookingUuid;
+  mockMultiBooking.id = realBookingId;
+
+  const multiAuthRecord = await passengerAuthorizationService.createAuthorizationToken(mockMultiBooking, {
+    cardBrand: 'MasterCard',
+    cardLast4: '8899'
+  });
+
+  const multiEvidence = await passengerAuthorizationService.generateAuditEvidenceExport(realBookingId);
+  assert.strictEqual(multiEvidence.paymentSplits.length, 2, 'Must contain 2 payment splits');
+  assert.strictEqual(multiEvidence.paymentSplits[0].merchant_name, 'Alaska Airlines');
+  assert.strictEqual(multiEvidence.paymentSplits[0].amount, '1803.87');
+  assert.strictEqual(multiEvidence.paymentSplits[1].merchant_name, 'The Final Seat LLC');
+  assert.strictEqual(multiEvidence.paymentSplits[1].amount, '1000.00');
+
+  const { generateAuthorizationPdfBuffer } = await import('../src/modules/authorizations/authorization-pdf.service.mjs');
+  const pdfBufferPending = await generateAuthorizationPdfBuffer(multiEvidence);
+  assert.ok(pdfBufferPending instanceof Buffer, 'PDF Buffer generated successfully');
+  assert.ok(pdfBufferPending.length > 2000, 'PDF Buffer must have valid length');
+  assert.strictEqual(multiEvidence.authorization.status, 'PENDING');
+  assert.ok(multiEvidence.consentText.includes('Alaska Airlines: $1803.87 USD'));
+  assert.ok(multiEvidence.consentText.includes('The Final Seat LLC: $1000.00 USD'));
+
+  // Simulate customer authorization completion with real IP
+  await passengerAuthorizationService.acceptAuthorization({
+    token: multiAuthRecord.token,
+    acceptedCheckboxText: multiEvidence.consentText,
+    clientIp: '203.0.113.195',
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X)'
+  });
+
+  const multiEvidenceAccepted = await passengerAuthorizationService.generateAuditEvidenceExport(realBookingId);
+  const pdfBufferAccepted = await generateAuthorizationPdfBuffer(multiEvidenceAccepted);
+  assert.ok(pdfBufferAccepted instanceof Buffer, 'Accepted PDF Buffer generated successfully');
+  assert.ok(pdfBufferAccepted.length > 2000, 'Accepted PDF Buffer must have valid length');
+
+  assert.strictEqual(multiEvidenceAccepted.authorization.status, 'ACCEPTED');
+  assert.strictEqual(multiEvidenceAccepted.clientIp, '203.0.113.195');
+  assert.ok(multiEvidenceAccepted.consentHash, 'Consent hash must be present');
+  assert.ok(multiEvidenceAccepted.emailDelivery, 'Email delivery record must be present');
+
+  console.log('✔ Test 6 Passed: Multi-merchant splits, dynamic consent agreement, real IP & PDF evidence verified');
 
   console.log('\n🎉 ALL PASSENGER AUTHORIZATION TESTS PASSED SUCCESSFULLY!\n');
 }
