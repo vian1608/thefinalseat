@@ -832,6 +832,22 @@ export const bookingRepository = {
       }
     }
 
+    // 4.5 Validate Itinerary Segments if provided
+    if (Array.isArray(payload.itinerarySegments) && payload.itinerarySegments.length > 0) {
+      for (const [idx, seg] of payload.itinerarySegments.entries()) {
+        const orig = (seg.origin_airport || seg.originCode || seg.departure_airport || '').trim();
+        const dest = (seg.destination_airport || seg.destinationCode || seg.arrival_airport || '').trim();
+        if (!orig || !dest) {
+          return {
+            success: false,
+            code: 'INVALID_ITINERARY_SEGMENT',
+            message: `Itinerary segment #${idx + 1} requires origin and destination airport codes.`,
+            field: `itinerarySegments[${idx}]`
+          };
+        }
+      }
+    }
+
     // 5. Begin Transactional Mutation
     try {
       const bookingUpdateFields = {
@@ -889,8 +905,10 @@ export const bookingRepository = {
         const splitTotal = centsSum / 100;
 
         await bookingRepository.savePaymentSplits(realId, payload.paymentSplits);
-        bookingUpdateFields.customer_price = splitTotal;
-        bookingUpdateFields.total_amount = splitTotal;
+        if (splitTotal > 0 && (payload.customerTotal === undefined || payload.customerTotal === null)) {
+          bookingUpdateFields.customer_price = splitTotal;
+          bookingUpdateFields.total_amount = splitTotal;
+        }
       }
 
       // Perform database update
@@ -901,14 +919,19 @@ export const bookingRepository = {
         await bookingRepository.saveItinerarySegments(realId, payload.itinerarySegments);
       }
 
-      // Record Audit Event
+      // Record Audit Event with detailed changes list
+      const changedKeys = Object.keys(bookingUpdateFields).filter(k => k !== 'updated_at');
+      const auditReason = payload.auditReason || `Booking updated via Admin Dashboard (${changedKeys.join(', ') || 'No main fields changed'})`;
+
       await bookingRepository.recordStatusAudit({
         bookingId: realId,
         oldStatus: existingBooking.status,
         newStatus: bookingUpdateFields.status || existingBooking.status,
         adminId,
-        reason: payload.auditReason || 'Bulk edits saved via Admin Dashboard'
+        reason: auditReason
       });
+
+      logger.info(`[saveAllBookingChanges] Booking ${realId} updated by ${adminId}: ${changedKeys.join(', ')}`);
 
       const completeBooking = await bookingRepository.getCompleteBookingById(realId);
       return {
@@ -1012,21 +1035,24 @@ export const bookingRepository = {
         };
       });
 
-      // Always save to memory store first (immediate availability)
-      if (rows.length > 0) {
-        segmentsMemoryStore.set(bookingId, rows);
-      } else {
-        segmentsMemoryStore.delete(bookingId);
+      // SAFETY GUARD: Do NOT wipe out existing database itinerary segments if the input segment list is empty or contains only blank entries
+      const validRows = rows.filter(r => r.origin_airport && r.destination_airport);
+      if (validRows.length === 0) {
+        logger.warn(`[saveItinerarySegments] Skipped updating itinerary for ${bookingId}: input segments list is empty or contains invalid/blank entries.`);
+        return;
       }
+
+      // Always save to memory store first (immediate availability)
+      segmentsMemoryStore.set(bookingId, validRows);
 
       // Attempt 1: Save to booking_itinerary_segments (normalized table)
       const { error: deleteErr } = await supabase.from('booking_itinerary_segments').delete().eq('booking_id', bookingId);
-      if (!deleteErr && rows.length > 0) {
-        const { error: insertErr } = await supabase.from('booking_itinerary_segments').insert(rows);
+      if (!deleteErr && validRows.length > 0) {
+        const { error: insertErr } = await supabase.from('booking_itinerary_segments').insert(validRows);
         if (!insertErr) {
-          logger.info(`[saveItinerarySegments] Saved ${rows.length} segments to booking_itinerary_segments for ${bookingId}.`);
+          logger.info(`[saveItinerarySegments] Saved ${validRows.length} segments to booking_itinerary_segments for ${bookingId}.`);
           // Also persist to flights table for maximum redundancy
-          await bookingRepository._persistToFlightsTable(bookingId, rows);
+          await bookingRepository._persistToFlightsTable(bookingId, validRows);
           return;
         }
         logger.warn(`[saveItinerarySegments] booking_itinerary_segments insert failed: ${insertErr.message}. Falling back to flights table.`);

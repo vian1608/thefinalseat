@@ -379,33 +379,8 @@ function AdminDashboard() {
       }
     }
 
-
-    if (rawOutbound.length === 0) {
-      // No itinerary segments found — use an empty template so the admin can fill them in
-      rawOutbound = [{
-        journey_direction: 'outbound',
-        segment_sequence: 1,
-        carrier_name: booking.carrier || booking.airline_name || booking.airlineName || '',
-        carrier_code: booking.carrier_code || booking.airlineCode || '',
-        operating_carrier: '',
-        flight_number: '',
-        origin_airport: booking.origin_code || '',
-        origin_city: '',
-        destination_airport: booking.destination_code || '',
-        destination_city: '',
-        departure_date: '',
-        departure_time: '',
-        arrival_date: '',
-        arrival_time: '',
-        arrival_next_day: false,
-        cabin: 'Economy',
-        booking_class: 'Y',
-        terminal: '',
-        baggage_allowance: '1 Bag',
-        aircraft: '',
-        stop_count: 0
-      }];
-    }
+    // Do NOT inject blank/dummy template rows into rawOutbound if empty.
+    // An empty array indicates no itinerary segments exist yet.
 
     const mappedOutbound = rawOutbound.map((s, i) => ({
       journey_direction: 'outbound',
@@ -501,18 +476,14 @@ function AdminDashboard() {
       password: ''
     });
 
-    // Initial payment splits setup
-    const total = toFiniteNumber(customerTotal, 0);
+    // Initial payment splits setup — do NOT generate fake/dummy splits if empty
     const rawSplits = booking.payment_splits || [];
-    const mappedSplits = rawSplits.length > 0 ? rawSplits.map((s, idx) => ({
+    const mappedSplits = rawSplits.map((s, idx) => ({
       id: s.id || `split_${idx}_${Date.now()}`,
       merchant_name: s.merchant_name || s.merchantName || '',
       amount: parseFloat(s.amount || 0),
       currency: s.currency || booking.currency || 'USD'
-    })) : [
-      { id: 'split_1', merchant_name: booking.carrier || 'Airline Partner', amount: total > 0 ? toFiniteNumber((total * 0.85).toFixed(2), 1800) : 1800, currency: booking.currency || 'USD' },
-      { id: 'split_2', merchant_name: 'The Final Seat LLC', amount: total > 0 ? toFiniteNumber((total * 0.15).toFixed(2), 322.20) : 322.20, currency: booking.currency || 'USD' }
-    ];
+    }));
     setPaymentSplits(mappedSplits);
 
 
@@ -543,10 +514,13 @@ function AdminDashboard() {
     setUpdatingRecord(true);
 
     const adminToken = localStorage.getItem('token');
-    const allSegments = [
-      ...outboundSegments.map((s, i) => ({ ...s, journey_direction: 'outbound', segment_sequence: i + 1 })),
-      ...(hasReturnJourney ? returnSegments.map((s, i) => ({ ...s, journey_direction: 'return', segment_sequence: i + 1 })) : [])
-    ];
+    // Only send itinerarySegments if valid segments are populated by admin
+    const validSegments = allSegments.filter(s =>
+      (s.origin_airport && s.origin_airport.trim() !== '') ||
+      (s.destination_airport && s.destination_airport.trim() !== '') ||
+      (s.flight_number && s.flight_number.trim() !== '') ||
+      (s.carrier_name && s.carrier_name.trim() !== '')
+    );
 
     const payload = {
       bookingStatus: newStatus,
@@ -565,7 +539,7 @@ function AdminDashboard() {
       supplierCost: pricingForm.supplierFare,
       discount: pricingForm.discount,
       paymentSplits: paymentSplits,
-      itinerarySegments: allSegments
+      ...(validSegments.length > 0 ? { itinerarySegments: validSegments } : {})
     };
 
     try {
