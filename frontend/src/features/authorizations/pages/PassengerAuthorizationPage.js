@@ -197,30 +197,41 @@ function PassengerAuthorizationPage() {
           <div className="auth-section-block">
             <h4 className="auth-section-title"><i className="fas fa-plane-departure"></i> Flight Itinerary</h4>
             
-            {/* Outbound Journey */}
+            {/* Outbound & Return Journey */}
             {(() => {
-              const outboundList = authData.itinerarySnapshot?.outboundSegments || (outbound?.carrier_name || outbound?.airline ? [outbound] : []);
-              const returnList = authData.itinerarySnapshot?.returnSegments || (returnFlight?.carrier_name || returnFlight?.airline ? [returnFlight] : []);
+              const outboundList = authData.itinerarySnapshot?.outboundSegments || authData.itinerarySnapshot?.canonical?.outbound || (outbound?.carrier_name || outbound?.airline || outbound?.airlineName || outbound?.carrierCode ? [outbound] : []);
+              const returnList = authData.itinerarySnapshot?.returnSegments || authData.itinerarySnapshot?.canonical?.return || (returnFlight?.carrier_name || returnFlight?.airline || returnFlight?.airlineName || returnFlight?.carrierCode ? [returnFlight] : []);
+
+              if (outboundList.length === 0 && returnList.length === 0) {
+                return (
+                  <div className="auth-flight-card" style={{ textAlign: 'center', color: '#64748b', fontSize: '0.9rem', padding: '1.25rem' }}>
+                    <i className="fas fa-info-circle" style={{ marginRight: '0.5rem' }}></i>
+                    Flight itinerary details will be updated upon final airline confirmation.
+                  </div>
+                );
+              }
 
               return (
                 <>
-                  <div className="auth-flight-card">
-                    <div className="auth-flight-tag">
-                      Outbound Journey ({outboundList.length > 1 ? `${outboundList.length - 1} Connection Stop(s)` : 'Nonstop'})
-                    </div>
-                    {outboundList.map((seg, idx) => (
-                      <div key={`out-${idx}`} style={{ marginTop: idx > 0 ? '0.75rem' : '0', paddingTop: idx > 0 ? '0.75rem' : '0', borderTop: idx > 0 ? '1px dashed #cbd5e1' : 'none' }}>
-                        <div className="auth-flight-airline">Flight #{idx + 1}: {seg.carrier_name || seg.airline || 'Airline'} {seg.flight_number || seg.flightNumber}</div>
-                        <div className="auth-flight-route">
-                          {seg.origin_city || seg.originCity || seg.origin_airport || seg.originCode} ({seg.origin_airport || seg.originCode}) &rarr; {seg.destination_city || seg.destinationCity || seg.destination_airport || seg.destinationCode} ({seg.destination_airport || seg.destinationCode})
-                        </div>
-                        <div className="auth-flight-details">
-                          <span><strong>Departure:</strong> {seg.departure_date || seg.departureDate} {seg.departure_time || seg.departureTime}</span>
-                          <span><strong>Cabin:</strong> {seg.cabin || seg.cabinClass || 'Economy'}</span>
-                        </div>
+                  {outboundList.length > 0 && (
+                    <div className="auth-flight-card">
+                      <div className="auth-flight-tag">
+                        Outbound Journey ({outboundList.length > 1 ? `${outboundList.length - 1} Connection Stop(s)` : 'Nonstop'})
                       </div>
-                    ))}
-                  </div>
+                      {outboundList.map((seg, idx) => (
+                        <div key={`out-${idx}`} style={{ marginTop: idx > 0 ? '0.75rem' : '0', paddingTop: idx > 0 ? '0.75rem' : '0', borderTop: idx > 0 ? '1px dashed #cbd5e1' : 'none' }}>
+                          <div className="auth-flight-airline">Flight #{idx + 1}: {seg.carrier_name || seg.airline || seg.airlineName || 'Airline'} {seg.flight_number || seg.flightNumber}</div>
+                          <div className="auth-flight-route">
+                            {seg.origin_city || seg.originCity || seg.origin_airport || seg.originCode} ({seg.origin_airport || seg.originCode}) &rarr; {seg.destination_city || seg.destinationCity || seg.destination_airport || seg.destinationCode} ({seg.destination_airport || seg.destinationCode})
+                          </div>
+                          <div className="auth-flight-details">
+                            <span><strong>Departure:</strong> {seg.departure_date || seg.departureDate} {seg.departure_time || seg.departureTime}</span>
+                            <span><strong>Cabin:</strong> {seg.cabin || seg.cabinClass || 'Economy'}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Return Journey */}
                   {returnList.length > 0 && (
@@ -230,7 +241,7 @@ function PassengerAuthorizationPage() {
                       </div>
                       {returnList.map((seg, idx) => (
                         <div key={`ret-${idx}`} style={{ marginTop: idx > 0 ? '0.75rem' : '0', paddingTop: idx > 0 ? '0.75rem' : '0', borderTop: idx > 0 ? '1px dashed #cbd5e1' : 'none' }}>
-                          <div className="auth-flight-airline">Flight #{idx + 1}: {seg.carrier_name || seg.airline || 'Airline'} {seg.flight_number || seg.flightNumber}</div>
+                          <div className="auth-flight-airline">Flight #{idx + 1}: {seg.carrier_name || seg.airline || seg.airlineName || 'Airline'} {seg.flight_number || seg.flightNumber}</div>
                           <div className="auth-flight-route">
                             {seg.origin_city || seg.originCity || seg.origin_airport || seg.originCode} ({seg.origin_airport || seg.originCode}) &rarr; {seg.destination_city || seg.destinationCity || seg.destination_airport || seg.destinationCode} ({seg.destination_airport || seg.destinationCode})
                           </div>
@@ -247,21 +258,35 @@ function PassengerAuthorizationPage() {
             })()}
           </div>
 
-
           {/* Fare & Payment Breakdown */}
-          <div className="auth-section-block">
-            <h4 className="auth-section-title"><i className="fas fa-credit-card"></i> Payment &amp; Fare Breakdown</h4>
-            <div className="auth-fare-card">
-              <div className="auth-fare-row">
-                <span>Total Authorized Charge</span>
-                <strong style={{ fontSize: '1.2rem', color: '#7f0d2f' }}>${amount} {currency}</strong>
+          {(() => {
+            const splits = authData.splits || authData.quoteSnapshot?.splits || [];
+            return (
+              <div className="auth-section-block">
+                <h4 className="auth-section-title"><i className="fas fa-credit-card"></i> Payment Authorization Breakdown</h4>
+                <div className="auth-fare-card">
+                  {splits.length > 0 && (
+                    <div style={{ marginBottom: '0.75rem', paddingBottom: '0.75rem', borderBottom: '1px dashed #cbd5e1' }}>
+                      {splits.map((s, idx) => (
+                        <div key={`split-${idx}`} className="auth-fare-row" style={{ marginBottom: '0.35rem', fontSize: '0.95rem' }}>
+                          <span style={{ color: '#334155', fontWeight: '600' }}>{s.merchant_name || s.merchantName || 'Merchant Split'}</span>
+                          <strong style={{ color: '#1e293b' }}>${parseFloat(s.amount || 0).toFixed(2)} {s.currency || currency}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="auth-fare-row">
+                    <span style={{ fontWeight: '700', color: '#1e293b' }}>Total Authorized Charge</span>
+                    <strong style={{ fontSize: '1.25rem', color: '#7f0d2f' }}>${amount} {currency}</strong>
+                  </div>
+                  <div className="auth-fare-row" style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#64748b' }}>
+                    <span>Saved Payment Method</span>
+                    <span><strong>{cardBrand} ending in {cardLast4}</strong></span>
+                  </div>
+                </div>
               </div>
-              <div className="auth-fare-row" style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#64748b' }}>
-                <span>Saved Payment Method</span>
-                <span><strong>{cardBrand} ending in {cardLast4}</strong></span>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Mandatory Checkbox */}
           <div className="auth-checkbox-container">

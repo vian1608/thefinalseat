@@ -8,7 +8,18 @@ import { adminController } from '../src/modules/admin/admin.controller.mjs';
 async function runAdminDrawerTests() {
   console.log('=== RUNNING ADMIN DRAWER & REVISION WORKFLOW TESTS ===\n');
 
-  const testBookingId = '8744e915-a566-41ea-a79a-fe2163bcaf31';
+  // Create a clean test booking
+  const testBooking = await bookingRepository.createBookingRecord({
+    confirmation_code: `TFS-TEST-${Date.now().toString().slice(-6)}`,
+    customer_price: 500.00,
+    total_amount: 500.00,
+    currency: 'USD',
+    email: 'test_drawer@thefinalseat.com',
+    passenger_name: 'Test Drawer Passenger',
+    status: 'AUTHORIZED',
+    payment_status: 'PROCESSING'
+  });
+  const testBookingId = testBooking.id;
 
   // Test 1: Itinerary Segment Save & Authorization Invalidation
   console.log('Test 1: Itinerary multi-segment editing & authorization invalidation...');

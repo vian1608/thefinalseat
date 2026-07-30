@@ -416,6 +416,20 @@ export const sendBookingConfirmation = async (bookingInput, options = {}) => {
     html = html.replace(/\{\{[^}]+\\}\}/g, '');
 
     // Plaintext Fallback
+    const outboundAirlineTxt = outSeg.airlineName || '';
+    const outboundFlightNumberTxt = outSeg.flightNumber || '';
+    const outboundOriginCityTxt = outSeg.originName || '';
+    const outboundOriginCodeTxt = outSeg.originCode || '';
+    const outboundDestinationCityTxt = outboundSegs[outboundSegs.length - 1]?.destinationName || '';
+    const outboundDestinationCodeTxt = outboundSegs[outboundSegs.length - 1]?.destinationCode || '';
+    const outboundDepartureDateTxt = formatUsDate(outSeg.departureDate);
+    const outboundDepartureTimeTxt = formatUsTime(outSeg.departureTime);
+    const outboundArrivalDateTxt = formatUsDate(outSeg.arrivalDate);
+    const outboundArrivalTimeTxt = formatUsTime(outSeg.arrivalTime);
+    const outboundCabinTxt = outSeg.cabinClass || 'Economy';
+    const outboundStopsTxt = outboundSegs.length > 1 ? `${outboundSegs.length - 1} Stop(s)` : (outSeg.stops === 0 ? 'Nonstop' : `${outSeg.stops || 0} Stop(s)`);
+    const hasReturnFlightTxt = returnSegs && returnSegs.length > 0;
+
     const customerTextBody = `
 THE FINAL SEAT — TEMPORARY RESERVATION CONFIRMATION
 
@@ -431,12 +445,12 @@ Number of Travelers: ${passengerCount}
 Contact Email: ${customerEmail}
 
 FLIGHT ITINERARY:
-Outbound: ${outboundAirline} ${outboundFlightNumber} (${outboundOriginCity} [${outboundOriginCode}] to ${outboundDestinationCity} [${outboundDestinationCode}])
-Departure: ${outboundDepartureDate} ${outboundDepartureTime}
-Arrival: ${outboundArrivalDate} ${outboundArrivalTime}
-Cabin: ${outboundCabin} | Stops: ${outboundStops}
-${hasReturnFlight ? `
-Return: ${outboundAirline} (${outboundDestinationCity} to ${outboundOriginCity})
+Outbound: ${outboundAirlineTxt} ${outboundFlightNumberTxt} (${outboundOriginCityTxt} [${outboundOriginCodeTxt}] to ${outboundDestinationCityTxt} [${outboundDestinationCodeTxt}])
+Departure: ${outboundDepartureDateTxt} ${outboundDepartureTimeTxt}
+Arrival: ${outboundArrivalDateTxt} ${outboundArrivalTimeTxt}
+Cabin: ${outboundCabinTxt} | Stops: ${outboundStopsTxt}
+${hasReturnFlightTxt ? `
+Return: ${retSeg?.airlineName || ''} (${retSeg?.originName || ''} to ${returnSegs[returnSegs.length - 1]?.destinationName || ''})
 ` : ''}
 IMPORTANT NOTICE:
 ${confirmationCode} is a temporary confirmation number issued by The Final Seat. It is not the airline's final PNR, ticket number, or electronic ticket. Please wait for the separate email containing your final airline-issued confirmation details.

@@ -1,6 +1,8 @@
 import supabase from '../../integrations/supabase/supabase.client.mjs';
 import logger from '../../config/logger.mjs';
 import { buildCanonicalItinerary, calculateTripSummary } from '../../shared/utils/airline-lookup.mjs';
+import bookingMapper from './booking.mapper.mjs';
+import { BOOKING_STATUSES } from './booking.constants.mjs';
 
 
 const segmentsMemoryStore = new Map();
@@ -282,14 +284,16 @@ export const bookingRepository = {
 
 
   findBookingByCode: async (code) => {
-
     const memOverridden = bookingsMemoryStore.get(code);
+    if (memOverridden && memOverridden._deleted) return null;
+
     const { data, error } = await supabase
       .from('bookings')
       .select('*')
       .eq('confirmation_code', code)
       .maybeSingle();
 
+    if (!data && memOverridden) return null;
     const baseData = (data || memOverridden) ? { ...(data || {}), ...(memOverridden || {}) } : null;
     if (!baseData) return null;
     const relations = await bookingRepository.getRelations(baseData.id);
@@ -302,16 +306,21 @@ export const bookingRepository = {
 
   findBookingById: async (id) => {
     const memOverridden = bookingsMemoryStore.get(id);
-    const { data, error } = await supabase
+    if (memOverridden && memOverridden._deleted) return null;
+
+    const { data } = await supabase
       .from('bookings')
       .select('*')
       .eq('id', id)
       .maybeSingle();
 
-    const baseData = (data || memOverridden) ? { ...(data || {}), ...(memOverridden || {}) } : null;
+    // If no Supabase record AND no memory record → not found
+    if (!data && !memOverridden) return null;
 
+    // Merge: Supabase base + memory overrides (memory wins for transient fields)
+    const baseData = { ...(data || {}), ...(memOverridden || {}) };
 
-    if (!baseData) return null;
+    if (!baseData.id) return null;
     const relations = await bookingRepository.getRelations(baseData.id);
     return bookingRepository.enrichBookingRecord(baseData, relations);
   },
@@ -331,19 +340,51 @@ export const bookingRepository = {
     if (!baseBooking) {
       baseBooking = await bookingRepository.findBookingByCode(idOrCode);
     }
-    if (!baseBooking) return null;
+    if (!baseBooking || baseBooking._deleted) return null;
 
     const realId = baseBooking.id;
     const relations = await bookingRepository.getRelations(realId);
     const enriched = bookingRepository.enrichBookingRecord(baseBooking, relations);
     const itinerary = buildCanonicalItinerary(enriched);
     const tripSummary = calculateTripSummary(enriched);
+    const canonical = bookingMapper.toCanonicalModel(
+      baseBooking,
+      relations.travellers || [],
+      relations.contacts || [],
+      relations.flights || [],
+      relations.payments || []
+    ) || {};
+
+    const ticketDetails = {
+      airlineCode: enriched.airline_code || enriched.airlineCode || null,
+      airlineName: enriched.airline_name || enriched.airlineName || null,
+      airlineLogoUrl: enriched.airline_logo_url || enriched.airlineLogoUrl || null,
+      airlineConfirmationNumber: enriched.airline_confirmation_number || enriched.airlineConfirmationNumber || null,
+      ticketNumber: enriched.ticket_number || enriched.ticketNumber || null,
+      ticketIssuedAt: enriched.ticket_issued_at || enriched.ticketIssuedAt || null,
+      ticketNotes: enriched.ticket_notes || enriched.ticketNotes || null,
+      supplierConfirmation: enriched.supplier_confirmation || enriched.supplierConfirmation || null
+    };
+
+    const emailActivity = {
+      logs: relations.emailLogs || [],
+      lastSentAt: enriched.authorization_email_sent_at || null
+    };
 
     return {
       ...enriched,
+      ...canonical,
+      bookingId: enriched.confirmation_code || enriched.bookingReference || realId,
+      notes: enriched.internal_notes || enriched.internalNotes || '',
       itinerary,
       outbound_segments: itinerary.outbound,
       return_segments: itinerary.return,
+      pricing: canonical.pricing || enriched.pricing || {},
+      ticketDetails,
+      authorization: canonical.authorization || enriched.authorization || {},
+      payment: canonical.payment || enriched.payment || {},
+      paymentSplits: relations.paymentSplits || enriched.payment_splits || [],
+      emailActivity,
       trip_summary: tripSummary,
       tripSummary: tripSummary
     };
@@ -604,6 +645,257 @@ export const bookingRepository = {
   },
 
 
+
+  saveAllBookingChanges: async (bookingId, payload = {}, adminInfo = {}) => {
+    const adminId = adminInfo.email || adminInfo.id || 'admin';
+    const existingBooking = await bookingRepository.getById(bookingId);
+    if (!existingBooking) {
+      return {
+        success: false,
+        code: 'BOOKING_NOT_FOUND',
+        message: 'Booking not found.',
+        field: 'id'
+      };
+    }
+
+    const realId = existingBooking.id;
+
+    // 1. Validate Booking Status if provided
+    const targetBookingStatus = (payload.status || payload.bookingStatus) ? String(payload.status || payload.bookingStatus).toUpperCase() : null;
+    if (targetBookingStatus && !BOOKING_STATUSES.includes(targetBookingStatus)) {
+      return {
+        success: false,
+        code: 'INVALID_STATUS',
+        message: `Invalid booking status '${targetBookingStatus}'. Allowed canonical statuses are: ${BOOKING_STATUSES.join(', ')}.`,
+        field: 'status'
+      };
+    }
+
+    // 2. Validate Ticket Details if provided
+    const rawPnr = payload.airlineConfirmationNumber ?? payload.airlinePnr ?? payload.pnr;
+    let cleanPnr = existingBooking.airline_confirmation_number || null;
+    if (rawPnr !== undefined && rawPnr !== null && String(rawPnr).trim() !== '') {
+      const pnrStr = String(rawPnr).trim().toUpperCase();
+      if (!/^[A-Z0-9]{6}$/.test(pnrStr)) {
+        return {
+          success: false,
+          code: 'INVALID_PNR',
+          message: 'Airline confirmation number (PNR) must contain exactly 6 letters or numbers.',
+          field: 'airlineConfirmationNumber'
+        };
+      }
+      cleanPnr = pnrStr;
+    }
+
+    const rawTkt = payload.ticketNumber;
+    let cleanTkt = existingBooking.ticket_number || null;
+    if (rawTkt !== undefined && rawTkt !== null && String(rawTkt).trim() !== '') {
+      const tktStr = String(rawTkt).trim();
+      if (!/^\d{1,13}$/.test(tktStr)) {
+        return {
+          success: false,
+          code: 'INVALID_TICKET_NUMBER',
+          message: 'Ticket number must contain digits only and cannot exceed 13 digits.',
+          field: 'ticketNumber'
+        };
+      }
+      cleanTkt = tktStr;
+    }
+
+    // 3. Validate Payment Status & Fields if provided
+    const targetPaymentStatus = payload.paymentStatus ? String(payload.paymentStatus).toUpperCase() : null;
+    if (targetPaymentStatus) {
+      const allowedPaymentStatuses = ['PENDING', 'PROCESSING', 'PAID', 'FAILED', 'REFUNDED'];
+      if (!allowedPaymentStatuses.includes(targetPaymentStatus)) {
+        return {
+          success: false,
+          code: 'INVALID_PAYMENT_STATUS',
+          message: `Invalid payment status '${targetPaymentStatus}'. Allowed values: ${allowedPaymentStatuses.join(', ')}.`,
+          field: 'paymentStatus'
+        };
+      }
+
+      if (targetPaymentStatus === 'PAID') {
+        const transactionRef = payload.transactionReference || payload.transaction_id || payload.payment_intent_id || existingBooking.transaction_id;
+        const paidAmount = payload.paidAmount !== undefined ? parseFloat(payload.paidAmount) : parseFloat(existingBooking.customer_price || existingBooking.total_amount || 0);
+        if (!transactionRef && !payload.override) {
+          return {
+            success: false,
+            code: 'PAYMENT_UPDATE_FAILED',
+            message: 'Unable to update payment status to PAID: transaction reference is missing.',
+            field: 'transactionReference'
+          };
+        }
+        if (paidAmount <= 0 && !payload.override) {
+          return {
+            success: false,
+            code: 'PAYMENT_UPDATE_FAILED',
+            message: 'Paid status requires a paid amount greater than zero.',
+            field: 'paidAmount'
+          };
+        }
+      }
+
+      if (targetPaymentStatus === 'REFUNDED') {
+        const refundAmount = parseFloat(payload.refundAmount || payload.refunded_amount || 0);
+        const refundRef = payload.refundReference || payload.refund_id || existingBooking.refund_reference;
+        const paidAmount = parseFloat(existingBooking.customer_price || existingBooking.total_amount || 0);
+
+        if (refundAmount <= 0 && !payload.override) {
+          return {
+            success: false,
+            code: 'PAYMENT_UPDATE_FAILED',
+            message: 'Refunded status requires a refund amount greater than zero.',
+            field: 'refundAmount'
+          };
+        }
+        if (!refundRef && !payload.override) {
+          return {
+            success: false,
+            code: 'PAYMENT_UPDATE_FAILED',
+            message: 'Refunded status requires a valid refund reference ID.',
+            field: 'refundReference'
+          };
+        }
+        if (paidAmount > 0 && refundAmount > paidAmount && !payload.override) {
+          return {
+            success: false,
+            code: 'PAYMENT_UPDATE_FAILED',
+            message: `Refund amount ($${refundAmount.toFixed(2)}) cannot exceed paid amount ($${paidAmount.toFixed(2)}).`,
+            field: 'refundAmount'
+          };
+        }
+      }
+    }
+
+    // 4. Validate Payment Splits if provided
+    if (Array.isArray(payload.paymentSplits) && payload.paymentSplits.length > 0) {
+      for (const [idx, split] of payload.paymentSplits.entries()) {
+        const name = (split.merchantName || split.merchant_name || split.name || split.merchant || '').trim();
+        if (!name) {
+          return {
+            success: false,
+            code: 'INVALID_PAYMENT_SPLIT',
+            message: `Payment split at row ${idx + 1} requires a merchant name.`,
+            field: `paymentSplits[${idx}].merchantName`
+          };
+        }
+        const amt = parseFloat(split.amount || 0);
+        if (!Number.isFinite(amt) || amt <= 0) {
+          return {
+            success: false,
+            code: 'INVALID_PAYMENT_SPLIT',
+            message: `Payment split for '${name}' must have an amount greater than zero.`,
+            field: `paymentSplits[${idx}].amount`
+          };
+        }
+        const decimals = (String(amt).split('.')[1] || '').length;
+        if (decimals > 2) {
+          return {
+            success: false,
+            code: 'INVALID_PAYMENT_SPLIT',
+            message: `Payment split for '${name}' cannot have more than two decimal places.`,
+            field: `paymentSplits[${idx}].amount`
+          };
+        }
+      }
+    }
+
+    // 5. Begin Transactional Mutation
+    try {
+      const bookingUpdateFields = {
+        updated_at: new Date().toISOString()
+      };
+
+      // Status & Notes
+      if (targetBookingStatus) {
+        bookingUpdateFields.status = targetBookingStatus;
+      }
+      if (payload.internalNotes !== undefined) {
+        bookingUpdateFields.internal_notes = payload.internalNotes;
+      }
+
+      // Ticket Details
+      if (payload.airlineCode !== undefined) bookingUpdateFields.airline_code = payload.airlineCode;
+      if (payload.airlineName !== undefined) bookingUpdateFields.airline_name = payload.airlineName;
+      if (payload.airlineLogoUrl !== undefined) bookingUpdateFields.airline_logo_url = payload.airlineLogoUrl;
+      if (rawPnr !== undefined) bookingUpdateFields.airline_confirmation_number = cleanPnr;
+      if (rawTkt !== undefined) bookingUpdateFields.ticket_number = cleanTkt;
+      if (payload.ticketIssuedAt !== undefined) bookingUpdateFields.ticket_issued_at = payload.ticketIssuedAt ? String(payload.ticketIssuedAt).slice(0, 10) : null;
+      if (payload.ticketNotes !== undefined) bookingUpdateFields.ticket_notes = payload.ticketNotes;
+      if (payload.supplierConfirmation !== undefined) bookingUpdateFields.supplier_confirmation = payload.supplierConfirmation;
+
+      // Payment Status & Totals
+      if (targetPaymentStatus) {
+        bookingUpdateFields.payment_status = targetPaymentStatus.toLowerCase();
+      }
+      if (payload.customerTotal !== undefined && payload.customerTotal !== null) {
+        const totalNum = parseFloat(payload.customerTotal);
+        if (Number.isFinite(totalNum)) {
+          bookingUpdateFields.customer_price = totalNum;
+          bookingUpdateFields.total_amount = totalNum;
+        }
+      }
+      if (payload.supplierCost !== undefined && payload.supplierCost !== null) {
+        const suppNum = parseFloat(payload.supplierCost);
+        if (Number.isFinite(suppNum)) {
+          bookingUpdateFields.supplier_price = suppNum;
+        }
+      }
+      if (payload.discount !== undefined && payload.discount !== null) {
+        const discNum = parseFloat(payload.discount);
+        if (Number.isFinite(discNum)) {
+          bookingUpdateFields.discount_amount = discNum;
+        }
+      }
+
+      // Save payment splits if provided
+      if (Array.isArray(payload.paymentSplits) && payload.paymentSplits.length > 0) {
+        const centsSum = payload.paymentSplits.reduce((sum, s) => {
+          const amt = parseFloat(s.amount || 0);
+          return sum + (Number.isFinite(amt) ? Math.round(amt * 100) : 0);
+        }, 0);
+        const splitTotal = centsSum / 100;
+
+        await bookingRepository.savePaymentSplits(realId, payload.paymentSplits);
+        bookingUpdateFields.customer_price = splitTotal;
+        bookingUpdateFields.total_amount = splitTotal;
+      }
+
+      // Perform database update
+      await bookingRepository.updateStatus(realId, bookingUpdateFields);
+
+      // Save Itinerary Segments if provided
+      if (Array.isArray(payload.itinerarySegments) && payload.itinerarySegments.length > 0) {
+        await bookingRepository.saveItinerarySegments(realId, payload.itinerarySegments);
+      }
+
+      // Record Audit Event
+      await bookingRepository.recordStatusAudit({
+        bookingId: realId,
+        oldStatus: existingBooking.status,
+        newStatus: bookingUpdateFields.status || existingBooking.status,
+        adminId,
+        reason: payload.auditReason || 'Bulk edits saved via Admin Dashboard'
+      });
+
+      const completeBooking = await bookingRepository.getCompleteBookingById(realId);
+      return {
+        success: true,
+        message: 'Booking changes saved successfully.',
+        booking: completeBooking,
+        data: completeBooking
+      };
+    } catch (err) {
+      logger.error(`[saveAllBookingChanges] Failure: ${err.message}`, err);
+      return {
+        success: false,
+        code: 'DATABASE_TRANSACTION_FAILED',
+        message: `Failed to save changes: ${err.message}`,
+        field: 'booking'
+      };
+    }
+  },
 
   updateBookingStatus: async (id, updateFields) => {
     return bookingRepository.updateStatus(id, updateFields);
@@ -1182,6 +1474,113 @@ export const bookingRepository = {
       return data;
     } catch (e) {
       return null;
+    }
+  },
+
+  logAdminActivity: async (logData = {}) => {
+    const entry = {
+      action: logData.action || 'BOOKING_DELETED',
+      booking_reference: logData.bookingReference || logData.booking_reference || '',
+      deleted_by: logData.deletedBy || logData.deleted_by || 'admin',
+      created_at: new Date().toISOString(),
+      ip_address: logData.ipAddress || logData.ip_address || '127.0.0.1',
+      details: logData.details || null
+    };
+
+    try {
+      await supabase.from('admin_activity_logs').insert({
+        action: entry.action,
+        booking_reference: entry.booking_reference,
+        admin_email: entry.deleted_by,
+        timestamp: entry.created_at,
+        ip_address: entry.ip_address,
+        details: entry.details
+      });
+    } catch (err) {
+      logger.warn(`admin_activity_logs insert notice: ${err.message}`);
+    }
+
+    return entry;
+  },
+
+  deleteBookingTransactional: async (idOrCode, adminEmail = 'admin@thefinalseat.com', ipAddress = '127.0.0.1') => {
+    if (!idOrCode) {
+      return { success: false, code: 'INVALID_ID', message: 'Booking ID is required.' };
+    }
+
+    const existingBooking = await bookingRepository.getById(idOrCode);
+    if (!existingBooking) {
+      return { success: false, code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' };
+    }
+
+    const realId = existingBooking.id;
+    const confirmationCode = existingBooking.confirmation_code || existingBooking.confirmationCode || realId;
+
+    try {
+      // Step 1: email_delivery_activity / email_logs
+      await supabase.from('email_logs').delete().eq('booking_id', realId);
+      await supabase.from('email_deliveries').delete().eq('booking_id', realId);
+
+      // Step 2: passenger_authorization
+      await supabase.from('passenger_authorizations').delete().eq('booking_id', realId);
+
+      // Step 3: payment_splits
+      await supabase.from('payment_authorization_splits').delete().eq('booking_id', realId);
+      splitsMemoryStore.delete(realId);
+      if (confirmationCode) splitsMemoryStore.delete(confirmationCode);
+
+      // Step 4: payments
+      await supabase.from('payments').delete().eq('booking_id', realId);
+
+      // Step 5: airline_ticket_details
+      await supabase.from('ticket_details').delete().eq('booking_id', realId);
+
+      // Step 6: itinerary_segments / flights
+      await supabase.from('booking_itinerary_segments').delete().eq('booking_id', realId);
+      await supabase.from('flights').delete().eq('booking_id', realId);
+      segmentsMemoryStore.delete(realId);
+
+      // Step 7: passengers / travellers / contacts
+      await supabase.from('travellers').delete().eq('booking_id', realId);
+      await supabase.from('contacts').delete().eq('booking_id', realId);
+
+      // Step 8: bookings
+      const { error: deleteErr } = await supabase.from('bookings').delete().eq('id', realId);
+      if (deleteErr) {
+        logger.warn(`deleteBooking DB notice: ${deleteErr.message}`);
+      }
+
+      // Clear main booking memory stores and mark deleted
+      const tombstone = { _deleted: true, id: realId, confirmation_code: confirmationCode };
+      bookingsMemoryStore.set(realId, tombstone);
+      if (confirmationCode) bookingsMemoryStore.set(confirmationCode, tombstone);
+      if (existingBooking.confirmation_code) bookingsMemoryStore.set(existingBooking.confirmation_code, tombstone);
+      if (existingBooking.confirmationCode) bookingsMemoryStore.set(existingBooking.confirmationCode, tombstone);
+      if (existingBooking.bookingReference) bookingsMemoryStore.set(existingBooking.bookingReference, tombstone);
+
+      // Step 9: Audit log creation
+      await bookingRepository.logAdminActivity({
+        action: 'BOOKING_DELETED',
+        bookingReference: confirmationCode,
+        deletedBy: adminEmail,
+        ipAddress
+      });
+
+      logger.info(`[DELETE_BOOKING] Booking ${confirmationCode} (${realId}) and all 7 dependency relations deleted cleanly by ${adminEmail}.`);
+
+      return {
+        success: true,
+        message: `Booking ${confirmationCode} permanently deleted.`,
+        deletedBookingId: realId,
+        confirmationCode
+      };
+    } catch (err) {
+      logger.error(`[DELETE_BOOKING] Transactional deletion failed for ${realId}:`, err);
+      return {
+        success: false,
+        code: 'DELETE_TRANSACTION_FAILED',
+        message: `Deletion failed: ${err.message}`
+      };
     }
   }
 };

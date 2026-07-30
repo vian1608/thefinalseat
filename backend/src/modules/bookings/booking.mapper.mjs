@@ -91,7 +91,8 @@ export const bookingMapper = {
       stripeSessionId: paymentRecord.stripe_session_id || null,
       stripePaymentId: paymentRecord.stripe_payment_id || null,
       paymentAmount: parseFloat(paymentRecord.payment_amount || customerTotal || 0) || 0,
-      paymentStatus: (booking.payment_status || paymentRecord.payment_status || 'PENDING').toLowerCase(),
+      paymentStatus: (booking.payment_status || paymentRecord.payment_status || 'PENDING').toUpperCase(),
+      status: (booking.payment_status || paymentRecord.payment_status || 'PENDING').toUpperCase(),
       paymentDate: paymentRecord.payment_date || booking.paid_at || null,
       paidAmount,
       refundedAmount

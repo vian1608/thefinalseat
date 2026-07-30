@@ -20,6 +20,9 @@ import passengerAuthorizationController from '../authorizations/passenger-author
 // Protected admin endpoints
 router.get('/bookings', authenticate, authorize(['admin']), adminController.getBookings);
 router.get('/bookings/:id', authenticate, authorize(['admin']), adminController.getBookingDetail);
+router.delete('/bookings/:bookingId', authenticate, authorize(['admin']), adminController.deleteBooking);
+router.delete('/bookings/:id', authenticate, authorize(['admin']), adminController.deleteBooking);
+router.put('/bookings/:id/save-all', authenticate, authorize(['admin']), adminController.saveAllChanges);
 router.put('/bookings/:id', authenticate, authorize(['admin']), adminController.updateBooking);
 router.put('/bookings/:id/payment-splits', authenticate, authorize(['admin']), adminController.updatePaymentSplits);
 router.put('/bookings/:id/ticket-details', authenticate, authorize(['admin']), adminController.saveTicketDetails);

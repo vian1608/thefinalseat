@@ -44,6 +44,20 @@ const toFiniteNumber = (value, fallback = 0) => {
   return Number.isFinite(number) ? number : fallback;
 };
 
+const truncateText = (value, length = 12) => {
+  if (typeof value !== 'string' || value.trim() === '') {
+    return 'N/A';
+  }
+  return value.length > length ? `${value.slice(0, length)}…` : value;
+};
+
+// Null-safe substring — prevents `undefined.substring()` crashes across all save flows
+const safeSubstring = (value, start = 0, end) => {
+  if (value === null || value === undefined || value === '') return 'N/A';
+  const str = String(value);
+  return end !== undefined ? str.substring(start, end) : str.substring(start);
+};
+
 function AirlineCombobox({ valueName, valueCode, valueLogoUrl, onChange }) {
   const [query, setQuery] = React.useState(valueName || '');
   const [isOpen, setIsOpen] = React.useState(false);
@@ -192,6 +206,12 @@ function AdminDashboard() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
 
+  // Delete Booking Modal State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePasswordInput, setDeletePasswordInput] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
 
 
   // Itinerary Editor State (Journey Grouped)
@@ -237,6 +257,8 @@ function AdminDashboard() {
   const [showThreeDotMenu, setShowThreeDotMenu] = useState(false);
   const [finalTicketEmailError, setFinalTicketEmailError] = useState('');
   const [finalTicketEmailSuccess, setFinalTicketEmailSuccess] = useState('');
+  const [drawerError, setDrawerError] = useState('');
+  const [drawerSuccess, setDrawerSuccess] = useState('');
 
 
 
@@ -352,26 +374,28 @@ function AdminDashboard() {
       }
     }
 
+
     if (rawOutbound.length === 0) {
+      // No itinerary segments found — use an empty template so the admin can fill them in
       rawOutbound = [{
         journey_direction: 'outbound',
         segment_sequence: 1,
-        carrier_name: booking.carrier || 'United Airlines',
-        carrier_code: 'UA',
+        carrier_name: booking.carrier || booking.airline_name || booking.airlineName || '',
+        carrier_code: booking.carrier_code || booking.airlineCode || '',
         operating_carrier: '',
-        flight_number: 'UA 100',
-        origin_airport: booking.origin_code || 'LAX',
-        origin_city: 'Los Angeles',
-        destination_airport: booking.destination_code || 'MIA',
-        destination_city: 'Miami',
-        departure_date: '2026-09-10',
-        departure_time: '09:00 AM',
-        arrival_date: '2026-09-10',
-        arrival_time: '05:00 PM',
+        flight_number: '',
+        origin_airport: booking.origin_code || '',
+        origin_city: '',
+        destination_airport: booking.destination_code || '',
+        destination_city: '',
+        departure_date: '',
+        departure_time: '',
+        arrival_date: '',
+        arrival_time: '',
         arrival_next_day: false,
         cabin: 'Economy',
         booking_class: 'Y',
-        terminal: 'T1',
+        terminal: '',
         baggage_allowance: '1 Bag',
         aircraft: '',
         stop_count: 0
@@ -381,22 +405,22 @@ function AdminDashboard() {
     const mappedOutbound = rawOutbound.map((s, i) => ({
       journey_direction: 'outbound',
       segment_sequence: i + 1,
-      carrier_name: s.carrier_name || s.airline || 'United Airlines',
-      carrier_code: s.carrier_code || s.carrier || 'UA',
+      carrier_name: s.carrier_name || s.airline || s.airlineName || '',
+      carrier_code: s.carrier_code || s.carrier || s.carrierCode || '',
       operating_carrier: s.operating_carrier || s.operatingCarrier || '',
-      flight_number: s.flight_number || s.flightNumber || 'UA 100',
-      origin_airport: s.origin_airport || s.originCode || 'LAX',
-      origin_city: s.origin_city || s.originCity || 'Los Angeles',
-      destination_airport: s.destination_airport || s.destinationCode || 'MIA',
-      destination_city: s.destination_city || s.destinationCity || 'Miami',
-      departure_date: s.departure_date || s.departureDate || '2026-09-10',
-      departure_time: s.departure_time || s.departureTime || '09:00 AM',
-      arrival_date: s.arrival_date || s.arrivalDate || '2026-09-10',
-      arrival_time: s.arrival_time || s.arrivalTime || '05:00 PM',
+      flight_number: s.flight_number || s.flightNumber || '',
+      origin_airport: s.origin_airport || s.originCode || s.departure_airport || '',
+      origin_city: s.origin_city || s.originCity || '',
+      destination_airport: s.destination_airport || s.destinationCode || s.arrival_airport || '',
+      destination_city: s.destination_city || s.destinationCity || '',
+      departure_date: s.departure_date || s.departureDate || '',
+      departure_time: s.departure_time || s.departureTime || '',
+      arrival_date: s.arrival_date || s.arrivalDate || '',
+      arrival_time: s.arrival_time || s.arrivalTime || '',
       arrival_next_day: !!(s.arrival_next_day || s.arrivalNextDay),
       cabin: s.cabin || s.cabinClass || 'Economy',
       booking_class: s.booking_class || 'Y',
-      terminal: s.terminal || 'T1',
+      terminal: s.terminal || '',
       baggage_allowance: s.baggage_allowance || '1 Bag',
       aircraft: s.aircraft || '',
       stop_count: 0
@@ -405,18 +429,18 @@ function AdminDashboard() {
     const mappedReturn = rawReturn.map((s, i) => ({
       journey_direction: 'return',
       segment_sequence: i + 1,
-      carrier_name: s.carrier_name || s.airline || 'United Airlines',
-      carrier_code: s.carrier_code || s.carrier || 'UA',
+      carrier_name: s.carrier_name || s.airline || s.airlineName || '',
+      carrier_code: s.carrier_code || s.carrier || s.carrierCode || '',
       operating_carrier: s.operating_carrier || s.operatingCarrier || '',
-      flight_number: s.flight_number || s.flightNumber || 'UA 200',
-      origin_airport: s.origin_airport || s.originCode || 'MIA',
-      origin_city: s.origin_city || s.originCity || 'Miami',
-      destination_airport: s.destination_airport || s.destinationCode || 'LAX',
-      destination_city: s.destination_city || s.destinationCity || 'Los Angeles',
-      departure_date: s.departure_date || s.departureDate || '2026-09-17',
-      departure_time: s.departure_time || s.departureTime || '10:00 AM',
-      arrival_date: s.arrival_date || s.arrivalDate || '2026-09-17',
-      arrival_time: s.arrival_time || s.arrivalTime || '02:00 PM',
+      flight_number: s.flight_number || s.flightNumber || '',
+      origin_airport: s.origin_airport || s.originCode || s.departure_airport || '',
+      origin_city: s.origin_city || s.originCity || '',
+      destination_airport: s.destination_airport || s.destinationCode || s.arrival_airport || '',
+      destination_city: s.destination_city || s.destinationCity || '',
+      departure_date: s.departure_date || s.departureDate || '',
+      departure_time: s.departure_time || s.departureTime || '',
+      arrival_date: s.arrival_date || s.arrivalDate || '',
+      arrival_time: s.arrival_time || s.arrivalTime || '',
       arrival_next_day: !!(s.arrival_next_day || s.arrivalNextDay),
       cabin: s.cabin || s.cabinClass || 'Economy',
       booking_class: s.booking_class || 'Y',
@@ -503,6 +527,118 @@ function AdminDashboard() {
     setEditingTicketField(null);
     setTicketDetailsError('');
     setTicketDetailsSuccess('');
+  };
+
+  const handleSaveAllChanges = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedBooking) return;
+
+    setDrawerError('');
+    setDrawerSuccess('');
+    setUpdatingRecord(true);
+
+    const adminToken = localStorage.getItem('token');
+    const allSegments = [
+      ...outboundSegments.map((s, i) => ({ ...s, journey_direction: 'outbound', segment_sequence: i + 1 })),
+      ...(hasReturnJourney ? returnSegments.map((s, i) => ({ ...s, journey_direction: 'return', segment_sequence: i + 1 })) : [])
+    ];
+
+    const payload = {
+      bookingStatus: newStatus,
+      internalNotes: internalNotes,
+      airlineCode: ticketForm.airlineCode,
+      airlineName: ticketForm.airlineName,
+      airlineLogoUrl: ticketForm.airlineLogoUrl,
+      airlineConfirmationNumber: ticketForm.airlineConfirmationNumber || ticketForm.airlinePnr,
+      ticketNumber: ticketForm.ticketNumber,
+      ticketIssuedAt: ticketForm.ticketIssuedAt,
+      ticketNotes: ticketForm.ticketNotes,
+      supplierConfirmation: ticketForm.supplierConfirmation,
+      paymentStatus: paymentForm.paymentStatus,
+      authorizedAmount: paymentForm.authorizedAmount,
+      customerTotal: pricingForm.customerTotal,
+      supplierCost: pricingForm.supplierFare,
+      discount: pricingForm.discount,
+      paymentSplits: paymentSplits,
+      itinerarySegments: allSegments
+    };
+
+    try {
+      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/save-all`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        const errorMsg = data.message || data.error?.message || 'Changes were not saved.';
+        throw new Error(errorMsg);
+      }
+
+      const updatedBooking = data.booking || data.data;
+      if (updatedBooking) {
+        // Fully re-hydrate all form state (segments, pricing, payment, ticket) from fresh server response
+        handleSelectBooking(updatedBooking);
+        setBookings(prevList => prevList.map(b => b.id === updatedBooking.id ? { ...b, ...updatedBooking } : b));
+      }
+
+      setHasUnsavedEdits(false);
+      setDrawerSuccess(data.message || 'All booking changes saved cleanly.');
+      setIsEditMode(false);
+      setTimeout(() => setDrawerSuccess(''), 4000);
+    } catch (err) {
+      setHasUnsavedEdits(true);
+      setDrawerError(`Changes were not saved: ${err.message}`);
+    } finally {
+      setUpdatingRecord(false);
+    }
+  };
+
+  const handleConfirmDeleteBooking = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedBooking) return;
+    if (!deletePasswordInput) {
+      setDeleteError('Please enter admin password to confirm deletion.');
+      return;
+    }
+
+    setDeleteError('');
+    setIsDeleting(true);
+
+    try {
+      const adminToken = localStorage.getItem('token');
+      const targetId = selectedBooking.id || selectedBooking.bookingId || selectedBooking.confirmationCode || selectedBooking.confirmation_code;
+
+      const res = await fetch(`/api/admin/bookings/${targetId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ adminPassword: deletePasswordInput })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        const msg = data.error?.message || data.message || 'Deletion failed. Incorrect admin password.';
+        throw new Error(msg);
+      }
+
+      setShowDeleteModal(false);
+      setSelectedBooking(null);
+      setDeletePasswordInput('');
+      setDrawerSuccess(`Booking ${selectedBooking.confirmation_code || selectedBooking.confirmationCode || targetId} deleted permanently.`);
+      setBookings(prevList => prevList.filter(b => b.id !== targetId && b.confirmation_code !== targetId && b.confirmationCode !== targetId));
+      loadAllDashboardData();
+    } catch (err) {
+      setDeleteError(err.message);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleSaveTicketDetails = async (e) => {
@@ -716,11 +852,14 @@ function AdminDashboard() {
       }
 
       setHasUnsavedEdits(false);
-      alert(data.message || 'Itinerary updated successfully!');
-      if (data.booking) setSelectedBooking(data.booking);
-      loadAllDashboardData();
+      setDrawerSuccess(data.message || 'Itinerary updated successfully!');
+      if (data.booking) {
+        handleSelectBooking(data.booking);
+        setBookings(prevList => prevList.map(b => b.id === data.booking.id ? { ...b, ...data.booking } : b));
+      }
     } catch (err) {
-      alert(`Itinerary update error: ${err.message}`);
+      setHasUnsavedEdits(true);
+      setDrawerError(`Itinerary update error: ${err.message}`);
     } finally {
       setUpdatingRecord(false);
     }
@@ -729,6 +868,8 @@ function AdminDashboard() {
 
   const handleSavePricing = async () => {
     if (!selectedBooking) return;
+    setDrawerError('');
+    setDrawerSuccess('');
     const adminToken = localStorage.getItem('token');
     try {
       setUpdatingRecord(true);
@@ -748,11 +889,14 @@ function AdminDashboard() {
       }
 
       setHasUnsavedEdits(false);
-      alert(data.message || 'Pricing revisions saved cleanly!');
-      if (data.booking) setSelectedBooking(data.booking);
-      loadAllDashboardData();
+      setDrawerSuccess(data.message || 'Pricing revisions saved cleanly!');
+      if (data.booking) {
+        handleSelectBooking(data.booking);
+        setBookings(prevList => prevList.map(b => b.id === data.booking.id ? { ...b, ...data.booking } : b));
+      }
     } catch (err) {
-      alert(`Pricing error: ${err.message}`);
+      setHasUnsavedEdits(true);
+      setDrawerError(`Pricing error: ${err.message}`);
     } finally {
       setUpdatingRecord(false);
     }
@@ -760,6 +904,8 @@ function AdminDashboard() {
 
   const handlePaymentActionSubmit = async (actionName) => {
     if (!selectedBooking) return;
+    setDrawerError('');
+    setDrawerSuccess('');
     const adminToken = localStorage.getItem('token');
     try {
       setUpdatingRecord(true);
@@ -782,11 +928,14 @@ function AdminDashboard() {
       }
 
       setHasUnsavedEdits(false);
-      alert(data.message || `Payment action '${actionName}' completed successfully!`);
-      if (data.booking) setSelectedBooking(data.booking);
-      loadAllDashboardData();
+      setDrawerSuccess(data.message || `Payment action '${actionName}' completed successfully!`);
+      if (data.booking) {
+        handleSelectBooking(data.booking);
+        setBookings(prevList => prevList.map(b => b.id === data.booking.id ? { ...b, ...data.booking } : b));
+      }
     } catch (err) {
-      alert(`Payment action error: ${err.message}`);
+      setHasUnsavedEdits(true);
+      setDrawerError(`Payment action error: ${err.message}`);
     } finally {
       setUpdatingRecord(false);
     }
@@ -795,6 +944,8 @@ function AdminDashboard() {
 
   const handleSavePaymentSplits = async () => {
     if (!selectedBooking) return;
+    setDrawerError('');
+    setDrawerSuccess('');
     const adminToken = localStorage.getItem('token');
     try {
       setUpdatingRecord(true);
@@ -813,7 +964,7 @@ function AdminDashboard() {
 
       const updated = data.booking || data.data;
       if (updated) {
-        setSelectedBooking(updated);
+        handleSelectBooking(updated);
         const newTotal = parseFloat(updated.customer_price || updated.total_amount || 0);
         setPricingForm(prev => ({
           ...prev,
@@ -829,10 +980,10 @@ function AdminDashboard() {
       }
 
       setHasUnsavedEdits(false);
-      alert('Payment authorization splits and customer total updated successfully!');
-      loadAllDashboardData();
+      setDrawerSuccess('Payment authorization splits and customer total updated successfully!');
     } catch (err) {
-      alert(`Payment split save error: ${err.message}`);
+      setHasUnsavedEdits(true);
+      setDrawerError(`Payment split save error: ${err.message}`);
     } finally {
       setUpdatingRecord(false);
     }
@@ -841,8 +992,10 @@ function AdminDashboard() {
 
 
   const handleUpdateStatusAndNotes = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!selectedBooking) return;
+    setDrawerError('');
+    setDrawerSuccess('');
     setUpdatingRecord(true);
 
     try {
@@ -852,15 +1005,21 @@ function AdminDashboard() {
       });
 
       if (response.success) {
-        setSelectedBooking(response.data);
-        loadAllDashboardData();
-        alert('Booking status and notes updated successfully!');
+        const updated = response.booking || response.data;
+        if (updated) {
+          handleSelectBooking(updated);
+          setBookings(prevList => prevList.map(b => b.id === updated.id ? { ...b, ...updated } : b));
+        }
+        setHasUnsavedEdits(false);
+        setDrawerSuccess('Booking status and notes updated successfully!');
       } else {
-        alert(response.error?.message || 'Failed to update booking status.');
+        setHasUnsavedEdits(true);
+        setDrawerError(response.error?.message || 'Failed to update booking status.');
       }
     } catch (err) {
       console.error('Update status failed:', err);
-      alert('Error updating booking status.');
+      setHasUnsavedEdits(true);
+      setDrawerError(`Error updating booking status: ${err.message}`);
     } finally {
       setUpdatingRecord(false);
     }
@@ -1194,7 +1353,7 @@ function AdminDashboard() {
                           return (
                             <tr key={booking.id} className={isSelected ? 'active-row' : ''}>
                               <td>
-                                <strong>{booking.confirmation_code || booking.id.substring(0, 8)}</strong>
+                                <strong>{booking.confirmation_code || (booking.id ? truncateText(booking.id, 8) : 'N/A')}</strong>
                               </td>
                               <td>
                                 <div className="user-table-cell">
@@ -1248,7 +1407,7 @@ function AdminDashboard() {
                         {isEditMode ? 'Edit Booking' : 'Booking Details'}
                       </h3>
                       <span className="ref-tag" style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 700 }}>
-                        {selectedBooking.confirmation_code || selectedBooking.bookingReference || selectedBooking.id.substring(0, 8)}
+                        {selectedBooking.confirmation_code || selectedBooking.bookingReference || (selectedBooking.id ? truncateText(selectedBooking.id, 8) : 'N/A')}
                       </span>
                     </div>
 
@@ -1326,6 +1485,20 @@ function AdminDashboard() {
                       </button>
                     </div>
                   </div>
+
+                  {/* INLINE DRAWER ALERTS */}
+                  {drawerError && (
+                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', padding: '10px 12px', borderRadius: '6px', fontSize: '0.82rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <i className="fas fa-exclamation-triangle" style={{ color: '#dc2626' }}></i>
+                      <span>{drawerError}</span>
+                    </div>
+                  )}
+                  {drawerSuccess && (
+                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '10px 12px', borderRadius: '6px', fontSize: '0.82rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <i className="fas fa-check-circle" style={{ color: '#16a34a' }}></i>
+                      <span>{drawerSuccess}</span>
+                    </div>
+                  )}
 
                   {/* COMPACT STATUS BADGES BAR */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px', marginBottom: '14px' }}>
@@ -1443,7 +1616,7 @@ function AdminDashboard() {
                               <div key={`view_ret_${idx}`} style={{ borderLeft: '3px solid #6366f1', paddingLeft: '10px', marginBottom: '10px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
                                   <strong style={{ fontSize: '0.85rem', color: '#0f172a' }}>
-                                    {seg.carrier_name || 'United Airlines'} · {seg.flight_number || 'UA 200'}
+                                    {seg.carrier_name || seg.airlineName || 'Airline'} {seg.flight_number || seg.flightNumber || ''}
                                   </strong>
                                   <span style={{ fontSize: '0.75rem', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
                                     {seg.cabin || 'Economy'}
@@ -1513,7 +1686,7 @@ function AdminDashboard() {
                         </h4>
                         {/^[A-Z0-9]{6}$/.test((ticketForm.airlineConfirmationNumber || selectedBooking.airline_confirmation_number || '').trim().toUpperCase()) ? (
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
-                            <div><span style={{ color: '#64748b' }}>Airline:</span> <br/><strong>{ticketForm.airlineName ? `${ticketForm.airlineName} (${ticketForm.airlineCode})` : (selectedBooking.airline_name || 'United Airlines')}</strong></div>
+                            <div><span style={{ color: '#64748b' }}>Airline:</span> <br/><strong>{ticketForm.airlineName ? `${ticketForm.airlineName} (${ticketForm.airlineCode})` : (selectedBooking.airline_name || selectedBooking.carrier || 'N/A')}</strong></div>
                             <div><span style={{ color: '#64748b' }}>Airline PNR:</span> <br/><strong style={{ fontSize: '0.95rem', color: '#0369a1' }}>{(ticketForm.airlineConfirmationNumber || selectedBooking.airline_confirmation_number || '').toUpperCase()}</strong></div>
                             <div><span style={{ color: '#64748b' }}>Ticket Number:</span> <br/><strong>{ticketForm.ticketNumber || selectedBooking.ticket_number || 'N/A'}</strong></div>
                             <div><span style={{ color: '#64748b' }}>Issued Date:</span> <br/><strong>{ticketForm.ticketIssuedAt ? new Date(ticketForm.ticketIssuedAt + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Jul 29, 2026'}</strong></div>
@@ -1560,6 +1733,30 @@ function AdminDashboard() {
                         </div>
                       </div>
 
+                      {/* VIEW MODE ACTION BAR WITH RED DELETE BOOKING BUTTON */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditMode(true)}
+                          className="admin-primary-btn"
+                          style={{ background: '#1e3a5f' }}
+                        >
+                          <i className="fas fa-edit" style={{ marginRight: '6px' }}></i> Edit Booking
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeletePasswordInput('');
+                            setDeleteError('');
+                            setShowDeleteModal(true);
+                          }}
+                          className="admin-primary-btn"
+                          style={{ background: '#dc2626', color: '#ffffff' }}
+                        >
+                          <i className="fas fa-trash-alt" style={{ marginRight: '6px' }}></i> Delete Booking
+                        </button>
+                      </div>
+
                     </div>
                   ) : (
                     /* ═══════════════════════════════════════════════════════════════
@@ -1568,7 +1765,7 @@ function AdminDashboard() {
                     <div className="edit-mode-container" style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto' }}>
 
                       {/* UPDATE STATUS & NOTES FORM */}
-                      <form onSubmit={handleUpdateStatusAndNotes} className="detail-update-box">
+                      <div className="detail-update-box">
                         <div className="detail-form-group">
                           <label>Update Booking Status</label>
                           <select 
@@ -1577,11 +1774,6 @@ function AdminDashboard() {
                             className="admin-select"
                           >
                             <option value="PENDING">Pending</option>
-                            <option value="AWAITING_AUTHORIZATION">Awaiting Authorization</option>
-                            <option value="AUTHORIZED">Authorized</option>
-                            <option value="REAUTHORIZATION_REQUIRED">Reauthorization Required</option>
-                            <option value="READY_FOR_TICKETING">Ready for Ticketing</option>
-                            <option value="TICKETED">Ticketed</option>
                             <option value="DONE">Done</option>
                             <option value="FAILED">Failed</option>
                             <option value="CANCELLED">Cancelled</option>
@@ -1598,11 +1790,7 @@ function AdminDashboard() {
                             className="admin-textarea"
                           />
                         </div>
-
-                        <button type="submit" className="admin-primary-btn" style={{ width: '100%', marginTop: '10px' }} disabled={updatingRecord}>
-                          {updatingRecord ? 'Saving...' : 'Save Notes & Status'}
-                        </button>
-                      </form>
+                      </div>
 
                   {/* THREE COLLAPSED ACCORDIONS */}
                   <div className="admin-accordion-container">
@@ -1743,22 +1931,22 @@ function AdminDashboard() {
                                       setOutboundSegments([...outboundSegments, {
                                         journey_direction: 'outbound',
                                         segment_sequence: outboundSegments.length + 1,
-                                        carrier_name: lastSeg?.carrier_name || 'United Airlines',
-                                        carrier_code: lastSeg?.carrier_code || 'DL',
+                                        carrier_name: lastSeg?.carrier_name || '',
+                                        carrier_code: lastSeg?.carrier_code || '',
                                         operating_carrier: '',
-                                        flight_number: `DL ${100 + outboundSegments.length}`,
-                                        origin_airport: lastSeg?.destination_airport || 'ATL',
-                                        origin_city: lastSeg?.destination_city || 'Atlanta',
-                                        destination_airport: 'MIA',
-                                        destination_city: 'Miami',
-                                        departure_date: lastSeg?.arrival_date || '2026-09-10',
-                                        departure_time: '02:00 PM',
-                                        arrival_date: lastSeg?.arrival_date || '2026-09-10',
-                                        arrival_time: '05:00 PM',
+                                        flight_number: '',
+                                        origin_airport: lastSeg?.destination_airport || '',
+                                        origin_city: lastSeg?.destination_city || '',
+                                        destination_airport: '',
+                                        destination_city: '',
+                                        departure_date: lastSeg?.arrival_date || '',
+                                        departure_time: '',
+                                        arrival_date: lastSeg?.arrival_date || '',
+                                        arrival_time: '',
                                         arrival_next_day: false,
                                         cabin: lastSeg?.cabin || 'Economy',
                                         booking_class: 'Y',
-                                        terminal: 'T1',
+                                        terminal: '',
                                         baggage_allowance: '1 Bag',
                                         aircraft: ''
                                       }]);
@@ -1889,22 +2077,22 @@ function AdminDashboard() {
                                         setReturnSegments([...returnSegments, {
                                           journey_direction: 'return',
                                           segment_sequence: returnSegments.length + 1,
-                                          carrier_name: lastReturn?.carrier_name || lastOutbound?.carrier_name || 'United Airlines',
-                                          carrier_code: lastReturn?.carrier_code || lastOutbound?.carrier_code || 'UA',
+                                          carrier_name: lastReturn?.carrier_name || lastOutbound?.carrier_name || '',
+                                          carrier_code: lastReturn?.carrier_code || lastOutbound?.carrier_code || '',
                                           operating_carrier: '',
-                                          flight_number: `UA ${200 + returnSegments.length}`,
-                                          origin_airport: lastReturn?.destination_airport || lastOutbound?.destination_airport || 'MIA',
-                                          origin_city: lastReturn?.destination_city || lastOutbound?.destination_city || 'Miami',
-                                          destination_airport: outboundSegments[0]?.origin_airport || 'LAX',
-                                          destination_city: outboundSegments[0]?.origin_city || 'Los Angeles',
-                                          departure_date: lastReturn?.arrival_date || '2026-09-17',
-                                          departure_time: '10:00 AM',
-                                          arrival_date: lastReturn?.arrival_date || '2026-09-17',
-                                          arrival_time: '02:00 PM',
+                                          flight_number: '',
+                                          origin_airport: lastReturn?.destination_airport || lastOutbound?.destination_airport || '',
+                                          origin_city: lastReturn?.destination_city || lastOutbound?.destination_city || '',
+                                          destination_airport: outboundSegments[0]?.origin_airport || '',
+                                          destination_city: outboundSegments[0]?.origin_city || '',
+                                          departure_date: lastReturn?.arrival_date || '',
+                                          departure_time: '',
+                                          arrival_date: lastReturn?.arrival_date || '',
+                                          arrival_time: '',
                                           arrival_next_day: false,
                                           cabin: lastReturn?.cabin || 'Economy',
                                           booking_class: 'Y',
-                                          terminal: 'T1',
+                                          terminal: '',
                                           baggage_allowance: '1 Bag',
                                           aircraft: ''
                                         }]);
@@ -1926,19 +2114,18 @@ function AdminDashboard() {
                                   setReturnSegments([{
                                     journey_direction: 'return',
                                     segment_sequence: 1,
-                                    carrier_name: lastOutbound?.carrier_name || 'United Airlines',
-
-                                    carrier_code: lastOutbound?.carrier_code || 'UA',
+                                    carrier_name: lastOutbound?.carrier_name || '',
+                                    carrier_code: lastOutbound?.carrier_code || '',
                                     operating_carrier: '',
-                                    flight_number: 'UA 200',
-                                    origin_airport: lastOutbound?.destination_airport || 'MIA',
-                                    origin_city: lastOutbound?.destination_city || 'Miami',
-                                    destination_airport: outboundSegments[0]?.origin_airport || 'LAX',
-                                    destination_city: outboundSegments[0]?.origin_city || 'Los Angeles',
-                                    departure_date: '2026-09-17',
-                                    departure_time: '10:00 AM',
-                                    arrival_date: '2026-09-17',
-                                    arrival_time: '02:00 PM',
+                                    flight_number: '',
+                                    origin_airport: lastOutbound?.destination_airport || '',
+                                    origin_city: lastOutbound?.destination_city || '',
+                                    destination_airport: outboundSegments[0]?.origin_airport || '',
+                                    destination_city: outboundSegments[0]?.origin_city || '',
+                                    departure_date: '',
+                                    departure_time: '',
+                                    arrival_date: '',
+                                    arrival_time: '',
                                     arrival_next_day: false,
                                     cabin: lastOutbound?.cabin || 'Economy',
                                     booking_class: 'Y',
@@ -2128,20 +2315,6 @@ function AdminDashboard() {
                                   />
                                 </div>
                               </div>
-
-                              <button
-                                type="button"
-                                onClick={handleSaveTicketDetails}
-                                className="admin-primary-btn"
-                                style={{ width: '100%', marginTop: '12px', background: '#1e3a5f' }}
-                                disabled={updatingRecord}
-                              >
-                                {updatingRecord ? (
-                                  <><i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i> Saving...</>
-                                ) : (
-                                  <><i className="fas fa-ticket-alt" style={{ marginRight: '6px' }}></i> Save Airline Ticket Details</>
-                                )}
-                              </button>
                             </div>
                           ) : (
                             /* POST-SAVE READ-ONLY SUMMARY WITH INDIVIDUAL EDIT BUTTONS */
@@ -2452,18 +2625,9 @@ function AdminDashboard() {
                                   ]);
                                   setHasUnsavedEdits(true);
                                 }}
-                                style={{ flex: 1, background: '#ffffff', border: '1px dashed #8b1236', color: '#8b1236', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer' }}
+                                style={{ width: '100%', background: '#ffffff', border: '1px dashed #8b1236', color: '#8b1236', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer' }}
                               >
                                 + Add Payment Split
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleSavePaymentSplits}
-                                disabled={updatingRecord}
-                                style={{ flex: 1, background: '#8b1236', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer' }}
-                              >
-                                <i className="fas fa-save" style={{ marginRight: '4px' }}></i>
-                                Save Splits & Total
                               </button>
                             </div>
                           </div>
@@ -2557,52 +2721,10 @@ function AdminDashboard() {
                                   <input type="text" value={paymentForm.refundReferenceId} onChange={(e) => { setPaymentForm({ ...paymentForm, refundReferenceId: e.target.value }); setHasUnsavedEdits(true); }} placeholder="REF-883921" />
                                 </div>
                               </div>
-                              <div className="drawer-form-field">
-                                <label>Refund Reason *</label>
-                                <input type="text" value={paymentForm.reason} onChange={(e) => { setPaymentForm({ ...paymentForm, reason: e.target.value }); setHasUnsavedEdits(true); }} placeholder="Customer requested cancellation" />
-                              </div>
                             </>
                           )}
-
-                          <button type="button" onClick={() => handlePaymentActionSubmit(paymentForm.paymentStatus)} className="admin-primary-btn" style={{ width: '100%', background: '#7f0d2f', marginTop: '12px' }}>
-                            <i className="fas fa-save" style={{ marginRight: '4px' }}></i> Save Payment State &amp; Audit Event
-                          </button>
                         </div>
                       )}
-                    </div>
-
-                    {/* STICKY EDIT MODE FOOTER */}
-                    <div className="sticky-drawer-footer" style={{ marginTop: '12px' }}>
-                      <div>
-                        {hasUnsavedEdits ? (
-                          <span className="unsaved-badge">● Unsaved Edits</span>
-                        ) : (
-                          <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Synced</span>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: '12px' }}>
-                        <button type="button" onClick={() => setIsEditMode(false)} className="drawer-footer-cancel-btn">
-                          Cancel Editing
-                        </button>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              const fresh = await adminAPI.getBookingDetails(selectedBooking.id);
-                              if (fresh && (fresh.data || fresh.booking)) {
-                                const freshData = fresh.data || fresh.booking;
-                                setSelectedBooking(freshData);
-                                setBookings(prevList => prevList.map(b => b.id === freshData.id ? { ...b, ...freshData } : b));
-                              }
-                            } catch(e) {}
-                            setIsEditMode(false);
-                            setHasUnsavedEdits(false);
-                          }}
-                          className="drawer-footer-save-btn"
-                        >
-                          <i className="fas fa-check" style={{ marginRight: '4px' }}></i> Save &amp; Exit Edit Mode
-                        </button>
-                      </div>
                     </div>
 
 
@@ -2803,28 +2925,132 @@ function AdminDashboard() {
                         </div>
                       )}
                     </div>
+                      {/* STICKY EDIT MODE FOOTER */}
+                      <div className="sticky-drawer-footer" style={{ marginTop: '14px', position: 'sticky', bottom: 0, background: '#fff', borderTop: '1px solid #e2e8f0', padding: '12px 0', zIndex: 10 }}>
+                        <div>
+                          {hasUnsavedEdits ? (
+                            <span className="unsaved-badge">● Unsaved Changes</span>
+                          ) : (
+                            <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Synced</span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeletePasswordInput('');
+                              setDeleteError('');
+                              setShowDeleteModal(true);
+                            }}
+                            className="drawer-footer-cancel-btn"
+                            style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5', fontWeight: '700' }}
+                          >
+                            <i className="fas fa-trash-alt" style={{ marginRight: '4px' }}></i> Delete Booking
+                          </button>
+                          <button type="button" onClick={() => setIsEditMode(false)} className="drawer-footer-cancel-btn">
+                            Cancel Editing
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveAllChanges}
+                            className="drawer-footer-save-btn"
+                            disabled={updatingRecord}
+                          >
+                            <i className="fas fa-check" style={{ marginRight: '4px' }}></i> {updatingRecord ? 'Saving Changes...' : 'Save Changes'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-                  {/* STICKY DRAWER FOOTER */}
-                  <div className="sticky-drawer-footer">
-                    <div>
-                      {hasUnsavedEdits ? (
-                        <span className="unsaved-badge">● Unsaved Edits</span>
-                      ) : (
-                        <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Synced</span>
-                      )}
+                  {/* DELETE BOOKING CONFIRMATION MODAL */}
+                  {showDeleteModal && selectedBooking && (
+                    <div className="review-modal-backdrop" style={{ zIndex: 9999 }}>
+                      <div className="review-modal-card" style={{ maxWidth: '440px', padding: '20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#dc2626', marginBottom: '12px' }}>
+                          <i className="fas fa-exclamation-triangle" style={{ fontSize: '1.5rem' }}></i>
+                          <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#991b1b', fontWeight: '800' }}>Delete Booking?</h3>
+                        </div>
+
+                        <p style={{ fontSize: '0.86rem', color: '#334155', margin: '0 0 8px 0' }}>
+                          You are about to permanently delete:
+                        </p>
+
+                        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '8px 12px', marginBottom: '12px', fontSize: '0.86rem', fontWeight: '700', color: '#991b1b' }}>
+                          Booking ID: {selectedBooking.confirmation_code || selectedBooking.confirmationCode || selectedBooking.bookingId || selectedBooking.id}
+                        </div>
+
+                        <div style={{ fontSize: '0.82rem', color: '#475569', marginBottom: '12px' }}>
+                          <div style={{ fontWeight: '700', marginBottom: '6px', color: '#1e293b' }}>This will remove:</div>
+                          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <li style={{ color: '#047857' }}><i className="fas fa-check" style={{ marginRight: '6px' }}></i> Booking record</li>
+                            <li style={{ color: '#047857' }}><i className="fas fa-check" style={{ marginRight: '6px' }}></i> Passenger details</li>
+                            <li style={{ color: '#047857' }}><i className="fas fa-check" style={{ marginRight: '6px' }}></i> Itinerary</li>
+                            <li style={{ color: '#047857' }}><i className="fas fa-check" style={{ marginRight: '6px' }}></i> Payment records</li>
+                            <li style={{ color: '#047857' }}><i className="fas fa-check" style={{ marginRight: '6px' }}></i> Authorization records</li>
+                            <li style={{ color: '#047857' }}><i className="fas fa-check" style={{ marginRight: '6px' }}></i> Email history</li>
+                            <li style={{ color: '#047857' }}><i className="fas fa-check" style={{ marginRight: '6px' }}></i> Ticket details</li>
+                          </ul>
+                        </div>
+
+                        <div style={{ fontSize: '0.82rem', color: '#b91c1c', fontWeight: '700', marginBottom: '12px', fontStyle: 'italic' }}>
+                          This action cannot be undone.
+                        </div>
+
+                        <form onSubmit={handleConfirmDeleteBooking}>
+                          <div style={{ marginBottom: '14px' }}>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#1e293b', marginBottom: '4px' }}>
+                              Enter admin password to continue:
+                            </label>
+                            <input
+                              type="password"
+                              value={deletePasswordInput}
+                              onChange={(e) => {
+                                setDeletePasswordInput(e.target.value);
+                                setDeleteError('');
+                              }}
+                              placeholder="Enter admin password..."
+                              style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.88rem' }}
+                              autoFocus
+                            />
+                            {deleteError && (
+                              <div style={{ color: '#dc2626', fontSize: '0.78rem', marginTop: '4px', fontWeight: '600' }}>
+                                ⚠ {deleteError}
+                              </div>
+                            )}
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowDeleteModal(false);
+                                setDeletePasswordInput('');
+                                setDeleteError('');
+                              }}
+                              className="admin-secondary-btn"
+                              disabled={isDeleting}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              className="admin-primary-btn"
+                              style={{ background: '#dc2626', color: '#ffffff' }}
+                              disabled={isDeleting || !deletePasswordInput}
+                            >
+                              {isDeleting ? (
+                                <><i className="fas fa-spinner fa-spin" style={{ marginRight: '4px' }}></i> Deleting...</>
+                              ) : (
+                                'Delete Permanently'
+                              )}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '12px' }}>
-                      <button type="button" onClick={() => setSelectedBooking(null)} className="drawer-footer-cancel-btn">
-                        Cancel
-                      </button>
-                      <button type="button" onClick={handleSavePricing} className="drawer-footer-save-btn" disabled={!hasUnsavedEdits || updatingRecord}>
-                        Save Changes
-                      </button>
-                    </div>
-                  </div>
+                  )}
 
 
                   {/* COMPACT ITINERARY REVIEW MODAL */}
@@ -2992,7 +3218,7 @@ function AdminDashboard() {
                         const travellerStr = session.traveller_info ? `${session.traveller_info.firstName || ''} ${session.traveller_info.lastName || ''}` : 'Form Incomplete';
                         return (
                           <tr key={session.id || session.session_key}>
-                            <td><strong>{session.session_key?.substring(0, 14) || session.id}</strong></td>
+                            <td><strong>{session.session_key ? truncateText(session.session_key, 14) : (session.id || 'N/A')}</strong></td>
                             <td>{flightStr}</td>
                             <td>{travellerStr}</td>
                             <td>{session.contact_info?.email || 'N/A'}</td>

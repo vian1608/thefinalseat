@@ -185,7 +185,31 @@ export const passengerAuthorizationService = {
     const currencyStr = authRecord.currency || 'USD';
     const cardLast4 = authRecord.card_last4 || '4242';
 
+    const completeBooking = await bookingRepository.getCompleteBookingById(booking.id || booking.booking_id) || booking;
+    const splits = authRecord.quote_snapshot?.splits || completeBooking.paymentSplits || completeBooking.payment_splits || [];
+    const itinerary = buildCanonicalItinerary(completeBooking);
+    const outboundSegs = itinerary.outbound || [];
+    const returnSegs = itinerary.return || [];
+
     const subject = `Action Required — Authorize Booking ID ${confirmationCode} | The Final Seat`;
+
+    let splitsText = '';
+    if (splits.length > 0) {
+      splitsText = `\nPAYMENT AUTHORIZATION BREAKDOWN:\n` +
+        splits.map(s => `${s.merchant_name || s.merchantName || 'Merchant'}: $${parseFloat(s.amount || 0).toFixed(2)} ${(s.currency || currencyStr).toUpperCase()}`).join('\n') +
+        `\n--------------------\nTotal Authorized: $${amountStr} ${currencyStr}\n`;
+    }
+
+    let itineraryText = '';
+    if (outboundSegs.length > 0) {
+      itineraryText = `\nFLIGHT ITINERARY:\nOutbound:\n` +
+        outboundSegs.map((s, i) => `  Flight #${i + 1}: ${s.airlineName} (${s.carrierCode} ${s.flightNumber}) | ${s.originCode} -> ${s.destinationCode} | ${s.departureDate} ${s.departureTime}`).join('\n');
+      if (returnSegs.length > 0) {
+        itineraryText += `\nReturn:\n` +
+          returnSegs.map((s, i) => `  Flight #${i + 1}: ${s.airlineName} (${s.carrierCode} ${s.flightNumber}) | ${s.originCode} -> ${s.destinationCode} | ${s.departureDate} ${s.departureTime}`).join('\n');
+      }
+      itineraryText += '\n';
+    }
 
     const textBody = `
 THE FINAL SEAT — PASSENGER RESERVATION AUTHORIZATION REQUIRED
@@ -196,7 +220,7 @@ Please review and authorize your reservation for Booking ID ${confirmationCode}.
 
 Amount to Authorize: $${amountStr} ${currencyStr}
 Saved Payment Method: ${authRecord.card_brand || 'Visa'} ending in ${cardLast4}
-
+${splitsText}${itineraryText}
 Please review your complete flight itinerary, passenger details, fare breakdown, and authorize your booking using the secure link below:
 
 ${authUrl}
@@ -206,6 +230,48 @@ NOTE: Your saved card ending in ${cardLast4} will NOT be charged from an email l
 Need assistance? Contact our 24/7 Support Desk:
 Email: support@thefinalseat.com | Call: +1 (213) 965-9727
     `.trim();
+
+    let splitsHtml = '';
+    if (splits.length > 0) {
+      splitsHtml = `
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 20px 0;">
+          <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #7f0d2f; margin-bottom: 10px;">Payment Authorization Breakdown</div>
+          ${splits.map(s => `
+            <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; color: #334155;">
+              <span>${s.merchant_name || s.merchantName || 'Merchant'}</span>
+              <strong>$${parseFloat(s.amount || 0).toFixed(2)} ${(s.currency || currencyStr).toUpperCase()}</strong>
+            </div>
+          `).join('')}
+          <div style="border-top: 1px solid #cbd5e1; margin-top: 8px; padding-top: 8px; display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; color: #7f0d2f;">
+            <span>Total Authorized:</span>
+            <span>$${amountStr} ${currencyStr}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    let itineraryHtml = '';
+    if (outboundSegs.length > 0) {
+      itineraryHtml = `
+        <div style="margin: 20px 0;">
+          <div style="font-size: 13px; font-weight: 800; color: #7f0d2f; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;">Flight Itinerary</div>
+          ${outboundSegs.map((s, i) => `
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 6px; font-size: 13px;">
+              <strong>Outbound Flight #${i + 1}: ${s.airlineName} (${s.carrierCode} ${s.flightNumber})</strong><br>
+              ${s.originName} (${s.originCode}) &rarr; ${s.destinationName} (${s.destinationCode})<br>
+              <span style="color: #64748b; font-size: 12px;">Departure: ${s.departureDate} ${s.departureTime} &bull; Cabin: ${s.cabinClass}</span>
+            </div>
+          `).join('')}
+          ${returnSegs.map((s, i) => `
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 6px; font-size: 13px;">
+              <strong>Return Flight #${i + 1}: ${s.airlineName} (${s.carrierCode} ${s.flightNumber})</strong><br>
+              ${s.originName} (${s.originCode}) &rarr; ${s.destinationName} (${s.destinationCode})<br>
+              <span style="color: #64748b; font-size: 12px;">Departure: ${s.departureDate} ${s.departureTime} &bull; Cabin: ${s.cabinClass}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
 
     const htmlBody = `
 <!DOCTYPE html>
@@ -246,6 +312,9 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
         <div style="font-size: 13px; color: #6b5b43;">Saved Card: ${authRecord.card_brand || 'Visa'} ending in <strong>${cardLast4}</strong></div>
       </div>
 
+      ${splitsHtml}
+      ${itineraryHtml}
+
       <a href="${authUrl}" class="cta-btn">Review and Authorize Booking &rarr;</a>
 
       <div class="notice">
@@ -254,7 +323,6 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
     </div>
     <div class="footer">
       The Final Seat LLC &middot; 24/7 Support: support@thefinalseat.com &middot; +1 (213) 965-9727
-    </div>
     </div>
   </div>
 </body>
@@ -355,7 +423,6 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
 
     logger.info(`[Auth Lookup] Successfully resolved authorization record for booking ${authRecord.booking_id}`);
 
-
     // Check expiration
     if (new Date(authRecord.expires_at).getTime() < Date.now()) {
       if (authRecord.status === 'pending') {
@@ -368,39 +435,56 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
       authRecord.status = 'accepted';
     }
 
-    // Retrieve live booking to verify quote immutability
-    const booking = await bookingRepository.getById(authRecord.booking_id);
-    if (!booking) {
+    // Retrieve complete booking to verify quote immutability & build full details
+    const completeBooking = await bookingRepository.getCompleteBookingById(authRecord.booking_id);
+    if (!completeBooking) {
       throw new Error('BOOKING_NOT_FOUND');
     }
 
     // Check if booking total or flight itinerary was modified after snapshot
-    const currentPrice = parseFloat(booking.customer_price || booking.total_amount || 0);
+    const currentPrice = parseFloat(completeBooking.customer_price || completeBooking.total_amount || 0);
     const snapPrice = parseFloat(authRecord.authorized_amount || authRecord.quote_snapshot?.amount || 0);
     if (Math.abs(currentPrice - snapPrice) > 0.01) {
       authRecord.status = 'invalidated';
       throw new Error('AUTHORIZATION_INVALIDATED_PRICE_CHANGE');
     }
 
-    const relations = await bookingRepository.getRelations(booking.id);
-    const rawPassengers = relations.travellers || booking.passengers || [];
+    const relations = await bookingRepository.getRelations(completeBooking.id);
+    const rawPassengers = relations.travellers || completeBooking.passengers || [];
+
+    const canonicalItinerary = buildCanonicalItinerary(completeBooking);
+    const itinerarySnapshot = authRecord.itinerary_snapshot || {
+      outboundSegments: canonicalItinerary.outbound,
+      returnSegments: canonicalItinerary.return,
+      outbound: canonicalItinerary.outbound?.[0] || null,
+      return: canonicalItinerary.return?.[0] || null,
+      canonical: canonicalItinerary
+    };
+
+    const splitsRaw = authRecord.quote_snapshot?.splits || completeBooking.paymentSplits || completeBooking.payment_splits || (relations.paymentSplits) || [];
+    const splits = splitsRaw.map(s => ({
+      merchant_name: s.merchant_name || s.merchantName || 'Merchant',
+      amount: parseFloat(s.amount || 0).toFixed(2),
+      currency: (s.currency || completeBooking.currency || 'USD').toUpperCase()
+    }));
 
     return {
       token: authRecord.token,
       status: authRecord.status,
-      bookingId: booking.id,
-      confirmationCode: booking.confirmation_code,
-      passengerName: booking.passenger_name,
-      customerEmail: booking.email,
+      bookingId: completeBooking.id,
+      confirmationCode: completeBooking.confirmation_code,
+      passengerName: completeBooking.passenger_name,
+      customerEmail: completeBooking.email,
       authorizedAmount: snapPrice.toFixed(2),
       currency: authRecord.currency || 'USD',
       cardBrand: authRecord.card_brand || 'Visa',
       cardLast4: authRecord.card_last4 || '4242',
       quoteSnapshot: authRecord.quote_snapshot,
-      itinerarySnapshot: authRecord.itinerary_snapshot,
+      itinerarySnapshot,
       policiesSnapshot: authRecord.policies_snapshot,
       expiresAt: authRecord.expires_at,
-      passengers: rawPassengers
+      passengers: rawPassengers,
+      splits
     };
   },
 

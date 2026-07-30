@@ -69,7 +69,7 @@ describe('View Booking Details Pricing & Field Safety Tests', () => {
     };
 
     const canonical = bookingMapper.toCanonicalModel(booking);
-    assert.strictEqual(canonical.payment.paymentStatus, 'paid');
+    assert.strictEqual(canonical.payment.paymentStatus, 'PAID');
     assert.strictEqual(canonical.payment.paidAmount, 850.00);
   });
 
@@ -82,7 +82,7 @@ describe('View Booking Details Pricing & Field Safety Tests', () => {
     };
 
     const canonical = bookingMapper.toCanonicalModel(booking);
-    assert.strictEqual(canonical.payment.paymentStatus, 'refunded');
+    assert.strictEqual(canonical.payment.paymentStatus, 'REFUNDED');
     assert.strictEqual(canonical.payment.refundedAmount, 620.00);
   });
 
