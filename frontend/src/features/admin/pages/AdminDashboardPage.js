@@ -2952,15 +2952,18 @@ function AdminDashboard() {
                       )}
                     </div>
                       {/* STICKY EDIT MODE FOOTER */}
-                      <div className="sticky-drawer-footer" style={{ marginTop: '14px', position: 'sticky', bottom: 0, background: '#fff', borderTop: '1px solid #e2e8f0', padding: '12px 0', zIndex: 10 }}>
-                        <div>
+                      <div className="sticky-drawer-footer">
+                        {/* Row 1: Unsaved status badge */}
+                        <div className="drawer-footer-status-row">
                           {hasUnsavedEdits ? (
                             <span className="unsaved-badge">● Unsaved Changes</span>
                           ) : (
-                            <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Synced</span>
+                            <span className="drawer-footer-synced">✓ Synced</span>
                           )}
                         </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        {/* Row 2: Actions */}
+                        <div className="drawer-footer-actions-row">
+                          {/* Destructive – left-isolated */}
                           <button
                             type="button"
                             onClick={() => {
@@ -2968,22 +2971,28 @@ function AdminDashboard() {
                               setDeleteError('');
                               setShowDeleteModal(true);
                             }}
-                            className="drawer-footer-cancel-btn"
-                            style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5', fontWeight: '700' }}
+                            className="drawer-footer-delete-btn"
                           >
-                            <i className="fas fa-trash-alt" style={{ marginRight: '4px' }}></i> Delete Booking
+                            <i className="fas fa-trash-alt" style={{ marginRight: '5px' }}></i> Delete Booking
                           </button>
-                          <button type="button" onClick={() => setIsEditMode(false)} className="drawer-footer-cancel-btn">
-                            Cancel Editing
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleSaveAllChanges}
-                            className="drawer-footer-save-btn"
-                            disabled={updatingRecord}
-                          >
-                            <i className="fas fa-check" style={{ marginRight: '4px' }}></i> {updatingRecord ? 'Saving Changes...' : 'Save Changes'}
-                          </button>
+
+                          {/* Spacer pushes cancel+save to the right */}
+                          <span className="drawer-footer-spacer" />
+
+                          {/* Cancel + Save grouped */}
+                          <div className="drawer-footer-primary-group">
+                            <button type="button" onClick={() => setIsEditMode(false)} className="drawer-footer-cancel-btn">
+                              Cancel Editing
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleSaveAllChanges}
+                              className="drawer-footer-save-btn"
+                              disabled={updatingRecord}
+                            >
+                              <i className="fas fa-check" style={{ marginRight: '4px' }}></i>{updatingRecord ? 'Saving…' : 'Save Changes'}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>

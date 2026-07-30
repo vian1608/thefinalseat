@@ -319,7 +319,17 @@ export const bookingRepository = {
     if (!data && !memOverridden) return null;
 
     // Merge: Supabase base + memory overrides (memory wins for transient fields)
-    const baseData = { ...(data || {}), ...(memOverridden || {}) };
+    let baseData = { ...(data || {}), ...(memOverridden || {}) };
+
+    // If Supabase has authorization_status=AUTHORIZED but status is still
+    // AWAITING_AUTHORIZATION (due to check constraint blocking the status write),
+    // promote the effective status so the admin always sees the correct state.
+    if (
+      baseData.authorization_status === 'AUTHORIZED' &&
+      ['AWAITING_AUTHORIZATION', 'PENDING'].includes(baseData.status)
+    ) {
+      baseData = { ...baseData, status: 'AUTHORIZED' };
+    }
 
     if (!baseData.id) return null;
     const relations = await bookingRepository.getRelations(baseData.id);
@@ -601,6 +611,7 @@ export const bookingRepository = {
     delete cleanFields.crm_status;
     delete cleanFields.price_checked_at;
 
+    // Always update memory store first so in-process reads are consistent
     const existing = bookingsMemoryStore.get(id) || {};
     const updatedMem = { ...existing, ...cleanFields };
     bookingsMemoryStore.set(id, updatedMem);
@@ -608,6 +619,7 @@ export const bookingRepository = {
       bookingsMemoryStore.set(existing.confirmation_code, updatedMem);
     }
 
+    // Attempt full Supabase write
     const { data, error } = await supabase
       .from('bookings')
       .update(cleanFields)
@@ -617,11 +629,39 @@ export const bookingRepository = {
 
     if (error) {
       logger.warn(`Supabase schema notice: ${error.message}.`);
+
+      // Retry without status/payment_status to persist supplemental fields
+      // (authorization_status, authorized_at, etc.) that have no constraint.
+      const safeFields = { ...cleanFields };
+      delete safeFields.status;
+      delete safeFields.payment_status;
+
+      if (Object.keys(safeFields).length > 0) {
+        const { data: safeData, error: safeErr } = await supabase
+          .from('bookings')
+          .update(safeFields)
+          .eq('id', id)
+          .select()
+          .maybeSingle();
+
+        if (!safeErr && safeData) {
+          const finalRec = { ...updatedMem, ...safeData };
+          bookingsMemoryStore.set(id, finalRec);
+          if (finalRec.confirmation_code) {
+            bookingsMemoryStore.set(finalRec.confirmation_code, finalRec);
+          }
+          return finalRec;
+        }
+      }
+
       return updatedMem;
     }
 
     const finalRec = data ? { ...updatedMem, ...data } : updatedMem;
     bookingsMemoryStore.set(id, finalRec);
+    if (finalRec.confirmation_code) {
+      bookingsMemoryStore.set(finalRec.confirmation_code, finalRec);
+    }
     return finalRec;
   },
 

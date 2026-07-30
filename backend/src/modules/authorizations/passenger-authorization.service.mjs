@@ -575,31 +575,52 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
     const updateFields = {
       status: 'accepted',
       consumed_at: consumedAt,
-      ip_address: clientIp || '127.0.0.1',
-      user_agent: userAgent || 'Mozilla/5.0',
+      ip_address: clientIp || null,
+      user_agent: userAgent || null,
       authorization_text_version: 'v1.0',
       authorization_text_hash: textHash,
       updated_at: consumedAt
     };
 
     // Update Supabase passenger_authorizations table
-    try {
-      await supabase
-        .from('passenger_authorizations')
-        .update(updateFields)
-        .eq('token', token);
-    } catch (e) {
-      /* non-blocking memory update */
+    const { error: paError } = await supabase
+      .from('passenger_authorizations')
+      .update(updateFields)
+      .eq('token', token);
+
+    if (paError) {
+      logger.warn(`[Auth] passenger_authorizations update notice (non-fatal): ${paError.message}`);
     }
 
+    // Always update memory store immediately
     const updatedRecord = { ...authRecord, ...updateFields };
     memoryAuthStore.set(token, updatedRecord);
 
-    // Update Booking status to AUTHORIZED
-    await bookingRepository.updateStatus(authRecord.booking_id, {
+    // Update booking status to AUTHORIZED
+    // NOTE: Do NOT include payment_status here — it has a DB check constraint
+    logger.info(`[Auth] Updating booking ${authRecord.booking_id} status to AUTHORIZED`);
+
+    const bookingUpdateResult = await bookingRepository.updateStatus(authRecord.booking_id, {
       status: 'AUTHORIZED',
-      payment_status: 'PENDING'
+      authorization_status: 'AUTHORIZED',
+      authorized_at: consumedAt
     });
+
+    if (bookingUpdateResult) {
+      logger.info(`[Auth] Booking ${authRecord.booking_id} status updated → AUTHORIZED at ${consumedAt}`);
+    } else {
+      logger.warn(`[Auth] Booking ${authRecord.booking_id} status update returned empty — checking memory store`);
+    }
+
+    // Also write authorization_status directly to Supabase bookings (separate column, no constraint)
+    const { error: bkError } = await supabase
+      .from('bookings')
+      .update({ authorization_status: 'AUTHORIZED', authorized_at: consumedAt })
+      .eq('id', authRecord.booking_id);
+
+    if (bkError) {
+      logger.warn(`[Auth] bookings.authorization_status update notice: ${bkError.message}`);
+    }
 
     logger.info(`[Auth] Authorization accepted for booking ${authRecord.booking_id} from IP ${clientIp}`);
 
