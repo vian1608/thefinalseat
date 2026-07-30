@@ -166,12 +166,12 @@ export const passengerAuthorizationService = {
       memoryAuthStore.set(token, authRecord);
     }
 
-    // Persist authorization_token & expires_at directly on booking record
-    await bookingRepository.updateBookingStatus(bookingId, {
-      status: 'AWAITING_AUTHORIZATION',
+    // Only persist the authorization token & expiry on the booking record.
+    // Do NOT change bookings.status — it must stay as PENDING/DONE/CANCELLED/FAILED.
+    // The authorization state lives exclusively in passenger_authorizations.authorization_status.
+    await bookingRepository.updateStatus(bookingId, {
       authorization_token: token,
-      authorization_expires_at: expiresAt,
-      payment_status: 'PENDING'
+      authorization_expires_at: expiresAt
     });
 
     return { ...authRecord, token };
@@ -583,46 +583,34 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
     };
 
     // Update Supabase passenger_authorizations table
+    // Update passenger_authorizations: set authorization_status = AUTHORIZED
+    // This is the ONLY table/column that records the authorization decision.
+    // We do NOT touch bookings.status — it must remain PENDING/DONE/CANCELLED/FAILED.
+    const paUpdateFields = {
+      ...updateFields,
+      authorization_status: 'AUTHORIZED'
+    };
+
     const { error: paError } = await supabase
       .from('passenger_authorizations')
-      .update(updateFields)
+      .update(paUpdateFields)
       .eq('token', token);
 
     if (paError) {
       logger.warn(`[Auth] passenger_authorizations update notice (non-fatal): ${paError.message}`);
     }
 
-    // Always update memory store immediately
-    const updatedRecord = { ...authRecord, ...updateFields };
+    // Always update memory store immediately so in-process reads are consistent
+    const updatedRecord = { ...authRecord, ...paUpdateFields };
     memoryAuthStore.set(token, updatedRecord);
 
-    // Update booking status to AUTHORIZED
-    // NOTE: Do NOT include payment_status here — it has a DB check constraint
-    logger.info(`[Auth] Updating booking ${authRecord.booking_id} status to AUTHORIZED`);
-
-    const bookingUpdateResult = await bookingRepository.updateStatus(authRecord.booking_id, {
-      status: 'AUTHORIZED',
-      authorization_status: 'AUTHORIZED',
+    // Also update the booking's authorization_token field to record authorized_at
+    // (no status change — bookings.status stays as-is)
+    await bookingRepository.updateStatus(authRecord.booking_id, {
       authorized_at: consumedAt
     });
 
-    if (bookingUpdateResult) {
-      logger.info(`[Auth] Booking ${authRecord.booking_id} status updated → AUTHORIZED at ${consumedAt}`);
-    } else {
-      logger.warn(`[Auth] Booking ${authRecord.booking_id} status update returned empty — checking memory store`);
-    }
-
-    // Also write authorization_status directly to Supabase bookings (separate column, no constraint)
-    const { error: bkError } = await supabase
-      .from('bookings')
-      .update({ authorization_status: 'AUTHORIZED', authorized_at: consumedAt })
-      .eq('id', authRecord.booking_id);
-
-    if (bkError) {
-      logger.warn(`[Auth] bookings.authorization_status update notice: ${bkError.message}`);
-    }
-
-    logger.info(`[Auth] Authorization accepted for booking ${authRecord.booking_id} from IP ${clientIp}`);
+    logger.info(`[Auth] Authorization accepted for booking ${authRecord.booking_id} from IP ${clientIp} — passenger_authorizations.authorization_status = AUTHORIZED`);
 
     return {
       success: true,

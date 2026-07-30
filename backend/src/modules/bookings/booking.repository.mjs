@@ -319,17 +319,7 @@ export const bookingRepository = {
     if (!data && !memOverridden) return null;
 
     // Merge: Supabase base + memory overrides (memory wins for transient fields)
-    let baseData = { ...(data || {}), ...(memOverridden || {}) };
-
-    // If Supabase has authorization_status=AUTHORIZED but status is still
-    // AWAITING_AUTHORIZATION (due to check constraint blocking the status write),
-    // promote the effective status so the admin always sees the correct state.
-    if (
-      baseData.authorization_status === 'AUTHORIZED' &&
-      ['AWAITING_AUTHORIZATION', 'PENDING'].includes(baseData.status)
-    ) {
-      baseData = { ...baseData, status: 'AUTHORIZED' };
-    }
+    const baseData = { ...(data || {}), ...(memOverridden || {}) };
 
     if (!baseData.id) return null;
     const relations = await bookingRepository.getRelations(baseData.id);

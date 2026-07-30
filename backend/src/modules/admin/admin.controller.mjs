@@ -315,11 +315,14 @@ export const adminController = {
         return res.status(404).json({ success: false, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' } });
       }
 
-      if (booking.status !== 'AUTHORIZED' && booking.status !== 'READY_FOR_TICKETING' && booking.status !== 'AWAITING_AUTHORIZATION' && booking.status !== 'AWAITING_AUTH') {
+      const isAuthorized = booking.authorization_status === 'AUTHORIZED' ||
+                           booking.authorization?.status === 'AUTHORIZED' ||
+                           ['PENDING', 'DONE'].includes(booking.status);
 
+      if (!isAuthorized) {
         return res.status(400).json({
           success: false,
-          error: { code: 'INVALID_STATUS', message: `Booking status is '${booking.status}'. Only AUTHORIZED bookings can be processed for ticketing.` }
+          error: { code: 'INVALID_STATUS', message: `Passenger authorization is pending. Only AUTHORIZED bookings can be processed for ticketing.` }
         });
       }
 

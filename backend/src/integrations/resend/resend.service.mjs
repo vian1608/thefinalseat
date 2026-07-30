@@ -1023,8 +1023,32 @@ export const sendFinalTicketEmail = async (bookingInput) => {
       return { success: false, error: 'Final ticket email cannot be sent because the airline PNR is missing or invalid.' };
     }
 
-    if (!booking.itinerary || !booking.itinerary.outbound || booking.itinerary.outbound.length === 0) {
-      return { success: false, error: 'Final ticket email cannot be sent because no itinerary segments were found.' };
+    // Check passenger authorization status from passenger_authorizations table/record
+    const authStatus = (
+      booking.authorization_status ||
+      booking.authorization?.status ||
+      booking.authorization_email_status
+    );
+
+    // Fetch authorization record directly if not on booking
+    let isAuthorized = authStatus === 'AUTHORIZED' || authStatus === 'ACCEPTED' || authStatus === 'accepted';
+    if (!isAuthorized) {
+      try {
+        const { default: passengerAuthorizationService } = await import('../../modules/authorizations/passenger-authorization.service.mjs');
+        const evidence = await passengerAuthorizationService.generateAuditEvidenceExport(bookingId);
+        if (evidence && (evidence.authorization?.status === 'ACCEPTED' || evidence.authorization?.status === 'AUTHORIZED')) {
+          isAuthorized = true;
+        }
+      } catch (e) {
+        /* Ignore lookup error if evidence absent */
+      }
+    }
+
+    if (!isAuthorized) {
+      return {
+        success: false,
+        error: 'Final ticket email cannot be sent because passenger authorization status is not AUTHORIZED.'
+      };
     }
 
     const customerEmail = booking.email || booking.customerEmail || booking.contacts?.[0]?.email || booking.travellers?.[0]?.email;
