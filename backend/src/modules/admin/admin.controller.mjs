@@ -51,7 +51,10 @@ export const adminController = {
       }
 
       const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
-      const result = await bookingRepository.deleteBookingTransactional(bookingId, adminEmail, clientIp);
+      const permanent = req.query?.permanent === 'true' || req.body?.permanent === true;
+      const result = permanent
+        ? await bookingRepository.deleteBookingTransactional(bookingId, adminEmail, clientIp)
+        : await bookingRepository.softDeleteBooking(bookingId, adminEmail, clientIp, req.body?.reason || 'Admin soft delete');
 
       if (!result.success) {
         return res.status(400).json({
@@ -63,9 +66,94 @@ export const adminController = {
       return res.json({
         success: true,
         message: result.message,
-        deletedBookingId: result.deletedBookingId,
-        confirmationCode: result.confirmationCode
+        bookingId: result.bookingId || result.deletedBookingId,
+        confirmationCode: result.confirmationCode,
+        deletedAt: result.deletedAt
       });
+    } catch (error) {
+      logger.error(`Error in deleteBooking: ${error.message}`, error);
+      if (res.status) {
+        return res.status(500).json({ success: false, error: { code: 'DELETE_ERROR', message: error.message } });
+      }
+      next(error);
+    }
+  },
+
+  restoreBooking: async (req, res, next) => {
+    try {
+      const bookingId = req.params.bookingId || req.params.id;
+      const adminEmail = req.user?.email || env.adminEmail || 'admin@thefinalseat.com';
+      const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
+
+      const result = await bookingRepository.restoreBooking(bookingId, adminEmail, clientIp);
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          error: { code: result.code || 'RESTORE_FAILED', message: result.message }
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: result.message,
+        bookingId: result.bookingId,
+        confirmationCode: result.confirmationCode,
+        restoredAt: result.restoredAt
+      });
+    } catch (error) {
+      logger.error(`Error in restoreBooking: ${error.message}`, error);
+      if (res.status) {
+        return res.status(500).json({ success: false, error: { code: 'RESTORE_ERROR', message: error.message } });
+      }
+      next(error);
+    }
+  },
+
+  exportBooking: async (req, res, next) => {
+    try {
+      const id = req.params.bookingId || req.params.id;
+      const data = await bookingRepository.exportBookingJson(id);
+      if (!data) {
+        return res.status(404).json({ success: false, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' } });
+      }
+
+      if (res.setHeader) {
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="booking_${id}_export.json"`);
+      }
+      return res.json(data);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  getBookingHistory: async (req, res, next) => {
+    try {
+      const id = req.params.bookingId || req.params.id;
+      const history = await bookingRepository.getBookingHistory(id);
+      if (!history) {
+        return res.status(404).json({ success: false, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' } });
+      }
+      return res.json({ success: true, ...history });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  restoreFromSnapshot: async (req, res, next) => {
+    try {
+      const id = req.params.bookingId || req.params.id;
+      const adminEmail = req.user?.email || env.adminEmail || 'admin@thefinalseat.com';
+      const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
+      const snapshotPayload = req.body?.snapshot || req.body;
+
+      const result = await bookingRepository.restoreFromSnapshot(id, snapshotPayload, adminEmail, clientIp);
+      if (!result.success) {
+        return res.status(400).json({ success: false, error: { code: result.code || 'RESTORE_SNAPSHOT_FAILED', message: result.message } });
+      }
+
+      return res.json({ success: true, ...result });
     } catch (error) {
       next(error);
     }
@@ -315,6 +403,19 @@ export const adminController = {
         return res.status(404).json({ success: false, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' } });
       }
 
+      const { default: bookingValidatorService } = await import('../bookings/booking-validator.service.mjs');
+      const val = await bookingValidatorService.validateBookingIntegrity(booking.id, {
+        requireItinerary: true,
+        requirePassengers: true,
+        requirePayment: true
+      });
+      if (!val.valid) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'BOOKING_DATA_INCOMPLETE', message: val.reason, errors: val.errors }
+        });
+      }
+
       const isAuthorized = booking.authorization_status === 'AUTHORIZED' ||
                            booking.authorization?.status === 'AUTHORIZED' ||
                            ['PENDING', 'DONE'].includes(booking.status);
@@ -330,9 +431,9 @@ export const adminController = {
       const suppConf = supplierConfirmation || `SUP_${Date.now()}`;
       const tickets = ticketNumbers || [`TKT-7788-${Date.now()}`];
 
-      // Update Booking to TICKETED / PAID
+      // Update Booking to DONE / PAID
       const updatedBooking = await bookingRepository.updateBookingStatus(booking.id, {
-        status: 'TICKETED',
+        status: 'DONE',
         payment_status: 'paid',
         paid_at: new Date().toISOString(),
         internal_notes: `Authorized charge processed cleanly. PNR: ${pnr}, Supplier Ref: ${suppConf}`
@@ -353,7 +454,9 @@ export const adminController = {
         success: true,
         bookingId: booking.id,
         confirmationCode: booking.confirmation_code,
-        status: 'TICKETED',
+        status: 'DONE',
+        bookingStatus: 'DONE',
+        ticketStatus: 'TICKETED',
         paymentStatus: 'paid',
         airlinePnr: pnr,
         supplierConfirmation: suppConf,

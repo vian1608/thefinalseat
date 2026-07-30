@@ -17,11 +17,27 @@ router.post('/login', loginRateLimiter, adminController.login);
 
 import passengerAuthorizationController from '../authorizations/passenger-authorization.controller.mjs';
 
+import bookingController from '../bookings/booking.controller.mjs';
+
 // Protected admin endpoints
 router.get('/bookings', authenticate, authorize(['admin']), adminController.getBookings);
 router.get('/bookings/:id', authenticate, authorize(['admin']), adminController.getBookingDetail);
 router.delete('/bookings/:bookingId', authenticate, authorize(['admin']), adminController.deleteBooking);
 router.delete('/bookings/:id', authenticate, authorize(['admin']), adminController.deleteBooking);
+
+// Field-Isolated PATCH Endpoints
+router.patch('/bookings/:id/status', authenticate, authorize(['admin']), bookingController.updateStatus);
+router.patch('/bookings/:id/payment', authenticate, authorize(['admin']), bookingController.updatePayment);
+router.patch('/bookings/:id/itinerary', authenticate, authorize(['admin']), bookingController.updateItinerary);
+router.patch('/bookings/:id/ticket', authenticate, authorize(['admin']), bookingController.updateTicket);
+router.patch('/bookings/:id/notes', authenticate, authorize(['admin']), bookingController.updateNotes);
+router.patch('/bookings/:id/restore', authenticate, authorize(['admin']), adminController.restoreBooking);
+
+// Phase 16: Backup, Export & Snapshot Recovery
+router.get('/bookings/:id/export', authenticate, authorize(['admin']), adminController.exportBooking);
+router.get('/bookings/:id/history', authenticate, authorize(['admin']), adminController.getBookingHistory);
+router.post('/bookings/:id/restore-snapshot', authenticate, authorize(['admin']), adminController.restoreFromSnapshot);
+
 router.put('/bookings/:id/save-all', authenticate, authorize(['admin']), adminController.saveAllChanges);
 router.put('/bookings/:id', authenticate, authorize(['admin']), adminController.updateBooking);
 router.put('/bookings/:id/payment-splits', authenticate, authorize(['admin']), adminController.updatePaymentSplits);

@@ -48,6 +48,17 @@ export const flightController = {
       };
 
       const results = await flightService.searchFlights(searchParams);
+
+      const isProduction = (process.env.NODE_ENV || 'development') === 'production';
+      if (isProduction && results.meta?.isMock) {
+        return res.status(503).json({
+          success: false,
+          error: {
+            code: 'FLIGHT_SEARCH_UNAVAILABLE',
+            message: 'Live flight search is temporarily unavailable. Mock results are blocked in production.'
+          }
+        });
+      }
       
       // Standard stable response shape: { success: true, data: [...], meta: { source: '...', count: X } }
       res.json({
@@ -60,10 +71,11 @@ export const flightController = {
       });
     } catch (error) {
       console.error('[Controller Error] Flight search handler failed:', error);
-      res.status(500).json({
+      const statusCode = error.status || 500;
+      res.status(statusCode).json({
         success: false,
         error: {
-          code: 'FLIGHT_SEARCH_FAILED',
+          code: error.code || 'FLIGHT_SEARCH_FAILED',
           message: error.message || 'Unable to retrieve available flights.'
         }
       });

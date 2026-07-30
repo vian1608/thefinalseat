@@ -1346,9 +1346,11 @@ function AdminDashboard() {
                           const payStatusStr = (booking.payment_status || 'PENDING').toUpperCase();
                           const payBadgeClass = payStatusStr === 'PAID' ? 'status-badge--completed' : (payStatusStr === 'FAILED' ? 'status-badge--cancelled' : 'status-badge--pending');
 
-                          const carrierName = booking.carrier || booking.airline || booking.flight_details?.airline || booking.flights?.[0]?.airline || 'N/A';
-                          const originCode = booking.origin_code || booking.flights?.[0]?.departure_airport || 'SEA';
-                          const destCode = booking.destination_code || booking.flights?.[0]?.arrival_airport || 'MIA';
+                          const carrierName = booking.carrier || booking.airline || booking.flight_details?.airline || booking.flights?.[0]?.airline || null;
+                          // INTEGRITY: Never fall back to fake airport codes. If data is missing, show null — rendered as '—' below.
+                          const originCode = booking.origin_code || booking.flights?.[0]?.departure_airport || null;
+                          const destCode = booking.destination_code || booking.flights?.[0]?.arrival_airport || null;
+                          const hasRoute = !!(originCode && destCode);
 
                           return (
                             <tr key={booking.id} className={isSelected ? 'active-row' : ''}>
@@ -1362,10 +1364,13 @@ function AdminDashboard() {
                                 </div>
                               </td>
                               <td>
-                                <strong>{carrierName}</strong>
+                                <strong>{carrierName || <span style={{ color: '#888', fontStyle: 'italic' }}>—</span>}</strong>
                               </td>
                               <td>
-                                {originCode} <i className="fas fa-arrow-right"></i> {destCode}
+                                {hasRoute
+                                  ? <>{originCode} <i className="fas fa-arrow-right"></i> {destCode}</>
+                                  : <span style={{ color: '#e05252', fontStyle: 'italic', fontSize: '12px' }}>— No Itinerary</span>
+                                }
                               </td>
                               <td>{booking.passengers_count || booking.travellers?.length || 1}</td>
                               <td>{formatMoney(booking.customer_price ?? booking.total_amount ?? booking.pricing?.customerTotal, booking.currency || 'USD')}</td>
@@ -1534,23 +1539,47 @@ function AdminDashboard() {
                        ═══════════════════════════════════════════════════════════════ */
                     <div className="view-mode-container" style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1, overflowY: 'auto' }}>
 
-                      {/* TRIP SUMMARY BANNER */}
+                      {/* TRIP SUMMARY BANNER / MISSING ITINERARY NOTICE */}
                       {(() => {
-                        const trip = selectedBooking.trip_summary || selectedBooking.tripSummary || {
-                          bannerText: selectedBooking.trip_type === 'round_trip' || returnSegments.length > 0 ? 'Round Trip' : 'One Way',
-                          routeSummary: `${outboundSegments[0]?.origin_airport || 'LHR'} → ${outboundSegments[outboundSegments.length - 1]?.destination_airport || 'GEG'}`,
-                          passengerText: '1 Passenger'
-                        };
+                        const hasSegments = outboundSegments.length > 0 && outboundSegments[0]?.origin_airport;
+                        if (!hasSegments) {
+                          return (
+                            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', padding: '14px 16px', color: '#991b1b', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div>
+                                <div style={{ fontWeight: 800, fontSize: '0.95rem', marginBottom: '2px' }}>
+                                  <i className="fas fa-exclamation-triangle" style={{ marginRight: '6px' }}></i> Missing Itinerary Data
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: '#7f1d1d' }}>
+                                  No flight itinerary segments are recorded for this booking.
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => { setIsEditMode(true); setOpenAccordion('itinerary'); }}
+                                style={{ background: '#991b1b', color: '#ffffff', border: 'none', borderRadius: '6px', padding: '8px 14px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}
+                              >
+                                Complete Itinerary
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        const origin = outboundSegments[0]?.origin_airport || 'N/A';
+                        const dest = outboundSegments[outboundSegments.length - 1]?.destination_airport || 'N/A';
+                        const routeStr = `${origin} → ${dest}`;
+                        const bannerText = selectedBooking.trip_type === 'round_trip' || returnSegments.length > 0 ? 'Round Trip' : 'One Way';
+                        const passengerText = selectedBooking.passenger_name || '1 Passenger';
+
                         return (
                           <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)', color: '#ffffff', borderRadius: '10px', padding: '14px 16px', boxShadow: '0 4px 12px rgba(15,23,42,0.15)' }}>
                             <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.8px', color: '#94a3b8', fontWeight: 700, marginBottom: '4px' }}>
-                              {trip.bannerText}
+                              {bannerText}
                             </div>
                             <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#38bdf8', marginBottom: '4px' }}>
-                              {trip.routeSummary || `${outboundSegments[0]?.origin_airport || 'LHR'} → ${outboundSegments[outboundSegments.length - 1]?.destination_airport || 'GEG'}`}
+                              {routeStr}
                             </div>
                             <div style={{ fontSize: '0.8rem', color: '#cbd5e1', display: 'flex', gap: '12px' }}>
-                              <span><i className="fas fa-user" style={{ marginRight: '4px' }}></i> {trip.passengerText}</span>
+                              <span><i className="fas fa-user" style={{ marginRight: '4px' }}></i> {passengerText}</span>
                               <span><i className="fas fa-chair" style={{ marginRight: '4px' }}></i> {outboundSegments[0]?.cabin || 'Economy'}</span>
                             </div>
                           </div>
@@ -1807,9 +1836,9 @@ function AdminDashboard() {
                           </span>
                           <span className="accordion-summary-right">
                             {outboundSegments.length > 0 
-                              ? `${outboundSegments[0].origin_airport || 'LAX'} → ${outboundSegments[outboundSegments.length - 1].destination_airport || 'MIA'} (${outboundSegments.length > 1 ? `${outboundSegments.length - 1} stop(s)` : 'Nonstop'})`
+                              ? `${outboundSegments[0].origin_airport || 'N/A'} → ${outboundSegments[outboundSegments.length - 1].destination_airport || 'N/A'} (${outboundSegments.length > 1 ? `${outboundSegments.length - 1} stop(s)` : 'Nonstop'})`
                               : 'No itinerary'}
-                            {hasReturnJourney && returnSegments.length > 0 && ` · Return: ${returnSegments[0]?.origin_airport || 'MIA'} → ${returnSegments[returnSegments.length - 1]?.destination_airport || 'LAX'}`}
+                            {hasReturnJourney && returnSegments.length > 0 && ` · Return: ${returnSegments[0]?.origin_airport || 'N/A'} → ${returnSegments[returnSegments.length - 1]?.destination_airport || 'N/A'}`}
                           </span>
                         </button>
 
@@ -3071,9 +3100,9 @@ function AdminDashboard() {
                           Any material change to flight numbers, travel dates, airports, or cabin class will automatically <strong>invalidate any existing passenger authorization</strong> and change status to <strong>REAUTHORIZATION_REQUIRED</strong>.
                         </p>
                         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px', fontSize: '0.82rem', marginBottom: '14px' }}>
-                          <div><strong>Outbound Journey:</strong> {outboundSegments[0]?.origin_airport || 'LAX'} &rarr; {outboundSegments.map(s => s.destination_airport).join(' &rarr; ')} ({outboundSegments.length} segment(s))</div>
+                          <div><strong>Outbound Journey:</strong> {outboundSegments[0]?.origin_airport || 'N/A'} &rarr; {outboundSegments.map(s => s.destination_airport || 'N/A').join(' &rarr; ')} ({outboundSegments.length} segment(s))</div>
                           {hasReturnJourney && returnSegments.length > 0 && (
-                            <div style={{ marginTop: '4px' }}><strong>Return Journey:</strong> {returnSegments[0]?.origin_airport || 'MIA'} &rarr; {returnSegments.map(s => s.destination_airport).join(' &rarr; ')} ({returnSegments.length} segment(s))</div>
+                            <div style={{ marginTop: '4px' }}><strong>Return Journey:</strong> {returnSegments[0]?.origin_airport || 'N/A'} &rarr; {returnSegments.map(s => s.destination_airport || 'N/A').join(' &rarr; ')} ({returnSegments.length} segment(s))</div>
                           )}
                         </div>
 

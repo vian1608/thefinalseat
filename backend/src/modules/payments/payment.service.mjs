@@ -36,6 +36,12 @@ export const paymentService = {
         }
       }
     } else if (type === 'booking') {
+      if (payload.flight?.isMock || payload.returnFlight?.isMock || payload.isMock) {
+        const err = new Error('Offline / sample flight routes cannot be booked online. Please contact our support team.');
+        err.code = 'MOCK_FLIGHT_NOT_BOOKABLE';
+        throw err;
+      }
+
       if (payload.flight) {
         const pricing = calculateBookingTotal({
           outboundFlight: payload.flight,

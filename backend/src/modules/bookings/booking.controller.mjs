@@ -98,6 +98,101 @@ export const bookingController = {
     } catch (error) {
       next(error);
     }
+  },
+
+  updateStatus: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const adminId = req.user?.email || 'admin';
+      const updated = await bookingService.updateStatus(id, { ...req.body, adminId });
+      res.json({
+        success: true,
+        message: 'Booking status updated successfully.',
+        data: updated
+      });
+    } catch (error) {
+      const statusCode = error.status || (error.code === 'INVALID_STATUS' ? 400 : 500);
+      res.status(statusCode).json({
+        success: false,
+        error: { code: error.code || 'STATUS_UPDATE_FAILED', message: error.message }
+      });
+    }
+  },
+
+  updatePayment: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const adminId = req.user?.email || 'admin';
+      const updated = await bookingService.updatePayment(id, { ...req.body, adminId });
+      res.json({
+        success: true,
+        message: 'Payment details updated successfully.',
+        data: updated
+      });
+    } catch (error) {
+      const statusCode = error.status || 400;
+      res.status(statusCode).json({
+        success: false,
+        error: { code: error.code || 'PAYMENT_UPDATE_FAILED', message: error.message }
+      });
+    }
+  },
+
+  updateItinerary: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const adminId = req.user?.email || 'admin';
+      const updated = await bookingService.updateItinerary(id, { ...req.body, adminId });
+      res.json({
+        success: true,
+        message: 'Itinerary segments updated successfully.',
+        data: updated
+      });
+    } catch (error) {
+      const statusCode = error.status || 400;
+      res.status(statusCode).json({
+        success: false,
+        error: { code: error.code || 'ITINERARY_UPDATE_FAILED', message: error.message }
+      });
+    }
+  },
+
+  updateTicket: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const adminId = req.user?.email || 'admin';
+      const updated = await bookingService.updateTicket(id, req.body || {}, adminId);
+      res.json({
+        success: true,
+        message: 'Airline ticket details updated successfully.',
+        data: updated
+      });
+    } catch (error) {
+      const statusCode = error.status || 400;
+      res.status(statusCode).json({
+        success: false,
+        error: { code: error.code || 'TICKET_UPDATE_FAILED', message: error.message }
+      });
+    }
+  },
+
+  updateNotes: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const adminId = req.user?.email || 'admin';
+      const updated = await bookingService.updateNotes(id, { ...req.body, adminId });
+      res.json({
+        success: true,
+        message: 'Internal notes updated successfully.',
+        data: updated
+      });
+    } catch (error) {
+      const statusCode = error.status || 400;
+      res.status(statusCode).json({
+        success: false,
+        error: { code: error.code || 'NOTES_UPDATE_FAILED', message: error.message }
+      });
+    }
   }
 };
 

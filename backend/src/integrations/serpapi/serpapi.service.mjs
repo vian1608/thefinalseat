@@ -107,9 +107,25 @@ class SerpApiService {
 
   // Search flights using SerpAPI google_flights engine
   async searchFlights(searchParams) {
+    const isProduction = (process.env.NODE_ENV || 'development') === 'production';
+    const demoAllowed = process.env.DEMO_FLIGHTS === 'true' || !isProduction;
+
     if (!this.apiKey) {
-      console.warn('[SerpAPI Warning] SERPAPI_API_KEY environment variable is not configured. Returning offline mock offers.');
-      return this.getMockFlightOffers(searchParams);
+      if (isProduction) {
+        // INTEGRITY: Never serve fake flight data in production
+        const err = new Error('Flight search is temporarily unavailable. Please try again or contact support.');
+        err.code = 'FLIGHT_SEARCH_UNAVAILABLE';
+        err.status = 503;
+        throw err;
+      }
+      if (demoAllowed) {
+        console.warn('[SerpAPI] SERPAPI_API_KEY not configured — serving demo flights (non-production only).');
+        return this.getMockFlightOffers(searchParams);
+      }
+      const err = new Error('Flight search API key not configured.');
+      err.code = 'FLIGHT_SEARCH_UNAVAILABLE';
+      err.status = 503;
+      throw err;
     }
 
     try {
@@ -158,7 +174,15 @@ class SerpApiService {
 
       return this.formatSerpFlightOffers(data, searchParams);
     } catch (error) {
-      console.warn('[SerpAPI Notice] Live flight search notice:', error.message);
+      if (isProduction) {
+        // INTEGRITY: Never fall back to fake flights in production on API failure
+        const err = new Error('Live flight search is temporarily unavailable. Please try again shortly.');
+        err.code = 'FLIGHT_SEARCH_UNAVAILABLE';
+        err.status = 503;
+        err.cause = error;
+        throw err;
+      }
+      console.warn('[SerpAPI] Live flight search notice (non-production):', error.message);
       return this.getMockFlightOffers(searchParams);
     }
   }

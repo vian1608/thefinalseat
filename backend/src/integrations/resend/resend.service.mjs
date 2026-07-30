@@ -317,12 +317,21 @@ export const sendBookingConfirmation = async (bookingInput, options = {}) => {
       return { success: true, duplicate: true, sentAt };
     }
 
-    const itinerary = buildCanonicalItinerary(booking);
-    if (!itinerary.outbound || itinerary.outbound.length === 0) {
-      const errMsg = 'BOOKING_ITINERARY_MISSING: Cannot dispatch email for booking without committed flight segments.';
-      logger.error(`[Email] ${errMsg} (bookingId=${bookingId})`);
-      return { success: false, error: 'BOOKING_ITINERARY_MISSING' };
+    // PHASE 13 EMAIL PROTECTION VALIDATION (BOOKING CONFIRMATION EMAIL)
+    const { default: bookingValidatorService } = await import('../../modules/bookings/booking-validator.service.mjs');
+    const integrity = await bookingValidatorService.validateBookingIntegrity(booking, {
+      requireItinerary: true,
+      requirePassengers: true,
+      requirePayment: true
+    });
+
+    if (!integrity.valid) {
+      const errMsg = `EMAIL_PROTECTION_BLOCKED: ${integrity.reason}`;
+      logger.error(`[Email Protection] ${errMsg} (bookingId=${bookingId})`);
+      return { success: false, error: errMsg };
     }
+
+    const itinerary = buildCanonicalItinerary(booking);
 
     const rawPassengers = booking.passengers || booking.traveller_details || booking.travellers || [];
     const passengers = Array.isArray(rawPassengers)
@@ -330,12 +339,25 @@ export const sendBookingConfirmation = async (bookingInput, options = {}) => {
       : (typeof rawPassengers === 'string' ? JSON.parse(rawPassengers || '[]') : []);
 
     const firstPassenger = passengers[0] || {};
-    const passengerName = booking.passenger_name || `${firstPassenger.firstName || firstPassenger.first_name || ''} ${firstPassenger.lastName || firstPassenger.last_name || ''}`.trim() || 'Valued Customer';
-    const passengerFirstName = firstPassenger.firstName || firstPassenger.first_name || passengerName.split(' ')[0] || 'Valued Customer';
+    const passengerName = booking.passenger_name || `${firstPassenger.firstName || firstPassenger.first_name || ''} ${firstPassenger.lastName || firstPassenger.last_name || ''}`.trim() || null;
+
+    if (!passengerName && passengers.length === 0) {
+      const errMsg = 'EMAIL_PROTECTION_BLOCKED: Cannot send booking confirmation email because passenger details are missing.';
+      logger.error(`[Email Protection] ${errMsg} (bookingId=${bookingId})`);
+      return { success: false, error: errMsg };
+    }
+
+    const passengerFirstName = firstPassenger.firstName || firstPassenger.first_name || (passengerName ? passengerName.split(' ')[0] : 'Valued Customer');
     const confirmationCode = booking.confirmation_code || booking.confirmationCode || 'TFS-PENDING';
     const customerEmail = booking.email || booking.customerEmail || '';
 
     const customerPrice = parseFloat(booking.customer_price || booking.total_amount || 0);
+    if (isNaN(customerPrice) || customerPrice <= 0) {
+      const errMsg = 'EMAIL_PROTECTION_BLOCKED: Cannot send booking confirmation email because total amount is zero or invalid.';
+      logger.error(`[Email Protection] ${errMsg} (bookingId=${bookingId})`);
+      return { success: false, error: errMsg };
+    }
+
     const amountPaid = customerPrice.toFixed(2);
     const currency = (booking.currency || 'USD').toUpperCase();
     const currencySymbol = currency === 'USD' ? '$' : (currency === 'EUR' ? '€' : (currency === 'GBP' ? '£' : '$'));
@@ -689,8 +711,22 @@ export const sendPassengerAuthorizationEmail = async (bookingIdInput) => {
 
 
     if (!booking.itinerary || !booking.itinerary.outbound || booking.itinerary.outbound.length === 0) {
-      const errMsg = 'BOOKING_ITINERARY_MISSING: Cannot dispatch authorization email for booking without committed flight segments.';
-      logger.error(`[Email] ${errMsg} (bookingId=${bookingId})`);
+      const errMsg = 'EMAIL_PROTECTION_BLOCKED: Cannot dispatch authorization request email because flight itinerary segments snapshot is missing.';
+      logger.error(`[Email Protection] ${errMsg} (bookingId=${bookingId})`);
+      await bookingRepository.updateBookingStatus(bookingId, {
+        authorization_email_status: 'FAILED',
+        authorization_email_error: errMsg
+      });
+      return { success: false, error: errMsg };
+    }
+
+    const splits = booking.payment_splits && booking.payment_splits.length > 0
+      ? booking.payment_splits
+      : await bookingRepository.getPaymentSplits(booking.id);
+
+    if (!splits || splits.length === 0) {
+      const errMsg = 'EMAIL_PROTECTION_BLOCKED: Cannot dispatch authorization request email because payment splits breakdown is missing.';
+      logger.error(`[Email Protection] ${errMsg} (bookingId=${bookingId})`);
       await bookingRepository.updateBookingStatus(bookingId, {
         authorization_email_status: 'FAILED',
         authorization_email_error: errMsg
@@ -715,9 +751,6 @@ export const sendPassengerAuthorizationEmail = async (bookingIdInput) => {
     const confirmationCode = booking.confirmation_code || 'TFS-PENDING';
     const passengerName = booking.passenger_name || 'Valued Passenger';
     const passengerFirstName = passengerName.split(' ')[0] || 'Passenger';
-    const splits = booking.payment_splits && booking.payment_splits.length > 0
-      ? booking.payment_splits
-      : await bookingRepository.getPaymentSplits(booking.id);
 
     const splitTotal = splits.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0);
     const totalAmountNum = splitTotal > 0 ? splitTotal : parseFloat(booking.customer_price || booking.total_amount || 0);
@@ -1015,7 +1048,25 @@ export function renderFlightItineraryText(bookingOrSegments) {
 export const sendFinalTicketEmail = async (bookingInput) => {
   try {
     const bookingId = typeof bookingInput === 'object' ? (bookingInput.id || bookingInput.booking_id) : bookingInput;
-    const booking = await bookingRepository.getCompleteBookingById(bookingId);
+    
+    // Strict Data Integrity Validation before sending final ticket email
+    const { default: bookingValidatorService } = await import('../../modules/bookings/booking-validator.service.mjs');
+    const integrityResult = await bookingValidatorService.validateBookingIntegrity(bookingId, {
+      requireItinerary: true,
+      requirePassengers: true,
+      requirePnr: true,
+      requireTicket: true,
+      requireAuthorization: true
+    });
+
+    if (!integrityResult.valid) {
+      return {
+        success: false,
+        error: `Final ticket email blocked: ${integrityResult.errors.join(' ')}`
+      };
+    }
+
+    const booking = integrityResult.booking || (await bookingRepository.getCompleteBookingById(bookingId));
     if (!booking) return { success: false, error: 'Booking not found' };
 
     const airlinePnr = (booking.airline_confirmation_number || booking.airline_pnr || booking.pnr || '').trim().toUpperCase();

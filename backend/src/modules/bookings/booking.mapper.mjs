@@ -131,11 +131,15 @@ export const bookingMapper = {
 
       itinerary,
       flight_details: itinerary,
+      flights: flights || [],
+      itinerary_segments: flights || [],
+      outbound_segments: (flights || []).filter(f => f.leg === 'outbound'),
       
       pricing,
       authorization,
       payment: paymentModel,
-      payment_details: paymentRecord,
+      contacts: contacts || [],
+      payments: payments || [],
       
       bookingStatus: booking.status,
       status: booking.status,

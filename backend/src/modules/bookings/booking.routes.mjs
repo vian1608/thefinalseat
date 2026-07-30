@@ -22,6 +22,14 @@ router.get('/search', searchRateLimiter, bookingController.search);
 router.get('/user/:email', bookingController.getByUserEmail);
 router.use('/abandoned', abandonedBookingRouter);
 router.post('/:id/resend-confirmation', bookingController.resendConfirmation);
+
+// Field-Level Isolated Update Endpoints
+router.patch('/:id/status', bookingController.updateStatus);
+router.patch('/:id/payment', bookingController.updatePayment);
+router.patch('/:id/itinerary', bookingController.updateItinerary);
+router.patch('/:id/ticket', bookingController.updateTicket);
+router.patch('/:id/notes', bookingController.updateNotes);
+
 router.get('/:reference', bookingController.getByReference);
 
 export default router;

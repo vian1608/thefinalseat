@@ -25,6 +25,17 @@ export const paypalController = {
         });
       }
 
+      // Reject offline / mock flight results
+      if (booking.is_mock || booking.isMock || booking.flight_details?.isMock) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'MOCK_FLIGHT_NOT_BOOKABLE',
+            message: 'Offline / sample flight routes cannot be booked online. Please contact our support team.'
+          }
+        });
+      }
+
       // 2. Check if booking is pending & payable
       if (booking.status === 'DONE' || booking.payment_status === 'paid') {
         return res.status(400).json({

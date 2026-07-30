@@ -8,12 +8,22 @@ import { BOOKING_STATUSES } from './booking.constants.mjs';
 const segmentsMemoryStore = new Map();
 const bookingsMemoryStore = new Map();
 const splitsMemoryStore = new Map();
+const ticketSnapshotsMemoryStore = new Map();
+const authSnapshotsMemoryStore = new Map();
+const auditLogsMemoryStore = new Map();
 
 
 export const bookingRepository = {
 
 
   createBookingRecord: async (dbRow) => {
+    const isProduction = (process.env.NODE_ENV || 'development') === 'production';
+    if (isProduction && (dbRow.is_mock || dbRow.isMock || dbRow.flight_details?.isMock)) {
+      const err = new Error('Mock flight bookings are not permitted in production environment.');
+      err.code = 'MOCK_FLIGHT_NOT_BOOKABLE';
+      throw err;
+    }
+
     const { data, error } = await supabase
       .from('bookings')
       .insert(dbRow)
@@ -44,19 +54,41 @@ export const bookingRepository = {
         const fallbackId = dbRow.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `bk_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`);
         const fallbackRecord = { id: fallbackId, created_at: new Date().toISOString(), ...dbRow };
         bookingsMemoryStore.set(fallbackId, fallbackRecord);
+        if (dbRow.id) bookingsMemoryStore.set(dbRow.id, fallbackRecord);
         if (fallbackRecord.confirmation_code) bookingsMemoryStore.set(fallbackRecord.confirmation_code, fallbackRecord);
+        await bookingRepository.recordAuditLog({
+          bookingId: fallbackId,
+          action: 'BOOKING_CREATED',
+          oldValue: null,
+          newValue: fallbackRecord,
+          actor: dbRow.created_by || 'customer'
+        });
         return fallbackRecord;
       }
       if (coreData) {
         if (coreData.id) bookingsMemoryStore.set(coreData.id, coreData);
         if (coreData.confirmation_code) bookingsMemoryStore.set(coreData.confirmation_code, coreData);
       }
+      await bookingRepository.recordAuditLog({
+        bookingId: coreData.id || dbRow.id,
+        action: 'BOOKING_CREATED',
+        oldValue: null,
+        newValue: coreData,
+        actor: dbRow.created_by || 'customer'
+      });
       return coreData;
     }
     if (data) {
       if (data.id) bookingsMemoryStore.set(data.id, data);
       if (data.confirmation_code) bookingsMemoryStore.set(data.confirmation_code, data);
     }
+    await bookingRepository.recordAuditLog({
+      bookingId: data.id || dbRow.id,
+      action: 'BOOKING_CREATED',
+      oldValue: null,
+      newValue: data,
+      actor: dbRow.created_by || 'customer'
+    });
     return data;
   },
 
@@ -472,7 +504,142 @@ export const bookingRepository = {
       reason: `[${eventType}] PNR: ${cleanPnr || 'N/A'}, Airline: ${cleanName || 'N/A'} (${cleanCode || 'N/A'}), Ticket: ${cleanTkt || 'N/A'}, IssuedAt: ${cleanIssuedAt || 'N/A'}`
     });
 
+    // Create Immutable Append-Only Ticket Snapshot
+    if (cleanPnr || cleanTkt) {
+      const completeBooking = await bookingRepository.getById(realId);
+      const relations = await bookingRepository.getRelations(realId);
+      const finalItinerary = (relations?.itinerarySegments && relations.itinerarySegments.length > 0)
+        ? relations.itinerarySegments
+        : (completeBooking?.itinerary_segments || completeBooking?.flights || []);
+
+      await bookingRepository.createTicketSnapshot({
+        booking_id: realId,
+        airline: cleanName || booking.airline_name || 'Airline',
+        airline_code: cleanCode || booking.airline_code || null,
+        pnr: cleanPnr || booking.airline_confirmation_number || 'PNR_PENDING',
+        ticket_number: cleanTkt || booking.ticket_number || null,
+        final_itinerary: finalItinerary,
+        final_price: parseFloat(completeBooking?.customer_price || completeBooking?.total_amount || booking.total_amount || 0),
+        currency: (completeBooking?.currency || booking.currency || 'USD').toUpperCase(),
+        issue_date: cleanIssuedAt ? new Date(cleanIssuedAt).toISOString() : new Date().toISOString()
+      });
+
+      await bookingRepository.recordAuditLog({
+        bookingId: realId,
+        action: 'TICKET_CREATED',
+        oldValue: { pnr: booking.airline_confirmation_number, ticket_number: booking.ticket_number },
+        newValue: { pnr: cleanPnr, ticket_number: cleanTkt, airline: cleanName, issue_date: cleanIssuedAt },
+        actor: adminId || 'admin'
+      });
+    }
+
     return bookingRepository.getCompleteBookingById(realId);
+  },
+
+  /**
+   * Create Immutable Append-Only Ticket Snapshot Entry
+   */
+  createTicketSnapshot: async (snapshotPayload) => {
+    const snapshotId = snapshotPayload.id || `tkt_snap_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const record = {
+      id: snapshotId,
+      booking_id: snapshotPayload.booking_id,
+      airline: snapshotPayload.airline || snapshotPayload.airline_name || 'Airline',
+      airline_code: snapshotPayload.airline_code || null,
+      pnr: snapshotPayload.pnr,
+      ticket_number: snapshotPayload.ticket_number || null,
+      final_itinerary: snapshotPayload.final_itinerary || [],
+      final_price: parseFloat(snapshotPayload.final_price || 0),
+      currency: (snapshotPayload.currency || 'USD').toUpperCase(),
+      issue_date: snapshotPayload.issue_date || new Date().toISOString(),
+      created_at: new Date().toISOString()
+    };
+
+    // 1. Memory Store (Append-Only Array)
+    const list = ticketSnapshotsMemoryStore.get(record.booking_id) || [];
+    list.push(record);
+    ticketSnapshotsMemoryStore.set(record.booking_id, list);
+
+    // 2. Database persistent insert
+    const { error } = await supabase
+      .from('ticket_snapshots')
+      .insert(record);
+
+    if (error) {
+      logger.warn(`ticket_snapshots insert notice (stored in memory store): ${error.message}`);
+    }
+
+    logger.info(`[TicketSnapshot] Created immutable ticket snapshot ${record.id} for booking ${record.booking_id} (PNR: ${record.pnr}, Ticket: ${record.ticket_number || 'N/A'})`);
+    return record;
+  },
+
+  /**
+   * Fetch all historical ticket snapshots for a booking (ordered by creation date ascending)
+   */
+  getTicketSnapshotsForBooking: async (bookingId) => {
+    const memList = ticketSnapshotsMemoryStore.get(bookingId) || [];
+    const { data, error } = await supabase
+      .from('ticket_snapshots')
+      .select('*')
+      .eq('booking_id', bookingId)
+      .order('created_at', { ascending: true });
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return data;
+    }
+    return memList;
+  },
+
+  /**
+   * Record System-Wide Audit Log Entry
+   */
+  recordAuditLog: async ({ bookingId, action, oldValue = null, newValue = null, actor = 'system', ipAddress = null }) => {
+    if (!bookingId) return null;
+    const logId = `audit_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const record = {
+      id: logId,
+      booking_id: bookingId,
+      action,
+      old_value: oldValue,
+      new_value: newValue,
+      actor: actor || 'system',
+      ip_address: ipAddress || null,
+      created_at: new Date().toISOString()
+    };
+
+    // 1. Memory Store (Append-Only Array)
+    const list = auditLogsMemoryStore.get(bookingId) || [];
+    list.push(record);
+    auditLogsMemoryStore.set(bookingId, list);
+
+    // 2. Database Persistent Insert
+    const { error } = await supabase
+      .from('audit_logs')
+      .insert(record);
+
+    if (error) {
+      logger.warn(`audit_logs insert notice (stored in memory store): ${error.message}`);
+    }
+
+    logger.info(`[AuditLog] Action '${action}' recorded for booking ${bookingId} by actor '${record.actor}'`);
+    return record;
+  },
+
+  /**
+   * Fetch all historical audit logs for a booking (ordered by creation date ascending)
+   */
+  getAuditLogsForBooking: async (bookingId) => {
+    const memList = auditLogsMemoryStore.get(bookingId) || [];
+    const { data, error } = await supabase
+      .from('audit_logs')
+      .select('*')
+      .eq('booking_id', bookingId)
+      .order('created_at', { ascending: true });
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return data;
+    }
+    return memList;
   },
 
 
@@ -601,8 +768,18 @@ export const bookingRepository = {
     delete cleanFields.crm_status;
     delete cleanFields.price_checked_at;
 
-    // Always update memory store first so in-process reads are consistent
-    const existing = bookingsMemoryStore.get(id) || {};
+    // Retrieve existing record so un-updated fields are preserved
+    let existing = bookingsMemoryStore.get(id);
+    if (!existing || Object.keys(existing).length === 0) {
+      const dbRec = await bookingRepository.getById(id);
+      if (dbRec) {
+        existing = dbRec;
+        bookingsMemoryStore.set(id, dbRec);
+      } else {
+        existing = {};
+      }
+    }
+
     const updatedMem = { ...existing, ...cleanFields };
     bookingsMemoryStore.set(id, updatedMem);
     if (existing.confirmation_code) {
@@ -700,6 +877,20 @@ export const bookingRepository = {
         message: `Invalid booking status '${targetBookingStatus}'. Allowed canonical statuses are: ${BOOKING_STATUSES.join(', ')}.`,
         field: 'status'
       };
+    }
+
+    // Require flight itinerary for completion/ticketing statuses
+    if (targetBookingStatus && ['DONE', 'TICKETED', 'PAID'].includes(targetBookingStatus)) {
+      const { default: bookingValidatorService } = await import('./booking-validator.service.mjs');
+      const valResult = await bookingValidatorService.validateBookingIntegrity(realId, { requireItinerary: true });
+      if (!valResult.valid) {
+        return {
+          success: false,
+          code: 'BOOKING_ITINERARY_INCOMPLETE',
+          message: 'Booking itinerary is incomplete. Please complete itinerary before continuing.',
+          field: 'itinerary'
+        };
+      }
     }
 
     // 2. Validate Ticket Details if provided
@@ -1044,6 +1235,14 @@ export const bookingRepository = {
 
       // Always save to memory store first (immediate availability)
       segmentsMemoryStore.set(bookingId, validRows);
+
+      await bookingRepository.recordAuditLog({
+        bookingId,
+        action: 'FLIGHT_CREATED',
+        oldValue: null,
+        newValue: validRows,
+        actor: 'system'
+      });
 
       // Attempt 1: Save to booking_itinerary_segments (normalized table)
       const { error: deleteErr } = await supabase.from('booking_itinerary_segments').delete().eq('booking_id', bookingId);
@@ -1616,6 +1815,14 @@ export const bookingRepository = {
       if (existingBooking.bookingReference) bookingsMemoryStore.set(existingBooking.bookingReference, tombstone);
 
       // Step 9: Audit log creation
+      await bookingRepository.recordAuditLog({
+        bookingId: realId,
+        action: 'BOOKING_DELETED',
+        oldValue: existingBooking,
+        newValue: null,
+        actor: adminEmail,
+        ipAddress
+      });
       await bookingRepository.logAdminActivity({
         action: 'BOOKING_DELETED',
         bookingReference: confirmationCode,
@@ -1639,6 +1846,253 @@ export const bookingRepository = {
         message: `Deletion failed: ${err.message}`
       };
     }
+  },
+
+  deleteBooking: async (idOrCode) => {
+    return bookingRepository.deleteBookingTransactional(idOrCode, 'system-atomic-rollback@thefinalseat.com');
+  },
+
+  softDeleteBooking: async (idOrCode, adminEmail = 'admin@thefinalseat.com', ipAddress = '127.0.0.1', reason = 'Admin soft delete') => {
+    const existingBooking = await bookingRepository.getById(idOrCode);
+    if (!existingBooking) {
+      return { success: false, code: 'BOOKING_NOT_FOUND', message: `Booking '${idOrCode}' not found.` };
+    }
+
+    const realId = existingBooking.id;
+    const confirmationCode = existingBooking.confirmation_code || existingBooking.confirmationCode || realId;
+    const deletedAt = new Date().toISOString();
+
+    const updateFields = {
+      status: 'CANCELLED',
+      deleted_at: deletedAt,
+      deleted_by: adminEmail,
+      delete_reason: reason,
+      updated_at: deletedAt
+    };
+
+    await bookingRepository.updateStatus(realId, updateFields);
+
+    const updatedBooking = { ...existingBooking, ...updateFields, _softDeleted: true };
+    bookingsMemoryStore.set(realId, updatedBooking);
+    if (confirmationCode) bookingsMemoryStore.set(confirmationCode, updatedBooking);
+
+    await bookingRepository.recordAuditLog({
+      bookingId: realId,
+      action: 'BOOKING_SOFT_DELETED',
+      oldValue: existingBooking,
+      newValue: updatedBooking,
+      actor: adminEmail,
+      ipAddress
+    });
+
+    logger.info(`[SOFT_DELETE] Booking ${confirmationCode} (${realId}) soft-deleted by ${adminEmail}.`);
+
+    return {
+      success: true,
+      message: `Booking ${confirmationCode} soft-deleted cleanly.`,
+      bookingId: realId,
+      confirmationCode,
+      deletedAt
+    };
+  },
+
+  restoreBooking: async (idOrCode, adminEmail = 'admin@thefinalseat.com', ipAddress = '127.0.0.1') => {
+    const existingBooking = await bookingRepository.getById(idOrCode);
+    if (!existingBooking) {
+      return { success: false, code: 'BOOKING_NOT_FOUND', message: `Booking '${idOrCode}' not found.` };
+    }
+
+    const realId = existingBooking.id;
+    const confirmationCode = existingBooking.confirmation_code || existingBooking.confirmationCode || realId;
+    const restoredAt = new Date().toISOString();
+
+    const updateFields = {
+      status: 'PENDING',
+      deleted_at: null,
+      deleted_by: null,
+      delete_reason: null,
+      updated_at: restoredAt
+    };
+
+    await bookingRepository.updateStatus(realId, updateFields);
+
+    const restoredBooking = { ...existingBooking, ...updateFields, _softDeleted: false };
+    bookingsMemoryStore.set(realId, restoredBooking);
+    if (confirmationCode) bookingsMemoryStore.set(confirmationCode, restoredBooking);
+
+    await bookingRepository.recordAuditLog({
+      bookingId: realId,
+      action: 'BOOKING_RESTORED',
+      oldValue: existingBooking,
+      newValue: restoredBooking,
+      actor: adminEmail,
+      ipAddress
+    });
+
+    logger.info(`[RESTORE_BOOKING] Booking ${confirmationCode} (${realId}) restored to active status by ${adminEmail}.`);
+
+    return {
+      success: true,
+      message: `Booking ${confirmationCode} restored successfully.`,
+      bookingId: realId,
+      confirmationCode,
+      restoredAt
+    };
+  },
+
+  saveAuthorizationSnapshot: async (snapshotData) => {
+    const snapId = snapshotData.id || `auth_snap_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const record = { ...snapshotData, id: snapId, created_at: snapshotData.created_at || new Date().toISOString() };
+    authSnapshotsMemoryStore.set(snapId, record);
+    try {
+      await supabase.from('authorization_snapshots').insert(record);
+    } catch (e) {
+      logger.warn(`authorization_snapshots insert notice (stored in memory store): ${e.message}`);
+    }
+    return record;
+  },
+
+  getAuthorizationSnapshots: async (bookingId) => {
+    try {
+      const { data, error } = await supabase
+        .from('authorization_snapshots')
+        .select('*')
+        .eq('booking_id', bookingId)
+        .order('created_at', { ascending: true });
+
+      if (!error && Array.isArray(data) && data.length > 0) return data;
+    } catch (e) {
+      // Fallback to in-memory store
+    }
+    return Array.from(authSnapshotsMemoryStore.values()).filter(s => s.booking_id === bookingId || s.bookingId === bookingId);
+  },
+
+  exportBookingJson: async (idOrCode) => {
+    const booking = await bookingRepository.getById(idOrCode);
+    if (!booking) return null;
+
+    const realId = booking.id;
+    const relations = await bookingRepository.getRelations(realId);
+    const auditLogs = await bookingRepository.getAuditLogsForBooking(realId);
+    const authSnapshots = await bookingRepository.getAuthorizationSnapshots(realId);
+    const ticketSnapshots = await bookingRepository.getTicketSnapshotsForBooking(realId);
+
+    return {
+      exported_at: new Date().toISOString(),
+      booking: bookingRepository.enrichBookingRecord(booking, relations),
+      itinerary_segments: relations.itinerarySegments || [],
+      travellers: relations.travellers || [],
+      contacts: relations.contacts || [],
+      payments: relations.payments || [],
+      payment_splits: relations.paymentSplits || [],
+      authorization_snapshots: authSnapshots || [],
+      ticket_snapshots: ticketSnapshots || [],
+      audit_logs: auditLogs || []
+    };
+  },
+
+  getBookingHistory: async (idOrCode) => {
+    const booking = await bookingRepository.getById(idOrCode);
+    if (!booking) return null;
+
+    const realId = booking.id;
+    const auditLogs = await bookingRepository.getAuditLogsForBooking(realId);
+    const authSnapshots = await bookingRepository.getAuthorizationSnapshots(realId);
+    const ticketSnapshots = await bookingRepository.getTicketSnapshotsForBooking(realId);
+
+    const timeline = [];
+
+    (auditLogs || []).forEach(a => {
+      timeline.push({
+        type: 'AUDIT_EVENT',
+        action: a.action,
+        timestamp: a.created_at,
+        actor: a.actor,
+        ipAddress: a.ip_address,
+        oldValue: a.old_value,
+        newValue: a.new_value
+      });
+    });
+
+    (authSnapshots || []).forEach(s => {
+      timeline.push({
+        type: 'AUTHORIZATION_SNAPSHOT',
+        id: s.id,
+        timestamp: s.created_at || s.accepted_at,
+        pnr: s.confirmation_code,
+        authorizedAmount: s.authorized_amount,
+        consentHash: s.consent_hash
+      });
+    });
+
+    (ticketSnapshots || []).forEach(t => {
+      timeline.push({
+        type: 'TICKET_SNAPSHOT',
+        id: t.id,
+        timestamp: t.issue_date || t.created_at,
+        pnr: t.pnr,
+        ticketNumber: t.ticket_number,
+        airline: t.airline,
+        finalPrice: t.final_price
+      });
+    });
+
+    timeline.sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime());
+
+    return {
+      bookingId: realId,
+      confirmationCode: booking.confirmation_code,
+      currentStatus: booking.status,
+      timeline
+    };
+  },
+
+  restoreFromSnapshot: async (idOrCode, targetSnapshot, adminEmail = 'admin@thefinalseat.com', ipAddress = '127.0.0.1') => {
+    const booking = await bookingRepository.getById(idOrCode);
+    if (!booking) {
+      return { success: false, code: 'BOOKING_NOT_FOUND', message: `Booking '${idOrCode}' not found.` };
+    }
+
+    const realId = booking.id;
+    const snapData = typeof targetSnapshot === 'object' ? targetSnapshot : null;
+
+    if (!snapData) {
+      return { success: false, code: 'INVALID_SNAPSHOT', message: 'Target snapshot payload is invalid or empty.' };
+    }
+
+    const updateFields = {
+      passenger_name: snapData.passenger_name || booking.passenger_name,
+      customer_price: snapData.authorized_amount || snapData.total_amount || snapData.final_price || booking.customer_price,
+      total_amount: snapData.authorized_amount || snapData.total_amount || snapData.final_price || booking.total_amount,
+      status: snapData.status || 'PENDING',
+      updated_at: new Date().toISOString()
+    };
+
+    if (snapData.itinerary_snapshot && Array.isArray(snapData.itinerary_snapshot)) {
+      await bookingRepository.saveItinerarySegments(realId, snapData.itinerary_snapshot);
+    } else if (snapData.final_itinerary && Array.isArray(snapData.final_itinerary)) {
+      await bookingRepository.saveItinerarySegments(realId, snapData.final_itinerary);
+    }
+
+    await bookingRepository.updateStatus(realId, updateFields);
+
+    await bookingRepository.recordAuditLog({
+      bookingId: realId,
+      action: 'BOOKING_RESTORED_FROM_SNAPSHOT',
+      oldValue: booking,
+      newValue: snapData,
+      actor: adminEmail,
+      ipAddress
+    });
+
+    logger.info(`[RESTORE_SNAPSHOT] Booking ${realId} restored from snapshot by ${adminEmail}.`);
+
+    return {
+      success: true,
+      message: `Booking ${realId} successfully restored from snapshot state.`,
+      bookingId: realId,
+      restoredAt: new Date().toISOString()
+    };
   }
 };
 

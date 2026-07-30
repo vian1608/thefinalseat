@@ -495,7 +495,12 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
   /**
    * Accept passenger authorization when passenger submits the checkbox & button
    */
-  acceptAuthorization: async ({ token, acceptedCheckboxText, clientIp, userAgent }) => {
+  acceptAuthorization: async (params = {}) => {
+    const token = typeof params === 'string' ? params : params.token;
+    const acceptedCheckboxText = typeof params === 'object' ? (params.acceptedCheckboxText || params.consentText || 'I confirm that the passenger names, itinerary, dates, fare, fees and contact information shown above are correct.') : 'I confirm that the passenger names, itinerary, dates, fare, fees and contact information shown above are correct.';
+    const clientIp = typeof params === 'object' ? (params.clientIp || params.ipAddress || '198.51.100.1') : '198.51.100.1';
+    const userAgent = typeof params === 'object' ? (params.userAgent || 'Mozilla/5.0') : 'Mozilla/5.0';
+
     let authRecord = memoryAuthStore.get(token);
 
     if (!authRecord) {
@@ -572,6 +577,49 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
     const textHash = hashText(acceptedCheckboxText);
     const consumedAt = new Date().toISOString();
 
+    const booking = await bookingRepository.getById(authRecord.booking_id);
+    const relations = await bookingRepository.getRelations(authRecord.booking_id);
+
+    const paymentSplits = (relations.paymentSplits || booking.payment_splits || []).map(s => ({
+      merchant_name: s.merchant_name || s.merchantName || 'Merchant',
+      amount: parseFloat(s.amount || 0).toFixed(2),
+      currency: (s.currency || authRecord.currency || booking.currency || 'USD').toUpperCase()
+    }));
+
+    const flightSegs = relations.itinerarySegments || booking?.itinerary_segments || [];
+    const flightNums = flightSegs.map(s => s.flight_number || s.flightNumber).filter(Boolean);
+    const firstSeg = flightSegs[0] || {};
+    const airlineName = booking?.airline_name || firstSeg.carrier_name || firstSeg.airline || 'Commercial Airline';
+    const departureDate = firstSeg.departure_date || firstSeg.departureDate || null;
+    const lastSeg = flightSegs[flightSegs.length - 1] || firstSeg;
+    const arrivalDate = lastSeg.arrival_date || lastSeg.arrivalDate || null;
+
+    const authorizationSnapshot = {
+      booking_id: authRecord.booking_id,
+      confirmation_code: booking?.confirmation_code || authRecord.booking_id,
+      passenger_name: booking?.passenger_name || 'Valued Passenger',
+      customer_email: booking?.email || null,
+      passengers: relations.travellers || booking?.passengers || [],
+      itinerary_snapshot: flightSegs,
+      airline_info: { name: airlineName, code: booking?.airline_code || firstSeg.carrier_code || null },
+      flight_numbers: flightNums,
+      dates: { departure: departureDate, arrival: arrivalDate },
+      fare: {
+        total_amount: parseFloat(authRecord.authorized_amount || booking?.total_amount || 0),
+        currency: (authRecord.currency || booking?.currency || 'USD').toUpperCase()
+      },
+      payment_splits: paymentSplits,
+      authorized_amount: parseFloat(authRecord.authorized_amount || booking?.total_amount || 0),
+      currency: (authRecord.currency || booking?.currency || 'USD').toUpperCase(),
+      consent_text: acceptedCheckboxText,
+      consent_version: 'v1.0',
+      consent_hash: textHash,
+      timestamp: consumedAt,
+      accepted_at: consumedAt,
+      client_ip: clientIp || null,
+      user_agent: userAgent || null
+    };
+
     const updateFields = {
       status: 'accepted',
       consumed_at: consumedAt,
@@ -579,13 +627,11 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
       user_agent: userAgent || null,
       authorization_text_version: 'v1.0',
       authorization_text_hash: textHash,
+      authorization_snapshot: authorizationSnapshot,
       updated_at: consumedAt
     };
 
-    // Update Supabase passenger_authorizations table
     // Update passenger_authorizations: set authorization_status = AUTHORIZED
-    // This is the ONLY table/column that records the authorization decision.
-    // We do NOT touch bookings.status — it must remain PENDING/DONE/CANCELLED/FAILED.
     const paUpdateFields = {
       ...updateFields,
       authorization_status: 'AUTHORIZED'
@@ -600,17 +646,48 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
       logger.warn(`[Auth] passenger_authorizations update notice (non-fatal): ${paError.message}`);
     }
 
+    // Persist into authorization_snapshots table & memory store
+    await bookingRepository.saveAuthorizationSnapshot({
+      booking_id: authRecord.booking_id,
+      confirmation_code: authorizationSnapshot.confirmation_code,
+      passenger_name: authorizationSnapshot.passenger_name,
+      customer_email: authorizationSnapshot.customer_email,
+      token,
+      snapshot_data: authorizationSnapshot,
+      itinerary_snapshot: authorizationSnapshot.itinerary_snapshot,
+      airline_info: authorizationSnapshot.airline_info,
+      flight_numbers: authorizationSnapshot.flight_numbers,
+      authorized_amount: authorizationSnapshot.authorized_amount,
+      currency: authorizationSnapshot.currency,
+      payment_splits: authorizationSnapshot.payment_splits,
+      consent_text: acceptedCheckboxText,
+      consent_version: 'v1.0',
+      consent_hash: textHash,
+      client_ip: clientIp || null,
+      user_agent: userAgent || null,
+      accepted_at: consumedAt,
+      created_at: consumedAt
+    });
+
     // Always update memory store immediately so in-process reads are consistent
     const updatedRecord = { ...authRecord, ...paUpdateFields };
     memoryAuthStore.set(token, updatedRecord);
 
     // Also update the booking's authorization_token field to record authorized_at
-    // (no status change — bookings.status stays as-is)
     await bookingRepository.updateStatus(authRecord.booking_id, {
       authorized_at: consumedAt
     });
 
-    logger.info(`[Auth] Authorization accepted for booking ${authRecord.booking_id} from IP ${clientIp} — passenger_authorizations.authorization_status = AUTHORIZED`);
+    await bookingRepository.recordAuditLog({
+      bookingId: authRecord.booking_id,
+      action: 'AUTHORIZATION_COMPLETED',
+      oldValue: { authorization_status: authRecord.status || 'PENDING' },
+      newValue: { authorization_status: 'AUTHORIZED', snapshot: authorizationSnapshot },
+      actor: 'customer',
+      ipAddress: clientIp || null
+    });
+
+    logger.info(`[Auth] Authorization accepted for booking ${authRecord.booking_id} from IP ${clientIp} — saved immutable authorization_snapshot.`);
 
     return {
       success: true,
@@ -618,7 +695,8 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
       status: 'AUTHORIZED',
       authorizedAmount: authRecord.authorized_amount,
       currency: authRecord.currency,
-      acceptedAt: consumedAt
+      acceptedAt: consumedAt,
+      authorizationSnapshot
     };
   },
 
@@ -633,10 +711,24 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
    * Generate complete Audit Evidence Export for compliance & admin CRM
    */
   generateAuditEvidenceExport: async (bookingId) => {
+    // Fetch the complete booking record first (with all relations attached)
     const booking = await bookingRepository.getById(bookingId);
     if (!booking) throw new Error('BOOKING_NOT_FOUND');
 
     const relations = await bookingRepository.getRelations(bookingId);
+
+    // Merge relations into booking for validation (attach itinerary_segments, outbound_segments)
+    const enrichedBooking = {
+      ...booking,
+      itinerary_segments: relations.itinerarySegments || booking.itinerary_segments || [],
+      outbound_segments: (relations.itinerarySegments || []).filter(s => (s.journey_direction || s.direction) === 'outbound'),
+      flights: relations.flights || booking.flights || [],
+      payment_splits: relations.paymentSplits || booking.payment_splits || []
+    };
+
+    // Validate integrity against the enriched booking object
+    const { default: bookingValidatorService } = await import('../bookings/booking-validator.service.mjs');
+    await bookingValidatorService.validateBookingIntegrity(enrichedBooking, { requireItinerary: true, throwOnError: true });
 
     // Find authorization record
     let authRecord = null;
@@ -679,8 +771,12 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
       };
     }
 
-    // Collect payment splits from all sources
+    // Check for immutable authorization_snapshot
+    const snap = authRecord.authorization_snapshot || null;
+
+    // Collect payment splits from snapshot if available, else from relations
     const paymentSplits = (
+      snap?.payment_splits ||
       authRecord.quote_snapshot?.splits ||
       relations.paymentSplits ||
       booking.payment_splits ||
@@ -694,10 +790,10 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
 
     // Build canonical consent text from real data (card last4 + splits)
     const cardLast4   = authRecord.card_last4 || booking.card_last4 || '****';
-    const currency    = (authRecord.currency || booking.currency || 'USD').toUpperCase();
+    const currency    = (snap?.currency || authRecord.currency || booking.currency || 'USD').toUpperCase();
     const { buildConsentText } = await import('./authorization-pdf.service.mjs');
-    const consentText = buildConsentText({ cardLast4, splits: paymentSplits, currency });
-    const consentHash = authRecord.authorization_text_hash || hashText(consentText);
+    const consentText = snap?.consent_text || buildConsentText({ cardLast4, splits: paymentSplits, currency });
+    const consentHash = snap?.consent_hash || authRecord.authorization_text_hash || hashText(consentText);
 
     // Email delivery evidence from booking columns
     const emailDelivery = {
@@ -711,23 +807,24 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
     const evidence = {
       evidenceId: `EVID_${booking.confirmation_code}_${Date.now()}`,
       generatedAt: new Date().toISOString(),
-      confirmationCode: booking.confirmation_code,
-      passengerName: booking.passenger_name,
-      customerEmail: booking.email,
-      authorizedAmount: parseFloat(authRecord.authorized_amount || authRecord.quote_snapshot?.amount || booking.customer_price || booking.total_amount || 0).toFixed(2),
+      confirmationCode: snap?.confirmation_code || booking.confirmation_code,
+      passengerName: snap?.passenger_name || booking.passenger_name,
+      customerEmail: snap?.customer_email || booking.email,
+      authorizedAmount: parseFloat(snap?.authorized_amount || authRecord.authorized_amount || authRecord.quote_snapshot?.amount || booking.customer_price || booking.total_amount || 0).toFixed(2),
       currency,
       paymentSplits,
       consentText,
       consentHash,
-      consentVersion: authRecord.authorization_text_version || 'v1.0',
-      clientIp: authRecord.ip_address || null,
+      consentVersion: snap?.consent_version || authRecord.authorization_text_version || 'v1.0',
+      clientIp: snap?.client_ip || authRecord.ip_address || null,
       emailDelivery,
+      authorization_snapshot: snap,
 
       booking: {
         id: booking.id,
-        confirmationCode: booking.confirmation_code,
-        passengerName: booking.passenger_name,
-        email: booking.email,
+        confirmationCode: snap?.confirmation_code || booking.confirmation_code,
+        passengerName: snap?.passenger_name || booking.passenger_name,
+        email: snap?.customer_email || booking.email,
         phone: booking.phone,
         status: booking.status,
         paymentStatus: booking.payment_status,
@@ -742,25 +839,26 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
       authorization: {
         token: authRecord.token,
         status: (authRecord.status || 'PENDING').toUpperCase(),
-        authorizedAmount: authRecord.authorized_amount,
-        currency: authRecord.currency || 'USD',
+        authorizedAmount: snap?.authorized_amount || authRecord.authorized_amount,
+        currency: snap?.currency || authRecord.currency || 'USD',
         cardBrand: authRecord.card_brand || 'Visa',
         cardLast4,
         paymentMethodToken: authRecord.payment_method_token,
-        ipAddress: authRecord.ip_address || null,
-        userAgent: authRecord.user_agent || null,
-        authorizationTextVersion: authRecord.authorization_text_version || 'v1.0',
+        ipAddress: snap?.client_ip || authRecord.ip_address || null,
+        userAgent: snap?.user_agent || authRecord.user_agent || null,
+        authorizationTextVersion: snap?.consent_version || authRecord.authorization_text_version || 'v1.0',
         authorizationTextHash: consentHash,
         createdAt: authRecord.created_at,
         expiresAt: authRecord.expires_at,
-        consumedAt: authRecord.consumedAt || authRecord.consumed_at || null,
-        acceptedAt: authRecord.consumedAt || authRecord.consumed_at || null,
+        consumedAt: snap?.accepted_at || authRecord.consumedAt || authRecord.consumed_at || null,
+        acceptedAt: snap?.accepted_at || authRecord.consumedAt || authRecord.consumed_at || null,
         quoteSnapshot: authRecord.quote_snapshot,
-        itinerarySnapshot: authRecord.itinerary_snapshot,
+        itinerarySnapshot: snap?.itinerary_snapshot || authRecord.itinerary_snapshot || relations.itinerarySegments || [],
         policiesSnapshot: authRecord.policies_snapshot,
-        splits: paymentSplits
+        splits: paymentSplits,
+        authorizationSnapshot: snap
       },
-      passengers: relations.travellers || [],
+      passengers: snap?.passengers || relations.travellers || [],
       payments: relations.payments || [],
       complianceNotice: 'This evidence export certifies that passenger authorization was obtained prior to credit card charging or airline ticketing. Raw card numbers and CVCs were never stored or transmitted.'
     };

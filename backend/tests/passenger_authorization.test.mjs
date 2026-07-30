@@ -13,6 +13,21 @@ async function runAuthorizationTests() {
   const testUuid = '8744e915-a566-41ea-a79a-fe2163bcaf31';
   await bookingRepository.createBookingRecord({ id: testUuid, confirmation_code: 'TFS-2026-AUTH8899', customer_price: 489.60, total_amount: 489.60, currency: 'USD', passenger_name: 'Vinod Saini', email: 'viansaini1608@gmail.com', status: 'PENDING' });
   await bookingRepository.updateStatus(testUuid, { total_amount: 489.60, customer_price: 489.60 });
+  // Persist test itinerary segments so validateBookingIntegrity passes
+  await bookingRepository.saveItinerarySegments(testUuid, [{
+    journey_direction: 'outbound',
+    segment_sequence: 1,
+    carrier_name: 'United Airlines',
+    carrier_code: 'UA',
+    flight_number: 'UA 8899',
+    origin_airport: 'LAX',
+    destination_airport: 'JFK',
+    departure_date: '2026-09-10',
+    departure_time: '09:00',
+    arrival_date: '2026-09-10',
+    arrival_time: '17:30',
+    cabin: 'Economy'
+  }]);
 
   const mockBooking = {
     id: testUuid,
@@ -141,6 +156,13 @@ async function runAuthorizationTests() {
   const createdBooking = await bookingRepository.createBookingRecord(mockMultiBooking);
   const realBookingId = createdBooking.id || multiSplitBookingUuid;
   mockMultiBooking.id = realBookingId;
+
+  // Persist test itinerary segments so validateBookingIntegrity passes
+  await bookingRepository.saveItinerarySegments(realBookingId, mockMultiBooking.outbound_segments.map((s, i) => ({
+    ...s,
+    journey_direction: 'outbound',
+    segment_sequence: i + 1
+  })));
 
   const multiAuthRecord = await passengerAuthorizationService.createAuthorizationToken(mockMultiBooking, {
     cardBrand: 'MasterCard',

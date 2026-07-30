@@ -3,6 +3,7 @@ import bookingMapper from './booking.mapper.mjs';
 import { travellerService } from '../travellers/traveller.service.mjs';
 import { sendBookingConfirmation } from '../../integrations/resend/resend.service.mjs';
 import { itineraryMapper } from '../itineraries/itinerary.mapper.mjs';
+import bookingValidatorService from './booking-validator.service.mjs';
 import logger from '../../config/logger.mjs';
 
 function generateConfirmationCode() {
@@ -38,87 +39,115 @@ export const bookingService = {
       payment_provider: payload.payment_provider || 'whop'
     };
 
-    const insertRow = bookingMapper.toDatabaseInsert(confirmationCode, payloadWithPassengerName);
-    const booking = await bookingRepository.createBookingRecord(insertRow);
+    let booking = null;
+    try {
+      const insertRow = bookingMapper.toDatabaseInsert(confirmationCode, payloadWithPassengerName);
+      booking = await bookingRepository.createBookingRecord(insertRow);
 
-    // 4 — Save travellers list
-    let travellers = [];
-    if (passengerList.length > 0) {
-      travellers = await bookingRepository.insertTravellers(
-        passengerList.map(p => ({
-          booking_id: booking.id,
-          role: (p.role || 'adult').toLowerCase(),
-          title: p.title || null,
-          first_name: p.firstName || '',
-          middle_name: p.middleName || null,
-          last_name: p.lastName || '',
-          date_of_birth: p.dateOfBirth || null,
-          gender: p.gender || null,
-          nationality: p.nationality || null,
-          passport_number: p.passportNumber || null,
-          passport_expiry: p.passportExpiry || null,
-        }))
+      if (!booking || !booking.id) {
+        throw new Error('Failed to insert booking record.');
+      }
+
+      // 4 — Save travellers list
+      let travellers = [];
+      if (passengerList.length > 0) {
+        travellers = await bookingRepository.insertTravellers(
+          passengerList.map(p => ({
+            booking_id: booking.id,
+            role: (p.role || 'adult').toLowerCase(),
+            title: p.title || null,
+            first_name: p.firstName || '',
+            middle_name: p.middleName || null,
+            last_name: p.lastName || '',
+            date_of_birth: p.dateOfBirth || null,
+            gender: p.gender || null,
+            nationality: p.nationality || null,
+            passport_number: p.passportNumber || null,
+            passport_expiry: p.passportExpiry || null,
+          }))
+        );
+      }
+
+      // 5 — Save primary contact details
+      const rawPhone = String(payload.phone || '').trim();
+      const countryCode = rawPhone.startsWith('+') ? rawPhone.split(' ')[0] : null;
+      const contactRow = {
+        booking_id: booking.id,
+        email: payload.email,
+        country_code: countryCode,
+        phone_number: rawPhone
+      };
+      const contacts = await bookingRepository.insertContact(contactRow);
+
+      // 6 — Save flight itineraries (MUST HAVE VALID FLIGHTS OR ROLLBACK)
+      const flightsList = [];
+      const tripType = payload.returnFlight ? 'round-trip' : 'one-way';
+      
+      if (payload.flight) {
+        const outboundRows = itineraryMapper.toDatabaseRows(booking.id, payload.flight, 'outbound', tripType);
+        flightsList.push(...outboundRows);
+      }
+      if (payload.returnFlight) {
+        const returnRows = itineraryMapper.toDatabaseRows(booking.id, payload.returnFlight, 'return', tripType);
+        flightsList.push(...returnRows);
+      }
+      
+      if (flightsList.length === 0) {
+        const err = new Error(`Booking creation failed: Cannot create booking ${confirmationCode} without flight itinerary segments.`);
+        err.code = 'BOOKING_ITINERARY_MISSING';
+        throw err;
+      }
+
+      const flights = await bookingRepository.insertFlights(flightsList);
+
+      // 7 — Save pending payment record
+      const paymentRow = {
+        booking_id: booking.id,
+        payment_provider: payload.payment_provider || 'whop',
+        provider_checkout_id: payload.provider_checkout_id || null,
+        provider_payment_id: payload.provider_payment_id || null,
+        payment_amount: parseFloat(payload.customer_price || payload.displayedWebsitePrice) || 0,
+        currency: (payload.currency || 'USD').toUpperCase(),
+        payment_status: payload.paymentStatus || 'pending',
+        payment_date: new Date().toISOString()
+      };
+      const payments = await bookingRepository.insertPayment(paymentRow);
+
+      const canonicalBooking = bookingMapper.toCanonicalModel(
+        booking,
+        travellers,
+        contacts,
+        flights,
+        payments
       );
-    }
 
-    // 5 — Save primary contact details separately
-    const rawPhone = String(payload.phone || '').trim();
-    const countryCode = rawPhone.startsWith('+') ? rawPhone.split(' ')[0] : null;
-    const contactRow = {
-      booking_id: booking.id,
-      email: payload.email,
-      country_code: countryCode,
-      phone_number: rawPhone
-    };
-    const contacts = await bookingRepository.insertContact(contactRow);
-
-    // 6 — Save flight itineraries
-    const flightsList = [];
-    const tripType = payload.returnFlight ? 'round-trip' : 'one-way';
-    
-    if (payload.flight) {
-      const outboundRows = itineraryMapper.toDatabaseRows(booking.id, payload.flight, 'outbound', tripType);
-      flightsList.push(...outboundRows);
-    }
-    if (payload.returnFlight) {
-      const returnRows = itineraryMapper.toDatabaseRows(booking.id, payload.returnFlight, 'return', tripType);
-      flightsList.push(...returnRows);
-    }
-    
-    let flights = [];
-    if (flightsList.length > 0) {
-      flights = await bookingRepository.insertFlights(flightsList);
-    }
-
-    // 7 — Save pending payment record with correct provider and pending status (no Stripe defaults)
-    const paymentRow = {
-      booking_id: booking.id,
-      payment_provider: payload.payment_provider || 'whop',
-      provider_checkout_id: payload.provider_checkout_id || null,
-      provider_payment_id: payload.provider_payment_id || null,
-      payment_amount: parseFloat(payload.customer_price || payload.displayedWebsitePrice) || 0,
-      currency: (payload.currency || 'USD').toUpperCase(),
-      payment_status: payload.paymentStatus || 'pending',
-      payment_date: new Date().toISOString()
-    };
-    const payments = await bookingRepository.insertPayment(paymentRow);
-
-    const canonicalBooking = bookingMapper.toCanonicalModel(
-      booking,
-      travellers,
-      contacts,
-      flights,
-      payments
-    );
-
-    // Only send confirmation email if payment status is explicitly paid
-    if (payload.paymentStatus === 'paid') {
-      sendBookingConfirmation(canonicalBooking).catch(err => {
-        logger.error(`Non-blocking email sending failed: ${err.message}`);
+      // 8 — Validate complete transactional integrity before committing
+      await bookingValidatorService.validateBookingIntegrity(canonicalBooking, {
+        requireItinerary: true,
+        requirePassengers: true,
+        throwOnError: true
       });
-    }
 
-    return canonicalBooking;
+      // Only send confirmation email if payment status is explicitly paid
+      if (payload.paymentStatus === 'paid') {
+        sendBookingConfirmation(canonicalBooking).catch(err => {
+          logger.error(`Non-blocking email sending failed: ${err.message}`);
+        });
+      }
+
+      return canonicalBooking;
+    } catch (err) {
+      logger.error(`[AtomicBookingCreate] Rollback triggered for code ${confirmationCode}: ${err.message}`);
+      if (booking?.id) {
+        try {
+          await bookingRepository.deleteBooking(booking.id);
+          logger.info(`[AtomicBookingCreate] Clean ROLLBACK completed for failed booking ID ${booking.id}`);
+        } catch (cleanupErr) {
+          logger.error(`[AtomicBookingCreate] Rollback cleanup failed: ${cleanupErr.message}`);
+        }
+      }
+      throw err;
+    }
   },
 
   /**
@@ -161,6 +190,269 @@ export const bookingService = {
     const payments   = raw.payments   || [];
 
     return bookingMapper.toCanonicalModel(raw, travellers, contacts, flights, payments);
+  },
+
+  /**
+   * Field-Isolated Update 1: Status
+   */
+  updateStatus: async (id, { status, internalNotes, adminId = 'system', reason } = {}) => {
+    const ALLOWED = ['PENDING', 'DONE', 'CANCELLED', 'FAILED'];
+    const targetStatus = (status || '').toUpperCase();
+    if (!ALLOWED.includes(targetStatus)) {
+      const err = new Error(`Invalid status '${status}'. Allowed canonical statuses are: ${ALLOWED.join(', ')}.`);
+      err.code = 'INVALID_STATUS';
+      err.status = 400;
+      throw err;
+    }
+
+    const booking = await bookingRepository.getById(id);
+    if (!booking) {
+      const err = new Error(`Booking '${id}' not found.`);
+      err.code = 'BOOKING_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+
+    const updateFields = { status: targetStatus, updated_at: new Date().toISOString() };
+    if (internalNotes !== undefined) updateFields.internal_notes = internalNotes;
+
+    await bookingRepository.updateStatus(booking.id, updateFields);
+    await bookingRepository.recordStatusAudit({
+      bookingId: booking.id,
+      oldStatus: booking.status,
+      newStatus: targetStatus,
+      adminId,
+      reason: reason || `Booking status updated to ${targetStatus}`
+    });
+    await bookingRepository.recordAuditLog({
+      bookingId: booking.id,
+      action: 'STATUS_CHANGED',
+      oldValue: { status: booking.status },
+      newValue: { status: targetStatus, internal_notes: internalNotes },
+      actor: adminId
+    });
+
+    return bookingService.getDetailsByCodeOrId(booking.id);
+  },
+
+  /**
+   * Field-Isolated Update 2: Payment
+   */
+  updatePayment: async (id, paymentData = {}) => {
+    const { paymentStatus, paidAmount, refundedAmount, paymentProvider, adminId = 'system', reason } = paymentData;
+
+    // 1. Strict Forbidden Domain Keys Guard
+    const FORBIDDEN_KEYS = [
+      'airline', 'airline_name', 'airlineName', 'airline_code', 'airlineCode',
+      'itinerary', 'itinerary_segments', 'outbound_segments', 'flights',
+      'passenger', 'passenger_name', 'passengerName', 'passengers', 'travellers', 'email', 'phone',
+      'departure_date', 'departureDate', 'arrival_date', 'arrivalDate', 'departure_time', 'arrival_time',
+      'flight_number', 'flightNumber', 'origin_airport', 'destination_airport', 'origin', 'destination'
+    ];
+
+    const inputKeys = Object.keys(paymentData || {});
+    const forbiddenMatches = inputKeys.filter(k => FORBIDDEN_KEYS.includes(k));
+    if (forbiddenMatches.length > 0) {
+      const err = new Error(`Payment update failed: payload contains forbidden domain fields [${forbiddenMatches.join(', ')}]. Payment updates must ONLY affect payment attributes.`);
+      err.code = 'FORBIDDEN_PAYMENT_UPDATE_FIELD';
+      err.status = 400;
+      throw err;
+    }
+
+    const ALLOWED_PAY_STATUS = ['pending', 'paid', 'failed', 'refunded', 'authorized'];
+    const booking = await bookingRepository.getById(id);
+    if (!booking) {
+      const err = new Error(`Booking '${id}' not found.`);
+      err.code = 'BOOKING_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+
+    // 2. Pre-Update Structural Snapshot
+    const beforeRelations = await bookingRepository.getRelations(booking.id);
+    const beforeSegmentsCount = (beforeRelations.itinerarySegments || booking.itinerary_segments || []).length;
+    const beforeTravellersCount = (beforeRelations.travellers || booking.passengers || []).length;
+    const beforePassengerName = booking.passenger_name;
+    const beforeAmount = parseFloat(booking.customer_price || booking.total_amount || 0);
+
+    const updateFields = { updated_at: new Date().toISOString() };
+    if (paymentStatus !== undefined) {
+      const ps = String(paymentStatus).toLowerCase();
+      if (!ALLOWED_PAY_STATUS.includes(ps)) {
+        const err = new Error(`Invalid payment status '${paymentStatus}'. Allowed: ${ALLOWED_PAY_STATUS.join(', ')}.`);
+        err.code = 'INVALID_PAYMENT_STATUS';
+        err.status = 400;
+        throw err;
+      }
+      updateFields.payment_status = ps;
+    }
+
+    if (paidAmount !== undefined && paidAmount !== null) {
+      const num = parseFloat(paidAmount);
+      if (!Number.isFinite(num) || num < 0) {
+        const err = new Error('paidAmount must be a non-negative number.');
+        err.code = 'INVALID_AMOUNT';
+        err.status = 400;
+        throw err;
+      }
+      updateFields.paid_amount = num;
+      updateFields.paid_at = new Date().toISOString();
+    }
+
+    if (refundedAmount !== undefined && refundedAmount !== null) {
+      const num = parseFloat(refundedAmount);
+      if (!Number.isFinite(num) || num < 0) {
+        const err = new Error('refundedAmount must be a non-negative number.');
+        err.code = 'INVALID_AMOUNT';
+        err.status = 400;
+        throw err;
+      }
+      updateFields.refund_amount = num;
+      updateFields.refund_timestamp = new Date().toISOString();
+    }
+
+    if (paymentProvider !== undefined) {
+      updateFields.payment_provider = paymentProvider;
+    }
+
+    await bookingRepository.updateStatus(booking.id, updateFields);
+
+    // 3. Post-Update Structural Verification Routine
+    const afterBooking = await bookingRepository.getById(booking.id);
+    const afterRelations = await bookingRepository.getRelations(booking.id);
+    const afterSegmentsCount = (afterRelations.itinerarySegments || afterBooking.itinerary_segments || []).length;
+    const afterTravellersCount = (afterRelations.travellers || afterBooking.passengers || []).length;
+    const afterPassengerName = afterBooking.passenger_name;
+    const afterAmount = parseFloat(afterBooking.customer_price || afterBooking.total_amount || 0);
+
+    if (afterSegmentsCount !== beforeSegmentsCount) {
+      const err = new Error(`PAYMENT_SAFETY_VIOLATION: Flight count changed from ${beforeSegmentsCount} to ${afterSegmentsCount} during payment update.`);
+      err.code = 'PAYMENT_UPDATE_VERIFICATION_FAILED';
+      throw err;
+    }
+    if (afterTravellersCount !== beforeTravellersCount) {
+      const err = new Error(`PAYMENT_SAFETY_VIOLATION: Passenger count changed from ${beforeTravellersCount} to ${afterTravellersCount} during payment update.`);
+      err.code = 'PAYMENT_UPDATE_VERIFICATION_FAILED';
+      throw err;
+    }
+    if (afterPassengerName !== beforePassengerName) {
+      const err = new Error(`PAYMENT_SAFETY_VIOLATION: Passenger name changed from '${beforePassengerName}' to '${afterPassengerName}' during payment update.`);
+      err.code = 'PAYMENT_UPDATE_VERIFICATION_FAILED';
+      throw err;
+    }
+    if (Math.abs(afterAmount - beforeAmount) > 0.01) {
+      const err = new Error(`PAYMENT_SAFETY_VIOLATION: Booking total amount changed from $${beforeAmount} to $${afterAmount} during payment update.`);
+      err.code = 'PAYMENT_UPDATE_VERIFICATION_FAILED';
+      throw err;
+    }
+
+    await bookingRepository.recordStatusAudit({
+      bookingId: booking.id,
+      oldStatus: booking.status,
+      newStatus: booking.status,
+      adminId,
+      reason: reason || `Payment details updated (${Object.keys(updateFields).join(', ')})`
+    });
+
+    await bookingRepository.recordAuditLog({
+      bookingId: booking.id,
+      action: 'PAYMENT_UPDATED',
+      oldValue: { payment_status: booking.payment_status, paid_amount: booking.paid_amount },
+      newValue: updateFields,
+      actor: adminId
+    });
+
+    return bookingService.getDetailsByCodeOrId(booking.id);
+  },
+
+  /**
+   * Field-Isolated Update 3: Itinerary
+   */
+  updateItinerary: async (id, { segments, adminId = 'system', reason } = {}) => {
+    const booking = await bookingRepository.getById(id);
+    if (!booking) {
+      const err = new Error(`Booking '${id}' not found.`);
+      err.code = 'BOOKING_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+
+    if (!Array.isArray(segments) || segments.length === 0) {
+      const err = new Error('Itinerary update requires a non-empty array of flight segments.');
+      err.code = 'BOOKING_ITINERARY_MISSING';
+      err.status = 400;
+      throw err;
+    }
+
+    const relations = await bookingRepository.getRelations(booking.id);
+    await bookingRepository.saveItinerarySegments(booking.id, segments);
+    await bookingRepository.recordStatusAudit({
+      bookingId: booking.id,
+      oldStatus: booking.status,
+      newStatus: booking.status,
+      adminId,
+      reason: reason || `Itinerary segments updated (${segments.length} segments)`
+    });
+    await bookingRepository.recordAuditLog({
+      bookingId: booking.id,
+      action: 'FLIGHT_UPDATED',
+      oldValue: relations.itinerarySegments || booking.itinerary_segments || [],
+      newValue: segments,
+      actor: adminId
+    });
+
+    return bookingService.getDetailsByCodeOrId(booking.id);
+  },
+
+  /**
+   * Field-Isolated Update 4: Ticket Details
+   */
+  updateTicket: async (id, ticketData = {}, adminId = 'system') => {
+    const booking = await bookingRepository.getById(id);
+    if (!booking) {
+      const err = new Error(`Booking '${id}' not found.`);
+      err.code = 'BOOKING_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+
+    await bookingRepository.saveTicketDetails(booking.id, ticketData, adminId);
+    return bookingService.getDetailsByCodeOrId(booking.id);
+  },
+
+  /**
+   * Field-Isolated Update 5: Internal Notes
+   */
+  updateNotes: async (id, { internalNotes, adminId = 'system', reason } = {}) => {
+    const booking = await bookingRepository.getById(id);
+    if (!booking) {
+      const err = new Error(`Booking '${id}' not found.`);
+      err.code = 'BOOKING_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+
+    if (typeof internalNotes !== 'string') {
+      const err = new Error('internalNotes parameter must be a string.');
+      err.code = 'INVALID_INPUT';
+      err.status = 400;
+      throw err;
+    }
+
+    await bookingRepository.updateStatus(booking.id, {
+      internal_notes: internalNotes,
+      updated_at: new Date().toISOString()
+    });
+
+    await bookingRepository.recordStatusAudit({
+      bookingId: booking.id,
+      oldStatus: booking.status,
+      newStatus: booking.status,
+      adminId,
+      reason: reason || 'Internal notes updated'
+    });
+
+    return bookingService.getDetailsByCodeOrId(booking.id);
   }
 };
 

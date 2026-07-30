@@ -89,7 +89,16 @@ class AmadeusService {
 
       return this.formatFlightOffers(response.data);
     } catch (error) {
-      console.warn('Amadeus API failed or not configured, falling back to simulated flight offers:', error.message);
+      const isProduction = (process.env.NODE_ENV || 'development') === 'production';
+      if (isProduction) {
+        // INTEGRITY: Never fall back to fake flights in production on API failure
+        const err = new Error('Amadeus live flight search is temporarily unavailable.');
+        err.code = 'FLIGHT_SEARCH_UNAVAILABLE';
+        err.status = 503;
+        err.cause = error;
+        throw err;
+      }
+      console.warn('Amadeus API failed or not configured, falling back to simulated flight offers (non-production only):', error.message);
       return this.getMockFlightOffers(searchParams);
     }
   }
