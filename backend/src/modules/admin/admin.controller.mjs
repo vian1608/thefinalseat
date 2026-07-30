@@ -628,12 +628,38 @@ export const adminController = {
         updatePayload.refund_timestamp = new Date().toISOString();
       }
 
-      const updated = await bookingRepository.updateBookingStatus(booking.id, updatePayload);
+      const rawUpdated = await bookingRepository.updateBookingStatus(booking.id, updatePayload);
+
+      // Fetch the fully enriched booking (with itinerary, splits, relations)
+      // so the frontend never receives a sparse flat row missing payment_splits etc.
+      const enriched = await bookingRepository.getById(booking.id) || rawUpdated;
+
+      // Build a null-safe payment summary so the frontend never sees audit/payment as undefined
+      const paymentSummary = {
+        status: (enriched.payment_status || desiredState || 'PENDING').toUpperCase(),
+        paidAmount: enriched.paid_amount ?? null,
+        refundedAmount: enriched.refund_amount ?? null,
+        referenceId: enriched.payment_reference_id || referenceId || null,
+        provider: enriched.payment_provider || 'Whop',
+        paidAt: enriched.paid_at || null,
+        ...(enriched.payment || {})
+      };
+
+      const auditSummary = {
+        id: null,
+        reference: enriched.payment_reference_id || referenceId || null,
+        eventType: desiredState || 'PAYMENT_STATE_UPDATE',
+        recordedAt: new Date().toISOString()
+      };
 
       return res.json({
         success: true,
         paymentStatus: desiredState,
-        booking: updated,
+        booking: {
+          ...enriched,
+          payment: paymentSummary,
+          audit: auditSummary
+        },
         message: `Payment state updated to ${desiredState} cleanly.`
       });
     } catch (error) {

@@ -287,15 +287,16 @@ export const bookingRepository = {
     const memOverridden = bookingsMemoryStore.get(code);
     if (memOverridden && memOverridden._deleted) return null;
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('bookings')
       .select('*')
       .eq('confirmation_code', code)
       .maybeSingle();
 
-    if (!data && memOverridden) return null;
-    const baseData = (data || memOverridden) ? { ...(data || {}), ...(memOverridden || {}) } : null;
-    if (!baseData) return null;
+    // If no Supabase record AND no memory record → not found
+    if (!data && !memOverridden) return null;
+    const baseData = { ...(data || {}), ...(memOverridden || {}) };
+    if (!baseData.id) return null;
     const relations = await bookingRepository.getRelations(baseData.id);
     return bookingRepository.enrichBookingRecord(baseData, relations);
   },

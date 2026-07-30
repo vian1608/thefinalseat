@@ -51,9 +51,14 @@ const truncateText = (value, length = 12) => {
   return value.length > length ? `${value.slice(0, length)}…` : value;
 };
 
-// Null-safe substring — prevents `undefined.substring()` crashes across all save flows
-const safeSubstring = (value, start = 0, end) => {
-  if (value === null || value === undefined || value === '') return 'N/A';
+// Null-safe substring — logs exact fieldName when value is missing so crashes are diagnosable
+const safeSubstring = (value, start = 0, end, fieldName) => {
+  if (value === null || value === undefined || value === '') {
+    if (fieldName) {
+      console.error('MISSING_FIELD_FOR_SUBSTRING', fieldName, value);
+    }
+    return 'N/A';
+  }
   const str = String(value);
   return end !== undefined ? str.substring(start, end) : str.substring(start);
 };
@@ -919,7 +924,6 @@ function AdminDashboard() {
           ...paymentForm,
           payment_splits: paymentSplits
         })
-
       });
 
       const data = await res.json();
@@ -929,9 +933,31 @@ function AdminDashboard() {
 
       setHasUnsavedEdits(false);
       setDrawerSuccess(data.message || `Payment action '${actionName}' completed successfully!`);
-      if (data.booking) {
-        handleSelectBooking(data.booking);
-        setBookings(prevList => prevList.map(b => b.id === data.booking.id ? { ...b, ...data.booking } : b));
+
+      // --- DIAGNOSTIC: wrap booking reload so the exact undefined field is printed ---
+      try {
+        const bookingToLoad = data.booking;
+        console.log('[PAYMENT_ACTION_RESPONSE] booking from API:', JSON.stringify({
+          id: bookingToLoad?.id,
+          status: bookingToLoad?.status,
+          payment_status: bookingToLoad?.payment_status,
+          payment: bookingToLoad?.payment,
+          audit: bookingToLoad?.audit,
+          payment_splits: bookingToLoad?.payment_splits?.length,
+          outbound_segments: bookingToLoad?.outbound_segments?.length,
+        }, null, 2));
+        if (bookingToLoad) {
+          handleSelectBooking(bookingToLoad);
+          setBookings(prevList => prevList.map(b => b.id === bookingToLoad.id ? { ...b, ...bookingToLoad } : b));
+        }
+      } catch (refreshErr) {
+        console.error('PAYMENT_SAVE_REFRESH_ERROR', {
+          error: refreshErr,
+          booking: data.booking,
+          paymentForm,
+          actionName
+        });
+        throw refreshErr;
       }
     } catch (err) {
       setHasUnsavedEdits(true);
