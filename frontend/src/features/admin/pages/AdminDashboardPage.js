@@ -514,6 +514,11 @@ function AdminDashboard() {
     setUpdatingRecord(true);
 
     const adminToken = localStorage.getItem('token');
+
+    const outboundSegs = Array.isArray(outboundSegments) ? outboundSegments : [];
+    const returnSegs = (hasReturnJourney && Array.isArray(returnSegments)) ? returnSegments : [];
+    const allSegments = [...outboundSegs, ...returnSegs];
+
     // Only send itinerarySegments if valid segments are populated by admin
     const validSegments = allSegments.filter(s =>
       (s.origin_airport && s.origin_airport.trim() !== '') ||
