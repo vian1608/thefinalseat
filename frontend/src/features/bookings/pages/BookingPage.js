@@ -280,6 +280,8 @@ function Booking() {
       cardholderName: cardForm.cardholderName,
       cardLast4,
       cardBrand,
+      cardExpDate: cardForm.expDate,
+      card_exp_date: cardForm.expDate,
       billingPhone: cardForm.billingPhone,
       billingAddress: `${cardForm.billingAddress}${cardForm.billingAddress2 ? `, ${cardForm.billingAddress2}` : ''}`,
       billingCity: cardForm.billingCity,
