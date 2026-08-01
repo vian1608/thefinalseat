@@ -41,7 +41,9 @@ router.use('/', whopRouter);
 
 router.use('/flights', flightRouter);
 router.use('/airports', airportRouter);
-router.use('/inquiries', enquiryRouter);
+import addressAutocompleteController from '../modules/flights/address-autocomplete.controller.mjs';
+
+router.get('/address-autocomplete', addressAutocompleteController.getAddressAutocomplete);
 router.use('/admin', adminRouter);
 
 // Health check endpoint

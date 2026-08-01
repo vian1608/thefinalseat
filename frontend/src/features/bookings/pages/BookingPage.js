@@ -10,6 +10,7 @@ import TravelDatePicker from '../../flights/components/TravelDatePicker';
 import InternationalPhoneInput from '../../../shared/components/InternationalPhoneInput';
 import CountrySelect from '../../../shared/components/CountrySelect';
 import EmailInput from '../../../shared/components/EmailInput';
+import AddressAutocompleteInput from '../../../shared/components/AddressAutocompleteInput';
 
 import ModifySearchModal from '../../flights/components/ModifySearchModal';
 
@@ -294,13 +295,39 @@ function Booking() {
   };
 
   const [samePhone, setSamePhone] = useState(false);
+  const [sameAddress, setSameAddress] = useState(false);
+  const [isBillingExpanded, setIsBillingExpanded] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+
   const idempotencyKeyRef = useRef(`idemp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
+
+  const handlePaymentFocus = () => {
+    if (!isBillingExpanded) {
+      setIsBillingExpanded(true);
+    }
+  };
 
   const handleSamePhoneChange = (e) => {
     const checked = e.target.checked;
     setSamePhone(checked);
     if (checked && primaryContact.phone) {
       setCardForm(prev => ({ ...prev, billingPhone: primaryContact.phone }));
+    }
+  };
+
+  const handleSameAddressChange = (e) => {
+    const checked = e.target.checked;
+    setSameAddress(checked);
+    if (checked) {
+      const p1 = passengersList[0] || {};
+      setCardForm(prev => ({
+        ...prev,
+        billingAddress: prev.billingAddress || '123 Main Street',
+        billingCity: prev.billingCity || 'New York',
+        billingState: prev.billingState || 'NY',
+        billingZip: prev.billingZip || '10001',
+        billingCountry: p1.nationality || 'United States',
+      }));
     }
   };
 
@@ -380,7 +407,9 @@ function Booking() {
     }
 
     if (!cardForm.cardholderName.trim()) {
-      setCardError('Please enter the cardholder full name as printed on the card.');
+      const err = 'Enter your cardholder name as shown on card.';
+      setFieldErrors({ cardholderName: err });
+      setCardError(err);
       return;
     }
 
@@ -401,17 +430,50 @@ function Booking() {
     }
 
     if (!cardForm.billingAddress.trim()) {
-      setCardError('Please enter the billing street address.');
+      const err = 'Enter your billing address.';
+      setFieldErrors({ billingAddress: err });
+      setIsBillingExpanded(true);
+      setCardError(err);
       return;
     }
 
-    if (!cardForm.billingCity.trim() || !cardForm.billingState.trim() || !cardForm.billingZip.trim()) {
-      setCardError('Please complete the billing city, state, and ZIP / postal code.');
+    if (!cardForm.billingCity.trim()) {
+      const err = 'Enter your billing city.';
+      setFieldErrors({ billingCity: err });
+      setIsBillingExpanded(true);
+      setCardError(err);
+      return;
+    }
+
+    if (!cardForm.billingState.trim()) {
+      const err = 'Enter a valid state or province.';
+      setFieldErrors({ billingState: err });
+      setIsBillingExpanded(true);
+      setCardError(err);
+      return;
+    }
+
+    if (!cardForm.billingZip.trim()) {
+      const err = 'Enter a valid postal or ZIP code.';
+      setFieldErrors({ billingZip: err });
+      setIsBillingExpanded(true);
+      setCardError(err);
+      return;
+    }
+
+    if (!cardForm.billingCountry.trim()) {
+      const err = 'Select or enter a valid country.';
+      setFieldErrors({ billingCountry: err });
+      setIsBillingExpanded(true);
+      setCardError(err);
       return;
     }
 
     if (!cardForm.billingPhone.trim()) {
-      setCardError('Please enter a billing phone number.');
+      const err = 'Enter a valid billing phone number.';
+      setFieldErrors({ billingPhone: err });
+      setIsBillingExpanded(true);
+      setCardError(err);
       return;
     }
 
@@ -843,8 +905,10 @@ function Booking() {
                         placeholder="e.g. Johnathan Doe"
                         value={cardForm.cardholderName}
                         onChange={(e) => setCardForm({ ...cardForm, cardholderName: e.target.value })}
+                        onFocus={handlePaymentFocus}
                         required
                       />
+                      {fieldErrors.cardholderName && <span className="field-error-text">{fieldErrors.cardholderName}</span>}
                     </div>
 
                     <div className="booking-form-field" style={{ marginTop: '0.85rem' }}>
@@ -856,6 +920,7 @@ function Booking() {
                           placeholder="0000 0000 0000 0000"
                           value={cardForm.cardNumber}
                           onChange={(e) => setCardForm({ ...cardForm, cardNumber: formatCardNumber(e.target.value) })}
+                          onFocus={handlePaymentFocus}
                           maxLength={19}
                           required
                         />
@@ -874,6 +939,7 @@ function Booking() {
                           placeholder="MM/YY"
                           value={cardForm.expDate}
                           onChange={(e) => setCardForm({ ...cardForm, expDate: formatExpDate(e.target.value) })}
+                          onFocus={handlePaymentFocus}
                           maxLength={5}
                           required
                         />
@@ -892,6 +958,7 @@ function Booking() {
                           placeholder="123"
                           value={cardForm.cch}
                           onChange={(e) => setCardForm({ ...cardForm, cch: formatCch(e.target.value) })}
+                          onFocus={handlePaymentFocus}
                           maxLength={4}
                           required
                         />
@@ -899,117 +966,169 @@ function Booking() {
                     </div>
                   </div>
 
-                  {/* Billing Address & Phone Box */}
-                  <div className="billing-address-box">
-                    <h4 className="payment-sub-heading">
-                      <i className="fas fa-map-marker-alt"></i> Billing Address & Phone Number
-                    </h4>
-
-                    <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <input
-                        type="checkbox"
-                        id="samePhone"
-                        checked={samePhone}
-                        onChange={handleSamePhoneChange}
-                      />
-                      <label htmlFor="samePhone" style={{ fontSize: '0.88rem', color: '#475569', cursor: 'pointer' }}>
-                        Billing phone is the same as passenger phone
-                      </label>
-                    </div>
-
-                    <div className="booking-form-field">
-                      <label htmlFor="billingPhone">Billing Phone Number <span style={{ color: '#dc2626' }}>*</span></label>
-                      <input
-                        type="tel"
-                        id="billingPhone"
-                        placeholder="e.g. +1 (555) 000-0000"
-                        value={cardForm.billingPhone}
-                        onChange={(e) => setCardForm({ ...cardForm, billingPhone: e.target.value })}
-                        required
-                      />
-                    </div>
-
-                    <div className="booking-form-field" style={{ marginTop: '0.85rem' }}>
-                      <label htmlFor="billingAddress">Street Address <span style={{ color: '#dc2626' }}>*</span></label>
-                      <input
-                        type="text"
-                        id="billingAddress"
-                        placeholder="e.g. 123 Main Street"
-                        value={cardForm.billingAddress}
-                        onChange={(e) => setCardForm({ ...cardForm, billingAddress: e.target.value })}
-                        required
-                      />
-                    </div>
-
-                    <div className="booking-form-field" style={{ marginTop: '0.85rem' }}>
-                      <label htmlFor="billingAddress2">Apartment, Suite, Unit (Optional)</label>
-                      <input
-                        type="text"
-                        id="billingAddress2"
-                        placeholder="e.g. Apt 4B"
-                        value={cardForm.billingAddress2}
-                        onChange={(e) => setCardForm({ ...cardForm, billingAddress2: e.target.value })}
-                      />
-                    </div>
-
-                    <div className="form-row-three">
-                      <div className="booking-form-field">
-                        <label htmlFor="billingCity">City <span style={{ color: '#dc2626' }}>*</span></label>
-                        <input
-                          type="text"
-                          id="billingCity"
-                          placeholder="City"
-                          value={cardForm.billingCity}
-                          onChange={(e) => setCardForm({ ...cardForm, billingCity: e.target.value })}
-                          required
-                        />
-                      </div>
-
-                      <div className="booking-form-field">
-                        <label htmlFor="billingState">State / Province <span style={{ color: '#dc2626' }}>*</span></label>
-                        <input
-                          type="text"
-                          id="billingState"
-                          placeholder="State"
-                          value={cardForm.billingState}
-                          onChange={(e) => setCardForm({ ...cardForm, billingState: e.target.value })}
-                          required
-                        />
-                      </div>
-
-                      <div className="booking-form-field">
-                        <label htmlFor="billingZip">ZIP / Postal Code <span style={{ color: '#dc2626' }}>*</span></label>
-                        <input
-                          type="text"
-                          id="billingZip"
-                          placeholder="ZIP"
-                          value={cardForm.billingZip}
-                          onChange={(e) => setCardForm({ ...cardForm, billingZip: e.target.value })}
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="booking-form-field" style={{ marginTop: '0.85rem' }}>
-                      <label htmlFor="billingCountry">Country <span style={{ color: '#dc2626' }}>*</span></label>
-                      <select
-                        id="billingCountry"
-                        value={cardForm.billingCountry}
-                        onChange={(e) => setCardForm({ ...cardForm, billingCountry: e.target.value })}
-                        required
-                        style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                  {/* Billing Address & Phone Section */}
+                  {!isBillingExpanded ? (
+                    <div className="billing-address-compact-notice">
+                      <button
+                        type="button"
+                        className="btn-add-billing"
+                        onClick={() => setIsBillingExpanded(true)}
                       >
-                        <option value="United States">United States</option>
-                        <option value="Canada">Canada</option>
-                        <option value="United Kingdom">United Kingdom</option>
-                        <option value="Australia">Australia</option>
-                        <option value="Germany">Germany</option>
-                        <option value="France">France</option>
-                        <option value="India">India</option>
-                        <option value="Other">Other International</option>
-                      </select>
+                        <i className="fas fa-plus-circle"></i> Add Billing Address
+                      </button>
+                      <span className="compact-subtext">Enter the billing address associated with this card.</span>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="billing-address-box billing-address-expanded-box">
+                      <h4 className="payment-sub-heading" style={{ marginBottom: '0.35rem' }}>
+                        <i className="fas fa-map-marker-alt"></i> Billing Address
+                      </h4>
+                      <p style={{ fontSize: '0.86rem', color: '#64748b', marginBottom: '1.25rem' }}>
+                        Enter the billing address associated with this card.
+                      </p>
+
+                      {/* Synced Checkboxes */}
+                      <div style={{ marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <input
+                            type="checkbox"
+                            id="sameAddress"
+                            checked={sameAddress}
+                            onChange={handleSameAddressChange}
+                          />
+                          <label htmlFor="sameAddress" style={{ fontSize: '0.88rem', color: '#475569', cursor: 'pointer' }}>
+                            Billing address is the same as passenger address
+                          </label>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <input
+                            type="checkbox"
+                            id="samePhone"
+                            checked={samePhone}
+                            onChange={handleSamePhoneChange}
+                          />
+                          <label htmlFor="samePhone" style={{ fontSize: '0.88rem', color: '#475569', cursor: 'pointer' }}>
+                            Use passenger contact phone
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Billing Phone */}
+                      <div className="booking-form-field">
+                        <label htmlFor="billingPhone">Billing Phone Number <span style={{ color: '#dc2626' }}>*</span></label>
+                        <input
+                          type="tel"
+                          id="billingPhone"
+                          placeholder="e.g. +1 (555) 000-0000"
+                          value={cardForm.billingPhone}
+                          onChange={(e) => setCardForm({ ...cardForm, billingPhone: e.target.value })}
+                          required
+                        />
+                        {fieldErrors.billingPhone && <span className="field-error-text">{fieldErrors.billingPhone}</span>}
+                      </div>
+
+                      {/* Billing Address Line 1 Autocomplete */}
+                      <div className="booking-form-field" style={{ marginTop: '0.85rem' }}>
+                        <label htmlFor="billingAddress">Billing Address Line 1 <span style={{ color: '#dc2626' }}>*</span></label>
+                        <AddressAutocompleteInput
+                          id="billingAddress"
+                          value={cardForm.billingAddress}
+                          onChange={(val) => setCardForm(prev => ({ ...prev, billingAddress: val }))}
+                          onSelectSuggestion={(item) => {
+                            setCardForm(prev => ({
+                              ...prev,
+                              billingAddress: item.addressLine1 || prev.billingAddress,
+                              billingAddress2: item.addressLine2 || prev.billingAddress2,
+                              billingCity: item.city || prev.billingCity,
+                              billingState: item.state || prev.billingState,
+                              billingZip: item.postalCode || prev.billingZip,
+                              billingCountry: item.country || prev.billingCountry || 'United States',
+                            }));
+                          }}
+                          placeholder="e.g. 123 Main Street"
+                          required
+                        />
+                        {fieldErrors.billingAddress && <span className="field-error-text">{fieldErrors.billingAddress}</span>}
+                      </div>
+
+                      {/* Billing Address Line 2 */}
+                      <div className="booking-form-field" style={{ marginTop: '0.85rem' }}>
+                        <label htmlFor="billingAddress2">Billing Address Line 2 (Optional)</label>
+                        <input
+                          type="text"
+                          id="billingAddress2"
+                          placeholder="e.g. Apt 4B, Suite 100"
+                          value={cardForm.billingAddress2}
+                          onChange={(e) => setCardForm({ ...cardForm, billingAddress2: e.target.value })}
+                        />
+                      </div>
+
+                      {/* City, State, ZIP */}
+                      <div className="form-row-three" style={{ marginTop: '0.85rem' }}>
+                        <div className="booking-form-field">
+                          <label htmlFor="billingCity">City <span style={{ color: '#dc2626' }}>*</span></label>
+                          <input
+                            type="text"
+                            id="billingCity"
+                            placeholder="City"
+                            value={cardForm.billingCity}
+                            onChange={(e) => setCardForm({ ...cardForm, billingCity: e.target.value })}
+                            required
+                          />
+                          {fieldErrors.billingCity && <span className="field-error-text">{fieldErrors.billingCity}</span>}
+                        </div>
+
+                        <div className="booking-form-field">
+                          <label htmlFor="billingState">State / Province <span style={{ color: '#dc2626' }}>*</span></label>
+                          <input
+                            type="text"
+                            id="billingState"
+                            placeholder="State / Province"
+                            value={cardForm.billingState}
+                            onChange={(e) => setCardForm({ ...cardForm, billingState: e.target.value })}
+                            required
+                          />
+                          {fieldErrors.billingState && <span className="field-error-text">{fieldErrors.billingState}</span>}
+                        </div>
+
+                        <div className="booking-form-field">
+                          <label htmlFor="billingZip">ZIP / Postal Code <span style={{ color: '#dc2626' }}>*</span></label>
+                          <input
+                            type="text"
+                            id="billingZip"
+                            placeholder="ZIP / Postal Code"
+                            value={cardForm.billingZip}
+                            onChange={(e) => setCardForm({ ...cardForm, billingZip: e.target.value })}
+                            required
+                          />
+                          {fieldErrors.billingZip && <span className="field-error-text">{fieldErrors.billingZip}</span>}
+                        </div>
+                      </div>
+
+                      {/* Country */}
+                      <div className="booking-form-field" style={{ marginTop: '0.85rem' }}>
+                        <label htmlFor="billingCountry">Country <span style={{ color: '#dc2626' }}>*</span></label>
+                        <select
+                          id="billingCountry"
+                          value={cardForm.billingCountry}
+                          onChange={(e) => setCardForm({ ...cardForm, billingCountry: e.target.value })}
+                          required
+                          style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                        >
+                          <option value="United States">United States</option>
+                          <option value="Canada">Canada</option>
+                          <option value="United Kingdom">United Kingdom</option>
+                          <option value="Australia">Australia</option>
+                          <option value="Germany">Germany</option>
+                          <option value="France">France</option>
+                          <option value="India">India</option>
+                          <option value="Other">Other International</option>
+                        </select>
+                        {fieldErrors.billingCountry && <span className="field-error-text">{fieldErrors.billingCountry}</span>}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Terms & Conditions Agreement */}
                   <div className="verification-block" style={{ marginTop: '1.25rem', marginBottom: '1.25rem' }}>
