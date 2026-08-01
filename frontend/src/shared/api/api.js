@@ -105,6 +105,10 @@ export const bookingAPI = {
     const response = await api.get(`/bookings/${reference}`);
     return response.data;
   },
+  getConfirmationDTO: async (confirmationCode) => {
+    const response = await api.get(`/bookings/confirmation/${confirmationCode}`);
+    return response.data;
+  },
   getPaymentStatus: async (bookingId) => {
     const response = await api.get(`/bookings/${bookingId}/payment-status`);
     return response.data;

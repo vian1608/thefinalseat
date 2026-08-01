@@ -29,7 +29,12 @@ function PaymentSuccessPage() {
 
       try {
         setLoading(true);
-        const res = await bookingAPI.getByReference(confirmationCodeParam);
+        let res;
+        try {
+          res = await bookingAPI.getConfirmationDTO(confirmationCodeParam);
+        } catch (dtoErr) {
+          res = await bookingAPI.getByReference(confirmationCodeParam);
+        }
 
         if (res && res.success && res.data) {
           if (isMounted) {
@@ -124,10 +129,22 @@ function PaymentSuccessPage() {
     ? `Your confirmation email is on its way to ${email}.`
     : `Your reservation is saved, but we could not send the confirmation email. Please keep your booking ID.`;
 
-  // Itinerary Segments
-  const outboundSegments = booking.outbound_segments || booking.itinerary?.outbound || [];
-  const returnSegments = booking.return_segments || booking.itinerary?.return || [];
-  const allSegments = [...outboundSegments, ...returnSegments];
+  // Itinerary Segments (Authored solely from backend flights list)
+  const flightsList = Array.isArray(booking.flights) && booking.flights.length > 0
+    ? booking.flights
+    : (Array.isArray(booking.itinerary_segments) && booking.itinerary_segments.length > 0
+      ? booking.itinerary_segments
+      : []);
+
+  const outboundSegments = flightsList.filter(f => f.leg === 'outbound' || (!f.leg && flightsList.indexOf(f) === 0));
+  const returnSegments = flightsList.filter(f => f.leg === 'return' || (!f.leg && flightsList.indexOf(f) > 0));
+  const allSegments = flightsList;
+
+  // Price Calculation & Validation
+  const rawPrice = parseFloat(booking.customer_price ?? booking.total_amount ?? booking.totalAmount ?? 0);
+  const hasValidPrice = !isNaN(rawPrice) && rawPrice > 0;
+  const totalPrice = hasValidPrice ? rawPrice.toFixed(2) : '0.00';
+  const currency = (booking.currency || 'USD').toUpperCase();
 
   // Payment Method Metadata Reference
   const pm = booking.paymentMethod || booking.payment_method || {};
@@ -148,10 +165,6 @@ function PaymentSuccessPage() {
   ].filter(Boolean).join(', ') || 'On File';
 
   const billingPhone = pm.billing_phone || pm.billingPhone || phone;
-
-  // Price Calculation
-  const totalPrice = parseFloat(booking.customer_price || booking.total_amount || 0).toFixed(2);
-  const currency = (booking.currency || 'USD').toUpperCase();
 
   return (
     <div className="confirmation-page-wrapper">

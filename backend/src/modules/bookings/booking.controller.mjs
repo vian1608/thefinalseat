@@ -17,6 +17,7 @@ export const bookingController = {
 
       res.status(201).json({
         success: true,
+        integrityValidated: true,
         message: 'Booking request created successfully.',
         data: result
       });
@@ -39,6 +40,57 @@ export const bookingController = {
       res.json({
         success: true,
         data: booking
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  getConfirmationDTO: async (req, res, next) => {
+    try {
+      const { confirmationCode } = req.params;
+      const completeBooking = await bookingService.getDetailsByCodeOrId(confirmationCode);
+      if (!completeBooking) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'BOOKING_NOT_FOUND', message: 'Booking reference not found.' }
+        });
+      }
+
+      const totalAmt = parseFloat(
+        completeBooking.customer_price ??
+        completeBooking.total_amount ??
+        completeBooking.pricing?.customerTotal ??
+        completeBooking.amount ??
+        0
+      );
+      const flights = completeBooking.flights || completeBooking.itinerary_segments || [];
+      const isEmailSent = !!(completeBooking.authorization_email_sent_at || completeBooking.emailSentAt || completeBooking.email_sent_at);
+
+      const dto = {
+        booking: {
+          id: completeBooking.id,
+          confirmationCode: completeBooking.confirmation_code || completeBooking.confirmationCode,
+          status: completeBooking.status,
+          paymentStatus: completeBooking.payment_status || completeBooking.paymentStatus,
+          passengerName: completeBooking.passenger_name || completeBooking.customerName,
+          email: completeBooking.email,
+          phone: completeBooking.phone,
+          totalAmount: totalAmt,
+          currency: (completeBooking.currency || 'USD').toUpperCase(),
+          createdAt: completeBooking.created_at || new Date().toISOString()
+        },
+        flights,
+        travellers: completeBooking.travellers || [],
+        contact: completeBooking.contacts?.[0] || { email: completeBooking.email, phone: completeBooking.phone },
+        paymentMethod: completeBooking.paymentMethod || completeBooking.payment_method || {},
+        emailDeliveryStatus: isEmailSent ? 'SENT' : 'NOT_SENT'
+      };
+
+      res.json({
+        success: true,
+        data: dto,
+        ...dto
       });
     } catch (error) {
       next(error);

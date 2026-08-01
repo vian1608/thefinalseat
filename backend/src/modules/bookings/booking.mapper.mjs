@@ -2,8 +2,33 @@ import { itineraryMapper } from '../itineraries/itinerary.mapper.mjs';
 
 export const bookingMapper = {
   toDatabaseInsert: (bookingReference, payload) => {
-    const rawCustomerPrice = parseFloat(payload.customer_price || payload.displayedWebsitePrice || 0);
-    const rawSupplierPrice = parseFloat(payload.supplier_price || payload.originalApiPrice || rawCustomerPrice);
+    const rawCustomerPrice = parseFloat(
+      payload.customer_price ??
+      payload.customerPrice ??
+      payload.total_amount ??
+      payload.totalAmount ??
+      payload.displayedWebsitePrice ??
+      payload.amount ??
+      payload.price ??
+      payload.flight?.price ??
+      payload.flight?.totalPrice ??
+      0
+    );
+
+    const rawSupplierPrice = parseFloat(
+      payload.supplier_price ??
+      payload.supplierPrice ??
+      payload.originalApiPrice ??
+      payload.original_api_price ??
+      rawCustomerPrice
+    );
+
+    if (isNaN(rawCustomerPrice) || rawCustomerPrice <= 0) {
+      const err = new Error(`INVALID_BOOKING_PRICE: Customer total reservation price must be greater than zero. Received: ${rawCustomerPrice}`);
+      err.code = 'INVALID_BOOKING_PRICE';
+      throw err;
+    }
+
     const isMock = !!payload.isMock;
     const discountPercent = isMock ? 0 : (parseFloat(payload.discount_percent) || 10);
     const discountAmount = isMock ? 0 : (parseFloat(payload.discount_amount) || Math.max(0, rawSupplierPrice - rawCustomerPrice));
@@ -11,7 +36,7 @@ export const bookingMapper = {
     return {
       confirmation_code: bookingReference,
       status: payload.status || 'PENDING',
-      payment_status: payload.paymentStatus || 'pending',  // default pending — NEVER 'paid' before capture
+      payment_status: payload.paymentStatus || 'pending',
       total_amount: rawCustomerPrice,
       customer_price: rawCustomerPrice,
       supplier_price: rawSupplierPrice,
@@ -101,6 +126,7 @@ export const bookingMapper = {
     return {
       id: booking.id,
       confirmationCode: booking.confirmation_code,
+      confirmation_code: booking.confirmation_code,
       bookingReference: booking.confirmation_code,
       customer: {
         name: booking.passenger_name,

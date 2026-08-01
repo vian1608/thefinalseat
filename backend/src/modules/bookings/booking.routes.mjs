@@ -35,6 +35,7 @@ router.patch('/:id/itinerary', bookingController.updateItinerary);
 router.patch('/:id/ticket', bookingController.updateTicket);
 router.patch('/:id/notes', bookingController.updateNotes);
 
+router.get('/confirmation/:confirmationCode', bookingController.getConfirmationDTO);
 router.get('/:reference', bookingController.getByReference);
 
 export default router;

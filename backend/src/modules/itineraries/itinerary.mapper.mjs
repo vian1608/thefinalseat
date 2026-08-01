@@ -2,28 +2,103 @@ export const itineraryMapper = {
   toDatabaseRows: (bookingId, flight, leg, tripType) => {
     if (!flight) return [];
     
-    // Check if the flight has connecting segments (nested stops/segments)
-    // If we support multiple connecting segments, we map them.
-    // For now, we write a flat row matching the schema, with support for JSONB fare/segments details.
+    const airlineName = (
+      flight.airline_name ||
+      flight.airlineName ||
+      flight.airline ||
+      flight.carrier_name ||
+      flight.carrierName ||
+      flight.carrier ||
+      'Commercial Airline'
+    ).trim();
+
+    const flightNumber = (
+      flight.flight_number ||
+      flight.flightNumber ||
+      flight.flightNo ||
+      flight.flight_no ||
+      'N/A'
+    ).trim();
+
+    const depAirport = (
+      flight.departure?.airport ||
+      flight.departureAirport ||
+      flight.origin_airport ||
+      flight.originCode ||
+      flight.origin_code ||
+      (typeof flight.origin === 'object' ? flight.origin.code : flight.origin) ||
+      flight.from ||
+      flight.fromCode ||
+      ''
+    ).trim().toUpperCase();
+
+    const arrAirport = (
+      flight.arrival?.airport ||
+      flight.arrivalAirport ||
+      flight.destination_airport ||
+      flight.destinationCode ||
+      flight.destination_code ||
+      (typeof flight.destination === 'object' ? flight.destination.code : flight.destination) ||
+      flight.to ||
+      flight.toCode ||
+      ''
+    ).trim().toUpperCase();
+
+    const depDate = (
+      flight.departure?.date ||
+      flight.departureDate ||
+      flight.departure_date ||
+      flight.date ||
+      ''
+    ).trim();
+
+    const arrDate = (
+      flight.arrival?.date ||
+      flight.arrivalDate ||
+      flight.arrival_date ||
+      depDate
+    ).trim();
+
+    const depTimeStr = (
+      flight.departure?.time ||
+      flight.departureTime ||
+      flight.departure_time_str ||
+      flight.departure_time ||
+      ''
+    ).trim();
+
+    const arrTimeStr = (
+      flight.arrival?.time ||
+      flight.arrivalTime ||
+      flight.arrival_time_str ||
+      flight.arrival_time ||
+      ''
+    ).trim();
+
+    if (!depAirport || !arrAirport) {
+      const err = new Error(`ITINERARY_NORMALIZATION_FAILED: Flight '${airlineName} ${flightNumber}' is missing departure or arrival airport codes (dep: '${depAirport}', arr: '${arrAirport}').`);
+      err.code = 'ITINERARY_NORMALIZATION_FAILED';
+      throw err;
+    }
+
     const row = {
       booking_id: bookingId,
       leg,
       trip_type: tripType,
-      airline_name: flight.airline || flight.airlineName || null,
-      flight_number: flight.flightNumber || flight.flight_number || null,
-      departure_airport: flight.departure?.airport || flight.departureAirport || null,
-      arrival_airport: flight.arrival?.airport || flight.arrivalAirport || null,
-      departure_date: flight.departure?.date || flight.departureDate || null,
-      arrival_date: flight.arrival?.date || flight.arrivalDate || null,
-      departure_time_str: flight.departure?.time || flight.departureTime || null,
-      arrival_time_str: flight.arrival?.time || flight.arrivalTime || null,
+      airline_name: airlineName,
+      flight_number: flightNumber,
+      departure_airport: depAirport,
+      arrival_airport: arrAirport,
+      departure_date: depDate,
+      arrival_date: arrDate,
+      departure_time_str: depTimeStr,
+      arrival_time_str: arrTimeStr,
       duration: flight.duration || null,
       stops: typeof flight.stops === 'number' ? flight.stops : 0,
-      cabin_class: flight.class || flight.cabinClass || 'Economy',
+      cabin_class: flight.class || flight.cabinClass || flight.cabin_class || 'Economy',
       fare_details: flight.price || flight.fareDetails || null,
     };
 
-    // If there are sub-segments (e.g. connections), we store them in fare_details / segments property
     if (flight.segments) {
       row.fare_details = {
         ...row.fare_details,

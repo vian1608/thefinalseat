@@ -354,14 +354,14 @@ function Booking() {
     };
 
     const res = await bookingAPI.create(bookingPayload);
-    if (res && res.success) {
+    if (res && res.success && (res.data?.id || res.data?.confirmation_code)) {
       const bId = res.data.id;
       const bCode = res.data.confirmation_code || res.data.confirmationCode;
       pendingBookingId.current = bId;
       pendingBookingCode.current = bCode;
       return { id: bId, code: bCode };
     } else {
-      throw new Error(res?.error?.message || 'Unable to register reservation in database. Please check details and try again.');
+      throw new Error(res?.error?.message || res?.message || 'We could not complete your reservation. No confirmed booking was created. Please review your details and try again.');
     }
   };
 

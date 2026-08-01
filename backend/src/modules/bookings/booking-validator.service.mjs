@@ -171,6 +171,83 @@ export const bookingValidatorService = {
   },
 
   /**
+   * Enforces complete booking transactional validation prior to returning success.
+   */
+  validateCompletedBooking: async (bookingId) => {
+    const completeBooking = await bookingRepository.getCompleteBookingById(bookingId);
+    if (!completeBooking) {
+      const err = new Error(`BOOKING_CREATION_INCOMPLETE: Booking record '${bookingId}' was not found in database.`);
+      err.code = 'BOOKING_CREATION_INCOMPLETE';
+      throw err;
+    }
+
+    const confCode = completeBooking.confirmation_code || completeBooking.confirmationCode;
+    if (!confCode) {
+      const err = new Error(`BOOKING_CREATION_INCOMPLETE: Booking '${bookingId}' is missing a valid confirmation code.`);
+      err.code = 'BOOKING_CREATION_INCOMPLETE';
+      throw err;
+    }
+
+    const totalAmt = parseFloat(completeBooking.customer_price ?? completeBooking.total_amount ?? 0);
+    if (isNaN(totalAmt) || totalAmt <= 0) {
+      const err = new Error(`BOOKING_CREATION_INCOMPLETE: Reservation total amount must be greater than zero. Received: $${totalAmt}`);
+      err.code = 'BOOKING_CREATION_INCOMPLETE';
+      throw err;
+    }
+
+    const currency = completeBooking.currency;
+    if (!currency) {
+      const err = new Error(`BOOKING_CREATION_INCOMPLETE: Currency is missing for booking '${confCode}'.`);
+      err.code = 'BOOKING_CREATION_INCOMPLETE';
+      throw err;
+    }
+
+    const flights = completeBooking.flights || [];
+    const segments = completeBooking.itinerary_segments || [];
+    const allSegments = flights.length > 0 ? flights : segments;
+
+    if (allSegments.length === 0) {
+      const err = new Error(`BOOKING_CREATION_INCOMPLETE: Reservation '${confCode}' has zero valid flight itinerary segments in database.`);
+      err.code = 'BOOKING_CREATION_INCOMPLETE';
+      throw err;
+    }
+
+    for (let idx = 0; idx < allSegments.length; idx++) {
+      const seg = allSegments[idx];
+      const airline = seg.airline_name || seg.carrier_name || seg.airline || seg.carrier_code;
+      const flightNum = seg.flight_number || seg.flightNumber;
+      const orig = seg.departure_airport || seg.origin_airport || seg.originCode;
+      const dest = seg.arrival_airport || seg.destination_airport || seg.destinationCode;
+      const depDate = seg.departure_date || seg.departureDate;
+
+      if (!airline || !flightNum || !orig || !dest || !depDate) {
+        const err = new Error(`BOOKING_CREATION_INCOMPLETE: Flight segment #${idx + 1} for '${confCode}' is missing required route or date fields.`);
+        err.code = 'BOOKING_CREATION_INCOMPLETE';
+        throw err;
+      }
+    }
+
+    const travellers = completeBooking.travellers || [];
+    if (travellers.length === 0 && !completeBooking.passenger_name) {
+      const err = new Error(`BOOKING_CREATION_INCOMPLETE: Passenger details are missing for booking '${confCode}'.`);
+      err.code = 'BOOKING_CREATION_INCOMPLETE';
+      throw err;
+    }
+
+    const email = completeBooking.email;
+    if (!email || !email.includes('@')) {
+      const err = new Error(`BOOKING_CREATION_INCOMPLETE: Contact email is missing or invalid for booking '${confCode}'.`);
+      err.code = 'BOOKING_CREATION_INCOMPLETE';
+      throw err;
+    }
+
+    return {
+      valid: true,
+      booking: completeBooking
+    };
+  },
+
+  /**
    * Integrity Check 1: Verify booking has flight itinerary records attached
    */
   checkBookingWithoutFlights: async (bookingOrId) => {

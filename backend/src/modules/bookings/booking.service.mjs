@@ -99,14 +99,15 @@ export const bookingService = {
 
       // 6 — Save flight itineraries (MUST HAVE VALID FLIGHTS OR ROLLBACK)
       const flightsList = [];
-      const tripType = payload.returnFlight ? 'round-trip' : 'one-way';
+      const returnObj = payload.returnFlight || payload.flight?.returnFlight;
+      const tripType = returnObj ? 'round-trip' : 'one-way';
       
       if (payload.flight) {
         const outboundRows = itineraryMapper.toDatabaseRows(booking.id, payload.flight, 'outbound', tripType);
         flightsList.push(...outboundRows);
       }
-      if (payload.returnFlight) {
-        const returnRows = itineraryMapper.toDatabaseRows(booking.id, payload.returnFlight, 'return', tripType);
+      if (returnObj) {
+        const returnRows = itineraryMapper.toDatabaseRows(booking.id, returnObj, 'return', tripType);
         flightsList.push(...returnRows);
       }
       
@@ -140,11 +141,7 @@ export const bookingService = {
       );
 
       // 8 — Validate complete transactional integrity before committing
-      await bookingValidatorService.validateBookingIntegrity(canonicalBooking, {
-        requireItinerary: true,
-        requirePassengers: true,
-        throwOnError: true
-      });
+      await bookingValidatorService.validateCompletedBooking(booking.id);
 
       // Only send confirmation email if payment status is explicitly paid
       if (payload.paymentStatus === 'paid') {
