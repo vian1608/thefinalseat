@@ -28,7 +28,7 @@ function Footer() {
           {/* Brand — always visible */}
           <div className="footer-section footer-brand">
             <h3>The Final Seat LLC</h3>
-            <p>Your trusted partner for urgent travel advisory and support.</p>
+            <p>The Final Seat provides flight-search and reservation assistance for travelers who value clear information and real human support.</p>
           </div>
 
           {/* Collapsible on mobile */}

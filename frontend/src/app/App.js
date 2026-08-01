@@ -28,6 +28,7 @@ import Booking from '../features/bookings/pages/BookingPage';
 import PaymentSuccess from '../features/bookings/pages/PaymentSuccessPage';
 import MyBookings from '../features/bookings/pages/MyBookingsPage';
 import PassengerAuthorization from '../features/authorizations/pages/PassengerAuthorizationPage';
+import TravelAssistance from '../features/flights/pages/TravelAssistancePage';
 import AppErrorBoundary from '../shared/components/AppErrorBoundary';
 
 
@@ -160,6 +161,7 @@ function App() {
                 <Route path="/refund-policy" element={<RefundPolicy />} />
                 
                 {/* Common Aliases / Shortcuts */}
+                <Route path="/travel-assistance" element={<TravelAssistance />} />
                 <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
                 <Route path="/privacypolicy" element={<Navigate to="/privacy-policy" replace />} />
                 <Route path="/refund" element={<Navigate to="/refund-policy" replace />} />

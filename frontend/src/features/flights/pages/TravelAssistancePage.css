@@ -1,0 +1,276 @@
+.travel-assistance-page {
+  background: #ffffff;
+  color: #1e293b;
+}
+
+.ta-hero {
+  background: linear-gradient(135deg, #8b1538 0%, #6b0f2a 55%, #0f172a 100%);
+  color: #ffffff;
+  padding: 4rem 0;
+  text-align: center;
+}
+
+.ta-hero__content {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.ta-eyebrow {
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #e2b84d;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  display: block;
+}
+
+.ta-hero h1 {
+  font-size: clamp(1.9rem, 4vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1.2;
+  margin-bottom: 1.25rem;
+  color: #ffffff;
+}
+
+.ta-lead {
+  font-size: 1.15rem;
+  line-height: 1.65;
+  color: #f1f5f9;
+  opacity: 0.95;
+  margin-bottom: 2rem;
+}
+
+.ta-hero__actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.ta-section {
+  padding: 4rem 0;
+}
+
+.ta-section--light {
+  background: #f8fafc;
+}
+
+.ta-section--dark {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.ta-section__header {
+  text-align: center;
+  max-width: 650px;
+  margin: 0 auto 3rem;
+}
+
+.ta-section__header h2 {
+  font-size: 2rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+  color: #1e293b;
+}
+
+.ta-section__header--light h2 {
+  color: #ffffff;
+}
+
+.ta-section__header p {
+  color: #64748b;
+  font-size: 1.05rem;
+}
+
+.ta-section__header--light p {
+  color: #cbd5e1;
+}
+
+.ta-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.ta-grid--4 {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.ta-grid--3 {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.ta-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.75rem;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+}
+
+.ta-card__icon {
+  width: 48px;
+  height: 48px;
+  background: #faf5f7;
+  color: #8b1538;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.ta-card h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: #1e293b;
+}
+
+.ta-card p {
+  font-size: 0.92rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ta-feature {
+  display: flex;
+  gap: 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.ta-feature__icon {
+  font-size: 1.5rem;
+  color: #8b1538;
+  margin-top: 0.2rem;
+}
+
+.ta-feature h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+  color: #1e293b;
+}
+
+.ta-feature p {
+  font-size: 0.9rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ta-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+}
+
+.ta-step {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+}
+
+.ta-step__num {
+  width: 44px;
+  height: 44px;
+  background: #8b1538;
+  color: #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin: 0 auto 1.25rem;
+}
+
+.ta-step h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 0.5rem;
+}
+
+.ta-step p {
+  font-size: 0.95rem;
+  color: #cbd5e1;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ta-faq-container {
+  max-width: 750px;
+  margin: 0 auto;
+}
+
+.ta-faq-container h2 {
+  font-size: 2rem;
+  font-weight: 800;
+  margin-bottom: 2rem;
+  text-align: center;
+  color: #1e293b;
+}
+
+.ta-faq-item {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.ta-faq-item:last-child {
+  border-bottom: none;
+}
+
+.ta-faq-item h4 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+
+.ta-faq-item p {
+  font-size: 0.95rem;
+  color: #475569;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.ta-cta-box {
+  background: #faf5f7;
+  border-top: 1px solid #f0d5de;
+  padding: 4rem 0;
+  text-align: center;
+}
+
+.ta-cta-content {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.ta-cta-content h2 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #8b1538;
+  margin-bottom: 0.5rem;
+}
+
+.ta-cta-content p {
+  font-size: 1.05rem;
+  color: #475569;
+  margin-bottom: 2rem;
+}
+
+.ta-cta-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}

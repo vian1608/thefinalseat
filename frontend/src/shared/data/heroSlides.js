@@ -2,7 +2,7 @@ const heroImage = (filename) => `${process.env.PUBLIC_URL}/images/hero/${filenam
 
 export const heroOfferTag = {
   label: 'Limited Offer',
-  highlight: 'Up to 30% off',
+  highlight: 'Up to 20% off',
   detail: 'on travel within 3 days',
 };
 
@@ -11,10 +11,10 @@ export const flightHeroSlides = [
     id: 'flight-intro',
     type: 'content',
     backgroundImage: heroImage('flight-slide.jpg'),
-    eyebrow: 'The Final Seat LLC — Air Logistics',
-    title: 'Urgent & Complex Air Travel Logistics Advisory',
+    eyebrow: 'The Final Seat — Flight Booking Assistance',
+    title: 'Simple Flight Booking With Real Human Support',
     lead:
-      'Independent consultancy for time-sensitive itineraries, routing strategy, and itinerary optimization across domestic and international air networks.',
+      'We help travelers and families compare routes, connections, baggage and total travel time before completing a reservation.',
     showActions: true,
   },
   {
@@ -29,14 +29,14 @@ export const flightHeroSlides = [
     type: 'image',
     image: heroImage('flight-cabin.jpg'),
     alt: 'Premium aircraft cabin seating',
-    caption: 'Cabin-class advisory tailored to your logistics needs',
+    caption: 'Cabin-class advisory tailored to your travel needs',
   },
   {
     id: 'flight-travelers',
     type: 'image',
     image: heroImage('flight-travelers.jpg'),
     alt: 'Travelers satisfied with their journey',
-    caption: 'Trusted by clients for urgent and complex travel logistics',
+    caption: 'Trusted flight reservation support for travelers and families',
   },
 ];
 

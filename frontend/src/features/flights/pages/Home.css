@@ -828,3 +828,151 @@
     margin-bottom: 1rem;
   }
 }
+
+/* ── Who We Help Section ── */
+.who-we-help-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+}
+
+.who-we-help-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.75rem 1.25rem;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.who-we-help-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.who-icon-wrapper {
+  width: 52px;
+  height: 52px;
+  background: #f1f5f9;
+  color: #8b1538;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  margin-bottom: 1rem;
+}
+
+.who-we-help-card h3 {
+  font-size: 1.15rem;
+  color: #1e293b;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.who-we-help-card p {
+  font-size: 0.92rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Compare More Than Price Grid ── */
+.compare-more-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.compare-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: background 0.2s ease;
+}
+
+.compare-card:hover {
+  background: #f1f5f9;
+}
+
+.compare-icon {
+  font-size: 1.4rem;
+  color: #8b1538;
+  margin-bottom: 0.75rem;
+  display: block;
+}
+
+.compare-card h4 {
+  font-size: 1.05rem;
+  color: #1e293b;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.compare-card p {
+  font-size: 0.9rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Trust Section ── */
+.trust-bullets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.25rem;
+  text-align: left;
+}
+
+.trust-bullet {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1rem;
+  color: #f1f5f9;
+  font-weight: 500;
+}
+
+/* ── Expectations Section ── */
+.expectations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+}
+
+.expectation-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.exp-icon {
+  width: 48px;
+  height: 48px;
+  background: #fffaf0;
+  color: #b45309;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.expectation-card h4 {
+  font-size: 1.05rem;
+  color: #1e293b;
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+
+.expectation-card p {
+  font-size: 0.9rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}

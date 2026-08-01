@@ -7,14 +7,12 @@ import InquiryLocationSelect from '../components/InquiryLocationSelect';
 import CustomSelect from '../../../shared/components/CustomSelect';
 import TravelDatePicker from '../components/TravelDatePicker';
 import { flightAirportSelectGroups } from '../../../shared/data/flightAirports';
-import CustomerReviews from '../../../shared/components/CustomerReviews';
 import { inquiryAPI } from '../../../shared/api/api';
-import { flightReviews } from '../../../shared/data/customerReviews';
 import { flightHeroSlides, heroOfferTag } from '../../../shared/data/heroSlides';
 import RouteSlider from '../../../shared/components/RouteSlider';
 import SeamlessAdvisorySection from '../../../shared/components/SeamlessAdvisorySection';
 import { flightFamousRoutes } from '../../../shared/data/famousRoutes';
-import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
+import { SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
 import EmailInput from '../../../shared/components/EmailInput';
 import InternationalPhoneInput from '../../../shared/components/InternationalPhoneInput';
 import './Home.css';
@@ -314,7 +312,7 @@ function Home() {
                   <>
                     <h2 style={{ marginBottom: '0.5rem', color: '#1e293b', fontSize: '1.75rem' }}>Search Flights</h2>
                     <p className="flights-inquiry__intro">
-                      Discover flight deals with SerpAPI real-time Google Flights search engine.
+                      Compare flight options with real-time routes, fares, and personal booking assistance.
                     </p>
                     
                     <form className="flights-form" onSubmit={handleSearchFlights}>
@@ -473,8 +471,22 @@ function Home() {
                         </div>
                       </div>
 
+                      {/* Booking For Someone Else Option */}
+                      <div className="search-booking-for-someone-else" style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px dashed #cbd5e1' }}>
+                        <label htmlFor="booking-for-someone-else" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', color: '#334155', fontWeight: '500' }}>
+                          <input
+                            type="checkbox"
+                            id="booking-for-someone-else"
+                            checked={!!searchData.isBookingForSomeoneElse}
+                            onChange={(e) => handleSearchChange('isBookingForSomeoneElse', e.target.checked)}
+                            style={{ width: '17px', height: '17px', accentColor: '#8b1538', cursor: 'pointer' }}
+                          />
+                          <span>I am booking for a parent, relative or another traveler</span>
+                        </label>
+                      </div>
+
                       {/* Submit action */}
-                      <div style={{ marginTop: '1.5rem' }}>
+                      <div style={{ marginTop: '1.25rem' }}>
                         <button 
                           type="submit" 
                           className="flights-btn flights-btn--cta" 
@@ -692,36 +704,44 @@ function Home() {
               </div>
             </div>
 
-            <div className="inquiry-side-panel">
+            <div className="inquiry-side-panel" id="support-section">
               <div className="flights-inquiry-card support-inquiry-card" style={{ height: 'auto', margin: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
-                  <h2 style={{ fontSize: '1.6rem', color: '#1e293b', marginBottom: '0.75rem', fontWeight: 800 }}>Need Immediate Support?</h2>
-                  <p style={{ color: '#475569', fontSize: '0.98rem', lineHeight: '1.6', marginBottom: '1.5rem' }}>
-                    Skip the form and call our expert travel desk directly to secure your air logistics and private routes immediately.
+                  <h2 style={{ fontSize: '1.6rem', color: '#1e293b', marginBottom: '0.75rem', fontWeight: 800 }}>Would You Like Help Booking?</h2>
+                  <p style={{ color: '#475569', fontSize: '0.98rem', lineHeight: '1.6', marginBottom: '1.25rem' }}>
+                    Speak with a real person for help comparing connections, baggage, total travel time and reservation details.
                   </p>
                   
-                  <div className="benefits-list" style={{ marginTop: '1.5rem' }}>
-                    <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 700 }}>Benefits of booking with us:</h3>
-                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                  <div className="benefits-list" style={{ marginTop: '1.25rem' }}>
+                    <h3 style={{ fontSize: '1.05rem', marginBottom: '0.85rem', color: '#1e293b', fontWeight: 700 }}>Benefits of booking with us:</h3>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                       <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
                         <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
-                        <span>Includes free 24/7 priority support till date of travel.</span>
+                        <span>Personal help reviewing flight options</span>
                       </li>
                       <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
                         <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
-                        <span>No need to wait on long holds like with traditional airlines.</span>
+                        <span>Assistance comparing stops and connection times</span>
                       </li>
                       <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
                         <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
-                        <span>Instant ticketing and custom route optimization.</span>
+                        <span>Guidance with baggage and fare conditions</span>
+                      </li>
+                      <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
+                        <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
+                        <span>Support before and after reservation</span>
                       </li>
                     </ul>
                   </div>
+
+                  <p style={{ marginTop: '1.25rem', fontSize: '0.85rem', color: '#64748b', fontStyle: 'italic', lineHeight: '1.4' }}>
+                    Urgent travel assistance is available 24/7 when immediate booking support is needed.
+                  </p>
                 </div>
                 
-                <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'center' }}>
-                  <a href={SUPPORT_PHONE_HREF} className="call-btn flights-btn flights-btn--cta" style={{ width: 'auto', minWidth: '180px', margin: 0, minHeight: '44px', height: '44px', padding: '0 1.5rem', fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <i className="fas fa-phone"></i> Call {SUPPORT_PHONE_DISPLAY}
+                <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center' }}>
+                  <a href={SUPPORT_PHONE_HREF} className="call-btn flights-btn flights-btn--cta" style={{ width: '100%', minHeight: '48px', height: '48px', padding: '0 1.5rem', fontSize: '1rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <i className="fas fa-phone"></i> Call for Booking Help
                   </a>
                 </div>
               </div>
@@ -730,17 +750,176 @@ function Home() {
         </div>
       </section>
 
-      <section className="flights-section">
-        <div className="container route-slider-section">
-          <RouteSlider routes={flightFamousRoutes} btnClassPrefix="flights" />
+      {/* WHO WE HELP SECTION */}
+      <section className="who-we-help-section" style={{ backgroundColor: '#ffffff', padding: '3.5rem 0', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0' }}>
+        <div className="container">
+          <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+            <h2 style={{ fontSize: '2rem', color: '#1e293b', fontWeight: 800, marginBottom: '0.5rem' }}>Who We Help</h2>
+            <p style={{ color: '#64748b', fontSize: '1.05rem', maxWidth: '650px', margin: '0 auto' }}>
+              Designed for travelers and families looking for clear guidance and personal service.
+            </p>
+          </div>
+          <div className="who-we-help-grid">
+            <div className="who-we-help-card">
+              <div className="who-icon-wrapper"><i className="fas fa-user-check"></i></div>
+              <h3>Personal Assistance</h3>
+              <p>Travelers who prefer personal booking assistance over automated forms.</p>
+            </div>
+            <div className="who-we-help-card">
+              <div className="who-icon-wrapper"><i className="fas fa-users"></i></div>
+              <h3>Family Booking</h3>
+              <p>Families arranging flights for parents, relatives or friends.</p>
+            </div>
+            <div className="who-we-help-card">
+              <div className="who-icon-wrapper"><i className="fas fa-route"></i></div>
+              <h3>Complex Routes</h3>
+              <p>Passengers comparing complex routes or multiple connecting flights.</p>
+            </div>
+            <div className="who-we-help-card">
+              <div className="who-icon-wrapper"><i className="fas fa-suitcase-rolling"></i></div>
+              <h3>Fare & Baggage Rules</h3>
+              <p>Travelers who want help understanding baggage allowances and fare conditions.</p>
+            </div>
+          </div>
         </div>
       </section>
 
+      {/* POPULAR FLIGHT OPTIONS */}
+      <section className="flights-section">
+        <div className="container route-slider-section">
+          <RouteSlider routes={flightFamousRoutes} btnClassPrefix="flights" title="Popular Flight Options" />
+        </div>
+      </section>
+
+      {/* PERSONAL BOOKING ASSISTANCE */}
       <SeamlessAdvisorySection variant="flight" />
 
+      {/* WE HELP YOU COMPARE MORE THAN PRICE */}
+      <section className="compare-more-section" style={{ padding: '4rem 0', backgroundColor: '#ffffff', borderTop: '1px solid #e2e8f0' }}>
+        <div className="container">
+          <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+            <h2 style={{ fontSize: '2rem', color: '#1e293b', fontWeight: 800, marginBottom: '0.5rem' }}>We Help You Compare More Than Price</h2>
+            <p style={{ color: '#64748b', fontSize: '1.05rem', maxWidth: '650px', margin: '0 auto' }}>
+              We focus on total journey quality and manageable travel details.
+            </p>
+          </div>
+          <div className="compare-more-grid">
+            <div className="compare-card">
+              <i className="fas fa-plane-arrival compare-icon"></i>
+              <h4>Number of Stops</h4>
+              <p>Help identifying more manageable options with minimal connections.</p>
+            </div>
+            <div className="compare-card">
+              <i className="fas fa-clock compare-icon"></i>
+              <h4>Connection Duration</h4>
+              <p>Sufficient layover times for comfortable airport transfers.</p>
+            </div>
+            <div className="compare-card">
+              <i className="fas fa-exchange-alt compare-icon"></i>
+              <h4>Airport Changes</h4>
+              <p>Clear warnings for terminal or airport transfers between legs.</p>
+            </div>
+            <div className="compare-card">
+              <i className="fas fa-stopwatch compare-icon"></i>
+              <h4>Total Journey Time</h4>
+              <p>Balancing duration, comfort, and schedule convenience.</p>
+            </div>
+            <div className="compare-card">
+              <i className="fas fa-luggage-cart compare-icon"></i>
+              <h4>Baggage Allowance</h4>
+              <p>Guidance on included baggage rules and carry-on limits.</p>
+            </div>
+            <div className="compare-card">
+              <i className="fas fa-shield-alt compare-icon"></i>
+              <h4>Refund & Change Rules</h4>
+              <p>Clear explanations of ticket flexibility and cancellation terms.</p>
+            </div>
+            <div className="compare-card">
+              <i className="fas fa-sun compare-icon"></i>
+              <h4>Departure & Arrival Times</h4>
+              <p>Convenient daytime schedules when available for easier travel.</p>
+            </div>
+            <div className="compare-card">
+              <i className="fas fa-wheelchair compare-icon"></i>
+              <h4>Mobility Assistance</h4>
+              <p>Help requesting airport assistance and special handling when needed.</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
+      {/* MORE THAN JUST A FLIGHT SEARCH (TRUST) */}
+      <section className="trust-section" style={{ backgroundColor: '#0f172a', color: '#ffffff', padding: '4rem 0' }}>
+        <div className="container">
+          <div style={{ maxWidth: '800px', margin: '0 auto', textAlign: 'center' }}>
+            <h2 style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: '1rem', color: '#ffffff' }}>More Than Just a Flight Search</h2>
+            <p style={{ fontSize: '1.15rem', color: '#cbd5e1', marginBottom: '2.5rem', lineHeight: '1.6' }}>
+              The Final Seat combines online flight search with personal reservation support.
+            </p>
+            <div className="trust-bullets-grid">
+              <div className="trust-bullet">
+                <i className="fas fa-check-circle" style={{ color: '#e2b84d' }}></i>
+                <span>Clear itinerary explanations</span>
+              </div>
+              <div className="trust-bullet">
+                <i className="fas fa-check-circle" style={{ color: '#e2b84d' }}></i>
+                <span>Real human booking assistance</span>
+              </div>
+              <div className="trust-bullet">
+                <i className="fas fa-check-circle" style={{ color: '#e2b84d' }}></i>
+                <span>Support for travelers and family members</span>
+              </div>
+              <div className="trust-bullet">
+                <i className="fas fa-check-circle" style={{ color: '#e2b84d' }}></i>
+                <span>Easy-to-read reservation summaries</span>
+              </div>
+              <div className="trust-bullet">
+                <i className="fas fa-check-circle" style={{ color: '#e2b84d' }}></i>
+                <span>Help before and after booking</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-            <CustomerReviews reviews={flightReviews} variant="flights" />
+      {/* WHAT CUSTOMERS CAN EXPECT */}
+      <section className="expectations-section" style={{ backgroundColor: '#f8fafc', padding: '4rem 0' }}>
+        <div className="container">
+          <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+            <h2 style={{ fontSize: '2rem', color: '#1e293b', fontWeight: 800, marginBottom: '0.5rem' }}>What Customers Can Expect</h2>
+            <p style={{ color: '#64748b', fontSize: '1.05rem', maxWidth: '650px', margin: '0 auto' }}>
+              Our commitment to clear communication and personal assistance on every reservation.
+            </p>
+          </div>
+          <div className="expectations-grid">
+            <div className="expectation-card">
+              <div className="exp-icon"><i className="fas fa-comments"></i></div>
+              <h4>Responsive Communication</h4>
+              <p>Direct support from real booking specialists before and after your reservation.</p>
+            </div>
+            <div className="expectation-card">
+              <div className="exp-icon"><i className="fas fa-search-plus"></i></div>
+              <h4>Itinerary Review</h4>
+              <p>Personal assistance checking connections, layovers, and total journey times.</p>
+            </div>
+            <div className="expectation-card">
+              <div className="exp-icon"><i className="fas fa-file-alt"></i></div>
+              <h4>Clear Reservation Details</h4>
+              <p>Easy-to-understand booking summaries with transparent fare information.</p>
+            </div>
+            <div className="expectation-card">
+              <div className="exp-icon"><i className="fas fa-info-circle"></i></div>
+              <h4>Connection & Baggage Guidance</h4>
+              <p>Clear explanations of baggage allowances and transit requirements.</p>
+            </div>
+            <div className="expectation-card">
+              <div className="exp-icon"><i className="fas fa-headset"></i></div>
+              <h4>Support Through the Process</h4>
+              <p>Dedicated assistance from initial flight search through travel completion.</p>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

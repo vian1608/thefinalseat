@@ -22,21 +22,21 @@ const CONTENT = {
     ],
   },
   flight: {
-    title: 'Seamless Direct Flight Advisory',
+    title: 'Personal Booking Assistance',
     subtitle:
-      'Our passenger support model delivers itinerary clarity and stress-free air logistics in three easy steps.',
+      'Our team helps you compare practical flight options and complete your reservation with clear guidance.',
     steps: [
       {
-        title: 'Specify Itinerary',
-        text: 'Enter your origin, destination, travel dates, and cabin preferences in the inquiry form above.',
+        title: 'Share Your Travel Details',
+        text: 'Enter your route, dates, passenger count and travel preferences.',
       },
       {
-        title: 'Call the Desk',
-        text: 'Use our hotline to speak directly with a flight logistics advisor for domestic and international routing.',
+        title: 'Review Suitable Options',
+        text: 'Compare price, connections, baggage and total travel time.',
       },
       {
-        title: 'Travel with Advisory',
-        text: 'Receive coordinated options by email and 24/7 disruption guidance through your day of travel.',
+        title: 'Complete Your Reservation',
+        text: 'Receive clear booking details and support when you need it.',
       },
     ],
   },

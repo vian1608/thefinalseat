@@ -4,7 +4,7 @@ import './RouteSlider.css';
 
 const AUTO_INTERVAL_MS = 4500;
 
-const RouteSlider = ({ routes, btnClassPrefix = 'flights', autoPlay = true }) => {
+const RouteSlider = ({ routes, btnClassPrefix = 'flights', autoPlay = true, title = 'Popular Flight Options' }) => {
   const sliderRef = useRef(null);
   const [isPaused, setIsPaused] = useState(false);
 
@@ -43,7 +43,7 @@ const RouteSlider = ({ routes, btnClassPrefix = 'flights', autoPlay = true }) =>
       onBlur={() => setIsPaused(false)}
     >
       <div className="route-slider-header">
-        <h2 className={`${btnClassPrefix}-section__title route-slider-title`}>Famous Routes</h2>
+        <h2 className={`${btnClassPrefix}-section__title route-slider-title`}>{title}</h2>
         <div className="route-slider-controls">
           <button
             type="button"
@@ -84,7 +84,7 @@ const RouteSlider = ({ routes, btnClassPrefix = 'flights', autoPlay = true }) =>
                 to={route.path}
                 className={`${btnClassPrefix}-btn ${btnClassPrefix}-btn--cta route-slider-cta`}
               >
-                Request a Quote
+                Check Flight Options
               </Link>
             </div>
           </article>
