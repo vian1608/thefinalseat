@@ -507,6 +507,22 @@ export const bookingService = {
 
     const savedPaymentMethod = await bookingRepository.savePaymentMethodRecord(booking.id, paymentMethodPayload);
     return savedPaymentMethod;
+  },
+
+  /**
+   * Update Payment Splits with Strict Allowlist & Data Integrity Protection
+   */
+  updatePaymentSplits: async (id, splits, adminId = 'admin', reason = 'Payment splits update') => {
+    const booking = await bookingRepository.getById(id);
+    if (!booking) {
+      const err = new Error(`Booking '${id}' not found.`);
+      err.code = 'BOOKING_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+
+    // Code-level guard: Assert no flight mutations occur
+    return await bookingRepository.updatePaymentSplitsAndTotal(booking.id, splits, adminId, reason);
   }
 };
 

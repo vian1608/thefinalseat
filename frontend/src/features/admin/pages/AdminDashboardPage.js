@@ -1552,10 +1552,10 @@ function AdminDashboard() {
                             <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', padding: '14px 16px', color: '#991b1b', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                               <div>
                                 <div style={{ fontWeight: 800, fontSize: '0.95rem', marginBottom: '2px' }}>
-                                  <i className="fas fa-exclamation-triangle" style={{ marginRight: '6px' }}></i> Missing Itinerary Data
+                                  <i className="fas fa-exclamation-triangle" style={{ marginRight: '6px' }}></i> Data Integrity Incident: Missing Itinerary Data
                                 </div>
                                 <div style={{ fontSize: '0.8rem', color: '#7f1d1d' }}>
-                                  No flight itinerary segments are recorded for this booking.
+                                  No flight itinerary segments are recorded for this active booking.
                                 </div>
                               </div>
                               <button

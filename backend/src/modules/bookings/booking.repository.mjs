@@ -1420,10 +1420,31 @@ export const bookingRepository = {
     return splitsMemoryStore.get(bookingId) || [];
   },
 
+  getFlightsCount: async (bookingId) => {
+    try {
+      const { count, error } = await supabase
+        .from('flights')
+        .select('*', { count: 'exact', head: true })
+        .eq('booking_id', bookingId);
+      if (!error && typeof count === 'number' && count > 0) return count;
+
+      const { count: segCount } = await supabase
+        .from('booking_itinerary_segments')
+        .select('*', { count: 'exact', head: true })
+        .eq('booking_id', bookingId);
+      return segCount || 0;
+    } catch (e) {
+      return 0;
+    }
+  },
+
   updatePaymentSplitsAndTotal: async (bookingId, splitsInput = [], adminId = 'admin', reason = 'Payment splits update') => {
     const booking = await bookingRepository.getById(bookingId);
     if (!booking) throw new Error('Booking not found');
     const realId = booking.id;
+
+    // 1. Record initial flight count prior to split update
+    const initialFlightCount = await bookingRepository.getFlightsCount(realId);
 
     if (!Array.isArray(splitsInput) || splitsInput.length === 0) {
       throw new Error('At least one payment split row is required.');
@@ -1431,7 +1452,7 @@ export const bookingRepository = {
 
     const currencies = new Set();
     const formattedSplits = splitsInput.map((s, idx) => {
-      const mName = String(s.merchantName || s.merchant_name || '').trim();
+      const mName = String(s.merchantName || s.merchant_name || s.name || s.merchant || '').trim();
       if (!mName) {
         throw new Error(`Split #${idx + 1}: Merchant name cannot be empty.`);
       }
@@ -1465,7 +1486,7 @@ export const bookingRepository = {
     const calculatedTotal = totalCents / 100;
     const oldTotal = parseFloat(booking.customer_price || booking.total_amount || 0);
 
-    // Save splits
+    // 2. Save splits safely
     await bookingRepository.savePaymentSplits(realId, formattedSplits);
 
     let newStatus = booking.status;
@@ -1497,7 +1518,14 @@ export const bookingRepository = {
       adminId
     });
 
-    return bookingRepository.getById(realId);
+    // 3. Post-execution flight count assertion
+    const postFlightCount = await bookingRepository.getFlightsCount(realId);
+    if (initialFlightCount > 0 && postFlightCount !== initialFlightCount) {
+      logger.error(`[DATA_INTEGRITY_CRITICAL] Flight count changed from ${initialFlightCount} to ${postFlightCount} during payment split save for booking ${realId}!`);
+      throw new Error(`DATA_INTEGRITY_CRITICAL_FAILURE: Flight count changed from ${initialFlightCount} to ${postFlightCount} during payment split update.`);
+    }
+
+    return bookingRepository.getCompleteBookingById(realId);
   },
 
 

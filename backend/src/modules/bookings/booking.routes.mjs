@@ -27,6 +27,8 @@ router.post('/:id/payment-method', bookingController.savePaymentMethod);
 router.patch('/:id/payment-method', bookingController.savePaymentMethod);
 
 // Field-Level Isolated Update Endpoints
+router.patch('/:id/payment-splits', bookingController.updatePaymentSplits);
+router.put('/:id/payment-splits', bookingController.updatePaymentSplits);
 router.patch('/:id/status', bookingController.updateStatus);
 router.patch('/:id/payment', bookingController.updatePayment);
 router.patch('/:id/itinerary', bookingController.updateItinerary);

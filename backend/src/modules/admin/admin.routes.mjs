@@ -41,6 +41,7 @@ router.post('/bookings/:id/restore-snapshot', authenticate, authorize(['admin'])
 router.put('/bookings/:id/save-all', authenticate, authorize(['admin']), adminController.saveAllChanges);
 router.put('/bookings/:id', authenticate, authorize(['admin']), adminController.updateBooking);
 router.put('/bookings/:id/payment-splits', authenticate, authorize(['admin']), adminController.updatePaymentSplits);
+router.patch('/bookings/:id/payment-splits', authenticate, authorize(['admin']), adminController.updatePaymentSplits);
 router.put('/bookings/:id/ticket-details', authenticate, authorize(['admin']), adminController.saveTicketDetails);
 router.post('/bookings/:id/send-final-ticket', authenticate, authorize(['admin']), adminController.sendFinalTicketEmail);
 router.get('/bookings/:id/diagnostic', authenticate, authorize(['admin']), adminController.getBookingDiagnosticData);
