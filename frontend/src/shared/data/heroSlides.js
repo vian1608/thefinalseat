@@ -1,9 +1,9 @@
 const heroImage = (filename) => `${process.env.PUBLIC_URL}/images/hero/${filename}`;
 
 export const heroOfferTag = {
-  label: 'Limited Offer',
-  highlight: 'Up to 20% off',
-  detail: 'on travel within 3 days',
+  label: 'Urgent Travel',
+  highlight: 'Need to travel within 3 days?',
+  detail: 'Get priority assistance and save up to 20% on eligible reservations.',
 };
 
 export const flightHeroSlides = [

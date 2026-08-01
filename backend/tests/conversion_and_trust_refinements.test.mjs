@@ -60,14 +60,16 @@ async function runConversionAndTrustRefinementTests() {
   console.log('✔ TEST 4 PASSED: Popular route card descriptions verified.\n');
 
   // ----------------------------------------------------
-  // TEST 5: URGENT TRAVEL ASSISTANCE SECTION
+  // TEST 5: URGENT TRAVEL ANNOUNCEMENT BANNER & SEARCH HINT
   // ----------------------------------------------------
-  console.log('--- TEST 5: URGENT TRAVEL ASSISTANCE SECTION ---');
-  assert.ok(homeJs.includes('Need To Travel Soon?'), 'Urgent travel section heading must exist');
-  assert.ok(homeJs.includes('We help travelers find suitable options when timing matters.'), 'Urgent travel section subtitle must match');
-  assert.ok(homeJs.includes('Save up to 20% on eligible urgent travel reservations within 3 days.'), '20% off within 3 days callout must exist');
-  assert.ok(homeJs.includes('Request Urgent Travel Help'), 'Urgent travel button CTA must exist');
-  console.log('✔ TEST 5 PASSED: Urgent travel section verified.\n');
+  console.log('--- TEST 5: URGENT TRAVEL ANNOUNCEMENT BANNER & HINT ---');
+  const heroSlidesJs = await fs.readFile(path.join(ROOT_DIR, 'frontend/src/shared/data/heroSlides.js'), 'utf8');
+  assert.ok(heroSlidesJs.includes('Need to travel within 3 days?'), 'Hero banner highlight text must match');
+  assert.ok(heroSlidesJs.includes('Get priority assistance and save up to 20% on eligible reservations.'), 'Hero banner detail text must match');
+  assert.ok(homeJs.includes('Traveling soon?'), 'Urgent hint in search section must exist');
+  assert.ok(homeJs.includes('Our specialists can help review urgent flight options.'), 'Urgent hint body text must match');
+  assert.ok(!homeJs.includes('className="urgent-travel-section"'), 'Large urgent-travel-section must be removed from Home.js');
+  console.log('✔ TEST 5 PASSED: Urgent travel announcement banner and search hint verified.\n');
 
   // ----------------------------------------------------
   // TEST 6: DEDICATED LANDING PAGES & ROUTING

@@ -314,6 +314,10 @@ function Home() {
                     <p className="flights-inquiry__intro">
                       Compare flight options with real-time routes, fares, and personal booking assistance.
                     </p>
+                    <p className="search-urgent-hint" style={{ fontSize: '0.88rem', color: '#8b1538', background: '#faf5f7', padding: '0.45rem 0.8rem', borderRadius: '6px', border: '1px solid #f0d5de', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', marginTop: '0.35rem' }}>
+                      <i className="fas fa-clock" style={{ color: '#8b1538' }}></i>
+                      <span><strong>Traveling soon?</strong> Our specialists can help review urgent flight options.</span>
+                    </p>
                     
                     <form className="flights-form" onSubmit={handleSearchFlights}>
                       
@@ -877,45 +881,6 @@ function Home() {
               <i className="fas fa-wheelchair compare-icon"></i>
               <h4>Mobility Assistance</h4>
               <p>Help requesting airport assistance and special handling when needed.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* URGENT TRAVEL ASSISTANCE SECTION */}
-      <section className="urgent-travel-section" style={{ backgroundColor: '#8b1538', color: '#ffffff', padding: '4rem 0' }}>
-        <div className="container">
-          <div style={{ maxWidth: '800px', margin: '0 auto', textAlign: 'center' }}>
-            <span style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px', color: '#e2b84d', fontWeight: 700, display: 'block', marginBottom: '0.5rem' }}>
-              Urgent Flight Support
-            </span>
-            <h2 style={{ fontSize: '2.2rem', color: '#ffffff', fontWeight: 800, marginBottom: '0.75rem' }}>Need To Travel Soon?</h2>
-            <p style={{ fontSize: '1.1rem', color: '#f1f5f9', opacity: 0.95, marginBottom: '2rem' }}>
-              We help travelers find suitable options when timing matters.
-            </p>
-            <div className="urgent-highlights-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', textAlign: 'left', marginBottom: '2rem' }}>
-              <div className="urgent-item" style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem 1.25rem', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 500 }}>
-                <i className="fas fa-check-circle" style={{ color: '#e2b84d', marginRight: '0.5rem' }}></i>
-                Quick flight comparison
-              </div>
-              <div className="urgent-item" style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem 1.25rem', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 500 }}>
-                <i className="fas fa-check-circle" style={{ color: '#e2b84d', marginRight: '0.5rem' }}></i>
-                Assistance understanding options
-              </div>
-              <div className="urgent-item" style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem 1.25rem', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 500 }}>
-                <i className="fas fa-check-circle" style={{ color: '#e2b84d', marginRight: '0.5rem' }}></i>
-                Support with urgent reservations
-              </div>
-            </div>
-            <div style={{ background: 'rgba(226, 184, 77, 0.15)', border: '1px dashed #e2b84d', borderRadius: '8px', padding: '1rem 1.5rem', display: 'inline-block', marginBottom: '1.75rem' }}>
-              <span style={{ color: '#fef3c7', fontWeight: 600, fontSize: '1rem' }}>
-                Save up to 20% on eligible urgent travel reservations within 3 days.
-              </span>
-            </div>
-            <div>
-              <Link to="/urgent-travel" className="flights-btn flights-btn--primary" style={{ minHeight: '48px', padding: '0.85rem 1.75rem', fontSize: '1.05rem', color: '#8b1538', background: '#ffffff', fontWeight: 700 }}>
-                <i className="fas fa-bolt" style={{ color: '#8b1538' }}></i> Request Urgent Travel Help
-              </Link>
             </div>
           </div>
         </div>
