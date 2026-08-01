@@ -1,16 +1,27 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import LandingCtaSection from '../../../shared/components/LandingCtaSection';
+import FlightSearchPanel from '../components/FlightSearchPanel';
+import analytics from '../../../shared/utils/analytics';
+import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
 import './TravelAssistancePage.css';
 
 function TravelAssistancePage() {
+  useEffect(() => {
+    analytics.trackSeoPageView('travel_assistance');
+  }, []);
+
   return (
     <div className="travel-assistance-page">
       <Helmet>
         <title>Travel Assistance & Flight Booking Support | The Final Seat</title>
         <meta
           name="description"
-          content="Personal flight booking assistance for travelers and families. We help compare routes, connections, baggage allowance and journey time with real human support."
+          content="Search available flight options online or get personal help comparing routes, connections, baggage allowance and journey time with real human support."
+        />
+        <meta
+          name="keywords"
+          content="travel assistance, flight booking support, book Delta flight, find airline tickets, human flight assistance"
         />
       </Helmet>
 
@@ -21,13 +32,53 @@ function TravelAssistancePage() {
             <span className="ta-eyebrow">The Final Seat — Travel Assistance</span>
             <h1>Need Help Booking Your Flight?</h1>
             <p className="ta-lead">
-              We help you compare routes, connections, baggage and total travel time, with real human support throughout the reservation process.
+              Search available flight options online or get personal help comparing routes, connections, baggage and total travel time.
             </p>
             <LandingCtaSection
-              primaryText="Get Travel Assistance"
-              primaryHref="/#inquiry"
+              primaryText="Search Flights"
+              primaryHref="#flight-search-form"
+              secondaryText={`Call ${SUPPORT_PHONE_DISPLAY}`}
+              secondaryHref={SUPPORT_PHONE_HREF}
               variant="hero"
             />
+          </div>
+        </div>
+      </section>
+
+      {/* Embedded Shared Flight Search Panel Section */}
+      <section className="ta-search-section">
+        <div className="container">
+          <FlightSearchPanel
+            pageId="travel_assistance"
+            title="Search Flights Online"
+            subtitle="Compare flight options with real-time routes, fares, and personal booking assistance."
+          />
+
+          {/* Compact Assistance Card */}
+          <div className="compact-assistance-card">
+            <div className="assistance-card-left">
+              <i className="fas fa-headset assistance-card-icon"></i>
+              <div>
+                <h3>Would You Prefer Help?</h3>
+                <p>Our travel specialists can help compare routes, connections, baggage and reservation details.</p>
+              </div>
+            </div>
+            <div className="assistance-card-actions">
+              <a
+                href={SUPPORT_PHONE_HREF}
+                className="btn-compact-phone"
+                onClick={() => analytics.trackCallCtaClicked('travel_assistance')}
+              >
+                <i className="fas fa-phone-alt"></i> Call {SUPPORT_PHONE_DISPLAY}
+              </a>
+              <a
+                href="#inquiry"
+                className="btn-compact-inquiry"
+                onClick={() => analytics.trackAssistanceRequested('travel_assistance')}
+              >
+                Request Assistance
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -64,7 +115,7 @@ function TravelAssistancePage() {
         </div>
       </section>
 
-      {/* What Assistance Is Available */}
+      {/* Benefits Section */}
       <section className="ta-section">
         <div className="container">
           <div className="ta-section__header">
@@ -128,8 +179,8 @@ function TravelAssistancePage() {
           <div className="ta-steps">
             <div className="ta-step">
               <div className="ta-step__num">1</div>
-              <h3>Share Your Route & Dates</h3>
-              <p>Use our flight search form or call our team to share your preferred cities, dates, and travelers.</p>
+              <h3>Search Flights Online</h3>
+              <p>Use our flight search form above or call our team to share your preferred cities, dates, and travelers.</p>
             </div>
             <div className="ta-step">
               <div className="ta-step__num">2</div>
@@ -145,14 +196,14 @@ function TravelAssistancePage() {
         </div>
       </section>
 
-      {/* Urgent Travel Notice & FAQ */}
+      {/* FAQ & Airline Intent Disclosure */}
       <section className="ta-section">
         <div className="container">
           <div className="ta-faq-container">
             <h2>Frequently Asked Questions</h2>
             <div className="ta-faq-item">
               <h4>Can I book a flight for my parent or relative?</h4>
-              <p>Yes. You can select "I am booking for a parent, relative or another traveler" during search and enter their details as the primary passenger while adding your contact information for reservation updates.</p>
+              <p>Yes. You can select "I am arranging this trip for a parent, relative or family member" during search and enter their details as the primary passenger while adding your contact information for updates.</p>
             </div>
             <div className="ta-faq-item">
               <h4>Is urgent travel assistance available?</h4>
@@ -160,20 +211,26 @@ function TravelAssistancePage() {
             </div>
             <div className="ta-faq-item">
               <h4>Will I speak to a real person?</h4>
-              <p>Always. The Final Seat combines online search with direct phone and email support from real reservation specialists.</p>
+              <p>Always. The Final Seat combines online flight search with direct phone and email support from real reservation specialists.</p>
             </div>
+          </div>
+
+          <div className="independent-service-footer-notice">
+            <i className="fas fa-info-circle"></i> The Final Seat is an independent flight-search and reservation-assistance service and is not affiliated with or endorsed by individual airlines.
           </div>
         </div>
       </section>
 
-      {/* CTA Box */}
+      {/* Final CTA Section */}
       <section className="ta-cta-box">
         <div className="container">
           <LandingCtaSection
             title="Ready to Find Your Flight?"
-            description="Speak with a real person or start your flight search online today."
-            primaryText="Get Travel Assistance"
-            primaryHref="/#inquiry"
+            description="Start your flight search online today or speak directly with a travel specialist."
+            primaryText="Search Flights"
+            primaryHref="#flight-search-form"
+            secondaryText={`Call ${SUPPORT_PHONE_DISPLAY}`}
+            secondaryHref={SUPPORT_PHONE_HREF}
             variant="footer"
           />
         </div>

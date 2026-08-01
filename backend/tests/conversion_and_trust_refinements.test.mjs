@@ -82,15 +82,15 @@ async function runConversionAndTrustRefinementTests() {
 
   const taPage = await fs.readFile(path.join(ROOT_DIR, 'frontend/src/features/flights/pages/TravelAssistancePage.js'), 'utf8');
   assert.ok(taPage.includes('Need Help Booking Your Flight?'), 'TravelAssistancePage heading must match');
-  assert.ok(taPage.includes('Get Travel Assistance'), 'TravelAssistancePage CTA must match');
+  assert.ok(taPage.includes('Search Flights') || taPage.includes('Get Travel Assistance'), 'TravelAssistancePage CTA must match');
 
   const bfpPage = await fs.readFile(path.join(ROOT_DIR, 'frontend/src/features/flights/pages/BookingForParentsPage.js'), 'utf8');
-  assert.ok(bfpPage.includes('Helping You Book Flights For Your Parents'), 'BookingForParentsPage heading must match');
-  assert.ok(bfpPage.includes('Find Flight Options'), 'BookingForParentsPage CTA must match');
+  assert.ok(bfpPage.includes('Arranging Travel for a Parent or Relative?') || bfpPage.includes('Helping You Book Flights For Your Parents'), 'BookingForParentsPage heading must match');
+  assert.ok(bfpPage.includes('Search Flights') || bfpPage.includes('Find Flight Options'), 'BookingForParentsPage CTA must match');
 
   const utPage = await fs.readFile(path.join(ROOT_DIR, 'frontend/src/features/flights/pages/UrgentTravelPage.js'), 'utf8');
-  assert.ok(utPage.includes('Need A Flight Within The Next Few Days?'), 'UrgentTravelPage heading must match');
-  assert.ok(utPage.includes('Request Urgent Travel Help'), 'UrgentTravelPage CTA must match');
+  assert.ok(utPage.includes('Need to Travel Within the Next Few Days?') || utPage.includes('Need A Flight Within The Next Few Days?'), 'UrgentTravelPage heading must match');
+  assert.ok(utPage.includes('Search Flights') || utPage.includes('Request Urgent Travel Help'), 'UrgentTravelPage CTA must match');
   console.log('✔ TEST 6 PASSED: All 3 landing pages & routes verified.\n');
 
   // ----------------------------------------------------

@@ -1,16 +1,23 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import LandingCtaSection from '../../../shared/components/LandingCtaSection';
+import FlightSearchPanel from '../components/FlightSearchPanel';
+import analytics from '../../../shared/utils/analytics';
+import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
 import './UrgentTravelPage.css';
 
 function UrgentTravelPage() {
+  useEffect(() => {
+    analytics.trackSeoPageView('urgent_travel');
+  }, []);
+
   return (
     <div className="urgent-travel-page">
       <Helmet>
         <title>Urgent Travel & Last-Minute Flight Support | The Final Seat</title>
         <meta
           name="description"
-          content="Fast, reliable flight booking support when timing matters. Save up to 20% on eligible urgent travel reservations within 3 days with real human assistance."
+          content="Search available flights now or speak with a travel specialist for priority assistance. Save up to 20% on eligible reservations for travel within 3 days."
         />
         <meta
           name="keywords"
@@ -23,35 +30,54 @@ function UrgentTravelPage() {
         <div className="container">
           <div className="ut-hero__content">
             <span className="ut-eyebrow">The Final Seat — Urgent Flight Support</span>
-            <h1>Need A Flight Within The Next Few Days?</h1>
+            <h1>Need to Travel Within the Next Few Days?</h1>
             <p className="ut-lead">
-              We help travelers compare real-time route availability, baggage rules, and schedules when timing is critical. Save up to 20% on eligible urgent travel reservations within 3 days.
+              Search available flights now or speak with a travel specialist for priority assistance. Save up to 20% on eligible reservations for travel within 3 days.
             </p>
             <LandingCtaSection
-              primaryText="Request Urgent Travel Help"
-              primaryHref="/#inquiry"
+              primaryText="Search Flights"
+              primaryHref="#flight-search-form"
+              secondaryText={`Call ${SUPPORT_PHONE_DISPLAY}`}
+              secondaryHref={SUPPORT_PHONE_HREF}
               variant="hero"
             />
           </div>
         </div>
       </section>
 
-      {/* Offer Banner */}
-      <div className="ut-offer-banner">
+      {/* Flight Search Section */}
+      <section className="ut-search-section">
         <div className="container">
+          <FlightSearchPanel
+            pageId="urgent_travel"
+            isUrgentContext={true}
+            title="Search Urgent Flights"
+            subtitle="Search immediate flight options or speak with a specialist for priority travel help."
+          />
+
+          {/* Urgent Offer Banner */}
           <div className="ut-offer-box">
-            <span className="ut-offer-badge">Limited Offer</span>
-            <h3>Save Up To 20% On Travel Within 3 Days</h3>
-            <p>Applied to eligible time-sensitive itineraries. Speak with our travel specialists to verify instant availability.</p>
+            <div className="ut-offer-left">
+              <span className="ut-offer-badge">Priority Travel Support</span>
+              <h3>Save Up To 20% On Travel Within 3 Days</h3>
+              <p>Applied to eligible time-sensitive itineraries. Savings depend on route availability and cabin class.</p>
+            </div>
+            <a
+              href={SUPPORT_PHONE_HREF}
+              className="btn-urgent-call"
+              onClick={() => analytics.trackCallCtaClicked('urgent_travel')}
+            >
+              <i className="fas fa-bolt"></i> Priority Call: {SUPPORT_PHONE_DISPLAY}
+            </a>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Key Services */}
       <section className="ut-section">
         <div className="container">
           <div className="ut-section__header">
-            <h2>Why Use Our Urgent Travel Service</h2>
+            <h2>Why Use Our Urgent Travel Desk</h2>
             <p>Fast responses, clear flight options, and direct human coordination.</p>
           </div>
 
@@ -72,6 +98,10 @@ function UrgentTravelPage() {
               <p>Direct contact with dedicated travel specialists who verify itinerary rules before reservation.</p>
             </div>
           </div>
+
+          <div className="independent-service-footer-notice" style={{ marginTop: '3rem' }}>
+            <i className="fas fa-info-circle"></i> The Final Seat is an independent flight-search and reservation-assistance service and is not affiliated with or endorsed by individual airlines.
+          </div>
         </div>
       </section>
 
@@ -80,9 +110,11 @@ function UrgentTravelPage() {
         <div className="container">
           <LandingCtaSection
             title="Need Immediate Flight Assistance?"
-            description="Our urgent travel desk is open 24/7. Call or request online assistance now."
-            primaryText="Request Urgent Travel Help"
-            primaryHref="/#inquiry"
+            description="Our urgent travel desk is open 24/7. Search flights online or call for priority help."
+            primaryText="Search Flights"
+            primaryHref="#flight-search-form"
+            secondaryText={`Call ${SUPPORT_PHONE_DISPLAY}`}
+            secondaryHref={SUPPORT_PHONE_HREF}
             variant="footer"
           />
         </div>

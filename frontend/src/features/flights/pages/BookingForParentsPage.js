@@ -1,20 +1,27 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import LandingCtaSection from '../../../shared/components/LandingCtaSection';
+import FlightSearchPanel from '../components/FlightSearchPanel';
+import analytics from '../../../shared/utils/analytics';
+import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
 import './BookingForParentsPage.css';
 
 function BookingForParentsPage() {
+  useEffect(() => {
+    analytics.trackSeoPageView('booking_for_parents');
+  }, []);
+
   return (
     <div className="booking-for-parents-page">
       <Helmet>
         <title>Helping You Book Flights For Your Parents | The Final Seat</title>
         <meta
           name="description"
-          content="Simple, trustworthy flight booking support when arranging travel for parents, elderly relatives, or family members. Real human assistance with routes, baggage, and layovers."
+          content="Search flight options online or get help comparing travel time, connections, baggage allowance and route complexity when arranging flights for parents or family members."
         />
         <meta
           name="keywords"
-          content="book flights for parents, elderly travel assistance, family flight booking, travel assistance for seniors"
+          content="book flights for parents, family flight booking, travel assistance for family, book flight for relative"
         />
       </Helmet>
 
@@ -23,15 +30,45 @@ function BookingForParentsPage() {
         <div className="container">
           <div className="bfp-hero__content">
             <span className="bfp-eyebrow">The Final Seat — Family Booking Assistance</span>
-            <h1>Helping You Book Flights For Your Parents</h1>
+            <h1>Arranging Travel for a Parent or Relative?</h1>
             <p className="bfp-lead">
-              We make it easy to arrange safe, comfortable, and manageable flight itineraries for your parents or older family members, supported by real travel specialists.
+              Search flight options online or get help comparing travel time, connections, baggage and route complexity with real human support.
             </p>
             <LandingCtaSection
-              primaryText="Find Flight Options"
-              primaryHref="/#inquiry"
+              primaryText="Search Flights"
+              primaryHref="#flight-search-form"
+              secondaryText={`Call ${SUPPORT_PHONE_DISPLAY}`}
+              secondaryHref={SUPPORT_PHONE_HREF}
               variant="hero"
             />
+          </div>
+        </div>
+      </section>
+
+      {/* Flight Search Section */}
+      <section className="bfp-search-section">
+        <div className="container">
+          <FlightSearchPanel
+            pageId="booking_for_parents"
+            defaultBookingForSomeoneElse={true}
+            title="Search Flights for Parents & Relatives"
+            subtitle="Compare flight options with clear layover details, seating preferences, and family reservation support."
+          />
+
+          {/* Compact Family Assistance Notice */}
+          <div className="family-assistance-banner">
+            <i className="fas fa-heart-spouse family-banner-icon"></i>
+            <div>
+              <h3>Family Booking Support Available</h3>
+              <p>We can help families review flight options and understand the complete itinerary before reservation.</p>
+            </div>
+            <a
+              href={SUPPORT_PHONE_HREF}
+              className="btn-family-call"
+              onClick={() => analytics.trackCallCtaClicked('booking_for_parents')}
+            >
+              <i className="fas fa-phone-alt"></i> Call {SUPPORT_PHONE_DISPLAY}
+            </a>
           </div>
         </div>
       </section>
@@ -48,7 +85,7 @@ function BookingForParentsPage() {
             <div className="bfp-card">
               <div className="bfp-card__icon"><i className="fas fa-smile"></i></div>
               <h3>Easy Booking Process</h3>
-              <p>Simple flight selection without requiring parents to navigate confusing online forms or complex airline apps.</p>
+              <p>Simple flight selection without requiring family members to navigate confusing automated systems.</p>
             </div>
             <div className="bfp-card">
               <div className="bfp-card__icon"><i className="fas fa-info-circle"></i></div>
@@ -57,13 +94,13 @@ function BookingForParentsPage() {
             </div>
             <div className="bfp-card">
               <div className="bfp-card__icon"><i className="fas fa-route"></i></div>
-              <h3>Support with Complex Routes</h3>
+              <h3>Support with Layovers</h3>
               <p>Special care evaluating layovers and transfers to ensure connections are stress-free and manageable.</p>
             </div>
             <div className="bfp-card">
-              <div className="bfp-card__icon"><i className="fas fa-wheelchair"></i></div>
-              <h3>Assistance for Older Travelers</h3>
-              <p>Help adding wheelchair assistance, special meal requests, and daytime departure preferences.</p>
+              <div className="bfp-card__icon"><i className="fas fa-hands-helping"></i></div>
+              <h3>Special Service Coordination</h3>
+              <p>Help adding wheelchair assistance, meal requests, and preferred daytime departure options.</p>
             </div>
           </div>
         </div>
@@ -80,19 +117,23 @@ function BookingForParentsPage() {
           <div className="bfp-steps">
             <div className="bfp-step">
               <div className="bfp-step__num">1</div>
-              <h3>Select Traveling Passengers</h3>
-              <p>Enter your parents or relatives as the primary passengers on the ticket.</p>
+              <h3>Search Flights Online</h3>
+              <p>Search routes above or select "I am arranging this trip for a parent, relative or family member".</p>
             </div>
             <div className="bfp-step">
               <div className="bfp-step__num">2</div>
-              <h3>Add Your Assisting Contact</h3>
-              <p>Include your email and phone number to receive confirmation notices and status updates.</p>
+              <h3>Add Your Contact Information</h3>
+              <p>Include your email and phone number to receive confirmation notices and real-time flight status updates.</p>
             </div>
             <div className="bfp-step">
               <div className="bfp-step__num">3</div>
               <h3>Review & Confirm</h3>
               <p>Our travel specialists review connection times and flight details before issuing final tickets.</p>
             </div>
+          </div>
+
+          <div className="independent-service-footer-notice" style={{ marginTop: '3rem' }}>
+            <i className="fas fa-info-circle"></i> The Final Seat is an independent flight-search and reservation-assistance service and is not affiliated with or endorsed by individual airlines.
           </div>
         </div>
       </section>
@@ -101,10 +142,12 @@ function BookingForParentsPage() {
       <section className="bfp-cta-box">
         <div className="container">
           <LandingCtaSection
-            title="Need Help Arranging Travel For A Parent?"
-            description="Our travel specialists are ready to assist with schedule comparison and ticket reservation."
-            primaryText="Find Flight Options"
-            primaryHref="/#inquiry"
+            title="Ready to Find Flights For Your Family?"
+            description="Search available flight options online or speak with a travel specialist."
+            primaryText="Search Flights"
+            primaryHref="#flight-search-form"
+            secondaryText={`Call ${SUPPORT_PHONE_DISPLAY}`}
+            secondaryHref={SUPPORT_PHONE_HREF}
             variant="footer"
           />
         </div>
