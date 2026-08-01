@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { flightAPI } from '../../../shared/api/api';
 import './SearchResultsPage.css';
+import ModifySearchSummaryBar from '../components/ModifySearchSummaryBar';
+import ModifySearchModal from '../components/ModifySearchModal';
 import FlightResultRow, { normalizeFlight } from '../components/FlightResultRow';
 
 // Helper to safely format error into string
@@ -102,6 +104,17 @@ function SearchResultsContent() {
 
   // Mobile Filter Drawer State
   const [showFiltersDrawer, setShowFiltersDrawer] = useState(false);
+  const [isModifySearchOpen, setIsModifySearchOpen] = useState(false);
+
+  const handleUpdateSearchFromResults = (updatedParams) => {
+    setIsModifySearchOpen(false);
+    sessionStorage.removeItem('selectedFlight');
+    sessionStorage.removeItem('selectedReturnFlight');
+    sessionStorage.removeItem('bookingDraft');
+
+    const searchUrl = `/search?from=${encodeURIComponent(updatedParams.from)}&to=${encodeURIComponent(updatedParams.to)}&departure=${encodeURIComponent(updatedParams.departure)}&return=${encodeURIComponent(updatedParams.return || '')}&tripType=${encodeURIComponent(updatedParams.tripType)}&adults=${updatedParams.adults}&children=${updatedParams.children}&infants=${updatedParams.infants}&cabin=${encodeURIComponent(updatedParams.cabinClass)}`;
+    navigate(searchUrl);
+  };
 
   const popoverRef = useRef(null);
 
@@ -649,6 +662,11 @@ function SearchResultsContent() {
         {/* RESULTS SECTION */}
         <div className="results-main-panel">
           
+          <ModifySearchSummaryBar
+            searchParams={searchParams || {}}
+            onOpenModifyModal={() => setIsModifySearchOpen(true)}
+          />
+
           {/* Top Bar with Route, Dates, and Outlined filter chips */}
           <div className="results-toolbar-row">
             <div className="results-meta-header-row">
@@ -892,6 +910,14 @@ function SearchResultsContent() {
         </div>
 
       </div>
+
+      <ModifySearchModal
+        isOpen={isModifySearchOpen}
+        onClose={() => setIsModifySearchOpen(false)}
+        initialSearch={searchParams || {}}
+        onUpdateSearch={handleUpdateSearchFromResults}
+        isCheckoutPage={false}
+      />
     </div>
   );
 }

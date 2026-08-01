@@ -11,6 +11,8 @@ import InternationalPhoneInput from '../../../shared/components/InternationalPho
 import CountrySelect from '../../../shared/components/CountrySelect';
 import EmailInput from '../../../shared/components/EmailInput';
 
+import ModifySearchModal from '../../flights/components/ModifySearchModal';
+
 import './BookingPage.css';
 
 const detectCardBrand = (number = '') => {
@@ -79,6 +81,52 @@ function Booking() {
   const [openSections, setOpenSections] = useState({ travellers: true, contact: false, requests: false, payment: false });
   const [showSummaryMobile, setShowSummaryMobile] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [isModifySearchOpen, setIsModifySearchOpen] = useState(false);
+
+  const handleUpdateSearchFromCheckout = (updatedParams) => {
+    const newAdults = parseInt(updatedParams.adults || 1, 10);
+    const newChildren = parseInt(updatedParams.children || 0, 10);
+    const newInfants = parseInt(updatedParams.infants || 0, 10);
+    const newTotalPax = newAdults + newChildren + newInfants;
+
+    if (newTotalPax !== passengersList.length) {
+      let updatedList = [...passengersList];
+      if (newTotalPax > passengersList.length) {
+        for (let i = passengersList.length; i < newTotalPax; i++) {
+          let role = 'adult';
+          if (i >= newAdults && i < newAdults + newChildren) role = 'child';
+          else if (i >= newAdults + newChildren) role = 'infant';
+
+          updatedList.push({
+            role,
+            title: '',
+            firstName: '',
+            middleName: '',
+            lastName: '',
+            dateOfBirth: '',
+            gender: '',
+            nationality: 'US',
+            passportNumber: '',
+            passportExpiry: '',
+            redressNumber: '',
+            knownTravelerNumber: ''
+          });
+        }
+      } else {
+        updatedList = updatedList.slice(0, newTotalPax);
+      }
+      setPassengersList(updatedList);
+    }
+
+    sessionStorage.removeItem('selectedFlight');
+    sessionStorage.removeItem('selectedReturnFlight');
+    sessionStorage.removeItem('bookingDraft');
+
+    const searchUrl = `/search?from=${encodeURIComponent(updatedParams.from)}&to=${encodeURIComponent(updatedParams.to)}&departure=${encodeURIComponent(updatedParams.departure)}&return=${encodeURIComponent(updatedParams.return || '')}&tripType=${encodeURIComponent(updatedParams.tripType)}&adults=${newAdults}&children=${newChildren}&infants=${newInfants}&cabin=${encodeURIComponent(updatedParams.cabinClass)}`;
+    
+    setIsModifySearchOpen(false);
+    navigate(searchUrl);
+  };
 
   const toggleSection = (key) => {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -1015,7 +1063,17 @@ function Booking() {
               <strong>${pricing.total} USD <i className={`fas fa-chevron-${showSummaryMobile ? 'up' : 'down'}`}></i></strong>
             </button>
             <div className={`summary-sticky-card ${showSummaryMobile ? 'mobile-expanded' : 'mobile-collapsed'}`}>
-              <h3 className="summary-card-title">Itinerary Summary</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
+                <h3 className="summary-card-title" style={{ margin: 0 }}>Your Selected Itinerary</h3>
+                <button
+                  type="button"
+                  onClick={() => setIsModifySearchOpen(true)}
+                  className="btn-modify-search-trigger"
+                  style={{ padding: '6px 14px', fontSize: '0.85rem' }}
+                >
+                  <i className="fas fa-edit"></i> Modify Search
+                </button>
+              </div>
 
               <ItineraryCard
                 flight={flight}
@@ -1054,6 +1112,24 @@ function Booking() {
           </aside>
         </div>
       </div>
+
+      <ModifySearchModal
+        isOpen={isModifySearchOpen}
+        onClose={() => setIsModifySearchOpen(false)}
+        initialSearch={{
+          from: flight?.departureAirport || flight?.origin || 'JFK',
+          to: flight?.arrivalAirport || flight?.destination || 'LHR',
+          departure: flight?.departureDate || '',
+          return: returnFlight?.departureDate || '',
+          tripType: returnFlight ? 'round-trip' : 'one-way',
+          adults: passengersList.filter(p => p.role === 'adult').length || 1,
+          children: passengersList.filter(p => p.role === 'child').length || 0,
+          infants: passengersList.filter(p => p.role === 'infant').length || 0,
+          cabinClass: flight?.cabinClass || 'Economy'
+        }}
+        onUpdateSearch={handleUpdateSearchFromCheckout}
+        isCheckoutPage={true}
+      />
     </div>
   );
 }

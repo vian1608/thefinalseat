@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { flightAPI } from '../../../shared/api/api';
 import FlightResultRow, { normalizeFlight } from '../components/FlightResultRow';
+import ModifySearchSummaryBar from '../components/ModifySearchSummaryBar';
+import ModifySearchModal from '../components/ModifySearchModal';
 import './SearchResultsPage.css';
 
 function ReturnFlightSelection() {
@@ -9,6 +11,7 @@ function ReturnFlightSelection() {
   const [flights, setFlights] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchParams, setSearchParams] = useState(null);
+  const [isModifySearchOpen, setIsModifySearchOpen] = useState(false);
 
   // Accordion Expand State
   const [expandedFlightId, setExpandedFlightId] = useState(null);
@@ -94,10 +97,25 @@ function ReturnFlightSelection() {
     );
   }
 
+  const handleUpdateSearchFromReturn = (updatedParams) => {
+    setIsModifySearchOpen(false);
+    sessionStorage.removeItem('selectedFlight');
+    sessionStorage.removeItem('selectedReturnFlight');
+    sessionStorage.removeItem('bookingDraft');
+
+    const searchUrl = `/search?from=${encodeURIComponent(updatedParams.from)}&to=${encodeURIComponent(updatedParams.to)}&departure=${encodeURIComponent(updatedParams.departure)}&return=${encodeURIComponent(updatedParams.return || '')}&tripType=${encodeURIComponent(updatedParams.tripType)}&adults=${updatedParams.adults}&children=${updatedParams.children}&infants=${updatedParams.infants}&cabin=${encodeURIComponent(updatedParams.cabinClass)}`;
+    navigate(searchUrl);
+  };
+
   return (
     <div className="search-results-page">
       <div className="container" style={{ maxWidth: '1000px', margin: '0 auto' }}>
         
+        <ModifySearchSummaryBar
+          searchParams={searchParams || {}}
+          onOpenModifyModal={() => setIsModifySearchOpen(true)}
+        />
+
         {/* Results Toolbar */}
         <div className="results-toolbar-comparison" style={{ marginBottom: '20px' }}>
           <div className="results-meta-text">
@@ -117,7 +135,7 @@ function ReturnFlightSelection() {
               </div>
               <h3>No return flights found</h3>
               <p>No return flights match your outbound selection, date, and routes. Try modifying your travel criteria.</p>
-              <button onClick={() => navigate('/')} className="btn-outline-modify">Back to Home</button>
+              <button onClick={() => setIsModifySearchOpen(true)} className="btn-outline-modify">Modify Search</button>
             </div>
           ) : (
             normalizedFlights.map((flight) => (
@@ -135,6 +153,14 @@ function ReturnFlightSelection() {
         </div>
 
       </div>
+
+      <ModifySearchModal
+        isOpen={isModifySearchOpen}
+        onClose={() => setIsModifySearchOpen(false)}
+        initialSearch={searchParams || {}}
+        onUpdateSearch={handleUpdateSearchFromReturn}
+        isCheckoutPage={false}
+      />
     </div>
   );
 }
