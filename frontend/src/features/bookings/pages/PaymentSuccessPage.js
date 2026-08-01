@@ -111,60 +111,100 @@ function PaymentSuccessPage() {
   }
 
   // ── 3. DATA EXTRACTION & DERIVED VALUES ──────────────────────────────────
-  const isPaid = (booking.payment_status || booking.paymentStatus || '').toLowerCase() === 'paid';
-  const passengerName = booking.passenger_name || booking.passengerName || 'Valued Traveler';
+  // ── 3. DATA EXTRACTION & DERIVED VALUES ──────────────────────────────────
+  const isPaid = (booking.booking?.paymentStatus || booking.payment_status || booking.paymentStatus || '').toLowerCase() === 'paid';
+  const passengerName = booking.booking?.passengerName || booking.passenger_name || booking.passengerName || 'Valued Traveler';
   const firstName = passengerName.split(' ')[0] || 'Traveler';
-  const code = booking.confirmation_code || booking.confirmationCode || booking.bookingId || confirmationCodeParam;
-  const email = booking.email || userEmailParam || 'customer@example.com';
-  const phone = booking.phone || 'N/A';
-  const bookingDate = booking.created_at ? new Date(booking.created_at).toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric'
-  }) : new Date().toLocaleDateString('en-US');
+  const code = booking.booking?.confirmationCode || booking.confirmation_code || booking.confirmationCode || booking.bookingId || confirmationCodeParam;
+  const email = booking.booking?.email || booking.email || userEmailParam || 'customer@example.com';
+  const phone = booking.booking?.phone || booking.phone || 'N/A';
+  const bookingDate = (booking.booking?.bookingDate || booking.created_at)
+    ? new Date(booking.booking?.bookingDate || booking.created_at).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'long', day: 'numeric'
+      })
+    : new Date().toLocaleDateString('en-US');
 
   const paymentStatusDisplay = isPaid ? 'Paid' : 'Pending';
-  const bookingStatusDisplay = (booking.status || 'PENDING').toUpperCase();
+  const bookingStatusDisplay = (booking.booking?.status || booking.status || 'PENDING').toUpperCase();
 
-  const isEmailSent = !!(booking.authorization_email_sent_at || booking.emailSentAt || booking.email_sent_at);
-  const emailNoticeMessage = isEmailSent
-    ? `Your confirmation email is on its way to ${email}.`
-    : `Your reservation is saved, but we could not send the confirmation email. Please keep your booking ID.`;
+  // Email Delivery Status Notice (Authoritative backend status)
+  const emailDeliveryStatus = booking.emailDelivery?.status || booking.emailDeliveryStatus || (booking.authorization_email_sent_at ? 'SENT' : 'UNATTEMPTED');
+
+  let emailNoticeMessage = '';
+  let emailNoticeType = 'info';
+  if (emailDeliveryStatus === 'SENT') {
+    emailNoticeType = 'success';
+    emailNoticeMessage = `Your booking confirmation has been sent to ${email}.`;
+  } else if (emailDeliveryStatus === 'FAILED') {
+    emailNoticeType = 'warn';
+    const errDetail = booking.emailDelivery?.errorMessage || '';
+    emailNoticeMessage = `Your reservation is saved. Confirmation email delivery notice: ${errDetail || 'Provider attempt logged'}.`;
+  } else {
+    emailNoticeType = 'info';
+    emailNoticeMessage = `Email delivery status is unavailable. Please retain your confirmation code: ${code}.`;
+  }
 
   // Itinerary Segments (Authored solely from backend flights list)
   const flightsList = Array.isArray(booking.flights) && booking.flights.length > 0
     ? booking.flights
-    : (Array.isArray(booking.itinerary_segments) && booking.itinerary_segments.length > 0
-      ? booking.itinerary_segments
-      : []);
+    : (booking.itinerary?.outbound || (Array.isArray(booking.itinerary_segments) && booking.itinerary_segments.length > 0 ? booking.itinerary_segments : []));
 
-  const outboundSegments = flightsList.filter(f => f.leg === 'outbound' || (!f.leg && flightsList.indexOf(f) === 0));
-  const returnSegments = flightsList.filter(f => f.leg === 'return' || (!f.leg && flightsList.indexOf(f) > 0));
-  const allSegments = flightsList;
+  const outboundSegments = (booking.itinerary?.outbound && booking.itinerary.outbound.length > 0)
+    ? booking.itinerary.outbound
+    : flightsList.filter(f => (f.leg || f.journey_direction || '').toLowerCase() === 'outbound' || (!f.leg && flightsList.indexOf(f) === 0));
 
-  // Price Calculation & Validation
-  const rawPrice = parseFloat(booking.customer_price ?? booking.total_amount ?? booking.totalAmount ?? 0);
+  const returnSegments = (booking.itinerary?.return && booking.itinerary.return.length > 0)
+    ? booking.itinerary.return
+    : flightsList.filter(f => (f.leg || f.journey_direction || '').toLowerCase() === 'return' || (!f.leg && flightsList.indexOf(f) > 0));
+
+  const allSegments = [...outboundSegments, ...returnSegments];
+
+  const isSegmentValid = (seg) => {
+    const origin = seg.departureAirport || seg.originCode || seg.departure_airport || seg.origin_airport;
+    const dest = seg.arrivalAirport || seg.destinationCode || seg.arrival_airport || seg.destination_airport;
+    const carrier = seg.airlineName || seg.carrier_name || seg.airline;
+    const fn = seg.flightNumber || seg.flight_number;
+    return !!(origin && dest && carrier && fn);
+  };
+
+  const isItineraryComplete = allSegments.length > 0 && allSegments.every(isSegmentValid);
+
+  // Price Calculation & Validation (Section 8 rule: Positive numeric total or unavailable)
+  const rawPrice = parseFloat(booking.booking?.totalAmount ?? booking.totalAmount ?? booking.total_amount ?? booking.customer_price ?? 0);
   const hasValidPrice = !isNaN(rawPrice) && rawPrice > 0;
-  const totalPrice = hasValidPrice ? rawPrice.toFixed(2) : '0.00';
-  const currency = (booking.currency || 'USD').toUpperCase();
+  const currency = (booking.booking?.currency || booking.currency || 'USD').toUpperCase();
+  const totalPriceDisplay = hasValidPrice ? `$${rawPrice.toFixed(2)} ${currency}` : 'Reservation amount unavailable';
 
-  // Payment Method Metadata Reference
-  const pm = booking.paymentMethod || booking.payment_method || {};
-  const cardholderName = pm.cardholder_name || pm.cardholderName || booking.passenger_name || passengerName;
-  const cardBrand = pm.card_brand || pm.cardBrand || 'Card';
-  const cardLast4 = pm.card_last4 || pm.cardLast4 || '4242';
-  const expMonth = pm.card_exp_month || pm.cardExpMonth || '12';
-  const expYear = pm.card_exp_year || pm.cardExpYear || '2028';
-  const cardDisplay = `${cardBrand} ending in ${cardLast4}`;
+  // Payment Method Metadata Reference (Section 2, 5, 6 rules)
+  const cardRef = booking.cardReference || booking.paymentMethod || booking.payment_method || {};
+  const cardholderName = cardRef.cardholderName || cardRef.cardholder_name || booking.passenger_name || passengerName;
+  const cardBrand = cardRef.cardBrand || cardRef.card_brand || cardRef.brand || null;
+  const rawLast4 = String(cardRef.last4 || cardRef.card_last4 || cardRef.cardLast4 || '').replace(/\D/g, '');
+  const validLast4 = /^\d{4}$/.test(rawLast4) ? rawLast4 : null;
 
-  const billingAddr = [
-    pm.billing_address_line1 || pm.billingAddress,
-    pm.billing_address_line2,
-    pm.billing_city,
-    pm.billing_state,
-    pm.billing_postal_code,
-    pm.billing_country
+  let cardDisplay = '';
+  if (cardBrand && validLast4) {
+    cardDisplay = `${cardBrand} ending in ${validLast4}`;
+  } else if (validLast4) {
+    cardDisplay = `Card ending in ${validLast4}`;
+  } else {
+    cardDisplay = 'Card ending unavailable';
+  }
+
+  const expMonth = cardRef.expMonth || cardRef.card_exp_month || cardRef.cardExpMonth;
+  const expYear = cardRef.expYear || cardRef.card_exp_year || cardRef.cardExpYear;
+  const expDisplay = (expMonth && expYear) ? `${expMonth}/${expYear}` : 'N/A';
+
+  const billingAddr = cardRef.billingAddress || [
+    cardRef.billing_address_line1 || cardRef.billingAddressLine1,
+    cardRef.billing_address_line2 || cardRef.billingAddressLine2,
+    cardRef.billing_city || cardRef.billingCity,
+    cardRef.billing_state || cardRef.billingState,
+    cardRef.billing_postal_code || cardRef.billingPostalCode,
+    cardRef.billing_country || cardRef.billingCountry
   ].filter(Boolean).join(', ') || 'On File';
 
-  const billingPhone = pm.billing_phone || pm.billingPhone || phone;
+  const billingPhone = cardRef.billingPhone || cardRef.billing_phone || phone;
 
   return (
     <div className="confirmation-page-wrapper">
@@ -242,9 +282,9 @@ function PaymentSuccessPage() {
               <i className="fas fa-plane-departure"></i> Flight Itinerary
             </h3>
 
-            {allSegments.length === 0 ? (
+            {!isItineraryComplete ? (
               <div className="incomplete-itinerary-alert">
-                <i className="fas fa-exclamation-triangle"></i> Itinerary details are currently incomplete. Our operations team has been notified to attach segment routing.
+                <i className="fas fa-exclamation-triangle"></i> Itinerary details are currently incomplete.
               </div>
             ) : (
               <div className="itinerary-segments-list">
@@ -262,8 +302,8 @@ function PaymentSuccessPage() {
                         </div>
                         <div className="segment-route">
                           <div className="route-point">
-                            <span className="airport-code">{seg.originCode || seg.origin_airport}</span>
-                            <span className="city-name">{seg.originCity || seg.origin_city || ''}</span>
+                            <span className="airport-code">{seg.departureAirport || seg.originCode || seg.departure_airport || seg.origin_airport}</span>
+                            <span className="city-name">{seg.originName || seg.originCity || seg.origin_city || ''}</span>
                             <span className="time-date">{seg.departureDate || seg.departure_date} {seg.departureTime || seg.departure_time || ''}</span>
                           </div>
                           <div className="route-arrow">
@@ -271,8 +311,8 @@ function PaymentSuccessPage() {
                             <span className="stops-count">{seg.stops === 0 ? 'Non-stop' : `${seg.stops} stop(s)`}</span>
                           </div>
                           <div className="route-point">
-                            <span className="airport-code">{seg.destinationCode || seg.destination_airport}</span>
-                            <span className="city-name">{seg.destinationCity || seg.destination_city || ''}</span>
+                            <span className="airport-code">{seg.arrivalAirport || seg.destinationCode || seg.arrival_airport || seg.destination_airport}</span>
+                            <span className="city-name">{seg.destinationName || seg.destinationCity || seg.destination_city || ''}</span>
                             <span className="time-date">{seg.arrivalDate || seg.arrival_date} {seg.arrivalTime || seg.arrival_time || ''}</span>
                           </div>
                         </div>
@@ -295,8 +335,8 @@ function PaymentSuccessPage() {
                         </div>
                         <div className="segment-route">
                           <div className="route-point">
-                            <span className="airport-code">{seg.originCode || seg.origin_airport}</span>
-                            <span className="city-name">{seg.originCity || seg.origin_city || ''}</span>
+                            <span className="airport-code">{seg.departureAirport || seg.originCode || seg.departure_airport || seg.origin_airport}</span>
+                            <span className="city-name">{seg.originName || seg.originCity || seg.origin_city || ''}</span>
                             <span className="time-date">{seg.departureDate || seg.departure_date} {seg.departureTime || seg.departure_time || ''}</span>
                           </div>
                           <div className="route-arrow">
@@ -304,8 +344,8 @@ function PaymentSuccessPage() {
                             <span className="stops-count">{seg.stops === 0 ? 'Non-stop' : `${seg.stops} stop(s)`}</span>
                           </div>
                           <div className="route-point">
-                            <span className="airport-code">{seg.destinationCode || seg.destination_airport}</span>
-                            <span className="city-name">{seg.destinationCity || seg.destination_city || ''}</span>
+                            <span className="airport-code">{seg.arrivalAirport || seg.destinationCode || seg.arrival_airport || seg.destination_airport}</span>
+                            <span className="city-name">{seg.destinationName || seg.destinationCity || seg.destination_city || ''}</span>
                             <span className="time-date">{seg.arrivalDate || seg.arrival_date} {seg.arrivalTime || seg.arrival_time || ''}</span>
                           </div>
                         </div>
@@ -327,7 +367,7 @@ function PaymentSuccessPage() {
             <div className="price-summary-box">
               <div className="price-row price-row--total">
                 <span>Total Reservation Amount:</span>
-                <strong>${totalPrice} {currency}</strong>
+                <strong>{totalPriceDisplay}</strong>
               </div>
             </div>
           </div>
@@ -350,7 +390,7 @@ function PaymentSuccessPage() {
               </div>
               <div className="res-field">
                 <span className="res-field-label">Expiration</span>
-                <span className="res-field-val">{expMonth}/{expYear}</span>
+                <span className="res-field-val">{expDisplay}</span>
               </div>
               <div className="res-field">
                 <span className="res-field-label">Billing Phone</span>
@@ -366,8 +406,8 @@ function PaymentSuccessPage() {
         </div>
 
         {/* ── 3. Email Delivery Status Notice ─────────────────────────────── */}
-        <div className={`email-notice-box email-notice-box--${isEmailSent ? 'success' : 'warn'}`}>
-          <i className={`fas ${isEmailSent ? 'fa-envelope-open-text' : 'fa-info-circle'}`}></i>
+        <div className={`email-notice-box email-notice-box--${emailNoticeType}`}>
+          <i className={`fas ${emailNoticeType === 'success' ? 'fa-envelope-open-text' : (emailNoticeType === 'warn' ? 'fa-exclamation-triangle' : 'fa-info-circle')}`}></i>
           <span>{emailNoticeMessage}</span>
         </div>
 

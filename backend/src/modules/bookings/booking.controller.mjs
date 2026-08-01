@@ -1,5 +1,7 @@
 import bookingService from './booking.service.mjs';
+import { bookingRepository } from './booking.repository.mjs';
 import { sendBookingConfirmation, sendBookingRequestReceivedEmail } from '../../integrations/resend/resend.service.mjs';
+import { buildCanonicalItinerary } from '../../shared/utils/airline-lookup.mjs';
 import logger from '../../config/logger.mjs';
 
 export const bookingController = {
@@ -57,15 +59,69 @@ export const bookingController = {
         });
       }
 
-      const totalAmt = parseFloat(
-        completeBooking.customer_price ??
-        completeBooking.total_amount ??
-        completeBooking.pricing?.customerTotal ??
-        completeBooking.amount ??
-        0
-      );
-      const flights = completeBooking.flights || completeBooking.itinerary_segments || [];
-      const isEmailSent = !!(completeBooking.authorization_email_sent_at || completeBooking.emailSentAt || completeBooking.email_sent_at);
+      // Total Price Rule (Section 8):
+      // customer_price when numeric & > 0, otherwise total_amount when numeric & > 0
+      const custPrice = parseFloat(completeBooking.customer_price);
+      const totAmt = parseFloat(completeBooking.total_amount);
+
+      let totalAmount = null;
+      if (!isNaN(custPrice) && custPrice > 0) {
+        totalAmount = custPrice;
+      } else if (!isNaN(totAmt) && totAmt > 0) {
+        totalAmount = totAmt;
+      }
+
+      const itinerary = buildCanonicalItinerary(completeBooking);
+
+      const pmRecord = (completeBooking.paymentMethod && typeof completeBooking.paymentMethod === 'object')
+        ? completeBooking.paymentMethod
+        : ((completeBooking.payment_method && typeof completeBooking.payment_method === 'object') ? completeBooking.payment_method : {});
+
+      const rawLast4 = String(pmRecord?.card_last4 || pmRecord?.cardLast4 || pmRecord?.last4 || '').trim().replace(/\D/g, '');
+      const validLast4 = /^\d{4}$/.test(rawLast4) ? rawLast4 : null;
+
+      const cardReference = {
+        cardholderName: pmRecord?.cardholder_name || pmRecord?.cardholderName || completeBooking.passenger_name || null,
+        cardBrand: pmRecord?.card_brand || pmRecord?.cardBrand || null,
+        last4: validLast4,
+        expMonth: pmRecord?.card_exp_month || pmRecord?.cardExpMonth || null,
+        expYear: pmRecord?.card_exp_year || pmRecord?.cardExpYear || null,
+        billingAddress: [
+          pmRecord?.billing_address_line1 || pmRecord?.billingAddressLine1 || pmRecord?.billingAddress,
+          pmRecord?.billing_address_line2 || pmRecord?.billingAddressLine2,
+          pmRecord?.billing_city || pmRecord?.billingCity,
+          pmRecord?.billing_state || pmRecord?.billingState,
+          pmRecord?.billing_postal_code || pmRecord?.billingPostalCode,
+          pmRecord?.billing_country || pmRecord?.billingCountry
+        ].filter(Boolean).join(', ') || null,
+        billingPhone: pmRecord?.billing_phone || pmRecord?.billingPhone || completeBooking.phone || null
+      };
+
+      const emailDeliveryRecord = await bookingRepository.getEmailDeliveryStatus(completeBooking.id, 'BOOKING_CONFIRMATION');
+      const emailDelivery = {
+        status: emailDeliveryRecord?.status || (completeBooking.authorization_email_sent_at ? 'SENT' : 'UNATTEMPTED'),
+        providerMessageId: emailDeliveryRecord?.provider_message_id || completeBooking.authorization_email_message_id || null,
+        errorMessage: emailDeliveryRecord?.error_message || null,
+        sentAt: emailDeliveryRecord?.sent_at || completeBooking.authorization_email_sent_at || null
+      };
+
+      // Map raw flights list to camelCase normalized flight segments
+      const rawFlights = completeBooking.flights || completeBooking.itinerary_segments || [];
+      const normalizedFlights = rawFlights.map(f => ({
+        id: f.id,
+        leg: f.leg || f.journey_direction || 'outbound',
+        airlineName: f.airline_name || f.carrier_name || f.airline || '',
+        flightNumber: f.flight_number || f.flightNumber || '',
+        departureAirport: (f.departure_airport || f.origin_airport || f.origin_code || f.origin || '').trim().toUpperCase(),
+        arrivalAirport: (f.arrival_airport || f.destination_airport || f.destination_code || f.destination || '').trim().toUpperCase(),
+        departureDate: f.departure_date || f.departureDate || '',
+        departureTime: f.departure_time_str || f.departure_time || f.departureTime || '',
+        arrivalDate: f.arrival_date || f.arrivalDate || '',
+        arrivalTime: f.arrival_time_str || f.arrival_time || f.arrivalTime || '',
+        duration: f.duration || '',
+        stops: f.stops !== undefined ? parseInt(f.stops, 10) : 0,
+        cabinClass: f.cabin_class || f.cabinClass || 'Economy'
+      }));
 
       const dto = {
         booking: {
@@ -76,15 +132,18 @@ export const bookingController = {
           passengerName: completeBooking.passenger_name || completeBooking.customerName,
           email: completeBooking.email,
           phone: completeBooking.phone,
-          totalAmount: totalAmt,
+          totalAmount: totalAmount,
           currency: (completeBooking.currency || 'USD').toUpperCase(),
-          createdAt: completeBooking.created_at || new Date().toISOString()
+          bookingDate: completeBooking.created_at || new Date().toISOString()
         },
-        flights,
+        itinerary,
+        flights: normalizedFlights,
         travellers: completeBooking.travellers || [],
         contact: completeBooking.contacts?.[0] || { email: completeBooking.email, phone: completeBooking.phone },
-        paymentMethod: completeBooking.paymentMethod || completeBooking.payment_method || {},
-        emailDeliveryStatus: isEmailSent ? 'SENT' : 'NOT_SENT'
+        cardReference,
+        paymentMethod: cardReference,
+        emailDelivery,
+        emailDeliveryStatus: emailDelivery.status
       };
 
       res.json({

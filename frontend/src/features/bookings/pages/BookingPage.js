@@ -318,7 +318,7 @@ function Booking() {
     };
 
     const cleanCardNum = cardForm.cardNumber.replace(/\D/g, '');
-    const cardLast4 = cleanCardNum.slice(-4) || '4242';
+    const cardLast4 = /^\d{4}$/.test(cleanCardNum.slice(-4)) ? cleanCardNum.slice(-4) : null;
     const cardBrand = detectCardBrand(cardForm.cardNumber).name;
 
     const bookingPayload = {

@@ -608,8 +608,11 @@ export const bookingRepository = {
       provider_customer_id: payload.provider_customer_id || payload.providerCustomerId || null,
       provider_payment_method_id: payload.provider_payment_method_id || payload.providerPaymentMethodId || payload.paymentMethodToken || `pm_tok_${Date.now()}`,
       cardholder_name: payload.cardholder_name || payload.cardholderName || null,
-      card_brand: payload.card_brand || payload.cardBrand || 'Credit Card',
-      card_last4: String(payload.card_last4 || payload.cardLast4 || '4242').replace(/\D/g, '').slice(-4),
+      card_brand: payload.card_brand || payload.cardBrand || null,
+      card_last4: (() => {
+        const raw = String(payload.card_last4 || payload.cardLast4 || '').replace(/\D/g, '');
+        return /^\d{4}$/.test(raw) ? raw : null;
+      })(),
       card_exp_month: payload.card_exp_month !== undefined ? parseInt(payload.card_exp_month) : (payload.cardExpMonth ? parseInt(payload.cardExpMonth) : null),
       card_exp_year: payload.card_exp_year !== undefined ? parseInt(payload.card_exp_year) : (payload.cardExpYear ? parseInt(payload.cardExpYear) : null),
       billing_address_line1: payload.billing_address_line1 || payload.billingAddressLine1 || payload.billingAddress || null,
@@ -648,20 +651,25 @@ export const bookingRepository = {
    * Get Active Tokenized Payment Method for a Booking
    */
   getPaymentMethodByBookingId: async (bookingId) => {
+    if (!bookingId) return null;
     const memRecord = paymentMethodsMemoryStore.get(bookingId);
+    if (memRecord) return memRecord;
 
-    const { data, error } = await supabase
-      .from('booking_payment_methods')
-      .select('*')
-      .eq('booking_id', bookingId)
-      .is('removed_at', null)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from('booking_payment_methods')
+        .select('*')
+        .eq('booking_id', bookingId)
+        .is('removed_at', null)
+        .maybeSingle();
 
-    if (error || !data) {
-      return memRecord || null;
-    }
+      if (!error && data) {
+        paymentMethodsMemoryStore.set(bookingId, data);
+        return data;
+      }
+    } catch (e) {}
 
-    return data;
+    return paymentMethodsMemoryStore.get(bookingId) || null;
   },
 
   /**

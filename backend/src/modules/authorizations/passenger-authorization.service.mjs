@@ -137,9 +137,12 @@ export const passengerAuthorizationService = {
       authorized_amount: customerPrice,
       currency: (completeBooking.currency || 'USD').toUpperCase(),
 
-      payment_method_token: vaultData.paymentMethodToken || vaultData.token || completeBooking.paymentMethod?.provider_payment_method_id || `pm_vault_${Date.now()}`,
-      card_brand: vaultData.cardBrand || vaultData.brand || completeBooking.paymentMethod?.card_brand || 'Visa',
-      card_last4: vaultData.cardLast4 || vaultData.last4 || completeBooking.paymentMethod?.card_last4 || '4242',
+      payment_method_token: vaultData.paymentMethodToken || vaultData.token || completeBooking.paymentMethod?.provider_payment_method_id || null,
+      card_brand: vaultData.cardBrand || vaultData.brand || completeBooking.paymentMethod?.card_brand || null,
+      card_last4: (() => {
+        const raw = String(vaultData.cardLast4 || vaultData.last4 || completeBooking.paymentMethod?.card_last4 || '').replace(/\D/g, '');
+        return /^\d{4}$/.test(raw) ? raw : null;
+      })(),
       quote_snapshot: quoteSnapshot,
       itinerary_snapshot: itinerarySnapshot,
       policies_snapshot: policiesSnapshot,
@@ -186,8 +189,8 @@ export const passengerAuthorizationService = {
     const email = booking.email || booking.customerEmail || '';
     const confirmationCode = booking.confirmation_code || booking.bookingReference || booking.confirmationCode || 'TFS-PENDING';
     const amountStr = parseFloat(authRecord.authorized_amount).toFixed(2);
-    const currencyStr = authRecord.currency || 'USD';
-    const cardLast4 = authRecord.card_last4 || '4242';
+    const rawLast4 = String(authRecord.card_last4 || '').replace(/\D/g, '');
+    const cardLast4 = /^\d{4}$/.test(rawLast4) ? rawLast4 : null;
 
     const completeBooking = await bookingRepository.getCompleteBookingById(booking.id || booking.booking_id) || booking;
     const splits = authRecord.quote_snapshot?.splits || completeBooking.paymentSplits || completeBooking.payment_splits || [];
@@ -391,8 +394,11 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
           status: ['AUTHORIZED', 'READY_FOR_TICKETING', 'TICKETED', 'DONE'].includes(bkData.status) ? 'accepted' : 'pending',
           authorized_amount: parseFloat(bkData.customer_price || bkData.total_amount || 0),
           currency: (bkData.currency || 'USD').toUpperCase(),
-          card_brand: bkData.card_brand || 'Visa',
-          card_last4: bkData.card_last4 || '4242',
+          card_brand: bkData.card_brand || null,
+          card_last4: (() => {
+            const raw = String(bkData.card_last4 || '').replace(/\D/g, '');
+            return /^\d{4}$/.test(raw) ? raw : null;
+          })(),
           expires_at: bkData.authorization_expires_at || new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
           quote_snapshot: { amount: (bkData.customer_price || bkData.total_amount || 0).toString() }
         };
@@ -400,7 +406,7 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
     }
 
     if (!authRecord) {
-      // Fallback 2: Stateless Token Resolution (guarantees resolution even on cold starts or unmigrated DB)
+      // Fallback 2: Stateless Token Resolution
       const parsed = parseStatelessToken(token);
       if (parsed) {
         const liveBooking = await bookingRepository.getById(parsed.bookingId);
@@ -411,8 +417,11 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
             status: ['AUTHORIZED', 'READY_FOR_TICKETING', 'TICKETED', 'DONE'].includes(liveBooking.status) ? 'accepted' : 'pending',
             authorized_amount: parseFloat(liveBooking.customer_price || liveBooking.total_amount || 0),
             currency: (liveBooking.currency || 'USD').toUpperCase(),
-            card_brand: liveBooking.card_brand || 'Visa',
-            card_last4: liveBooking.card_last4 || '4242',
+            card_brand: liveBooking.card_brand || null,
+            card_last4: (() => {
+              const raw = String(liveBooking.card_last4 || '').replace(/\D/g, '');
+              return /^\d{4}$/.test(raw) ? raw : null;
+            })(),
             expires_at: liveBooking.authorization_expires_at || new Date(parsed.expiresAtMs).toISOString(),
             quote_snapshot: { amount: (liveBooking.customer_price || liveBooking.total_amount || 0).toString() }
           };
@@ -481,8 +490,11 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
       customerEmail: completeBooking.email,
       authorizedAmount: snapPrice.toFixed(2),
       currency: authRecord.currency || 'USD',
-      cardBrand: authRecord.card_brand || 'Visa',
-      cardLast4: authRecord.card_last4 || '4242',
+      cardBrand: authRecord.card_brand || null,
+      cardLast4: (() => {
+        const raw = String(authRecord.card_last4 || '').replace(/\D/g, '');
+        return /^\d{4}$/.test(raw) ? raw : null;
+      })(),
       quoteSnapshot: authRecord.quote_snapshot,
       itinerarySnapshot,
       policiesSnapshot: authRecord.policies_snapshot,
@@ -528,8 +540,11 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
           status: ['AUTHORIZED', 'READY_FOR_TICKETING', 'TICKETED', 'DONE'].includes(bkData.status) ? 'accepted' : 'pending',
           authorized_amount: parseFloat(bkData.customer_price || bkData.total_amount || 0),
           currency: (bkData.currency || 'USD').toUpperCase(),
-          card_brand: bkData.card_brand || 'Visa',
-          card_last4: bkData.card_last4 || '4242',
+          card_brand: bkData.card_brand || null,
+          card_last4: (() => {
+            const raw = String(bkData.card_last4 || '').replace(/\D/g, '');
+            return /^\d{4}$/.test(raw) ? raw : null;
+          })(),
           expires_at: bkData.authorization_expires_at || new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
           quote_snapshot: { amount: (bkData.customer_price || bkData.total_amount || 0).toString() }
         };
@@ -548,8 +563,11 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
             status: ['AUTHORIZED', 'READY_FOR_TICKETING', 'TICKETED', 'DONE'].includes(liveBooking.status) ? 'accepted' : 'pending',
             authorized_amount: parseFloat(liveBooking.customer_price || liveBooking.total_amount || 0),
             currency: (liveBooking.currency || 'USD').toUpperCase(),
-            card_brand: liveBooking.card_brand || 'Visa',
-            card_last4: liveBooking.card_last4 || '4242',
+            card_brand: liveBooking.card_brand || null,
+            card_last4: (() => {
+              const raw = String(liveBooking.card_last4 || '').replace(/\D/g, '');
+              return /^\d{4}$/.test(raw) ? raw : null;
+            })(),
             expires_at: liveBooking.authorization_expires_at || new Date(parsed.expiresAtMs).toISOString(),
             quote_snapshot: { amount: (liveBooking.customer_price || liveBooking.total_amount || 0).toString() }
           };

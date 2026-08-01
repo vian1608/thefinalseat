@@ -132,6 +132,29 @@ export const bookingService = {
       };
       const payments = await bookingRepository.insertPayment(paymentRow);
 
+      // 7.5 — Save tokenized payment method metadata (if provided)
+      const pmPayload = payload.paymentMethod || payload.payment_method || payload;
+      let savedPaymentMethod = null;
+      if (pmPayload.card_last4 || pmPayload.cardLast4 || pmPayload.paymentMethodToken || pmPayload.token || pmPayload.card_brand || pmPayload.cardBrand) {
+        savedPaymentMethod = await bookingRepository.savePaymentMethodRecord(booking.id, {
+          booking_id: booking.id,
+          payment_provider: payload.payment_provider || 'stripe',
+          provider_payment_method_id: pmPayload.provider_payment_method_id || pmPayload.paymentMethodToken || pmPayload.token || `pm_tok_${Date.now()}`,
+          cardholder_name: pmPayload.cardholder_name || pmPayload.cardholderName || payload.customerName || null,
+          card_brand: pmPayload.card_brand || pmPayload.cardBrand || null,
+          card_last4: pmPayload.card_last4 || pmPayload.cardLast4 || null,
+          card_exp_month: pmPayload.card_exp_month || pmPayload.cardExpMonth || null,
+          card_exp_year: pmPayload.card_exp_year || pmPayload.cardExpYear || null,
+          billing_address_line1: pmPayload.billing_address_line1 || pmPayload.billingAddressLine1 || pmPayload.billingAddress || null,
+          billing_address_line2: pmPayload.billing_address_line2 || pmPayload.billingAddressLine2 || null,
+          billing_city: pmPayload.billing_city || pmPayload.billingCity || null,
+          billing_state: pmPayload.billing_state || pmPayload.billingState || null,
+          billing_postal_code: pmPayload.billing_postal_code || pmPayload.billingPostalCode || pmPayload.billingZip || null,
+          billing_country: pmPayload.billing_country || pmPayload.billingCountry || 'United States',
+          billing_phone: pmPayload.billing_phone || pmPayload.billingPhone || payload.phone || null
+        });
+      }
+
       const canonicalBooking = bookingMapper.toCanonicalModel(
         booking,
         travellers,
@@ -199,7 +222,9 @@ export const bookingService = {
    */
   getDetailsByCodeOrId: async (reference) => {
     const ref = String(reference).trim();
-    // Try as UUID (booking id) first, then as confirmation code string
+    const complete = await bookingRepository.getCompleteBookingById(ref);
+    if (complete) return complete;
+
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref);
     const raw = isUUID
       ? await bookingRepository.findBookingById(ref)
@@ -207,8 +232,6 @@ export const bookingService = {
 
     if (!raw) return null;
 
-    // enrichBookingRecord is already called inside find* methods and attaches
-    // travellers/contacts/flights/payments arrays on the returned object.
     const travellers = raw.travellers || [];
     const contacts   = raw.contacts   || [];
     const flights    = raw.flights    || [];

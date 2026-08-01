@@ -272,8 +272,8 @@ function AdminDashboard() {
     paymentStatus: 'PENDING',
     provider: 'Whop',
     methodType: 'card',
-    brand: 'Visa',
-    last4: '4242',
+    brand: '',
+    last4: '',
     authorizedAmount: 0,
     capturedAmount: 0,
     refundedAmount: 0,
@@ -466,8 +466,8 @@ function AdminDashboard() {
       paymentStatus: (booking.payment_status || 'PENDING').toUpperCase(),
       provider: booking.payment?.provider || 'Whop',
       methodType: 'card',
-      brand: 'Visa',
-      last4: '4242',
+      brand: booking.paymentMethod?.card_brand || booking.paymentMethod?.cardBrand || '',
+      last4: booking.paymentMethod?.card_last4 || booking.paymentMethod?.cardLast4 || '',
       authorizedAmount: toFiniteNumber(authAmount, customerTotal),
       capturedAmount: paid !== null ? toFiniteNumber(paid, 0) : 0,
       refundedAmount: toFiniteNumber(refunded, 0),
@@ -1695,7 +1695,7 @@ function AdminDashboard() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
                           <div><span style={{ color: '#64748b' }}>Status:</span> <br/><strong>{selectedBooking.authorization?.status || (selectedBooking.authorization_status === 'ACCEPTED' ? 'Authorized' : 'Awaiting Authorization')}</strong></div>
                           <div><span style={{ color: '#64748b' }}>Authorized Amount:</span> <br/><strong>{formatMoney(selectedBooking.authorization?.authorizedAmount ?? paymentForm.authorizedAmount, selectedBooking.currency || 'USD')}</strong></div>
-                          <div><span style={{ color: '#64748b' }}>Card Vault:</span> <br/><strong>Visa ending in 4242</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Card Vault:</span> <br/><strong>{selectedBooking.paymentMethod?.card_brand ? `${selectedBooking.paymentMethod.card_brand} ending in ${selectedBooking.paymentMethod.card_last4 || ''}` : (selectedBooking.paymentMethod?.card_last4 ? `Card ending in ${selectedBooking.paymentMethod.card_last4}` : 'Card ending unavailable')}</strong></div>
                           <div><span style={{ color: '#64748b' }}>Email Sent:</span> <br/><strong>{selectedBooking.authorization_email_sent_at ? new Date(selectedBooking.authorization_email_sent_at).toLocaleDateString() : 'Not Sent'}</strong></div>
                         </div>
                       </div>
@@ -2543,7 +2543,7 @@ function AdminDashboard() {
                           <div className="drawer-grid-2col">
                             <div className="drawer-form-field">
                               <label>Masked Payment Card</label>
-                              <input type="text" readOnly value={`${paymentForm.brand || 'Visa'} •••• ${paymentForm.last4 || '4242'}`} />
+                              <input type="text" readOnly value={paymentForm.last4 ? `${paymentForm.brand || 'Card'} •••• ${paymentForm.last4}` : 'Card ending unavailable'} />
                             </div>
                             <div className="drawer-form-field">
                               <label>Passenger IP</label>
@@ -2681,7 +2681,7 @@ function AdminDashboard() {
                             </div>
                             <div className="drawer-form-field">
                               <label>Masked Card</label>
-                              <input type="text" readOnly value={`${paymentForm.brand || 'Visa'} •••• ${paymentForm.last4 || '4242'}`} />
+                              <input type="text" readOnly value={paymentForm.last4 ? `${paymentForm.brand || 'Card'} •••• ${paymentForm.last4}` : 'Card ending unavailable'} />
                             </div>
                           </div>
 

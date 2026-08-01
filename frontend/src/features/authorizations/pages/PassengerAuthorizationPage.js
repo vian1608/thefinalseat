@@ -40,11 +40,13 @@ function PassengerAuthorizationPage() {
   const handleAuthorize = async () => {
     if (!checkboxAccepted || !authData) return;
 
-    const cardLast4 = authData.cardLast4 || '4242';
+    const rawLast4 = String(authData.cardLast4 || '').replace(/\D/g, '');
+    const validLast4 = /^\d{4}$/.test(rawLast4) ? rawLast4 : null;
+    const cardDisplayLabel = validLast4 ? `ending in ${validLast4}` : 'reference on file';
     const amount = authData.authorizedAmount;
     const currency = authData.currency || 'USD';
 
-    const acceptedText = `I confirm that the passenger names, itinerary, dates, fare, fees and contact information shown above are correct. I authorize The Final Seat to use my previously provided payment method ending in ${cardLast4} for a charge of up to ${amount} ${currency} for this reservation. I understand that a new authorization will be required if the itinerary or total amount changes.`;
+    const acceptedText = `I confirm that the passenger names, itinerary, dates, fare, fees and contact information shown above are correct. I authorize The Final Seat to use my previously provided payment method ${cardDisplayLabel} for a charge of up to ${amount} ${currency} for this reservation. I understand that a new authorization will be required if the itinerary or total amount changes.`;
 
     try {
       setSubmitting(true);
@@ -143,12 +145,14 @@ function PassengerAuthorizationPage() {
 
   const outbound = authData.itinerarySnapshot?.outbound || {};
   const returnFlight = authData.itinerarySnapshot?.return || null;
-  const cardLast4 = authData.cardLast4 || '4242';
-  const cardBrand = authData.cardBrand || 'Visa';
-  const amount = authData.authorizedAmount;
-  const currency = authData.currency || 'USD';
+  const rawRenderLast4 = String(authData.cardLast4 || '').replace(/\D/g, '');
+  const validRenderLast4 = /^\d{4}$/.test(rawRenderLast4) ? rawRenderLast4 : null;
+  const renderCardLabel = validRenderLast4 ? `ending in ${validRenderLast4}` : 'reference on file';
+  const cardBrand = authData.cardBrand || null;
+  const renderAmount = authData.authorizedAmount;
+  const renderCurrency = authData.currency || 'USD';
 
-  const checkboxWording = `I confirm that the passenger names, itinerary, dates, fare, fees and contact information shown above are correct. I authorize The Final Seat to use my previously provided payment method ending in ${cardLast4} for a charge of up to ${amount} ${currency} for this reservation. I understand that a new authorization will be required if the itinerary or total amount changes.`;
+  const renderCheckboxWording = `I confirm that the passenger names, itinerary, dates, fare, fees and contact information shown above are correct. I authorize The Final Seat to use my previously provided payment method ${renderCardLabel} for a charge of up to ${renderAmount} ${renderCurrency} for this reservation. I understand that a new authorization will be required if the itinerary or total amount changes.`;
 
   return (
     <div className="auth-page-container">
@@ -168,7 +172,7 @@ function PassengerAuthorizationPage() {
           <div className="auth-notice-banner">
             <i className="fas fa-lock" style={{ marginRight: '0.5rem', color: '#9f1239' }}></i>
             <span>
-              Please review your flight details below. Your saved card ending in <strong>{cardLast4}</strong> will be used ONLY after you confirm and authorize this reservation.
+              Please review your flight details below. Your saved card {renderCardLabel} will be used ONLY after you confirm and authorize this reservation.
             </span>
           </div>
 
@@ -270,18 +274,18 @@ function PassengerAuthorizationPage() {
                       {splits.map((s, idx) => (
                         <div key={`split-${idx}`} className="auth-fare-row" style={{ marginBottom: '0.35rem', fontSize: '0.95rem' }}>
                           <span style={{ color: '#334155', fontWeight: '600' }}>{s.merchant_name || s.merchantName || 'Merchant Split'}</span>
-                          <strong style={{ color: '#1e293b' }}>${parseFloat(s.amount || 0).toFixed(2)} {s.currency || currency}</strong>
+                          <strong style={{ color: '#1e293b' }}>${parseFloat(s.amount || 0).toFixed(2)} {s.currency || renderCurrency}</strong>
                         </div>
                       ))}
                     </div>
                   )}
                   <div className="auth-fare-row">
                     <span style={{ fontWeight: '700', color: '#1e293b' }}>Total Authorized Charge</span>
-                    <strong style={{ fontSize: '1.25rem', color: '#7f0d2f' }}>${amount} {currency}</strong>
+                    <strong style={{ fontSize: '1.25rem', color: '#7f0d2f' }}>${renderAmount} {renderCurrency}</strong>
                   </div>
                   <div className="auth-fare-row" style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#64748b' }}>
                     <span>Saved Payment Method</span>
-                    <span><strong>{cardBrand} ending in {cardLast4}</strong></span>
+                    <span><strong>{cardBrand ? `${cardBrand} ` : ''}{renderCardLabel}</strong></span>
                   </div>
                 </div>
               </div>
@@ -297,7 +301,7 @@ function PassengerAuthorizationPage() {
               onChange={(e) => setCheckboxAccepted(e.target.checked)}
             />
             <label htmlFor="auth-mandatory-check" className="auth-checkbox-label">
-              {checkboxWording}
+              {renderCheckboxWording}
             </label>
           </div>
 
