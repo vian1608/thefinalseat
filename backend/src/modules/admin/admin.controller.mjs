@@ -2,7 +2,7 @@ import adminService from './admin.service.mjs';
 import bookingRepository from '../bookings/booking.repository.mjs';
 import bookingMapper from '../bookings/booking.mapper.mjs';
 import { BOOKING_STATUSES, PAYMENT_OPERATIONAL_STATES } from '../bookings/booking.constants.mjs';
-import { sendBookingConfirmation, sendBookingRequestReceivedEmail, sendPassengerAuthorizationEmail, sendFinalTicketEmail } from '../../integrations/resend/resend.service.mjs';
+import { sendBookingConfirmation, sendBookingRequestReceivedEmail, sendPassengerAuthorizationEmail, sendFinalTicketEmail, sendAdminBookingAcknowledgement } from '../../integrations/resend/resend.service.mjs';
 
 import passengerAuthorizationService from '../authorizations/passenger-authorization.service.mjs';
 import { generateAuthorizationPdfBuffer } from '../authorizations/authorization-pdf.service.mjs';
@@ -874,6 +874,28 @@ export const adminController = {
       });
     } catch (error) {
       logger.error(`Error getting diagnostic data for booking ${req.params.id}: ${error.message}`);
+      next(error);
+    }
+  },
+
+  resendAdminAcknowledgement: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const result = await sendAdminBookingAcknowledgement(id, { force: true });
+      if (result.success) {
+        return res.json({
+          success: true,
+          message: 'Admin booking acknowledgement email re-sent successfully.',
+          data: result
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: { code: result.errorCode || 'EMAIL_FAILED', message: result.errorMessage || 'Failed to resend admin email.' }
+        });
+      }
+    } catch (error) {
+      logger.error(`Error resending admin email for ${req.params.id}: ${error.message}`);
       next(error);
     }
   }

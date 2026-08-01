@@ -1,7 +1,7 @@
 import bookingRepository from './booking.repository.mjs';
 import bookingMapper from './booking.mapper.mjs';
 import { travellerService } from '../travellers/traveller.service.mjs';
-import { sendBookingConfirmation } from '../../integrations/resend/resend.service.mjs';
+import { sendBookingConfirmation, sendAdminBookingAcknowledgement } from '../../integrations/resend/resend.service.mjs';
 import { itineraryMapper } from '../itineraries/itinerary.mapper.mjs';
 import bookingValidatorService from './booking-validator.service.mjs';
 import logger from '../../config/logger.mjs';
@@ -175,6 +175,15 @@ export const bookingService = {
         emailDeliveryResult = { success: false, errorCode: 'EMAIL_DELIVERY_EXCEPTION', errorMessage: emailErr.message, status: 'FAILED' };
       }
 
+      // 10 — Automatically trigger internal admin booking acknowledgement email
+      let adminEmailResult = { success: false, status: 'FAILED' };
+      try {
+        adminEmailResult = await sendAdminBookingAcknowledgement(canonicalBooking);
+      } catch (adminEmailErr) {
+        logger.error(`[BookingCreate] Internal admin acknowledgement email exception: ${adminEmailErr.message}`);
+        adminEmailResult = { success: false, errorCode: 'EMAIL_DELIVERY_EXCEPTION', errorMessage: adminEmailErr.message, status: 'FAILED' };
+      }
+
       if (idempotencyKey && booking?.id) {
         idempotencyStore.set(idempotencyKey, booking.id);
       }
@@ -182,7 +191,8 @@ export const bookingService = {
       return {
         ...canonicalBooking,
         emailDeliveryStatus: emailDeliveryResult.success ? 'SENT' : 'FAILED',
-        emailDelivery: emailDeliveryResult
+        emailDelivery: emailDeliveryResult,
+        adminEmailDelivery: adminEmailResult
       };
     } catch (err) {
       logger.error(`[AtomicBookingCreate] Rollback triggered for code ${confirmationCode}: ${err.message}`);

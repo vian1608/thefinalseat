@@ -30,6 +30,8 @@ export const env = {
   get resendApiKey() { return process.env.RESEND_API_KEY || ''; },
   get resendFrom() { return process.env.RESEND_FROM || 'The Final Seat <support@thefinalseat.com>'; },
   get inquiryNotifyEmails() { return process.env.INQUIRY_NOTIFY_EMAILS || 'support@thefinalseat.com,viansaini1608@gmail.com'; },
+  get adminBookingNotificationEmail() { return process.env.ADMIN_BOOKING_NOTIFICATION_EMAIL || 'viansaini1608@gmail.com'; },
+  get adminBookingNotificationsEnabled() { return process.env.ADMIN_BOOKING_NOTIFICATIONS_ENABLED !== 'false'; },
 
   // Stripe
   get stripeSecretKey() { return process.env.STRIPE_SECRET_KEY || ''; },

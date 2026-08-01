@@ -1347,6 +1347,329 @@ Thank you for choosing The Final Seat! Have a wonderful trip.
   }
 };
 
+export const sendAdminBookingAcknowledgement = async (bookingInput, options = {}) => {
+  try {
+    if (!env.adminBookingNotificationsEnabled && !options.force) {
+      logger.info('[Admin Email] Notifications disabled via ADMIN_BOOKING_NOTIFICATIONS_ENABLED=false.');
+      return { success: true, disabled: true, status: 'SKIPPED' };
+    }
+
+    const rawId = typeof bookingInput === 'object' ? (bookingInput.id || bookingInput.booking_id || bookingInput.confirmation_code) : bookingInput;
+    const booking = (await bookingRepository.getCompleteBookingById(rawId)) || (await bookingRepository.getById(rawId));
+    if (!booking) {
+      return { success: false, errorCode: 'BOOKING_NOT_FOUND', errorMessage: 'Booking record not found' };
+    }
+
+    const bookingId = booking.id;
+    const confCode = booking.confirmation_code || booking.confirmationCode || 'TFS-PENDING';
+    const adminRecipient = env.adminBookingNotificationEmail || 'viansaini1608@gmail.com';
+
+    // 1. Idempotency Guard via email_deliveries table
+    const existingDelivery = await bookingRepository.getEmailDeliveryStatus(bookingId, 'ADMIN_NEW_BOOKING_ACKNOWLEDGEMENT');
+    if (existingDelivery && existingDelivery.status === 'SENT' && !options.force) {
+      logger.info(`[Admin Email] Idempotency: Skipping duplicate admin notification email for booking ${confCode} (already SENT with messageId ${existingDelivery.provider_message_id})`);
+      return {
+        success: true,
+        duplicate: true,
+        messageId: existingDelivery.provider_message_id,
+        status: 'SENT'
+      };
+    }
+
+    const currentAttempt = (existingDelivery?.attempt_count || 0) + 1;
+
+    // Record PENDING state in email_deliveries table
+    await bookingRepository.upsertEmailDeliveryRecord({
+      booking_id: bookingId,
+      confirmation_code: confCode,
+      email_type: 'ADMIN_NEW_BOOKING_ACKNOWLEDGEMENT',
+      recipient: adminRecipient,
+      status: 'PENDING',
+      provider: 'RESEND',
+      attempt_count: currentAttempt
+    });
+
+    // 2. Validate Data Integrity Before Sending
+    const { bookingValidatorService } = await import('../../modules/bookings/booking-validator.service.mjs');
+    try {
+      await bookingValidatorService.validateCompletedBooking(bookingId);
+    } catch (valErr) {
+      const errMsg = `ADMIN_EMAIL_BLOCKED: ${valErr.message}`;
+      logger.error(`[Admin Email Protection] ${errMsg} (bookingId=${bookingId})`);
+      await bookingRepository.upsertEmailDeliveryRecord({
+        booking_id: bookingId,
+        confirmation_code: confCode,
+        email_type: 'ADMIN_NEW_BOOKING_ACKNOWLEDGEMENT',
+        recipient: adminRecipient,
+        status: 'FAILED',
+        error_code: 'BOOKING_DATA_INCOMPLETE',
+        error_message: errMsg,
+        attempt_count: currentAttempt
+      });
+      return { success: false, errorCode: 'BOOKING_DATA_INCOMPLETE', errorMessage: errMsg };
+    }
+
+    const customerPrice = parseFloat(booking.customer_price || booking.total_amount || 0);
+    if (isNaN(customerPrice) || customerPrice <= 0) {
+      const errMsg = 'ADMIN_EMAIL_BLOCKED: Cannot send admin notification because total reservation amount is zero or invalid.';
+      logger.error(`[Admin Email Protection] ${errMsg} (bookingId=${bookingId})`);
+      await bookingRepository.upsertEmailDeliveryRecord({
+        booking_id: bookingId,
+        confirmation_code: confCode,
+        email_type: 'ADMIN_NEW_BOOKING_ACKNOWLEDGEMENT',
+        recipient: adminRecipient,
+        status: 'FAILED',
+        error_code: 'INVALID_BOOKING_PRICE',
+        error_message: errMsg,
+        attempt_count: currentAttempt
+      });
+      return { success: false, errorCode: 'INVALID_BOOKING_PRICE', errorMessage: errMsg };
+    }
+
+    const itinerary = buildCanonicalItinerary(booking);
+    if (!itinerary.outbound || itinerary.outbound.length === 0) {
+      const errMsg = 'ADMIN_EMAIL_BLOCKED: Cannot send admin notification for booking without itinerary segments.';
+      logger.error(`[Admin Email Protection] ${errMsg} (bookingId=${bookingId})`);
+      await bookingRepository.upsertEmailDeliveryRecord({
+        booking_id: bookingId,
+        confirmation_code: confCode,
+        email_type: 'ADMIN_NEW_BOOKING_ACKNOWLEDGEMENT',
+        recipient: adminRecipient,
+        status: 'FAILED',
+        error_code: 'BOOKING_ITINERARY_MISSING',
+        error_message: errMsg,
+        attempt_count: currentAttempt
+      });
+      return { success: false, errorCode: 'BOOKING_ITINERARY_MISSING', errorMessage: errMsg };
+    }
+
+    // 3. Server-side Urgency Calculation
+    const outboundSegs = itinerary.outbound || [];
+    const returnSegs = itinerary.return || [];
+    const outSeg = outboundSegs[0] || {};
+    
+    let isUrgent = false;
+    if (outSeg.departureDate || outSeg.departure_date) {
+      const depDateStr = outSeg.departureDate || outSeg.departure_date;
+      const depDate = new Date(depDateStr);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const diffMs = depDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      if (diffDays <= 3) {
+        isUrgent = true;
+      }
+    }
+
+    // Subject calculation
+    const isTest = env.nodeEnv !== 'production';
+    const testPrefix = isTest ? '[TEST] ' : '';
+    const subjectPrefix = isUrgent ? `${testPrefix}URGENT New Booking` : `${testPrefix}New Booking Received`;
+    const subject = `${subjectPrefix} — ${confCode}`;
+
+    // Extract Passenger Info
+    const rawPassengers = booking.passengers || booking.traveller_details || booking.travellers || [];
+    const passengers = Array.isArray(rawPassengers)
+      ? rawPassengers
+      : (typeof rawPassengers === 'string' ? JSON.parse(rawPassengers || '[]') : []);
+    const firstPassenger = passengers[0] || {};
+    const passengerName = booking.passenger_name || `${firstPassenger.firstName || firstPassenger.first_name || ''} ${firstPassenger.lastName || firstPassenger.last_name || ''}`.trim() || 'Valued Customer';
+    const customerEmail = booking.email || booking.customerEmail || 'Not provided';
+    const customerPhone = booking.phone || booking.customerPhone || 'Not provided';
+    const passengerCount = passengers.length > 0 ? String(passengers.length) : '1';
+
+    // Price & Currency
+    const amountStr = customerPrice.toFixed(2);
+    const currency = (booking.currency || 'USD').toUpperCase();
+    const currencySymbol = currency === 'USD' ? '$' : (currency === 'EUR' ? '€' : (currency === 'GBP' ? '£' : '$'));
+    const formattedAmount = `${currencySymbol}${amountStr} ${currency}`;
+
+    // Card Reference Info (Safe Metadata Only)
+    const pm = booking.payment_method || booking.paymentMethod || booking.card_reference || {};
+    const cardholderName = pm.cardholder_name || pm.cardholderName || booking.customerName || null;
+    const cardBrand = pm.card_brand || pm.cardBrand || null;
+    const cardLast4 = pm.card_last4 || pm.cardLast4 || null;
+    const expMonth = pm.card_exp_month || pm.cardExpMonth || null;
+    const expYear = pm.card_exp_year || pm.cardExpYear || null;
+
+    let cardReferenceStr = 'Card reference unavailable';
+    if (cardLast4) {
+      const brandStr = cardBrand ? String(cardBrand).toUpperCase() : 'Card';
+      const expStr = expMonth && expYear ? ` (Exp: ${expMonth}/${expYear})` : '';
+      cardReferenceStr = `${brandStr} ending in ${cardLast4}${cardholderName ? ` · ${cardholderName}` : ''}${expStr}`;
+    }
+
+    const adminBookingUrl = `${env.frontendUrl}/admin/dashboard?search=${encodeURIComponent(confCode)}`;
+    const createdAtStr = formatUsDate(booking.created_at || new Date());
+
+    // Build Outbound & Return HTML & Text Summaries
+    let outboundSummaryHtml = outboundSegs.map((s, idx) => `
+      <div style="background: #f8fafc; padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #e2e8f0;">
+        <strong style="color: #1e3a5f;">Segment ${idx + 1}: ${s.airlineName || 'Airline'} ${s.flightNumber || ''}</strong> (${s.cabinClass || 'Economy'})<br/>
+        From: <strong>${s.originName} (${s.originCode})</strong> → To: <strong>${s.destinationName} (${s.destinationCode})</strong><br/>
+        Departure: ${formatUsDate(s.departureDate)} at ${formatUsTime(s.departureTime)}<br/>
+        Arrival: ${formatUsDate(s.arrivalDate)} at ${formatUsTime(s.arrivalTime)}<br/>
+        Stops: ${s.stops === 0 ? 'Nonstop' : `${s.stops} Stop(s)`}
+      </div>
+    `).join('');
+
+    let returnSummaryHtml = returnSegs.map((s, idx) => `
+      <div style="background: #faf5f7; padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #f0d5de;">
+        <strong style="color: #8b1538;">Return Segment ${idx + 1}: ${s.airlineName || 'Airline'} ${s.flightNumber || ''}</strong> (${s.cabinClass || 'Economy'})<br/>
+        From: <strong>${s.originName} (${s.originCode})</strong> → To: <strong>${s.destinationName} (${s.destinationCode})</strong><br/>
+        Departure: ${formatUsDate(s.departureDate)} at ${formatUsTime(s.departureTime)}<br/>
+        Arrival: ${formatUsDate(s.arrivalDate)} at ${formatUsTime(s.arrivalTime)}<br/>
+        Stops: ${s.stops === 0 ? 'Nonstop' : `${s.stops} Stop(s)`}
+      </div>
+    `).join('');
+
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
+        <div style="background: ${isUrgent ? '#8b1538' : '#1e3a5f'}; color: #ffffff; padding: 20px 24px; border-radius: 12px 12px 0 0;">
+          <h2 style="margin: 0; font-size: 22px;">NEW BOOKING RECEIVED</h2>
+          <p style="margin: 4px 0 0 0; font-size: 14px; opacity: 0.9;">The Final Seat Internal Admin Notification</p>
+        </div>
+
+        ${isUrgent ? `
+          <div style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 14px 18px; margin: 16px 0;">
+            <strong style="color: #b45309; font-size: 16px;">⚠️ Priority Review Required</strong><br/>
+            <span style="color: #78350f;">Travel begins within 3 days. Please review and process itinerary immediately.</span>
+          </div>
+        ` : ''}
+
+        <div style="border: 1px solid #cbd5e1; border-top: none; padding: 24px; border-radius: 0 0 12px 12px; background: #ffffff;">
+          <h3 style="margin: 0 0 12px 0; color: #0f172a; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px;">Booking Summary</h3>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+            <tr><td style="padding: 6px 0; color: #64748b; width: 180px;">Booking Code:</td><td><strong style="color: #8b1538; font-size: 16px;">${confCode}</strong></td></tr>
+            <tr><td style="padding: 6px 0; color: #64748b;">Booking Date:</td><td>${createdAtStr}</td></tr>
+            <tr><td style="padding: 6px 0; color: #64748b;">Primary Passenger:</td><td><strong>${passengerName}</strong></td></tr>
+            <tr><td style="padding: 6px 0; color: #64748b;">Passenger Email:</td><td><a href="mailto:${customerEmail}" style="color: #8b1538;">${customerEmail}</a></td></tr>
+            <tr><td style="padding: 6px 0; color: #64748b;">Passenger Phone:</td><td>${customerPhone}</td></tr>
+            <tr><td style="padding: 6px 0; color: #64748b;">Number of Passengers:</td><td>${passengerCount} Traveler(s)</td></tr>
+          </table>
+
+          <h3 style="margin: 20px 0 12px 0; color: #0f172a; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px;">Itinerary Details</h3>
+          ${outboundSummaryHtml}
+          ${returnSummaryHtml}
+
+          <h3 style="margin: 20px 0 12px 0; color: #0f172a; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px;">Payment & Billing Reference</h3>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+            <tr><td style="padding: 6px 0; color: #64748b; width: 180px;">Reservation Amount:</td><td><strong style="color: #059669; font-size: 16px;">${formattedAmount}</strong></td></tr>
+            <tr><td style="padding: 6px 0; color: #64748b;">Payment Status:</td><td><span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 13px;">Payment Under Process</span></td></tr>
+            <tr><td style="padding: 6px 0; color: #64748b;">Card Reference:</td><td>${cardReferenceStr}</td></tr>
+          </table>
+
+          <div style="margin-top: 28px; text-align: center;">
+            <a href="${adminBookingUrl}" style="background: #8b1538; color: #ffffff; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: 800; font-size: 15px; display: inline-block;">
+              Open Booking in Admin
+            </a>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const textBody = `
+NEW BOOKING RECEIVED — ${confCode}
+${isUrgent ? 'PRIORITY REVIEW REQUIRED — Travel begins within 3 days.\n' : ''}
+Booking ID: ${confCode}
+Booking Date: ${createdAtStr}
+
+PASSENGER:
+Name: ${passengerName}
+Email: ${customerEmail}
+Phone: ${customerPhone}
+Passengers Count: ${passengerCount}
+
+PRICE:
+Reservation Amount: ${formattedAmount}
+Payment Status: Payment Under Process
+Card Reference: ${cardReferenceStr}
+
+OPEN BOOKING IN ADMIN:
+${adminBookingUrl}
+    `.trim();
+
+    let emailMessageId = null;
+    let sendSuccess = false;
+    let providerError = null;
+
+    if (env.resendApiKey?.trim()) {
+      try {
+        const result = await sendViaResend({
+          recipients: [adminRecipient],
+          subject,
+          textBody,
+          htmlBody,
+          replyTo: customerEmail !== 'Not provided' ? customerEmail : undefined,
+        });
+        if (result && (result.messageId || result.id)) {
+          emailMessageId = result.messageId || result.id || `admin_resend_${Date.now()}`;
+          sendSuccess = true;
+        }
+      } catch (rErr) {
+        providerError = rErr.message;
+        logger.error(`[Admin Email] Resend API error for booking ${confCode}:`, rErr.message);
+      }
+    } else if (isSmtpConfigured()) {
+      try {
+        const transporter = getTransporter();
+        const info = await transporter.sendMail({
+          from: env.resendFrom || 'The Final Seat <support@thefinalseat.com>',
+          to: adminRecipient,
+          subject,
+          text: textBody,
+          html: htmlBody,
+        });
+        emailMessageId = info.messageId || `admin_smtp_${Date.now()}`;
+        sendSuccess = true;
+        logger.info(`SMTP admin booking notification sent to ${adminRecipient} for booking ${confCode}`);
+      } catch (sErr) {
+        providerError = sErr.message;
+        logger.error(`SMTP admin email error for booking ${confCode}:`, sErr.message);
+      }
+    } else {
+      emailMessageId = `admin_simulated_${Date.now()}_${confCode}`;
+      sendSuccess = true;
+      logger.info(`[Admin Email] Simulated local delivery to ${adminRecipient} for ${confCode} (messageId: ${emailMessageId})`);
+    }
+
+    if (sendSuccess) {
+      await bookingRepository.upsertEmailDeliveryRecord({
+        booking_id: bookingId,
+        confirmation_code: confCode,
+        email_type: 'ADMIN_NEW_BOOKING_ACKNOWLEDGEMENT',
+        recipient: adminRecipient,
+        status: 'SENT',
+        provider: 'RESEND',
+        provider_message_id: emailMessageId,
+        attempt_count: currentAttempt
+      });
+      return { success: true, messageId: emailMessageId, status: 'SENT' };
+    } else {
+      await bookingRepository.upsertEmailDeliveryRecord({
+        booking_id: bookingId,
+        confirmation_code: confCode,
+        email_type: 'ADMIN_NEW_BOOKING_ACKNOWLEDGEMENT',
+        recipient: adminRecipient,
+        status: 'FAILED',
+        provider: 'RESEND',
+        error_code: 'EMAIL_PROVIDER_ERROR',
+        error_message: providerError || 'Failed to send admin notification via provider.',
+        attempt_count: currentAttempt
+      });
+      return {
+        success: false,
+        errorCode: 'EMAIL_PROVIDER_ERROR',
+        errorMessage: providerError || 'Failed to send admin notification via provider',
+        status: 'FAILED'
+      };
+    }
+  } catch (error) {
+    logger.error('[Admin Email] Exception in sendAdminBookingAcknowledgement:', error.message);
+    return { success: false, errorCode: 'EMAIL_DELIVERY_EXCEPTION', errorMessage: error.message, status: 'FAILED' };
+  }
+};
+
 
 
 
