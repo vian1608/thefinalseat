@@ -303,6 +303,8 @@ export const bookingRepository = {
       outbound_segments: outboundSegs,
       return_segments: returnSegs,
       payment_splits: relations.paymentSplits || [],
+      paymentMethod: relations.paymentMethod || null,
+      payment_method: relations.paymentMethod || null,
 
       flight_details: outboundFlight ? {
         airline: carrier || nameVal,

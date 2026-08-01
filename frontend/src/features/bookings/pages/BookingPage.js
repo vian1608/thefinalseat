@@ -245,6 +245,17 @@ function Booking() {
     return true;
   };
 
+  const [samePhone, setSamePhone] = useState(false);
+  const idempotencyKeyRef = useRef(`idemp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
+
+  const handleSamePhoneChange = (e) => {
+    const checked = e.target.checked;
+    setSamePhone(checked);
+    if (checked && primaryContact.phone) {
+      setCardForm(prev => ({ ...prev, billingPhone: primaryContact.phone }));
+    }
+  };
+
   const createPendingBookingRecord = async () => {
     if (pendingBookingId.current) {
       return { id: pendingBookingId.current, code: pendingBookingCode.current };
@@ -263,6 +274,7 @@ function Booking() {
     const cardBrand = detectCardBrand(cardForm.cardNumber).name;
 
     const bookingPayload = {
+      idempotency_key: idempotencyKeyRef.current,
       customerName,
       email: primaryContact.email,
       phone: primaryContact.phone,
@@ -301,7 +313,7 @@ function Booking() {
       pendingBookingCode.current = bCode;
       return { id: bId, code: bCode };
     } else {
-      throw new Error('Unable to register pending booking in backend.');
+      throw new Error(res?.error?.message || 'Unable to register reservation in database. Please check details and try again.');
     }
   };
 
@@ -358,9 +370,8 @@ function Booking() {
     setCardProcessing(true);
 
     try {
-      // 1. Create or reuse pending booking in Supabase with card details
+      // 1. Create atomic reservation record in Supabase
       const pending = await createPendingBookingRecord();
-      const bId = pending.id;
       const bCode = pending.code;
 
       // 2. Remove abandoned session tracking
@@ -369,11 +380,11 @@ function Booking() {
 
       setPaymentComplete(true);
 
-      // 3. Navigate to confirmation success
-      navigate(`/confirmation/success?session_id=CARD_${Date.now()}&type=booking&booking_id=${encodeURIComponent(bId)}&code=${encodeURIComponent(bCode)}`);
+      // 3. Navigate to dedicated reservation confirmation page
+      navigate(`/booking-confirmed/${encodeURIComponent(bCode)}?email=${encodeURIComponent(primaryContact.email)}`);
     } catch (err) {
       console.error('Card payment processing error:', err);
-      setCardError(err.response?.data?.error?.message || err.message || 'Payment processing failed. Please verify your card details.');
+      setCardError(err.response?.data?.error?.message || err.message || 'We could not securely process your reservation. Please review details and try again.');
     } finally {
       setCardProcessing(false);
     }
@@ -845,6 +856,18 @@ function Booking() {
                     <h4 className="payment-sub-heading">
                       <i className="fas fa-map-marker-alt"></i> Billing Address & Phone Number
                     </h4>
+
+                    <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input
+                        type="checkbox"
+                        id="samePhone"
+                        checked={samePhone}
+                        onChange={handleSamePhoneChange}
+                      />
+                      <label htmlFor="samePhone" style={{ fontSize: '0.88rem', color: '#475569', cursor: 'pointer' }}>
+                        Billing phone is the same as passenger phone
+                      </label>
+                    </div>
 
                     <div className="booking-form-field">
                       <label htmlFor="billingPhone">Billing Phone Number <span style={{ color: '#dc2626' }}>*</span></label>

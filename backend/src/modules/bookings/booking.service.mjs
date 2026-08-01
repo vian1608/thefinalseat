@@ -16,8 +16,26 @@ function generateConfirmationCode() {
   return `TFS-${year}-${randomPart}`;
 }
 
+const idempotencyStore = new Map();
+
 export const bookingService = {
   create: async (payload) => {
+    // 0 — Idempotency Guard (Prevent Duplicate Submissions)
+    const idempotencyKey = payload.idempotency_key || payload.idempotencyKey;
+    if (idempotencyKey && idempotencyStore.has(idempotencyKey)) {
+      const existingId = idempotencyStore.get(idempotencyKey);
+      const existingComplete = await bookingRepository.getCompleteBookingById(existingId);
+      if (existingComplete) {
+        logger.info(`[Idempotency] Returning existing booking ${existingId} for key ${idempotencyKey}`);
+        return {
+          booking: existingComplete,
+          id: existingComplete.id,
+          confirmation_code: existingComplete.confirmation_code,
+          idempotentReused: true
+        };
+      }
+    }
+
     // 1 — Run traveler validations
     const passengerList = Array.isArray(payload.passengers) 
       ? payload.passengers 
@@ -133,6 +151,10 @@ export const bookingService = {
         sendBookingConfirmation(canonicalBooking).catch(err => {
           logger.error(`Non-blocking email sending failed: ${err.message}`);
         });
+      }
+
+      if (idempotencyKey && booking?.id) {
+        idempotencyStore.set(idempotencyKey, booking.id);
       }
 
       return canonicalBooking;

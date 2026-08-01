@@ -145,6 +145,8 @@ function App() {
                 <Route path="/booking" element={<Booking />} />
                 <Route path="/authorize/:token" element={<PassengerAuthorization />} />
                 <Route path="/confirmation/success" element={<PaymentSuccess />} />
+                <Route path="/booking-confirmed/:confirmationCode" element={<PaymentSuccess />} />
+                <Route path="/booking-confirmed" element={<PaymentSuccess />} />
 
                 <Route path="/my-bookings" element={<MyBookings />} />
                 <Route path="/signin" element={<SignIn />} />

@@ -1,247 +1,382 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { bookingAPI } from '../../../shared/api/api';
 import './PaymentSuccessPage.css';
 
-function PaymentSuccess() {
+function PaymentSuccessPage() {
+  const params = useParams();
   const [searchParams] = useSearchParams();
-  const bookingIdParam = searchParams.get('booking_id');
-  const codeParam = searchParams.get('code');
 
-  const [paymentState, setPaymentState] = useState('POLLING'); // 'POLLING' | 'PAID' | 'PENDING_TIMEOUT' | 'FAILED'
-  const [bookingData, setBookingData] = useState(null);
-  const [pollAttempts, setPollAttempts] = useState(0);
-  const intervalRef = useRef(null);
+  const confirmationCodeParam = params.confirmationCode || searchParams.get('code') || searchParams.get('booking_id');
+  const userEmailParam = searchParams.get('email');
 
-  const targetIdentifier = bookingIdParam || codeParam;
-  const maxPollAttempts = 30; // 30 attempts x 2s = 60s timeout
+  const [loading, setLoading] = useState(true);
+  const [booking, setBooking] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  // Break out of Whop iframe if embedded checkout redirected inside the iframe
   useEffect(() => {
-    if (window.top !== window.self) {
-      try {
-        window.top.location.href = window.location.href;
-      } catch (e) {
-        /* cross-origin fallback */
-      }
-    }
-  }, []);
+    let isMounted = true;
 
-  const checkPaymentStatus = async () => {
-    if (!targetIdentifier) {
-      setPaymentState('FAILED');
-      return true;
-    }
-
-    try {
-      const res = await bookingAPI.getPaymentStatus(targetIdentifier);
-      if (res && res.success) {
-        const status = (res.paymentStatus || '').toLowerCase();
-        const bStatus = (res.bookingStatus || res.status || '').toUpperCase();
-
-        if (status === 'paid' || bStatus === 'CONFIRMED') {
-          // Fetch complete enriched booking data from DB if available
-          try {
-            const fullRes = await bookingAPI.getByReference(res.confirmationCode || targetIdentifier);
-            if (fullRes && fullRes.success && fullRes.data) {
-              setBookingData({
-                ...res,
-                ...fullRes.data,
-                passengerName: fullRes.data.passenger_name || res.passengerName,
-                confirmationCode: fullRes.data.confirmation_code || res.confirmationCode,
-                email: fullRes.data.email || res.email,
-                emailSentAt: fullRes.data.confirmation_email_sent_at || res.emailSentAt
-              });
-            } else {
-              setBookingData(res);
-            }
-          } catch (e) {
-            setBookingData(res);
-          }
-          setPaymentState('PAID');
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          return true;
+    async function fetchBookingDetails() {
+      if (!confirmationCodeParam) {
+        if (isMounted) {
+          setErrorMsg('We could not load your reservation details. Please contact support with your booking reference.');
+          setLoading(false);
         }
-
-        if (status === 'failed' || status === 'cancelled' || bStatus === 'FAILED' || bStatus === 'CANCELLED') {
-          setPaymentState('FAILED');
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          return true;
-        }
-      }
-    } catch (err) {
-      console.warn('Status poll error:', err.message);
-    }
-    return false;
-  };
-
-  const startPolling = () => {
-    setPaymentState('POLLING');
-    setPollAttempts(0);
-    let count = 0;
-
-    const poll = async () => {
-      count++;
-      setPollAttempts(count);
-
-      const isFinished = await checkPaymentStatus();
-      if (isFinished) {
-        if (intervalRef.current) clearInterval(intervalRef.current);
         return;
       }
 
-      if (count >= maxPollAttempts) {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        // Attempt final fetch of booking reference for pending timeout display
-        try {
-          const finalRes = await bookingAPI.getByReference(targetIdentifier);
-          if (finalRes && finalRes.success && finalRes.data) {
-            setBookingData(finalRes.data);
-          }
-        } catch (e) { /* non-blocking */ }
-        setPaymentState('PENDING_TIMEOUT');
-      }
-    };
+      try {
+        setLoading(true);
+        const res = await bookingAPI.getByReference(confirmationCodeParam);
 
-    poll();
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(poll, 2000);
+        if (res && res.success && res.data) {
+          if (isMounted) {
+            setBooking(res.data);
+            setLoading(false);
+          }
+        } else {
+          if (isMounted) {
+            setErrorMsg('We could not load your reservation details. Please contact support with your booking reference.');
+            setLoading(false);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading confirmation booking:', err);
+        if (isMounted) {
+          setErrorMsg('We could not load your reservation details. Please contact support with your booking reference.');
+          setLoading(false);
+        }
+      }
+    }
+
+    fetchBookingDetails();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [confirmationCodeParam]);
+
+  const handlePrint = () => {
+    window.print();
   };
 
-  useEffect(() => {
-    startPolling();
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [targetIdentifier]);
-
-  // ── 1. LOADING / POLLING STATE ────────────────────────────────────────────
-  if (paymentState === 'POLLING') {
+  // ── 1. LOADING STATE ───────────────────────────────────────────────────────
+  if (loading) {
     return (
-      <div className="minimal-page-wrapper">
+      <div className="confirmation-page-wrapper">
         <Helmet>
-          <title>Confirming Your Payment | The Final Seat</title>
+          <title>Loading Reservation Confirmation | The Final Seat</title>
         </Helmet>
-        <div className="minimal-card minimal-card--polling">
-          <i className="fas fa-circle-notch fa-spin minimal-spinner"></i>
-          <p className="minimal-polling-text">Confirming your payment…</p>
+        <div className="confirmation-card confirmation-card--loading">
+          <i className="fas fa-circle-notch fa-spin confirmation-spinner"></i>
+          <p className="confirmation-loading-text">Loading your reservation details...</p>
         </div>
       </div>
     );
   }
 
-  // ── 2. FAILED STATE ───────────────────────────────────────────────────────
-  if (paymentState === 'FAILED') {
+  // ── 2. ERROR / NOT FOUND STATE ─────────────────────────────────────────────
+  if (errorMsg || !booking) {
     return (
-      <div className="minimal-page-wrapper">
+      <div className="confirmation-page-wrapper">
         <Helmet>
-          <title>Payment Failed | The Final Seat</title>
+          <title>Reservation Not Found | The Final Seat</title>
         </Helmet>
-        <div className="minimal-card minimal-card--failed">
-          <div className="minimal-failed-icon">
+        <div className="confirmation-card confirmation-card--error">
+          <div className="confirmation-error-icon">
             <i className="fas fa-exclamation-circle"></i>
           </div>
-          <h2 className="minimal-failed-title">Payment Processing Failed</h2>
-          <p className="minimal-failed-desc">
-            Your payment could not be processed. Please retry your payment to complete your reservation.
+          <h2 className="confirmation-error-title">Reservation Lookup Failed</h2>
+          <p className="confirmation-error-desc">
+            {errorMsg || 'We could not load your reservation details. Please contact support with your booking reference.'}
           </p>
-          <div className="minimal-actions">
-            <Link to="/booking" className="btn-minimal btn-minimal--retry">
-              Retry Payment
+          <div className="confirmation-actions">
+            <Link to="/" className="btn-confirm btn-confirm--primary">
+              Return to Home
             </Link>
+            <a href="mailto:support@thefinalseat.com" className="btn-confirm btn-confirm--secondary">
+              Contact Support
+            </a>
           </div>
         </div>
       </div>
     );
   }
 
-  // ── 3. PENDING TIMEOUT (60s elapsed) STATE ───────────────────────────────
-  if (paymentState === 'PENDING_TIMEOUT') {
-    const tempCode = bookingData?.confirmationCode || bookingData?.confirmation_code || targetIdentifier || 'TFS-2026-ABC123';
-    return (
-      <div className="minimal-page-wrapper">
-        <Helmet>
-          <title>Payment Received — Processing | The Final Seat</title>
-        </Helmet>
-        <div className="minimal-card minimal-card--pending">
-          <div className="minimal-pending-icon">
-            <i className="fas fa-hourglass-half"></i>
-          </div>
-          <h2 className="minimal-pending-title">Your payment was received, but confirmation is still processing</h2>
+  // ── 3. DATA EXTRACTION & DERIVED VALUES ──────────────────────────────────
+  const isPaid = (booking.payment_status || booking.paymentStatus || '').toLowerCase() === 'paid';
+  const passengerName = booking.passenger_name || booking.passengerName || 'Valued Traveler';
+  const firstName = passengerName.split(' ')[0] || 'Traveler';
+  const code = booking.confirmation_code || booking.confirmationCode || booking.bookingId || confirmationCodeParam;
+  const email = booking.email || userEmailParam || 'customer@example.com';
+  const phone = booking.phone || 'N/A';
+  const bookingDate = booking.created_at ? new Date(booking.created_at).toLocaleDateString('en-US', {
+    year: 'numeric', month: 'long', day: 'numeric'
+  }) : new Date().toLocaleDateString('en-US');
 
-          <div className="minimal-ref-box">
-            <span className="minimal-ref-label">Booking Reference</span>
+  const paymentStatusDisplay = isPaid ? 'Paid' : 'Pending';
+  const bookingStatusDisplay = (booking.status || 'PENDING').toUpperCase();
 
-            <strong className="minimal-ref-code">{tempCode}</strong>
-          </div>
+  const isEmailSent = !!(booking.authorization_email_sent_at || booking.emailSentAt || booking.email_sent_at);
+  const emailNoticeMessage = isEmailSent
+    ? `Your confirmation email is on its way to ${email}.`
+    : `Your reservation is saved, but we could not send the confirmation email. Please keep your booking ID.`;
 
-          <p className="minimal-disclaimer">
-            We are verifying your transaction with the payment gateway. Click Check Again below to re-verify your status.
-          </p>
+  // Itinerary Segments
+  const outboundSegments = booking.outbound_segments || booking.itinerary?.outbound || [];
+  const returnSegments = booking.return_segments || booking.itinerary?.return || [];
+  const allSegments = [...outboundSegments, ...returnSegments];
 
-          <div className="minimal-actions">
-            <button type="button" onClick={startPolling} className="btn-minimal btn-minimal--primary">
-              Check Again
-            </button>
-            <Link to="/my-bookings" className="btn-minimal btn-minimal--secondary">
-              View My Booking
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Payment Method Metadata Reference
+  const pm = booking.paymentMethod || booking.payment_method || {};
+  const cardholderName = pm.cardholder_name || pm.cardholderName || booking.passenger_name || passengerName;
+  const cardBrand = pm.card_brand || pm.cardBrand || 'Card';
+  const cardLast4 = pm.card_last4 || pm.cardLast4 || '4242';
+  const expMonth = pm.card_exp_month || pm.cardExpMonth || '12';
+  const expYear = pm.card_exp_year || pm.cardExpYear || '2028';
+  const cardDisplay = `${cardBrand} ending in ${cardLast4}`;
 
-  // ── 4. MINIMAL SUCCESS STATE (paymentStatus.toLowerCase() === 'paid') ─────
-  const rawName = bookingData?.passengerName || bookingData?.passenger_name || 'Customer';
-  const firstName = rawName.split(' ')[0] || 'Customer';
-  const confirmationCode = bookingData?.confirmationCode || bookingData?.confirmation_code || targetIdentifier || 'TFS-2026-ABC123';
-  const customerEmail = bookingData?.email || 'customer@email.com';
-  const isEmailSent = !!(bookingData?.emailSentAt || bookingData?.confirmation_email_sent_at);
+  const billingAddr = [
+    pm.billing_address_line1 || pm.billingAddress,
+    pm.billing_address_line2,
+    pm.billing_city,
+    pm.billing_state,
+    pm.billing_postal_code,
+    pm.billing_country
+  ].filter(Boolean).join(', ') || 'On File';
+
+  const billingPhone = pm.billing_phone || pm.billingPhone || phone;
+
+  // Price Calculation
+  const totalPrice = parseFloat(booking.customer_price || booking.total_amount || 0).toFixed(2);
+  const currency = (booking.currency || 'USD').toUpperCase();
 
   return (
-    <div className="minimal-page-wrapper">
+    <div className="confirmation-page-wrapper">
       <Helmet>
-        <title>Payment Successful | The Final Seat</title>
+        <title>{isPaid ? 'Booking & Payment Confirmed' : 'Reservation Received'} | The Final Seat</title>
       </Helmet>
 
-      <div className="minimal-card minimal-card--success">
-        {/* Animated Minimal Green Checkmark */}
-        <div className="minimal-checkmark-circle">
-          <span className="minimal-checkmark-symbol">&#10003;</span>
+      <div className="confirmation-container no-print-padding">
+        
+        {/* ── 1. Header Banner & Success Checkmark ──────────────────────── */}
+        <div className="confirmation-header-banner">
+          <div className="confirmation-checkmark-circle">
+            <span className="confirmation-checkmark-symbol">&#10003;</span>
+          </div>
+
+          <h1 className="confirmation-hero-title">
+            {isPaid ? 'Booking and Payment Confirmed' : 'Reservation Received'}
+          </h1>
+
+          <p className="confirmation-hero-subtitle">
+            {isPaid
+              ? `Thank you, ${firstName}. Your payment was successful and your reservation has been confirmed.`
+              : `Thank you, ${firstName}. Your reservation details have been received. Our team will process the booking and provide the final confirmation.`}
+          </p>
+
+          <div className="confirmation-status-row">
+            <div className={`status-badge status-badge--${isPaid ? 'paid' : 'pending'}`}>
+              <i className={`fas ${isPaid ? 'fa-check-circle' : 'fa-clock'}`}></i>
+              Payment Status: {paymentStatusDisplay}
+            </div>
+            <div className="status-badge status-badge--info">
+              <i className="fas fa-ticket-alt"></i>
+              Booking Status: {bookingStatusDisplay}
+            </div>
+          </div>
         </div>
 
-        <h1 className="minimal-title">Thank you, {firstName}!</h1>
+        {/* ── 2. Prominent Reservation Details Card ──────────────────────── */}
+        <div className="reservation-details-card">
+          
+          {/* Section: Booking Information */}
+          <div className="res-section">
+            <h3 className="res-section-title">
+              <i className="fas fa-info-circle"></i> Booking Information
+            </h3>
+            <div className="res-grid-two">
+              <div className="res-field">
+                <span className="res-field-label">Confirmation Code / Booking ID</span>
+                <strong className="res-field-code">{code}</strong>
+              </div>
+              <div className="res-field">
+                <span className="res-field-label">Booking Date</span>
+                <span className="res-field-val">{bookingDate}</span>
+              </div>
+              <div className="res-field">
+                <span className="res-field-label">Primary Passenger</span>
+                <span className="res-field-val">{passengerName}</span>
+              </div>
+              <div className="res-field">
+                <span className="res-field-label">Contact Email</span>
+                <span className="res-field-val">{email}</span>
+              </div>
+              <div className="res-field">
+                <span className="res-field-label">Contact Phone</span>
+                <span className="res-field-val">{phone}</span>
+              </div>
+            </div>
+          </div>
 
-        <p className="minimal-subtitle">Your payment was successful.</p>
+          <hr className="res-divider" />
 
-        <div className="minimal-ref-box">
-          <span className="minimal-ref-label">Booking ID</span>
+          {/* Section: Flight Itinerary */}
+          <div className="res-section">
+            <h3 className="res-section-title">
+              <i className="fas fa-plane-departure"></i> Flight Itinerary
+            </h3>
 
-          <strong className="minimal-ref-code">{confirmationCode}</strong>
+            {allSegments.length === 0 ? (
+              <div className="incomplete-itinerary-alert">
+                <i className="fas fa-exclamation-triangle"></i> Itinerary details are currently incomplete. Our operations team has been notified to attach segment routing.
+              </div>
+            ) : (
+              <div className="itinerary-segments-list">
+                {outboundSegments.length > 0 && (
+                  <div className="itinerary-leg-group">
+                    <h4 className="leg-group-title"><i className="fas fa-plane"></i> Outbound Flight</h4>
+                    {outboundSegments.map((seg, idx) => (
+                      <div key={idx} className="segment-card">
+                        <div className="segment-header">
+                          <span className="segment-airline">
+                            {seg.airlineLogoUrl && <img src={seg.airlineLogoUrl} alt={seg.airlineName} className="segment-logo" />}
+                            <strong>{seg.airlineName || seg.airline || 'Airline'}</strong> ({seg.flightNumber || seg.flight_number || 'N/A'})
+                          </span>
+                          <span className="segment-cabin">{seg.cabinClass || seg.cabin || 'Economy'}</span>
+                        </div>
+                        <div className="segment-route">
+                          <div className="route-point">
+                            <span className="airport-code">{seg.originCode || seg.origin_airport}</span>
+                            <span className="city-name">{seg.originCity || seg.origin_city || ''}</span>
+                            <span className="time-date">{seg.departureDate || seg.departure_date} {seg.departureTime || seg.departure_time || ''}</span>
+                          </div>
+                          <div className="route-arrow">
+                            <i className="fas fa-arrow-right"></i>
+                            <span className="stops-count">{seg.stops === 0 ? 'Non-stop' : `${seg.stops} stop(s)`}</span>
+                          </div>
+                          <div className="route-point">
+                            <span className="airport-code">{seg.destinationCode || seg.destination_airport}</span>
+                            <span className="city-name">{seg.destinationCity || seg.destination_city || ''}</span>
+                            <span className="time-date">{seg.arrivalDate || seg.arrival_date} {seg.arrivalTime || seg.arrival_time || ''}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {returnSegments.length > 0 && (
+                  <div className="itinerary-leg-group" style={{ marginTop: '1.25rem' }}>
+                    <h4 className="leg-group-title"><i className="fas fa-undo"></i> Return Flight</h4>
+                    {returnSegments.map((seg, idx) => (
+                      <div key={idx} className="segment-card">
+                        <div className="segment-header">
+                          <span className="segment-airline">
+                            {seg.airlineLogoUrl && <img src={seg.airlineLogoUrl} alt={seg.airlineName} className="segment-logo" />}
+                            <strong>{seg.airlineName || seg.airline || 'Airline'}</strong> ({seg.flightNumber || seg.flight_number || 'N/A'})
+                          </span>
+                          <span className="segment-cabin">{seg.cabinClass || seg.cabin || 'Economy'}</span>
+                        </div>
+                        <div className="segment-route">
+                          <div className="route-point">
+                            <span className="airport-code">{seg.originCode || seg.origin_airport}</span>
+                            <span className="city-name">{seg.originCity || seg.origin_city || ''}</span>
+                            <span className="time-date">{seg.departureDate || seg.departure_date} {seg.departureTime || seg.departure_time || ''}</span>
+                          </div>
+                          <div className="route-arrow">
+                            <i className="fas fa-arrow-right"></i>
+                            <span className="stops-count">{seg.stops === 0 ? 'Non-stop' : `${seg.stops} stop(s)`}</span>
+                          </div>
+                          <div className="route-point">
+                            <span className="airport-code">{seg.destinationCode || seg.destination_airport}</span>
+                            <span className="city-name">{seg.destinationCity || seg.destination_city || ''}</span>
+                            <span className="time-date">{seg.arrivalDate || seg.arrival_date} {seg.arrivalTime || seg.arrival_time || ''}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <hr className="res-divider" />
+
+          {/* Section: Price Details */}
+          <div className="res-section">
+            <h3 className="res-section-title">
+              <i className="fas fa-dollar-sign"></i> Price Details
+            </h3>
+            <div className="price-summary-box">
+              <div className="price-row price-row--total">
+                <span>Total Reservation Amount:</span>
+                <strong>${totalPrice} {currency}</strong>
+              </div>
+            </div>
+          </div>
+
+          <hr className="res-divider" />
+
+          {/* Section: Card and Billing Reference (Masked Metadata Only) */}
+          <div className="res-section">
+            <h3 className="res-section-title">
+              <i className="fas fa-credit-card"></i> Card & Billing Reference
+            </h3>
+            <div className="res-grid-two">
+              <div className="res-field">
+                <span className="res-field-label">Cardholder Name</span>
+                <span className="res-field-val">{cardholderName}</span>
+              </div>
+              <div className="res-field">
+                <span className="res-field-label">Payment Method</span>
+                <span className="res-field-val">{cardDisplay}</span>
+              </div>
+              <div className="res-field">
+                <span className="res-field-label">Expiration</span>
+                <span className="res-field-val">{expMonth}/{expYear}</span>
+              </div>
+              <div className="res-field">
+                <span className="res-field-label">Billing Phone</span>
+                <span className="res-field-val">{billingPhone}</span>
+              </div>
+              <div className="res-field" style={{ gridColumn: 'span 2' }}>
+                <span className="res-field-label">Billing Address</span>
+                <span className="res-field-val">{billingAddr}</span>
+              </div>
+            </div>
+          </div>
+
         </div>
 
-        <p className="minimal-email-note">
-          Your reservation confirmation {isEmailSent ? 'has been sent to' : 'will be emailed to'}{' '}
-          <strong className="email-highlight">{customerEmail}</strong>.
-        </p>
+        {/* ── 3. Email Delivery Status Notice ─────────────────────────────── */}
+        <div className={`email-notice-box email-notice-box--${isEmailSent ? 'success' : 'warn'}`}>
+          <i className={`fas ${isEmailSent ? 'fa-envelope-open-text' : 'fa-info-circle'}`}></i>
+          <span>{emailNoticeMessage}</span>
+        </div>
 
-        <p className="minimal-disclaimer">
-          Your final airline confirmation and electronic ticket details will be shared separately after the reservation is processed.
-        </p>
-
-        <div className="minimal-actions">
-          <Link to="/my-bookings" className="btn-minimal btn-minimal--primary">
-            View My Booking
+        {/* ── 4. Action Buttons ────────────────────────────────────────────── */}
+        <div className="confirmation-actions-bar no-print">
+          <Link to="/my-bookings" className="btn-confirm btn-confirm--primary">
+            <i className="fas fa-suitcase"></i> View My Booking
           </Link>
-          <Link to="/" className="btn-minimal btn-minimal--secondary">
-            Return to Home
+          <button type="button" onClick={handlePrint} className="btn-confirm btn-confirm--secondary">
+            <i className="fas fa-print"></i> Print Reservation
+          </button>
+          <Link to="/" className="btn-confirm btn-confirm--outline">
+            <i className="fas fa-home"></i> Return to Home
           </Link>
+          <a href="mailto:support@thefinalseat.com" className="btn-confirm btn-confirm--outline">
+            <i className="fas fa-headset"></i> Contact Support
+          </a>
         </div>
+
       </div>
     </div>
   );
 }
 
-export default PaymentSuccess;
+export default PaymentSuccessPage;
