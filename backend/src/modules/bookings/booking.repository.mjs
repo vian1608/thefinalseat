@@ -12,6 +12,7 @@ const ticketSnapshotsMemoryStore = new Map();
 const authSnapshotsMemoryStore = new Map();
 const auditLogsMemoryStore = new Map();
 const paymentMethodsMemoryStore = new Map();
+const emailDeliveriesMemoryStore = new Map();
 
 
 export const bookingRepository = {
@@ -1809,6 +1810,68 @@ export const bookingRepository = {
     }
   },
 
+  getEmailDeliveryStatus: async (bookingId, emailType = 'BOOKING_CONFIRMATION') => {
+    try {
+      const inMemKey = `${bookingId}_${emailType}`;
+      const inMem = emailDeliveriesMemoryStore.get(inMemKey);
+      if (inMem) return inMem;
+
+      const { data, error } = await supabase
+        .from('email_deliveries')
+        .select('*')
+        .eq('booking_id', bookingId)
+        .eq('email_type', emailType)
+        .maybeSingle();
+
+      if (!error && data) {
+        emailDeliveriesMemoryStore.set(inMemKey, data);
+        return data;
+      }
+    } catch (e) {
+      /* fallback */
+    }
+    return emailDeliveriesMemoryStore.get(`${bookingId}_${emailType}`) || null;
+  },
+
+  upsertEmailDeliveryRecord: async (record) => {
+    try {
+      const inMemKey = `${record.booking_id}_${record.email_type || 'BOOKING_CONFIRMATION'}`;
+      const existing = emailDeliveriesMemoryStore.get(inMemKey) || {};
+      const row = {
+        id: existing.id || `email_del_${Date.now()}`,
+        booking_id: record.booking_id,
+        confirmation_code: record.confirmation_code,
+        email_type: record.email_type || 'BOOKING_CONFIRMATION',
+        recipient: record.recipient,
+        status: record.status || 'PENDING',
+        provider: record.provider || 'RESEND',
+        provider_message_id: record.provider_message_id || existing.provider_message_id || null,
+        error_code: record.error_code || existing.error_code || null,
+        error_message: record.error_message || existing.error_message || null,
+        attempt_count: record.attempt_count || ((existing.attempt_count || 0) + 1),
+        last_attempt_at: new Date().toISOString(),
+        sent_at: record.status === 'SENT' ? new Date().toISOString() : existing.sent_at,
+        updated_at: new Date().toISOString()
+      };
+
+      emailDeliveriesMemoryStore.set(inMemKey, row);
+
+      const { data, error } = await supabase
+        .from('email_deliveries')
+        .upsert(row, { onConflict: 'booking_id,email_type' })
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        logger.warn(`[DB] email_deliveries upsert notice: ${error.message}`);
+      }
+      return data || row;
+    } catch (e) {
+      logger.warn(`[DB] email_deliveries upsert exception: ${e.message}`);
+      return emailDeliveriesMemoryStore.get(`${record.booking_id}_${record.email_type || 'BOOKING_CONFIRMATION'}`);
+    }
+  },
+
   recordEmailDelivery: async (deliveryRow) => {
     try {
       const { data, error } = await supabase
@@ -1826,7 +1889,6 @@ export const bookingRepository = {
         .maybeSingle();
 
       if (error) {
-        // Log warning if schema cache delay or duplicate constraint
         console.warn('[DB] Non-blocking email delivery record warning:', error.message);
         return null;
       }

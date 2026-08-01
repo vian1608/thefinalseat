@@ -143,18 +143,24 @@ export const bookingService = {
       // 8 — Validate complete transactional integrity before committing
       await bookingValidatorService.validateCompletedBooking(booking.id);
 
-      // Only send confirmation email if payment status is explicitly paid
-      if (payload.paymentStatus === 'paid') {
-        sendBookingConfirmation(canonicalBooking).catch(err => {
-          logger.error(`Non-blocking email sending failed: ${err.message}`);
-        });
+      // 9 — Automatically trigger and await server-side booking confirmation email
+      let emailDeliveryResult = { success: false, status: 'FAILED' };
+      try {
+        emailDeliveryResult = await sendBookingConfirmation(canonicalBooking);
+      } catch (emailErr) {
+        logger.error(`[BookingCreate] Server-side confirmation email exception: ${emailErr.message}`);
+        emailDeliveryResult = { success: false, errorCode: 'EMAIL_DELIVERY_EXCEPTION', errorMessage: emailErr.message, status: 'FAILED' };
       }
 
       if (idempotencyKey && booking?.id) {
         idempotencyStore.set(idempotencyKey, booking.id);
       }
 
-      return canonicalBooking;
+      return {
+        ...canonicalBooking,
+        emailDeliveryStatus: emailDeliveryResult.success ? 'SENT' : 'FAILED',
+        emailDelivery: emailDeliveryResult
+      };
     } catch (err) {
       logger.error(`[AtomicBookingCreate] Rollback triggered for code ${confirmationCode}: ${err.message}`);
       if (booking?.id) {

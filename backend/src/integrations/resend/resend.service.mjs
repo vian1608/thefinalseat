@@ -306,29 +306,58 @@ function formatUsTime(timeVal) {
 export const sendBookingConfirmation = async (bookingInput, options = {}) => {
   try {
     const rawId = typeof bookingInput === 'object' ? (bookingInput.id || bookingInput.booking_id || bookingInput.confirmation_code) : bookingInput;
-    const booking = await bookingRepository.getById(rawId);
-    if (!booking) return { success: false, error: 'Booking not found' };
-
-    const bookingId = booking.id;
-    const sentAt = booking.confirmation_email_sent_at || booking.confirmationEmailSentAt;
-
-    if (sentAt && !options.force) {
-      logger.info(`[Email] Skipping duplicate confirmation email for booking ${bookingId} (already sent at ${sentAt})`);
-      return { success: true, duplicate: true, sentAt };
+    const booking = (await bookingRepository.getCompleteBookingById(rawId)) || (await bookingRepository.getById(rawId));
+    if (!booking) {
+      return { success: false, errorCode: 'BOOKING_NOT_FOUND', errorMessage: 'Booking record not found' };
     }
 
-    // PHASE 13 EMAIL PROTECTION VALIDATION (BOOKING CONFIRMATION EMAIL)
-    const { default: bookingValidatorService } = await import('../../modules/bookings/booking-validator.service.mjs');
-    const integrity = await bookingValidatorService.validateBookingIntegrity(booking, {
-      requireItinerary: true,
-      requirePassengers: true,
-      requirePayment: true
+    const bookingId = booking.id;
+    const confCode = booking.confirmation_code || booking.confirmationCode || 'TFS-PENDING';
+    const customerEmail = booking.email || booking.customerEmail || '';
+
+    // 1. Check Idempotency via email_deliveries table
+    const existingDelivery = await bookingRepository.getEmailDeliveryStatus(bookingId, 'BOOKING_CONFIRMATION');
+    if (existingDelivery && existingDelivery.status === 'SENT' && !options.force) {
+      logger.info(`[Email] Idempotency: Skipping duplicate confirmation email for booking ${confCode} (already SENT with messageId ${existingDelivery.provider_message_id})`);
+      return {
+        success: true,
+        duplicate: true,
+        messageId: existingDelivery.provider_message_id,
+        status: 'SENT'
+      };
+    }
+
+    const currentAttempt = (existingDelivery?.attempt_count || 0) + 1;
+
+    // Record PENDING state in email_deliveries table
+    await bookingRepository.upsertEmailDeliveryRecord({
+      booking_id: bookingId,
+      confirmation_code: confCode,
+      email_type: 'BOOKING_CONFIRMATION',
+      recipient: customerEmail,
+      status: 'PENDING',
+      provider: 'RESEND',
+      attempt_count: currentAttempt
     });
 
-    if (!integrity.valid) {
-      const errMsg = `EMAIL_PROTECTION_BLOCKED: ${integrity.reason}`;
+    // 2. Validate Booking Integrity Before Sending
+    const { bookingValidatorService } = await import('../../modules/bookings/booking-validator.service.mjs');
+    try {
+      await bookingValidatorService.validateCompletedBooking(bookingId);
+    } catch (valErr) {
+      const errMsg = `EMAIL_PROTECTION_BLOCKED: ${valErr.message}`;
       logger.error(`[Email Protection] ${errMsg} (bookingId=${bookingId})`);
-      return { success: false, error: errMsg };
+      await bookingRepository.upsertEmailDeliveryRecord({
+        booking_id: bookingId,
+        confirmation_code: confCode,
+        email_type: 'BOOKING_CONFIRMATION',
+        recipient: customerEmail,
+        status: 'FAILED',
+        error_code: 'BOOKING_DATA_INCOMPLETE',
+        error_message: errMsg,
+        attempt_count: currentAttempt
+      });
+      return { success: false, errorCode: 'BOOKING_DATA_INCOMPLETE', errorMessage: errMsg };
     }
 
     const itinerary = buildCanonicalItinerary(booking);
@@ -344,25 +373,44 @@ export const sendBookingConfirmation = async (bookingInput, options = {}) => {
     if (!passengerName && passengers.length === 0) {
       const errMsg = 'EMAIL_PROTECTION_BLOCKED: Cannot send booking confirmation email because passenger details are missing.';
       logger.error(`[Email Protection] ${errMsg} (bookingId=${bookingId})`);
-      return { success: false, error: errMsg };
+      await bookingRepository.upsertEmailDeliveryRecord({
+        booking_id: bookingId,
+        confirmation_code: confCode,
+        email_type: 'BOOKING_CONFIRMATION',
+        recipient: customerEmail,
+        status: 'FAILED',
+        error_code: 'BOOKING_DATA_INCOMPLETE',
+        error_message: errMsg,
+        attempt_count: currentAttempt
+      });
+      return { success: false, errorCode: 'BOOKING_DATA_INCOMPLETE', errorMessage: errMsg };
     }
 
     const passengerFirstName = firstPassenger.firstName || firstPassenger.first_name || (passengerName ? passengerName.split(' ')[0] : 'Valued Customer');
-    const confirmationCode = booking.confirmation_code || booking.confirmationCode || 'TFS-PENDING';
-    const customerEmail = booking.email || booking.customerEmail || '';
+    const confirmationCode = confCode;
 
     const customerPrice = parseFloat(booking.customer_price || booking.total_amount || 0);
     if (isNaN(customerPrice) || customerPrice <= 0) {
       const errMsg = 'EMAIL_PROTECTION_BLOCKED: Cannot send booking confirmation email because total amount is zero or invalid.';
       logger.error(`[Email Protection] ${errMsg} (bookingId=${bookingId})`);
-      return { success: false, error: errMsg };
+      await bookingRepository.upsertEmailDeliveryRecord({
+        booking_id: bookingId,
+        confirmation_code: confCode,
+        email_type: 'BOOKING_CONFIRMATION',
+        recipient: customerEmail,
+        status: 'FAILED',
+        error_code: 'INVALID_BOOKING_PRICE',
+        error_message: errMsg,
+        attempt_count: currentAttempt
+      });
+      return { success: false, errorCode: 'INVALID_BOOKING_PRICE', errorMessage: errMsg };
     }
 
     const amountPaid = customerPrice.toFixed(2);
     const currency = (booking.currency || 'USD').toUpperCase();
     const currencySymbol = currency === 'USD' ? '$' : (currency === 'EUR' ? '€' : (currency === 'GBP' ? '£' : '$'));
 
-    const rawPaymentProvider = (booking.payment_provider || booking.paymentProvider || 'whop').toLowerCase();
+    const rawPaymentProvider = (booking.payment_provider || booking.paymentProvider || 'card').toLowerCase();
     let paymentMethod = 'Credit / Debit Card';
     if (rawPaymentProvider.includes('paypal')) {
       paymentMethod = 'PayPal';
@@ -374,9 +422,9 @@ export const sendBookingConfirmation = async (bookingInput, options = {}) => {
     const paymentDate = formatUsDate(rawDate);
     const passengerCount = passengers.length > 0 ? `${passengers.length}` : '1';
 
-    const outboundSegs = itinerary.outbound;
-    const returnSegs = itinerary.return;
-    const outSeg = outboundSegs[0];
+    const outboundSegs = itinerary.outbound || [];
+    const returnSegs = itinerary.return || [];
+    const outSeg = outboundSegs[0] || {};
     const retSeg = returnSegs[0] || null;
 
     const templatePath = path.join(__dirname, 'templates/booking-confirmation.html');
@@ -421,8 +469,8 @@ export const sendBookingConfirmation = async (bookingInput, options = {}) => {
       '{{outboundFlightNumber}}': outSeg.flightNumber,
       '{{outboundOriginCity}}': outSeg.originName,
       '{{outboundOriginCode}}': outSeg.originCode,
-      '{{outboundDestinationCity}}': outboundSegs[outboundSegs.length - 1].destinationName,
-      '{{outboundDestinationCode}}': outboundSegs[outboundSegs.length - 1].destinationCode,
+      '{{outboundDestinationCity}}': outboundSegs[outboundSegs.length - 1]?.destinationName || '',
+      '{{outboundDestinationCode}}': outboundSegs[outboundSegs.length - 1]?.destinationCode || '',
       '{{outboundDepartureDate}}': formatUsDate(outSeg.departureDate),
       '{{outboundDepartureTime}}': formatUsTime(outSeg.departureTime),
       '{{outboundArrivalDate}}': formatUsDate(outSeg.arrivalDate),
@@ -437,7 +485,6 @@ export const sendBookingConfirmation = async (bookingInput, options = {}) => {
 
     html = html.replace(/\{\{[^}]+\\}\}/g, '');
 
-    // Plaintext Fallback
     const outboundAirlineTxt = outSeg.airlineName || '';
     const outboundFlightNumberTxt = outSeg.flightNumber || '';
     const outboundOriginCityTxt = outSeg.originName || '';
@@ -457,7 +504,7 @@ THE FINAL SEAT — TEMPORARY RESERVATION CONFIRMATION
 
 Thank you, ${passengerFirstName}!
 
-Your payment of ${currencySymbol}${amountPaid} ${currency} has been received successfully via ${paymentMethod} on ${paymentDate}.
+Your reservation payment of ${currencySymbol}${amountPaid} ${currency} has been received successfully via ${paymentMethod} on ${paymentDate}.
 
 TEMPORARY CONFIRMATION NUMBER: ${confirmationCode}
 
@@ -483,7 +530,9 @@ Support 24/7: Call +1 (213) 965-9727 or Email support@thefinalseat.com
     `.trim();
 
     const subject = `Payment Received — Temporary Confirmation ${confirmationCode}`;
-    let emailMessageId = `log_${Date.now()}`;
+    let emailMessageId = null;
+    let sendSuccess = false;
+    let providerError = null;
 
     if (env.resendApiKey?.trim()) {
       try {
@@ -494,11 +543,13 @@ Support 24/7: Call +1 (213) 965-9727 or Email support@thefinalseat.com
           htmlBody: html,
           replyTo: 'support@thefinalseat.com',
         });
-        if (result && result.messageId) {
-          emailMessageId = result.messageId;
+        if (result && (result.messageId || result.id)) {
+          emailMessageId = result.messageId || result.id || `resend_${Date.now()}`;
+          sendSuccess = true;
         }
       } catch (rErr) {
-        logger.error(`Resend email error for booking ${bookingId}:`, rErr.message);
+        providerError = rErr.message;
+        logger.error(`[Email] Resend API error for booking ${confCode}:`, rErr.message);
       }
     } else if (isSmtpConfigured()) {
       try {
@@ -510,24 +561,55 @@ Support 24/7: Call +1 (213) 965-9727 or Email support@thefinalseat.com
           text: customerTextBody,
           html,
         });
-        emailMessageId = info.messageId || emailMessageId;
+        emailMessageId = info.messageId || `smtp_${Date.now()}`;
+        sendSuccess = true;
         logger.info(`SMTP confirmation email sent to ${customerEmail} for booking ${confirmationCode}`);
       } catch (sErr) {
-        logger.error(`SMTP email error for booking ${bookingId}:`, sErr.message);
+        providerError = sErr.message;
+        logger.error(`SMTP email error for booking ${confCode}:`, sErr.message);
       }
     } else {
-      logger.warn(`No email API key / SMTP configured. Confirmation email for ${confirmationCode} printed to logs.`);
+      emailMessageId = `simulated_${Date.now()}_${confCode}`;
+      sendSuccess = true;
+      logger.info(`[Email] Simulated local delivery for ${confCode} (messageId: ${emailMessageId})`);
     }
 
-    if (bookingId) {
+    if (sendSuccess) {
+      await bookingRepository.upsertEmailDeliveryRecord({
+        booking_id: bookingId,
+        confirmation_code: confCode,
+        email_type: 'BOOKING_CONFIRMATION',
+        recipient: customerEmail,
+        status: 'SENT',
+        provider: 'RESEND',
+        provider_message_id: emailMessageId,
+        attempt_count: currentAttempt
+      });
       await bookingRepository.markConfirmationEmailSent(bookingId, emailMessageId);
+      return { success: true, messageId: emailMessageId, status: 'SENT' };
+    } else {
+      await bookingRepository.upsertEmailDeliveryRecord({
+        booking_id: bookingId,
+        confirmation_code: confCode,
+        email_type: 'BOOKING_CONFIRMATION',
+        recipient: customerEmail,
+        status: 'FAILED',
+        provider: 'RESEND',
+        error_code: 'EMAIL_PROVIDER_ERROR',
+        error_message: providerError || 'Failed to send email via email provider.',
+        attempt_count: currentAttempt
+      });
+      return {
+        success: false,
+        errorCode: 'EMAIL_PROVIDER_ERROR',
+        errorMessage: providerError || 'Failed to send email via provider',
+        status: 'FAILED'
+      };
     }
-
-    return { success: true, emailId: emailMessageId };
 
   } catch (error) {
-    logger.error('[Email] Non-blocking error in sendBookingConfirmation:', error.message);
-    return { success: false, error: error.message };
+    logger.error('[Email] Exception in sendBookingConfirmation:', error.message);
+    return { success: false, errorCode: 'EMAIL_DELIVERY_EXCEPTION', errorMessage: error.message, status: 'FAILED' };
   }
 };
 
