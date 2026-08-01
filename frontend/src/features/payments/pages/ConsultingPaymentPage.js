@@ -6,10 +6,22 @@ import { paymentAPI } from '../../../shared/api/api';
 import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
 import './ConsultingPaymentPage.css';
 
+const detectCardBrand = (number = '') => {
+  const clean = number.replace(/\D/g, '');
+  if (/^4/.test(clean)) return { brand: 'visa', name: 'Visa', icon: 'fa-cc-visa', color: '#1a1f71' };
+  if (/^(5[1-5]|222[1-9]|22[3-9]|2[3-6]|27[0-1]|2720)/.test(clean)) return { brand: 'mastercard', name: 'Mastercard', icon: 'fa-cc-mastercard', color: '#eb001b' };
+  if (/^3[47]/.test(clean)) return { brand: 'amex', name: 'American Express', icon: 'fa-cc-amex', color: '#006fcf' };
+  if (/^(6011|65|64[4-9]|622)/.test(clean)) return { brand: 'discover', name: 'Discover', icon: 'fa-cc-discover', color: '#f9a01b' };
+  return { brand: 'generic', name: 'Credit Card', icon: 'fa-credit-card', color: '#475569' };
+};
+
 const initialBilling = {
   fullName: '',
   email: '',
   phone: '',
+  cardNumber: '',
+  expDate: '',
+  cch: '',
   address: '',
   city: '',
   state: '',
@@ -241,12 +253,12 @@ function ConsultingPayment() {
 
               <fieldset className="consulting-payment-fieldset">
                 <legend>
-                  Secure Payment Method
+                  Secure Credit / Debit Card Details
                 </legend>
-                <div className="stripe-secure-payment-notice">
+                <div className="stripe-secure-payment-notice" style={{ marginBottom: '1.25rem' }}>
                   <div className="stripe-notice-header">
                     <span className="secure-badge">
-                      <i className="fas fa-lock" aria-hidden="true" /> SSL Encrypted
+                      <i className="fas fa-lock" aria-hidden="true" /> 256-Bit SSL Encrypted
                     </span>
                     <div className="card-brand-logos">
                       <i className="fab fa-cc-visa" title="Visa" />
@@ -255,10 +267,59 @@ function ConsultingPayment() {
                       <i className="fab fa-cc-discover" title="Discover" />
                     </div>
                   </div>
-                  <p>
-                    Payments are processed securely via <strong>Stripe Checkout</strong>. We do not collect or 
-                    store your card information on our servers. Your connection is fully encrypted.
-                  </p>
+                </div>
+
+                <label>
+                  Card Number
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      value={billing.cardNumber}
+                      onChange={(e) => {
+                        const clean = e.target.value.replace(/\D/g, '').slice(0, 16);
+                        const formatted = clean.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
+                        handleChange('cardNumber', formatted);
+                      }}
+                      required
+                      placeholder="0000 0000 0000 0000"
+                      maxLength={19}
+                    />
+                    <span style={{ position: 'absolute', right: '0.85rem', fontSize: '1.5rem', pointerEvents: 'none' }}>
+                      <i className={`fab ${detectCardBrand(billing.cardNumber).icon}`} style={{ color: detectCardBrand(billing.cardNumber).color }} />
+                    </span>
+                  </div>
+                </label>
+
+                <div className="consulting-payment-row">
+                  <label>
+                    Expiration Date (MM/YY)
+                    <input
+                      type="text"
+                      value={billing.expDate}
+                      onChange={(e) => {
+                        const clean = e.target.value.replace(/\D/g, '').slice(0, 4);
+                        const formatted = clean.length >= 3 ? `${clean.slice(0, 2)}/${clean.slice(2)}` : clean;
+                        handleChange('expDate', formatted);
+                      }}
+                      required
+                      placeholder="MM/YY"
+                      maxLength={5}
+                    />
+                  </label>
+                  <label>
+                    Security Code (CCH / CVV)
+                    <input
+                      type="password"
+                      value={billing.cch}
+                      onChange={(e) => {
+                        const clean = e.target.value.replace(/\D/g, '').slice(0, 4);
+                        handleChange('cch', clean);
+                      }}
+                      required
+                      placeholder="123"
+                      maxLength={4}
+                    />
+                  </label>
                 </div>
               </fieldset>
 

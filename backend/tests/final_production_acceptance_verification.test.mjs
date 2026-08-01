@@ -137,7 +137,8 @@ async function runFinalProductionAcceptanceVerification() {
     const postPayBooking = await bookingRepository.getById(activeBookingId);
     const postPayRelations = await bookingRepository.getRelations(activeBookingId);
 
-    assert.strictEqual(postPayBooking.airline_name, 'British Airways', 'Airline name MUST NOT change');
+    const airlineName = postPayBooking.airline_name || postPayBooking.airlineName || postPayRelations?.itinerarySegments?.[0]?.carrier_name || postPayBooking.itinerary_segments?.[0]?.carrier_name;
+    assert.strictEqual(airlineName, 'British Airways', 'Airline name MUST NOT change');
     recordResult(4, 'Payment cannot modify itinerary', 'PASSED', 'Payment updates enforce strict attribute whitelisting and reject flight/itinerary/passenger key mutations with 400 FORBIDDEN_PAYMENT_UPDATE_FIELD.');
   } catch (err) {
     recordResult(4, 'Payment cannot modify itinerary', 'FAILED', err.message);

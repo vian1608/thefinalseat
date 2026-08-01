@@ -797,11 +797,13 @@ export const bookingRepository = {
     if (error) {
       logger.warn(`Supabase schema notice: ${error.message}.`);
 
-      // Retry without status/payment_status to persist supplemental fields
-      // (authorization_status, authorized_at, etc.) that have no constraint.
+      // Retry without non-persisted schema fields (paid_amount, paid_at, refund_amount, delete_reason)
       const safeFields = { ...cleanFields };
-      delete safeFields.status;
-      delete safeFields.payment_status;
+      delete safeFields.paid_amount;
+      delete safeFields.paid_at;
+      delete safeFields.refund_amount;
+      delete safeFields.refund_timestamp;
+      delete safeFields.delete_reason;
 
       if (Object.keys(safeFields).length > 0) {
         const { data: safeData, error: safeErr } = await supabase

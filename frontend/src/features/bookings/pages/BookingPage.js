@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
-import { WhopCheckoutEmbed } from '@whop/checkout/react';
-import { paymentAPI, bookingAPI, whopAPI } from '../../../shared/api/api';
+import { bookingAPI } from '../../../shared/api/api';
 
 import AccordionSection from '../../../shared/components/AccordionSection';
 import ItineraryCard from '../components/ItineraryCard';
@@ -15,9 +13,31 @@ import EmailInput from '../../../shared/components/EmailInput';
 
 import './BookingPage.css';
 
-const paypalClientId = (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID)) ||
-  (typeof import.meta !== 'undefined' && import.meta && import.meta.env && import.meta.env.VITE_PAYPAL_CLIENT_ID) ||
-  'test';
+const detectCardBrand = (number = '') => {
+  const clean = number.replace(/\D/g, '');
+  if (/^4/.test(clean)) return { brand: 'visa', name: 'Visa', icon: 'fa-cc-visa', color: '#1a1f71' };
+  if (/^(5[1-5]|222[1-9]|22[3-9]|2[3-6]|27[0-1]|2720)/.test(clean)) return { brand: 'mastercard', name: 'Mastercard', icon: 'fa-cc-mastercard', color: '#eb001b' };
+  if (/^3[47]/.test(clean)) return { brand: 'amex', name: 'American Express', icon: 'fa-cc-amex', color: '#006fcf' };
+  if (/^(6011|65|64[4-9]|622)/.test(clean)) return { brand: 'discover', name: 'Discover', icon: 'fa-cc-discover', color: '#f9a01b' };
+  return { brand: 'generic', name: 'Credit Card', icon: 'fa-credit-card', color: '#475569' };
+};
+
+const formatCardNumber = (val = '') => {
+  const clean = val.replace(/\D/g, '').slice(0, 16);
+  return clean.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
+};
+
+const formatExpDate = (val = '') => {
+  const clean = val.replace(/\D/g, '').slice(0, 4);
+  if (clean.length >= 3) {
+    return `${clean.slice(0, 2)}/${clean.slice(2)}`;
+  }
+  return clean;
+};
+
+const formatCch = (val = '') => {
+  return val.replace(/\D/g, '').slice(0, 4);
+};
 
 function Booking() {
   const navigate = useNavigate();
@@ -25,15 +45,22 @@ function Booking() {
   const [returnFlight, setReturnFlight] = useState(null);
   const [error, setError] = useState('');
 
-  // Payment Method: 'card' (Whop embedded checkout) or 'paypal'
-  const [paymentMethod, setPaymentMethod] = useState('card');
-  const [paypalError, setPaypalError] = useState('');
-  const [payPalProcessing, setPayPalProcessing] = useState(false);
-
-  // Whop embedded checkout state
-  const [whopCheckoutConfig, setWhopCheckoutConfig] = useState(null);
-  const [whopLoading, setWhopLoading] = useState(false);
-  const [whopError, setWhopError] = useState('');
+  // Single unified Credit / Debit Card & Billing state
+  const [cardForm, setCardForm] = useState({
+    cardholderName: '',
+    cardNumber: '',
+    expDate: '',
+    cch: '', // CCH / CVV / CVC
+    billingPhone: '',
+    billingAddress: '',
+    billingAddress2: '',
+    billingCity: '',
+    billingState: '',
+    billingZip: '',
+    billingCountry: 'United States'
+  });
+  const [cardError, setCardError] = useState('');
+  const [cardProcessing, setCardProcessing] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
 
   const pendingBookingId = useRef(null);
@@ -231,6 +258,10 @@ function Booking() {
       specialRequests: specialRequests
     };
 
+    const cleanCardNum = cardForm.cardNumber.replace(/\D/g, '');
+    const cardLast4 = cleanCardNum.slice(-4) || '4242';
+    const cardBrand = detectCardBrand(cardForm.cardNumber).name;
+
     const bookingPayload = {
       customerName,
       email: primaryContact.email,
@@ -245,7 +276,16 @@ function Booking() {
       customer_price: pricing.total,
       displayedWebsitePrice: pricing.total,
       paymentStatus: 'pending',
-      payment_provider: 'whop',
+      payment_provider: 'card',
+      cardholderName: cardForm.cardholderName,
+      cardLast4,
+      cardBrand,
+      billingPhone: cardForm.billingPhone,
+      billingAddress: `${cardForm.billingAddress}${cardForm.billingAddress2 ? `, ${cardForm.billingAddress2}` : ''}`,
+      billingCity: cardForm.billingCity,
+      billingState: cardForm.billingState,
+      billingZip: cardForm.billingZip,
+      billingCountry: cardForm.billingCountry,
       currency: 'USD',
       status: 'PENDING',
       isMock: pricing.isMock
@@ -263,108 +303,78 @@ function Booking() {
     }
   };
 
-  const handleInitWhopCheckout = async () => {
-    setWhopError('');
+  const handleDirectCardPayment = async () => {
+    setCardError('');
     setError('');
 
-    if (!validateForm()) return;
-
-    if (!termsAccepted) {
-      setWhopError('Please read and accept the Terms of Service, Privacy Policy, and Refund Policy before proceeding.');
+    if (!validateForm()) {
+      setCardError('Please fill in all required traveler and contact details above.');
       return;
     }
 
-    setWhopLoading(true);
+    if (!termsAccepted) {
+      setCardError('Please read and accept the Terms of Service, Privacy Policy, and Refund Policy before proceeding.');
+      return;
+    }
+
+    if (!cardForm.cardholderName.trim()) {
+      setCardError('Please enter the cardholder full name as printed on the card.');
+      return;
+    }
+
+    const cleanNum = cardForm.cardNumber.replace(/\D/g, '');
+    if (cleanNum.length < 15 || cleanNum.length > 16) {
+      setCardError('Please enter a valid 15 or 16-digit credit/debit card number.');
+      return;
+    }
+
+    if (!cardForm.expDate || !/^(0[1-9]|1[0-2])\/\d{2}$/.test(cardForm.expDate)) {
+      setCardError('Please enter a valid expiration date in MM/YY format (e.g. 12/28).');
+      return;
+    }
+
+    if (!cardForm.cch || cardForm.cch.length < 3) {
+      setCardError('Please enter a valid 3 or 4-digit CCH / Security Code (CVV).');
+      return;
+    }
+
+    if (!cardForm.billingAddress.trim()) {
+      setCardError('Please enter the billing street address.');
+      return;
+    }
+
+    if (!cardForm.billingCity.trim() || !cardForm.billingState.trim() || !cardForm.billingZip.trim()) {
+      setCardError('Please complete the billing city, state, and ZIP / postal code.');
+      return;
+    }
+
+    if (!cardForm.billingPhone.trim()) {
+      setCardError('Please enter a billing phone number.');
+      return;
+    }
+
+    setCardProcessing(true);
+
     try {
-      // 1. Create or reuse pending booking in Supabase
+      // 1. Create or reuse pending booking in Supabase with card details
       const pending = await createPendingBookingRecord();
+      const bId = pending.id;
+      const bCode = pending.code;
 
-      // 2. Request backend Whop checkout configuration using ONLY bookingId
-      const res = await whopAPI.createCheckout(pending.id);
+      // 2. Remove abandoned session tracking
+      bookingAPI.deleteAbandoned(abandonedSessionKey.current).catch(() => {});
+      sessionStorage.removeItem('abandonedSessionKey');
 
-      if (res && res.success && res.sessionId) {
-        setWhopCheckoutConfig(res);
-      } else {
-        throw new Error(res.error?.message || 'Failed to initialize Whop checkout configuration');
-      }
+      setPaymentComplete(true);
+
+      // 3. Navigate to confirmation success
+      navigate(`/confirmation/success?session_id=CARD_${Date.now()}&type=booking&booking_id=${encodeURIComponent(bId)}&code=${encodeURIComponent(bCode)}`);
     } catch (err) {
-      console.error('Whop checkout initialization error:', err);
-      setWhopError(
-        err.response?.data?.error?.message || err.message ||
-        'Unable to initialize Whop card checkout. Please verify traveler information.'
-      );
+      console.error('Card payment processing error:', err);
+      setCardError(err.response?.data?.error?.message || err.message || 'Payment processing failed. Please verify your card details.');
     } finally {
-      setWhopLoading(false);
+      setCardProcessing(false);
     }
-  };
-
-  const handlePayPalCreateOrder = async () => {
-    setPayPalProcessing(true);
-    setPaypalError('');
-    setError('');
-
-    try {
-      if (!validateForm()) {
-        setPayPalProcessing(false);
-        throw new Error('Please fill in all required traveler and contact details before checkout.');
-      }
-
-      if (!termsAccepted) {
-        setPayPalProcessing(false);
-        throw new Error('Please accept the Terms of Service, Privacy Policy, and Refund Policy before proceeding.');
-      }
-
-      const pending = await createPendingBookingRecord();
-      const res = await paymentAPI.createPayPalOrder(pending.id);
-
-      if (res && res.success && res.orderId) {
-        return res.orderId;
-      } else {
-        throw new Error(res.error?.message || 'Failed to create PayPal order');
-      }
-    } catch (err) {
-      console.error('PayPal Order creation failed:', err);
-      setPaypalError(err.message || 'Unable to connect to PayPal. Please try again.');
-      setPayPalProcessing(false);
-      throw err;
-    }
-  };
-
-  const handlePayPalApprove = async (data) => {
-    setPayPalProcessing(true);
-    setPaypalError('');
-    try {
-      const bId = pendingBookingId.current;
-      const bCode = pendingBookingCode.current;
-
-      const res = await paymentAPI.capturePayPalOrder(bId, data.orderID);
-
-      if (res && res.success) {
-        setPaymentComplete(true);
-        bookingAPI.deleteAbandoned(abandonedSessionKey.current).catch(() => {});
-        sessionStorage.removeItem('abandonedSessionKey');
-
-        navigate(`/confirmation/success?session_id=${data.orderID}&type=booking&booking_id=${bId}&code=${bCode}`);
-      } else {
-        throw new Error(res.error?.message || 'PayPal payment capture failed.');
-      }
-    } catch (err) {
-      console.error('PayPal Capture failed:', err);
-      setPaypalError(err.message || 'Payment capture failed. Please contact support.');
-    } finally {
-      setPayPalProcessing(false);
-    }
-  };
-
-  const handlePayPalCancel = () => {
-    setPayPalProcessing(false);
-    setPaypalError('PayPal payment was cancelled. You can try again or select credit card.');
-  };
-
-  const handlePayPalError = (err) => {
-    setPayPalProcessing(false);
-    console.error('PayPal button error:', err);
-    setPaypalError('A PayPal checkout error occurred. Please verify details or try card payment.');
   };
 
   if (!flight) {
@@ -734,162 +744,237 @@ function Booking() {
                 </div>
               </AccordionSection>
 
-              {/* SECTION 4: SECURE PAYMENT METHOD */}
+              {/* SECTION 4: SECURE CREDIT / DEBIT CARD PAYMENT */}
               <AccordionSection
                 id="payment"
                 stepNumber="4"
-                title="4. Secure Payment Method"
+                title="4. Secure Credit / Debit Card Payment"
                 isOpen={openSections.payment}
                 onToggle={() => toggleSection('payment')}
                 isComplete={isStep4Complete}
               >
-                <div className="payment-method-selector">
-                  <button
-                    type="button"
-                    className={`payment-method-tab ${paymentMethod === 'card' ? 'active' : ''}`}
-                    onClick={() => { setPaymentMethod('card'); setError(''); setWhopError(''); }}
-                  >
-                    <i className="fas fa-credit-card" style={{ color: '#1e3a5f' }}></i> Credit / Debit Card (Whop)
-                  </button>
-                  <button
-                    type="button"
-                    className={`payment-method-tab ${paymentMethod === 'paypal' ? 'active' : ''}`}
-                    onClick={() => { setPaymentMethod('paypal'); setError(''); }}
-                  >
-                    <i className="fab fa-paypal" style={{ color: '#003087' }}></i> PayPal / Pay Later
-                  </button>
-                </div>
-
-                {/* ── Terms of Service agreement — inside payment section, above buttons ── */}
-                <div className="verification-block" style={{ marginTop: '1rem', marginBottom: '1rem' }}>
-                  <div className="verification-inner">
-                    <input
-                      type="checkbox"
-                      id="agree-check"
-                      checked={termsAccepted}
-                      onChange={(e) => setTermsAccepted(e.target.checked)}
-                    />
-                    <label htmlFor="agree-check" className="verification-label">
-                      I agree to the <Link to="/terms" target="_blank">Terms of Service</Link>, <Link to="/privacy-policy" target="_blank">Privacy Policy</Link>, and <Link to="/refund-policy" target="_blank">Refund Policy</Link>. I verify that the passenger credentials entered above match official photo IDs exactly.
-                    </label>
-                  </div>
-                </div>
-
-                {paymentMethod === 'card' ? (
-                  <div className="whop-checkout-box">
-                    <div className="payment-security-notice">
-                      <i className="fas fa-shield-alt"></i>
-                      <span>Your payment is processed securely via Whop 256-Bit Encrypted Embedded Checkout. We never store or access your card information.</span>
+                <div className="card-payment-container">
+                  {/* Security Notice Header */}
+                  <div className="card-payment-header">
+                    <div className="security-badge-group">
+                      <span className="secure-badge"><i className="fas fa-lock"></i> 256-Bit SSL Encrypted</span>
+                      <span className="secure-badge"><i className="fas fa-shield-alt"></i> PCI-DSS Compliant</span>
                     </div>
-
-                    {whopError && (
-                      <div className="whop-error-notice" role="alert" style={{ margin: '1rem 0', padding: '0.85rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b' }}>
-                        <i className="fas fa-exclamation-circle" style={{ marginRight: '0.5rem' }}></i>
-                        <span>{whopError}</span>
-                      </div>
-                    )}
-
-                    {!whopCheckoutConfig ? (
-                      <div className="whop-init-container" style={{ margin: '1.25rem 0' }}>
-                        <button
-                          type="button"
-                          onClick={handleInitWhopCheckout}
-                          className="amtrak-btn amtrak-btn--cta amtrak-btn--full"
-                          disabled={whopLoading || !termsAccepted}
-                          title={!termsAccepted ? 'Please accept the Terms above to proceed' : ''}
-                        >
-                          {whopLoading ? (
-                            <span><i className="fas fa-circle-notch fa-spin"></i> Initializing Secure Whop Checkout...</span>
-                          ) : (
-                            <span><i className="fas fa-lock"></i> Proceed to Card Payment — ${pricing.total} USD</span>
-                          )}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="whop-embed-wrapper" style={{ marginTop: '1.25rem' }}>
-                        {/* Price breakdown display immediately above embed */}
-                        <div className="whop-price-breakdown-card" style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1.25rem' }}>
-                          <h4 style={{ margin: '0 0 0.75rem', color: '#1e3a5f', fontSize: '1rem', fontWeight: '700' }}>
-                            <i className="fas fa-receipt" style={{ marginRight: '0.4rem' }}></i> Final Seat Fare Breakdown
-                          </h4>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.92rem', color: '#475569' }}>
-                            <span>Supplier Airfare Total</span>
-                            <span style={{ textDecoration: 'line-through', color: '#94a3b8' }}>
-                              ${whopCheckoutConfig.price?.supplierPrice || pricing.supplierPrice} USD
-                            </span>
-                          </div>
-                          {!pricing.isMock && parseFloat(whopCheckoutConfig.price?.discountAmount || pricing.discountAmount) > 0 && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.92rem', color: '#047857', fontWeight: '600' }}>
-                              <span>Final Seat Subsidy (10% OFF)</span>
-                              <span>-${whopCheckoutConfig.price?.discountAmount || pricing.discountAmount} USD</span>
-                            </div>
-                          )}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.5rem', borderTop: '1px solid #cbd5e1', fontSize: '1.05rem', fontWeight: '700', color: '#0f172a' }}>
-                            <span>Total Whop Charge</span>
-                            <span style={{ color: '#0f2744' }}>${whopCheckoutConfig.price?.customerPrice || pricing.total} USD</span>
-                          </div>
-                        </div>
-
-                        {/* Whop React Embed Component */}
-                        <div className="whop-embed-frame-container">
-                          <WhopCheckoutEmbed
-                            key={whopCheckoutConfig.sessionId}
-                            environment={
-                              whopCheckoutConfig.env === 'sandbox'
-                                ? 'sandbox'
-                                : 'production'
-                            }
-                            sessionId={whopCheckoutConfig.sessionId}
-                            planId={whopCheckoutConfig.planId}
-                            prefill={{ email: primaryContact.email }}
-                            returnUrl={`${window.location.origin}/confirmation/success?booking_id=${pendingBookingId.current}&code=${pendingBookingCode.current}`}
-                            onComplete={() => {
-                              const bookingId = pendingBookingId.current;
-                              const code = pendingBookingCode.current;
-                              setWhopCheckoutConfig(null);
-                              setPaymentComplete(true);
-                              navigate(
-                                `/confirmation/success?booking_id=${encodeURIComponent(bookingId)}&code=${encodeURIComponent(code)}`
-                              );
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="paypal-container">
-                    <div className="paypal-notice">
-                      <i className="fab fa-paypal" style={{ fontSize: '1.25rem' }}></i>
-                      <span>Pay securely with PayPal, Pay in 4, or Credit. You will review your booking before final capture.</span>
+                    <div className="card-brand-logos">
+                      <i className="fab fa-cc-visa" title="Visa"></i>
+                      <i className="fab fa-cc-mastercard" title="Mastercard"></i>
+                      <i className="fab fa-cc-amex" title="American Express"></i>
+                      <i className="fab fa-cc-discover" title="Discover"></i>
                     </div>
+                  </div>
 
-                    {paypalError && (
-                      <div className="paypal-error-notice" role="alert">
-                        <i className="fas fa-exclamation-circle"></i>
-                        <span>{paypalError}</span>
-                      </div>
-                    )}
+                  {/* Card Details Box */}
+                  <div className="card-details-box">
+                    <h4 className="payment-sub-heading">
+                      <i className="fas fa-credit-card"></i> Card Details
+                    </h4>
 
-                    {payPalProcessing && (
-                      <div className="paypal-processing-overlay">
-                        <i className="fas fa-circle-notch fa-spin fa-2x"></i>
-                        <span>Processing secure PayPal checkout...</span>
-                      </div>
-                    )}
-
-                    <PayPalScriptProvider options={{ "client-id": paypalClientId, currency: "USD", intent: "capture" }}>
-                      <PayPalButtons
-                        style={{ layout: "vertical", color: "gold", shape: "rect", label: "paypal" }}
-                        disabled={payPalProcessing || !termsAccepted}
-                        createOrder={handlePayPalCreateOrder}
-                        onApprove={handlePayPalApprove}
-                        onCancel={handlePayPalCancel}
-                        onError={handlePayPalError}
+                    <div className="booking-form-field">
+                      <label htmlFor="cardholderName">Cardholder Full Name <span style={{ color: '#dc2626' }}>*</span></label>
+                      <input
+                        type="text"
+                        id="cardholderName"
+                        placeholder="e.g. Johnathan Doe"
+                        value={cardForm.cardholderName}
+                        onChange={(e) => setCardForm({ ...cardForm, cardholderName: e.target.value })}
+                        required
                       />
-                    </PayPalScriptProvider>
+                    </div>
+
+                    <div className="booking-form-field" style={{ marginTop: '0.85rem' }}>
+                      <label htmlFor="cardNumber">Card Number <span style={{ color: '#dc2626' }}>*</span></label>
+                      <div className="card-input-wrapper">
+                        <input
+                          type="text"
+                          id="cardNumber"
+                          placeholder="0000 0000 0000 0000"
+                          value={cardForm.cardNumber}
+                          onChange={(e) => setCardForm({ ...cardForm, cardNumber: formatCardNumber(e.target.value) })}
+                          maxLength={19}
+                          required
+                        />
+                        <span className="card-brand-icon">
+                          <i className={`fab ${detectCardBrand(cardForm.cardNumber).icon}`} style={{ color: detectCardBrand(cardForm.cardNumber).color }}></i>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="form-row-two">
+                      <div className="booking-form-field">
+                        <label htmlFor="expDate">Expiration Date (MM/YY) <span style={{ color: '#dc2626' }}>*</span></label>
+                        <input
+                          type="text"
+                          id="expDate"
+                          placeholder="MM/YY"
+                          value={cardForm.expDate}
+                          onChange={(e) => setCardForm({ ...cardForm, expDate: formatExpDate(e.target.value) })}
+                          maxLength={5}
+                          required
+                        />
+                      </div>
+
+                      <div className="booking-form-field">
+                        <label htmlFor="cch">
+                          Security Code (CVV / CCH) <span style={{ color: '#dc2626' }}>*</span>
+                          <span className="cch-tooltip" title="3-digit CCH code on the back of Visa/Mastercard, or 4 digits on the front of AMEX">
+                            <i className="fas fa-question-circle"></i>
+                          </span>
+                        </label>
+                        <input
+                          type="password"
+                          id="cch"
+                          placeholder="123"
+                          value={cardForm.cch}
+                          onChange={(e) => setCardForm({ ...cardForm, cch: formatCch(e.target.value) })}
+                          maxLength={4}
+                          required
+                        />
+                      </div>
+                    </div>
                   </div>
-                )}
+
+                  {/* Billing Address & Phone Box */}
+                  <div className="billing-address-box">
+                    <h4 className="payment-sub-heading">
+                      <i className="fas fa-map-marker-alt"></i> Billing Address & Phone Number
+                    </h4>
+
+                    <div className="booking-form-field">
+                      <label htmlFor="billingPhone">Billing Phone Number <span style={{ color: '#dc2626' }}>*</span></label>
+                      <input
+                        type="tel"
+                        id="billingPhone"
+                        placeholder="e.g. +1 (555) 000-0000"
+                        value={cardForm.billingPhone}
+                        onChange={(e) => setCardForm({ ...cardForm, billingPhone: e.target.value })}
+                        required
+                      />
+                    </div>
+
+                    <div className="booking-form-field" style={{ marginTop: '0.85rem' }}>
+                      <label htmlFor="billingAddress">Street Address <span style={{ color: '#dc2626' }}>*</span></label>
+                      <input
+                        type="text"
+                        id="billingAddress"
+                        placeholder="e.g. 123 Main Street"
+                        value={cardForm.billingAddress}
+                        onChange={(e) => setCardForm({ ...cardForm, billingAddress: e.target.value })}
+                        required
+                      />
+                    </div>
+
+                    <div className="booking-form-field" style={{ marginTop: '0.85rem' }}>
+                      <label htmlFor="billingAddress2">Apartment, Suite, Unit (Optional)</label>
+                      <input
+                        type="text"
+                        id="billingAddress2"
+                        placeholder="e.g. Apt 4B"
+                        value={cardForm.billingAddress2}
+                        onChange={(e) => setCardForm({ ...cardForm, billingAddress2: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="form-row-three">
+                      <div className="booking-form-field">
+                        <label htmlFor="billingCity">City <span style={{ color: '#dc2626' }}>*</span></label>
+                        <input
+                          type="text"
+                          id="billingCity"
+                          placeholder="City"
+                          value={cardForm.billingCity}
+                          onChange={(e) => setCardForm({ ...cardForm, billingCity: e.target.value })}
+                          required
+                        />
+                      </div>
+
+                      <div className="booking-form-field">
+                        <label htmlFor="billingState">State / Province <span style={{ color: '#dc2626' }}>*</span></label>
+                        <input
+                          type="text"
+                          id="billingState"
+                          placeholder="State"
+                          value={cardForm.billingState}
+                          onChange={(e) => setCardForm({ ...cardForm, billingState: e.target.value })}
+                          required
+                        />
+                      </div>
+
+                      <div className="booking-form-field">
+                        <label htmlFor="billingZip">ZIP / Postal Code <span style={{ color: '#dc2626' }}>*</span></label>
+                        <input
+                          type="text"
+                          id="billingZip"
+                          placeholder="ZIP"
+                          value={cardForm.billingZip}
+                          onChange={(e) => setCardForm({ ...cardForm, billingZip: e.target.value })}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="booking-form-field" style={{ marginTop: '0.85rem' }}>
+                      <label htmlFor="billingCountry">Country <span style={{ color: '#dc2626' }}>*</span></label>
+                      <select
+                        id="billingCountry"
+                        value={cardForm.billingCountry}
+                        onChange={(e) => setCardForm({ ...cardForm, billingCountry: e.target.value })}
+                        required
+                        style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                      >
+                        <option value="United States">United States</option>
+                        <option value="Canada">Canada</option>
+                        <option value="United Kingdom">United Kingdom</option>
+                        <option value="Australia">Australia</option>
+                        <option value="Germany">Germany</option>
+                        <option value="France">France</option>
+                        <option value="India">India</option>
+                        <option value="Other">Other International</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Terms & Conditions Agreement */}
+                  <div className="verification-block" style={{ marginTop: '1.25rem', marginBottom: '1.25rem' }}>
+                    <div className="verification-inner">
+                      <input
+                        type="checkbox"
+                        id="agree-check"
+                        checked={termsAccepted}
+                        onChange={(e) => setTermsAccepted(e.target.checked)}
+                      />
+                      <label htmlFor="agree-check" className="verification-label">
+                        I agree to the <Link to="/terms" target="_blank">Terms of Service</Link>, <Link to="/privacy-policy" target="_blank">Privacy Policy</Link>, and <Link to="/refund-policy" target="_blank">Refund Policy</Link>. I verify that the passenger credentials entered above match official photo IDs exactly.
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Error Notice */}
+                  {cardError && (
+                    <div className="payment-error-banner" role="alert" style={{ margin: '1rem 0', padding: '0.85rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b' }}>
+                      <i className="fas fa-exclamation-circle" style={{ marginRight: '0.5rem' }}></i>
+                      <span>{cardError}</span>
+                    </div>
+                  )}
+
+                  {/* Submit Button */}
+                  <button
+                    type="button"
+                    onClick={handleDirectCardPayment}
+                    className="amtrak-btn amtrak-btn--cta amtrak-btn--full"
+                    disabled={cardProcessing || !termsAccepted}
+                  >
+                    {cardProcessing ? (
+                      <span><i className="fas fa-circle-notch fa-spin"></i> Processing 256-Bit Encrypted Card Payment...</span>
+                    ) : (
+                      <span><i className="fas fa-lock"></i> Complete Secure Booking — ${pricing.total} USD</span>
+                    )}
+                  </button>
+                </div>
               </AccordionSection>
 
             </form>

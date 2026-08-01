@@ -12,10 +12,11 @@ async function runPhase18MasterAutomatedTesting() {
   console.log('  PHASE 18 — MASTER AUTOMATED TESTING SUITE');
   console.log('==================================================\n');
 
-  const testId = '66ff77aa-88bb-99cc-00dd-112233445566';
+  const randomSuffix = Math.floor(Math.random() * 899999 + 100000);
+  const testId = `66ff77aa-88bb-99cc-00dd-${randomSuffix}5566`;
   const initialBookingData = {
     id: testId,
-    confirmation_code: 'TFS-2026-PHASE18',
+    confirmation_code: `TFS-2026-P18-${randomSuffix}`,
     passenger_name: 'Catherine Deneuve',
     email: 'catherine@example.com',
     phone: '+1 415-555-0666',
