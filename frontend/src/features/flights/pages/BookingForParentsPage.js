@@ -1,7 +1,6 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
+import LandingCtaSection from '../../../shared/components/LandingCtaSection';
 import './BookingForParentsPage.css';
 
 function BookingForParentsPage() {
@@ -28,14 +27,11 @@ function BookingForParentsPage() {
             <p className="bfp-lead">
               We make it easy to arrange safe, comfortable, and manageable flight itineraries for your parents or older family members, supported by real travel specialists.
             </p>
-            <div className="bfp-hero__actions">
-              <Link to="/#inquiry" className="flights-btn flights-btn--primary">
-                <i className="fas fa-search" aria-hidden="true"></i> Find Flight Options
-              </Link>
-              <a href={SUPPORT_PHONE_HREF} className="flights-btn flights-btn--outline">
-                <i className="fas fa-headset" aria-hidden="true"></i> Talk to a Travel Specialist
-              </a>
-            </div>
+            <LandingCtaSection
+              primaryText="Find Flight Options"
+              primaryHref="/#inquiry"
+              variant="hero"
+            />
           </div>
         </div>
       </section>
@@ -104,18 +100,13 @@ function BookingForParentsPage() {
       {/* CTA Section */}
       <section className="bfp-cta-box">
         <div className="container">
-          <div className="bfp-cta-content">
-            <h2>Need Help Arranging Travel For A Parent?</h2>
-            <p>Our travel specialists are ready to assist with schedule comparison and ticket reservation.</p>
-            <div className="bfp-cta-buttons">
-              <Link to="/#inquiry" className="flights-btn flights-btn--primary">
-                Find Flight Options
-              </Link>
-              <a href={SUPPORT_PHONE_HREF} className="call-btn flights-btn flights-btn--cta">
-                <i className="fas fa-phone"></i> Call {SUPPORT_PHONE_DISPLAY}
-              </a>
-            </div>
-          </div>
+          <LandingCtaSection
+            title="Need Help Arranging Travel For A Parent?"
+            description="Our travel specialists are ready to assist with schedule comparison and ticket reservation."
+            primaryText="Find Flight Options"
+            primaryHref="/#inquiry"
+            variant="footer"
+          />
         </div>
       </section>
     </div>

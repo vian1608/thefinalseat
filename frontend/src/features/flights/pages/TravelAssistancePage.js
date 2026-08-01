@@ -1,7 +1,6 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
+import LandingCtaSection from '../../../shared/components/LandingCtaSection';
 import './TravelAssistancePage.css';
 
 function TravelAssistancePage() {
@@ -24,14 +23,11 @@ function TravelAssistancePage() {
             <p className="ta-lead">
               We help you compare routes, connections, baggage and total travel time, with real human support throughout the reservation process.
             </p>
-            <div className="ta-hero__actions">
-              <Link to="/#inquiry" className="flights-btn flights-btn--primary">
-                <i className="fas fa-search" aria-hidden="true"></i> Get Travel Assistance
-              </Link>
-              <a href={SUPPORT_PHONE_HREF} className="flights-btn flights-btn--outline">
-                <i className="fas fa-headset" aria-hidden="true"></i> Talk to a Travel Specialist
-              </a>
-            </div>
+            <LandingCtaSection
+              primaryText="Get Travel Assistance"
+              primaryHref="/#inquiry"
+              variant="hero"
+            />
           </div>
         </div>
       </section>
@@ -173,18 +169,13 @@ function TravelAssistancePage() {
       {/* CTA Box */}
       <section className="ta-cta-box">
         <div className="container">
-          <div className="ta-cta-content">
-            <h2>Ready to Find Your Flight?</h2>
-            <p>Speak with a real person or start your flight search online today.</p>
-            <div className="ta-cta-buttons">
-              <Link to="/#inquiry" className="flights-btn flights-btn--primary">
-                Search Flights
-              </Link>
-              <a href={SUPPORT_PHONE_HREF} className="call-btn flights-btn flights-btn--cta">
-                <i className="fas fa-phone"></i> Call {SUPPORT_PHONE_DISPLAY}
-              </a>
-            </div>
-          </div>
+          <LandingCtaSection
+            title="Ready to Find Your Flight?"
+            description="Speak with a real person or start your flight search online today."
+            primaryText="Get Travel Assistance"
+            primaryHref="/#inquiry"
+            variant="footer"
+          />
         </div>
       </section>
     </div>

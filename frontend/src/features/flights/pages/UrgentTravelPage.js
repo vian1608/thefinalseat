@@ -1,7 +1,6 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
+import LandingCtaSection from '../../../shared/components/LandingCtaSection';
 import './UrgentTravelPage.css';
 
 function UrgentTravelPage() {
@@ -28,14 +27,11 @@ function UrgentTravelPage() {
             <p className="ut-lead">
               We help travelers compare real-time route availability, baggage rules, and schedules when timing is critical. Save up to 20% on eligible urgent travel reservations within 3 days.
             </p>
-            <div className="ut-hero__actions">
-              <Link to="/#inquiry" className="flights-btn flights-btn--primary">
-                <i className="fas fa-bolt" aria-hidden="true"></i> Request Urgent Travel Help
-              </Link>
-              <a href={SUPPORT_PHONE_HREF} className="flights-btn flights-btn--outline">
-                <i className="fas fa-phone" aria-hidden="true"></i> Call {SUPPORT_PHONE_DISPLAY}
-              </a>
-            </div>
+            <LandingCtaSection
+              primaryText="Request Urgent Travel Help"
+              primaryHref="/#inquiry"
+              variant="hero"
+            />
           </div>
         </div>
       </section>
@@ -82,18 +78,13 @@ function UrgentTravelPage() {
       {/* CTA Box */}
       <section className="ut-cta-box">
         <div className="container">
-          <div className="ut-cta-content">
-            <h2>Need Immediate Flight Assistance?</h2>
-            <p>Our urgent travel desk is open 24/7. Call or request online assistance now.</p>
-            <div className="ut-cta-buttons">
-              <Link to="/#inquiry" className="flights-btn flights-btn--primary">
-                Request Urgent Travel Help
-              </Link>
-              <a href={SUPPORT_PHONE_HREF} className="call-btn flights-btn flights-btn--cta">
-                <i className="fas fa-phone"></i> Call {SUPPORT_PHONE_DISPLAY}
-              </a>
-            </div>
-          </div>
+          <LandingCtaSection
+            title="Need Immediate Flight Assistance?"
+            description="Our urgent travel desk is open 24/7. Call or request online assistance now."
+            primaryText="Request Urgent Travel Help"
+            primaryHref="/#inquiry"
+            variant="footer"
+          />
         </div>
       </section>
     </div>
