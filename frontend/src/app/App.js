@@ -29,6 +29,8 @@ import PaymentSuccess from '../features/bookings/pages/PaymentSuccessPage';
 import MyBookings from '../features/bookings/pages/MyBookingsPage';
 import PassengerAuthorization from '../features/authorizations/pages/PassengerAuthorizationPage';
 import TravelAssistance from '../features/flights/pages/TravelAssistancePage';
+import BookingForParents from '../features/flights/pages/BookingForParentsPage';
+import UrgentTravel from '../features/flights/pages/UrgentTravelPage';
 import AppErrorBoundary from '../shared/components/AppErrorBoundary';
 
 
@@ -161,7 +163,10 @@ function App() {
                 <Route path="/refund-policy" element={<RefundPolicy />} />
                 
                 {/* Common Aliases / Shortcuts */}
+                {/* Dedicated Landing Pages */}
                 <Route path="/travel-assistance" element={<TravelAssistance />} />
+                <Route path="/booking-for-parents" element={<BookingForParents />} />
+                <Route path="/urgent-travel" element={<UrgentTravel />} />
                 <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
                 <Route path="/privacypolicy" element={<Navigate to="/privacy-policy" replace />} />
                 <Route path="/refund" element={<Navigate to="/refund-policy" replace />} />

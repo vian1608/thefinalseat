@@ -1,0 +1,193 @@
+.booking-for-parents-page {
+  background: #ffffff;
+  color: #1e293b;
+}
+
+.bfp-hero {
+  background: linear-gradient(135deg, #8b1538 0%, #6b0f2a 55%, #0f172a 100%);
+  color: #ffffff;
+  padding: 4rem 0;
+  text-align: center;
+}
+
+.bfp-hero__content {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.bfp-eyebrow {
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #e2b84d;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  display: block;
+}
+
+.bfp-hero h1 {
+  font-size: clamp(1.9rem, 4vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1.2;
+  margin-bottom: 1.25rem;
+  color: #ffffff;
+}
+
+.bfp-lead {
+  font-size: 1.15rem;
+  line-height: 1.65;
+  color: #f1f5f9;
+  opacity: 0.95;
+  margin-bottom: 2rem;
+}
+
+.bfp-hero__actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.bfp-section {
+  padding: 4rem 0;
+}
+
+.bfp-section--light {
+  background: #f8fafc;
+}
+
+.bfp-section__header {
+  text-align: center;
+  max-width: 650px;
+  margin: 0 auto 3rem;
+}
+
+.bfp-section__header h2 {
+  font-size: 2rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+  color: #1e293b;
+}
+
+.bfp-section__header p {
+  color: #64748b;
+  font-size: 1.05rem;
+}
+
+.bfp-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.bfp-grid--4 {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.bfp-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.75rem;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+}
+
+.bfp-card__icon {
+  width: 48px;
+  height: 48px;
+  background: #faf5f7;
+  color: #8b1538;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.bfp-card h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: #1e293b;
+}
+
+.bfp-card p {
+  font-size: 0.92rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.bfp-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+}
+
+.bfp-step {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+}
+
+.bfp-step__num {
+  width: 44px;
+  height: 44px;
+  background: #8b1538;
+  color: #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin: 0 auto 1.25rem;
+}
+
+.bfp-step h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+
+.bfp-step p {
+  font-size: 0.95rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.bfp-cta-box {
+  background: #faf5f7;
+  border-top: 1px solid #f0d5de;
+  padding: 4rem 0;
+  text-align: center;
+}
+
+.bfp-cta-content {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.bfp-cta-content h2 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #8b1538;
+  margin-bottom: 0.5rem;
+}
+
+.bfp-cta-content p {
+  font-size: 1.05rem;
+  color: #475569;
+  margin-bottom: 2rem;
+}
+
+.bfp-cta-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}

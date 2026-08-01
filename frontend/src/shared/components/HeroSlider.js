@@ -113,15 +113,28 @@ function HeroSlider({ slides, variant, serviceNavActive, inquiryHref = '#inquiry
               <h1>{slide.title}</h1>
               <p className="hero-slider__lead">{slide.lead}</p>
               {slide.showActions && (
-                <div className="hero-slider__actions">
-                  <a href={inquiryHref} className={`${btnPrefix}-btn ${btnPrefix}-btn--primary`}>
-                    Request a Quote
-                  </a>
-                  <a href={SUPPORT_PHONE_HREF} className={`${btnPrefix}-btn ${btnPrefix}-btn--outline`}>
-                    <i className="fas fa-phone" aria-hidden="true" />
-                    Customer Support
-                  </a>
-                </div>
+                <>
+                  <div className="hero-slider__actions">
+                    <a href={inquiryHref} className={`${btnPrefix}-btn ${btnPrefix}-btn--primary`}>
+                      Search Flights
+                    </a>
+                    <a href={SUPPORT_PHONE_HREF} className={`${btnPrefix}-btn ${btnPrefix}-btn--outline`}>
+                      <i className="fas fa-headset" aria-hidden="true" />
+                      Talk to a Travel Specialist
+                    </a>
+                  </div>
+                  <div className="hero-trust-statement">
+                    <p className="hero-trust-text">
+                      Human-assisted booking • Clear itinerary review • Support before and after reservation
+                    </p>
+                    <div className="hero-trust-badges">
+                      <span className="hero-trust-badge"><i className="fas fa-user-shield" aria-hidden="true" /> Human Travel Assistance</span>
+                      <span className="hero-trust-badge"><i className="fas fa-tasks" aria-hidden="true" /> Clear Flight Comparison</span>
+                      <span className="hero-trust-badge"><i className="fas fa-users" aria-hidden="true" /> Family Booking Support</span>
+                      <span className="hero-trust-badge"><i className="fas fa-lock" aria-hidden="true" /> Secure Reservation Process</span>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           ) : (

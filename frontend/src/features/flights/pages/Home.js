@@ -707,9 +707,9 @@ function Home() {
             <div className="inquiry-side-panel" id="support-section">
               <div className="flights-inquiry-card support-inquiry-card" style={{ height: 'auto', margin: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
-                  <h2 style={{ fontSize: '1.6rem', color: '#1e293b', marginBottom: '0.75rem', fontWeight: 800 }}>Would You Like Help Booking?</h2>
+                  <h2 style={{ fontSize: '1.6rem', color: '#1e293b', marginBottom: '0.75rem', fontWeight: 800 }}>Need help choosing a flight?</h2>
                   <p style={{ color: '#475569', fontSize: '0.98rem', lineHeight: '1.6', marginBottom: '1.25rem' }}>
-                    Speak with a real person for help comparing connections, baggage, total travel time and reservation details.
+                    Our travel specialists can assist you with comparing connections, baggage rules, total travel time and reservation details.
                   </p>
                   
                   <div className="benefits-list" style={{ marginTop: '1.25rem' }}>
@@ -741,7 +741,7 @@ function Home() {
                 
                 <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center' }}>
                   <a href={SUPPORT_PHONE_HREF} className="call-btn flights-btn flights-btn--cta" style={{ width: '100%', minHeight: '48px', height: '48px', padding: '0 1.5rem', fontSize: '1rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <i className="fas fa-phone"></i> Call for Booking Help
+                    <i className="fas fa-headset"></i> Talk to a Travel Specialist
                   </a>
                 </div>
               </div>
@@ -788,6 +788,40 @@ function Home() {
       <section className="flights-section">
         <div className="container route-slider-section">
           <RouteSlider routes={flightFamousRoutes} btnClassPrefix="flights" title="Popular Flight Options" />
+        </div>
+      </section>
+
+      {/* WHY CHOOSE THE FINAL SEAT */}
+      <section className="why-choose-section" style={{ backgroundColor: '#f8fafc', padding: '4rem 0', borderTop: '1px solid #e2e8f0' }}>
+        <div className="container">
+          <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+            <h2 style={{ fontSize: '2rem', color: '#1e293b', fontWeight: 800, marginBottom: '0.5rem' }}>Why Choose The Final Seat</h2>
+            <p style={{ color: '#64748b', fontSize: '1.05rem', maxWidth: '650px', margin: '0 auto' }}>
+              Dedicated to delivering clarity, confidence, and personal assistance for every traveler.
+            </p>
+          </div>
+          <div className="why-choose-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
+            <div className="why-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.75rem 1.25rem', textAlign: 'center', boxShadow: '0 4px 12px rgba(15,23,42,0.04)' }}>
+              <div className="why-icon" style={{ width: '52px', height: '52px', background: '#faf5f7', color: '#8b1538', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.35rem', marginBottom: '1rem' }}><i className="fas fa-headset"></i></div>
+              <h3 style={{ fontSize: '1.15rem', color: '#1e293b', fontWeight: 700, marginBottom: '0.5rem' }}>Personal Travel Assistance</h3>
+              <p style={{ fontSize: '0.92rem', color: '#64748b', lineHeight: 1.5, margin: 0 }}>Get help comparing flights, routes, baggage rules and travel options.</p>
+            </div>
+            <div className="why-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.75rem 1.25rem', textAlign: 'center', boxShadow: '0 4px 12px rgba(15,23,42,0.04)' }}>
+              <div className="why-icon" style={{ width: '52px', height: '52px', background: '#faf5f7', color: '#8b1538', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.35rem', marginBottom: '1rem' }}><i className="fas fa-heart"></i></div>
+              <h3 style={{ fontSize: '1.15rem', color: '#1e293b', fontWeight: 700, marginBottom: '0.5rem' }}>Support For Family Bookings</h3>
+              <p style={{ fontSize: '0.92rem', color: '#64748b', lineHeight: 1.5, margin: 0 }}>Book flights for parents, relatives and travelers who need extra assistance.</p>
+            </div>
+            <div className="why-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.75rem 1.25rem', textAlign: 'center', boxShadow: '0 4px 12px rgba(15,23,42,0.04)' }}>
+              <div className="why-icon" style={{ width: '52px', height: '52px', background: '#faf5f7', color: '#8b1538', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.35rem', marginBottom: '1rem' }}><i className="fas fa-balance-scale"></i></div>
+              <h3 style={{ fontSize: '1.15rem', color: '#1e293b', fontWeight: 700, marginBottom: '0.5rem' }}>More Than Just The Cheapest Fare</h3>
+              <p style={{ fontSize: '0.92rem', color: '#64748b', lineHeight: 1.5, margin: 0 }}>We help you understand connections, travel time, baggage and total journey quality.</p>
+            </div>
+            <div className="why-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.75rem 1.25rem', textAlign: 'center', boxShadow: '0 4px 12px rgba(15,23,42,0.04)' }}>
+              <div className="why-icon" style={{ width: '52px', height: '52px', background: '#faf5f7', color: '#8b1538', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.35rem', marginBottom: '1rem' }}><i className="fas fa-check-circle"></i></div>
+              <h3 style={{ fontSize: '1.15rem', color: '#1e293b', fontWeight: 700, marginBottom: '0.5rem' }}>Simple Reservation Experience</h3>
+              <p style={{ fontSize: '0.92rem', color: '#64748b', lineHeight: 1.5, margin: 0 }}>Clear information and human support from search to confirmation.</p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -843,6 +877,45 @@ function Home() {
               <i className="fas fa-wheelchair compare-icon"></i>
               <h4>Mobility Assistance</h4>
               <p>Help requesting airport assistance and special handling when needed.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* URGENT TRAVEL ASSISTANCE SECTION */}
+      <section className="urgent-travel-section" style={{ backgroundColor: '#8b1538', color: '#ffffff', padding: '4rem 0' }}>
+        <div className="container">
+          <div style={{ maxWidth: '800px', margin: '0 auto', textAlign: 'center' }}>
+            <span style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px', color: '#e2b84d', fontWeight: 700, display: 'block', marginBottom: '0.5rem' }}>
+              Urgent Flight Support
+            </span>
+            <h2 style={{ fontSize: '2.2rem', color: '#ffffff', fontWeight: 800, marginBottom: '0.75rem' }}>Need To Travel Soon?</h2>
+            <p style={{ fontSize: '1.1rem', color: '#f1f5f9', opacity: 0.95, marginBottom: '2rem' }}>
+              We help travelers find suitable options when timing matters.
+            </p>
+            <div className="urgent-highlights-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', textAlign: 'left', marginBottom: '2rem' }}>
+              <div className="urgent-item" style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem 1.25rem', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 500 }}>
+                <i className="fas fa-check-circle" style={{ color: '#e2b84d', marginRight: '0.5rem' }}></i>
+                Quick flight comparison
+              </div>
+              <div className="urgent-item" style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem 1.25rem', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 500 }}>
+                <i className="fas fa-check-circle" style={{ color: '#e2b84d', marginRight: '0.5rem' }}></i>
+                Assistance understanding options
+              </div>
+              <div className="urgent-item" style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem 1.25rem', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 500 }}>
+                <i className="fas fa-check-circle" style={{ color: '#e2b84d', marginRight: '0.5rem' }}></i>
+                Support with urgent reservations
+              </div>
+            </div>
+            <div style={{ background: 'rgba(226, 184, 77, 0.15)', border: '1px dashed #e2b84d', borderRadius: '8px', padding: '1rem 1.5rem', display: 'inline-block', marginBottom: '1.75rem' }}>
+              <span style={{ color: '#fef3c7', fontWeight: 600, fontSize: '1rem' }}>
+                Save up to 20% on eligible urgent travel reservations within 3 days.
+              </span>
+            </div>
+            <div>
+              <Link to="/urgent-travel" className="flights-btn flights-btn--primary" style={{ minHeight: '48px', padding: '0.85rem 1.75rem', fontSize: '1.05rem', color: '#8b1538', background: '#ffffff', fontWeight: 700 }}>
+                <i className="fas fa-bolt" style={{ color: '#8b1538' }}></i> Request Urgent Travel Help
+              </Link>
             </div>
           </div>
         </div>

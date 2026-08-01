@@ -20,16 +20,16 @@ function TravelAssistancePage() {
         <div className="container">
           <div className="ta-hero__content">
             <span className="ta-eyebrow">The Final Seat — Travel Assistance</span>
-            <h1>Booking a Flight for Yourself, a Parent or a Relative?</h1>
+            <h1>Need Help Booking Your Flight?</h1>
             <p className="ta-lead">
               We help you compare routes, connections, baggage and total travel time, with real human support throughout the reservation process.
             </p>
             <div className="ta-hero__actions">
               <Link to="/#inquiry" className="flights-btn flights-btn--primary">
-                <i className="fas fa-search" aria-hidden="true"></i> Search Flights Now
+                <i className="fas fa-search" aria-hidden="true"></i> Get Travel Assistance
               </Link>
               <a href={SUPPORT_PHONE_HREF} className="flights-btn flights-btn--outline">
-                <i className="fas fa-phone" aria-hidden="true"></i> Call {SUPPORT_PHONE_DISPLAY}
+                <i className="fas fa-headset" aria-hidden="true"></i> Talk to a Travel Specialist
               </a>
             </div>
           </div>
