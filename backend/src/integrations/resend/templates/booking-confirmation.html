@@ -10,7 +10,7 @@
   >
 
   <title>
-    Payment Received — Temporary Confirmation {{confirmationCode}}
+    Your reservation has been received – {{confirmationCode}}
   </title>
 
   <style>
@@ -224,7 +224,7 @@
                   color: #9f1239;
                 "
               >
-                Payment Successfully Received
+                Your Reservation Has Been Received
               </div>
 
               <h1
@@ -249,9 +249,8 @@
                   color: #5f4a53;
                 "
               >
-                Your payment has been received successfully. We are now
-                processing your flight reservation and preparing your final
-                airline confirmation details.
+                Your reservation request and payment details have been received. We are currently
+                processing your flight reservation and preparing your final confirmation details.
               </p>
             </td>
           </tr>
@@ -390,18 +389,22 @@
                           "
                         >
                           Payment Status
+                          <div style="font-size: 12px; color: #64748b; margin-top: 3px; font-weight: normal; text-align: left;">
+                            Your payment details have been received and are currently being processed.
+                          </div>
                         </td>
 
                         <td
                           align="right"
                           style="
                             padding: 7px 0;
-                            color: #0f9f6e;
+                            color: #9f1239;
                             font-weight: 700;
                             font-size: 14px;
+                            vertical-align: top;
                           "
                         >
-                          Received
+                          {{customerPaymentStatus}}
                         </td>
                       </tr>
 
@@ -414,7 +417,7 @@
                             font-size: 14px;
                           "
                         >
-                          Amount Paid
+                          Reservation Amount
                         </td>
 
                         <td

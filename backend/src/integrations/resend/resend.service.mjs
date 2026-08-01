@@ -8,6 +8,20 @@ import bookingRepository from '../../modules/bookings/booking.repository.mjs';
 import passengerAuthorizationService from '../../modules/authorizations/passenger-authorization.service.mjs';
 import { resolveAirlineName, getCarrierLogoUrl, buildCanonicalItinerary } from '../../shared/utils/airline-lookup.mjs';
 
+/**
+ * Customer-Facing Payment Wording Formatter for Booking Confirmation Emails
+ * Priority: Section 3 — Never expose raw internal payment status (PENDING, PROCESSING, PAID, FAILED, REFUNDED)
+ */
+export function getBookingEmailPaymentLabel(paymentStatus) {
+  const normalized = String(paymentStatus || '').toUpperCase().trim();
+
+  if (normalized === 'FAILED' || normalized === 'REFUNDED') {
+    return null;
+  }
+
+  return 'Payment Under Process';
+}
+
 
 
 
@@ -427,6 +441,14 @@ export const sendBookingConfirmation = async (bookingInput, options = {}) => {
     const outSeg = outboundSegs[0] || {};
     const retSeg = returnSegs[0] || null;
 
+    const rawPaymentStatus = booking.payment_status || booking.paymentStatus || booking.payment?.paymentStatus || 'PENDING';
+    const customerPaymentLabel = getBookingEmailPaymentLabel(rawPaymentStatus);
+
+    if (!customerPaymentLabel) {
+      logger.info(`[Email Protection] Booking confirmation email suppressed for booking ${confCode} because payment status is ${rawPaymentStatus}.`);
+      return { success: false, errorCode: 'EMAIL_SUPPRESSED_PAYMENT_STATUS', errorMessage: `Booking confirmation email suppressed for ${rawPaymentStatus} status.` };
+    }
+
     const templatePath = path.join(__dirname, 'templates/booking-confirmation.html');
     let html = await fs.readFile(templatePath, 'utf8');
 
@@ -455,6 +477,7 @@ export const sendBookingConfirmation = async (bookingInput, options = {}) => {
 
     const replacements = {
       '{{emailHeaderSubtitle}}': 'FLIGHT RESERVATION CONFIRMATION',
+      '{{customerPaymentStatus}}': customerPaymentLabel,
       '{{confirmationCode}}': confirmationCode,
       '{{passengerFirstName}}': passengerFirstName,
       '{{passengerName}}': passengerName,
@@ -500,13 +523,19 @@ export const sendBookingConfirmation = async (bookingInput, options = {}) => {
     const hasReturnFlightTxt = returnSegs && returnSegs.length > 0;
 
     const customerTextBody = `
-THE FINAL SEAT — TEMPORARY RESERVATION CONFIRMATION
+THE FINAL SEAT — RESERVATION RECEIVED
 
 Thank you, ${passengerFirstName}!
 
-Your reservation payment of ${currencySymbol}${amountPaid} ${currency} has been received successfully via ${paymentMethod} on ${paymentDate}.
+Your reservation request for ${confirmationCode} has been received.
 
-TEMPORARY CONFIRMATION NUMBER: ${confirmationCode}
+PAYMENT SUMMARY:
+Payment Status: ${customerPaymentLabel}
+Your payment details have been received and are currently being processed.
+Reservation Amount: ${currencySymbol}${amountPaid} ${currency}
+Payment Method: ${paymentMethod}
+
+RESERVATION NUMBER: ${confirmationCode}
 
 PASSENGER DETAILS:
 Primary Passenger: ${passengerName}
@@ -522,14 +551,14 @@ ${hasReturnFlightTxt ? `
 Return: ${retSeg?.airlineName || ''} (${retSeg?.originName || ''} to ${returnSegs[returnSegs.length - 1]?.destinationName || ''})
 ` : ''}
 IMPORTANT NOTICE:
-${confirmationCode} is a temporary confirmation number issued by The Final Seat. It is not the airline's final PNR, ticket number, or electronic ticket. Please wait for the separate email containing your final airline-issued confirmation details.
+${confirmationCode} is a reservation reference number issued by The Final Seat. It is not the airline's final PNR, ticket number, or electronic ticket. Please wait for the separate email containing your final airline-issued confirmation details.
 
 Track your reservation at: https://www.thefinalseat.com/my-bookings?code=${confirmationCode}
 
 Support 24/7: Call +1 (213) 965-9727 or Email support@thefinalseat.com
     `.trim();
 
-    const subject = `Payment Received — Temporary Confirmation ${confirmationCode}`;
+    const subject = `Your reservation has been received – ${confirmationCode}`;
     let emailMessageId = null;
     let sendSuccess = false;
     let providerError = null;
