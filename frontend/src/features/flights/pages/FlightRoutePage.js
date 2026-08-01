@@ -130,7 +130,7 @@ const FlightRoute = ({ title, metaTitle, metaDescription, keywords, originCity, 
           <div className="inquiry-split-layout">
             <div className="inquiry-left-panel">
               <h2>Need Immediate Support for {capitalizeWords(topThreeKeywords[0])}?</h2>
-              <p>Skip the form and call us directly to secure your air logistics immediately.</p>
+              <p>Skip the form and call us directly for immediate flight assistance.</p>
               
               <a href={SUPPORT_PHONE_HREF} className="call-btn flights-btn flights-btn--cta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '2rem', padding: '1.25rem', fontSize: '1.2rem', backgroundColor: '#1e293b', color: '#fff', textDecoration: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
                 <i className="fas fa-phone"></i> Call {SUPPORT_PHONE_DISPLAY}

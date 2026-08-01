@@ -10,7 +10,7 @@ function ContactInfo() {
         <div className="info-card">
           <h1>Contact Information</h1>
           <p className="info-intro">
-            Reach The Final Seat LLC for consultancy inquiries, travel logistics strategy, and urgent
+            Reach The Final Seat LLC for flight search inquiries, travel assistance, and urgent
             itinerary support.
           </p>
 

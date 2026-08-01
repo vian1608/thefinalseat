@@ -103,20 +103,20 @@ function ConsultingPayment() {
   return (
     <div className="consulting-payment-page">
       <Helmet>
-        <title>Secure Payment | Consulting Service Fees | The Final Seat LLC</title>
+        <title>Secure Payment | Travel Assistance | The Final Seat</title>
         <meta
           name="description"
-          content="Pay consulting and logistics advisory service fees securely. The Final Seat LLC provides itinerary support, routing assistance, and urgent travel coordination."
+          content="Pay flight reservation assistance and travel support fees securely with The Final Seat."
         />
-        <link rel="canonical" href="https://thefinalseat.com/payment" />
+        <link rel="canonical" href="https://www.thefinalseat.com/payment" />
       </Helmet>
 
       <div className="consulting-payment-container">
         <header className="consulting-payment-header">
-          <h1>Secure Consulting Payment</h1>
+          <h1>Secure Payment</h1>
           <p>
-            Pay for logistics advisory, itinerary coordination, and urgent travel support. All
-            transactions are encrypted and processed through PCI-compliant payment infrastructure.
+            Pay for flight reservation assistance, itinerary coordination, and urgent travel support. All
+            transactions are encrypted and processed securely.
           </p>
         </header>
 
@@ -124,8 +124,8 @@ function ConsultingPayment() {
           <section className="consulting-payment-services" aria-labelledby="service-plans-heading">
             <h2 id="service-plans-heading">Service Plans</h2>
             <p className="consulting-payment-services__intro">
-              Select the advisory tier that matches your travel needs. Prices are in USD and cover
-              consultancy services only.
+              Select the service tier that matches your travel needs. Prices are in USD and cover
+              assistance services.
             </p>
             <div className="consulting-payment-plans">
               {consultingServices.map((plan) => (

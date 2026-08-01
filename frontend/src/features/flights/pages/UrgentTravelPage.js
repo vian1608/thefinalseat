@@ -14,15 +14,29 @@ function UrgentTravelPage() {
   return (
     <div className="urgent-travel-page">
       <Helmet>
-        <title>Urgent Travel & Last-Minute Flight Support | The Final Seat</title>
+        <title>Urgent Flight Booking Assistance | The Final Seat</title>
         <meta
           name="description"
-          content="Search available flights now or speak with a travel specialist for priority assistance. Save up to 20% on eligible reservations for travel within 3 days."
+          content="Search available flights or receive priority assistance for eligible travel within the next three days."
         />
         <meta
           name="keywords"
           content="urgent flights, last minute flight booking, urgent travel assistance, emergency flight support"
         />
+        <meta property="og:title" content="Urgent Flight Booking Assistance | The Final Seat" />
+        <meta
+          property="og:description"
+          content="Search available flights or receive priority assistance for eligible travel within the next three days."
+        />
+        <meta property="og:url" content="https://www.thefinalseat.com/urgent-travel" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Urgent Flight Booking Assistance | The Final Seat" />
+        <meta
+          name="twitter:description"
+          content="Search available flights or receive priority assistance for eligible travel within the next three days."
+        />
+        <link rel="canonical" href="https://www.thefinalseat.com/urgent-travel" />
       </Helmet>
 
       {/* Hero Section */}

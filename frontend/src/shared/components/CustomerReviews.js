@@ -49,8 +49,8 @@ function CustomerReviews({ reviews, variant = 'flights' }) {
           </h2>
           <p className="customer-reviews__subtitle">
             {isFlights
-              ? 'Real experiences from clients who relied on our air logistics advisory.'
-              : 'Real experiences from travelers who used our Amtrak and national rail consultancy.'}
+              ? 'Real experiences from travelers who used our flight reservation support.'
+              : 'Real experiences from travelers who used our Amtrak and national rail support.'}
           </p>
         </div>
 

@@ -14,15 +14,29 @@ function BookingForParentsPage() {
   return (
     <div className="booking-for-parents-page">
       <Helmet>
-        <title>Helping You Book Flights For Your Parents | The Final Seat</title>
+        <title>Family Flight Booking Assistance | The Final Seat</title>
         <meta
           name="description"
-          content="Search flight options online or get help comparing travel time, connections, baggage allowance and route complexity when arranging flights for parents or family members."
+          content="Arrange travel for a parent, relative or family member with help comparing routes, connections, baggage and total journey time."
         />
         <meta
           name="keywords"
           content="book flights for parents, family flight booking, travel assistance for family, book flight for relative"
         />
+        <meta property="og:title" content="Family Flight Booking Assistance | The Final Seat" />
+        <meta
+          property="og:description"
+          content="Arrange travel for a parent, relative or family member with help comparing routes, connections, baggage and total journey time."
+        />
+        <meta property="og:url" content="https://www.thefinalseat.com/booking-for-parents" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Family Flight Booking Assistance | The Final Seat" />
+        <meta
+          name="twitter:description"
+          content="Arrange travel for a parent, relative or family member with help comparing routes, connections, baggage and total journey time."
+        />
+        <link rel="canonical" href="https://www.thefinalseat.com/booking-for-parents" />
       </Helmet>
 
       {/* Hero Section */}

@@ -45,10 +45,10 @@ export const railHeroSlides = [
     id: 'rail-intro',
     type: 'content',
     backgroundImage: heroImage('rail-slide.jpg'),
-    eyebrow: 'The Final Seat LLC — Rail Logistics',
-    title: 'Amtrak & National Rail Logistics Advisory',
+    eyebrow: 'The Final Seat — Rail Travel Support',
+    title: 'Amtrak & National Rail Travel Support',
     lead:
-      'Independent consultancy for urgent rail itineraries, connection strategy, and itinerary optimization across Amtrak and partner rail networks.',
+      'Independent assistance for rail itineraries, connection planning, and journey optimization across Amtrak and partner rail networks.',
     showActions: true,
   },
   {

@@ -14,15 +14,29 @@ function TravelAssistancePage() {
   return (
     <div className="travel-assistance-page">
       <Helmet>
-        <title>Travel Assistance & Flight Booking Support | The Final Seat</title>
+        <title>Flight Booking Assistance | The Final Seat</title>
         <meta
           name="description"
-          content="Search available flight options online or get personal help comparing routes, connections, baggage allowance and journey time with real human support."
+          content="Search flights online or get personal help comparing routes, connections, baggage and total travel time with The Final Seat."
         />
         <meta
           name="keywords"
-          content="travel assistance, flight booking support, book Delta flight, find airline tickets, human flight assistance"
+          content="flight booking assistance, flight search, travel assistance, airline reservations, travel specialist, flight comparison"
         />
+        <meta property="og:title" content="Flight Booking Assistance | The Final Seat" />
+        <meta
+          property="og:description"
+          content="Search available flight options online or receive personal help from a travel specialist."
+        />
+        <meta property="og:url" content="https://www.thefinalseat.com/travel-assistance" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Flight Booking Assistance | The Final Seat" />
+        <meta
+          name="twitter:description"
+          content="Search flights online or get help comparing routes, connections, baggage and travel time."
+        />
+        <link rel="canonical" href="https://www.thefinalseat.com/travel-assistance" />
       </Helmet>
 
       {/* Hero Section */}

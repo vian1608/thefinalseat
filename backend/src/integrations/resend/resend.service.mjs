@@ -162,8 +162,8 @@ export const sendConsultingInquiry = async (inquiry) => {
   const subjectLabel = isPayment
     ? 'Secure Consulting Payment'
     : isFlights
-      ? 'Air Logistics Advisory'
-      : 'Amtrak / Rail Logistics Advisory';
+      ? 'Air Travel Assistance'
+      : 'Amtrak / Rail Travel Assistance';
 
   // Format inquiry text
   let textBody = '';
@@ -191,7 +191,7 @@ export const sendConsultingInquiry = async (inquiry) => {
     ].join('\n');
   } else {
     const lines = [
-      `NEW ${isFlights ? 'AIR' : 'RAIL'} LOGISTICS CONSULTING INQUIRY`,
+      `NEW ${isFlights ? 'AIR' : 'RAIL'} TRAVEL ASSISTANCE INQUIRY`,
       `The Final Seat LLC`,
       ``,
       `CONTACT`,

@@ -275,6 +275,29 @@ function Home() {
   return (
     <div className="flights-page">
       <Helmet>
+        <title>The Final Seat | Flight Search With Human Support</title>
+        <meta
+          name="description"
+          content="Compare flight options and complete your reservation with clear information and real human support from The Final Seat."
+        />
+        <meta
+          name="keywords"
+          content="flight search, flight booking, travel assistance, airline reservations, flight comparison"
+        />
+        <meta property="og:title" content="The Final Seat | Flight Search With Human Support" />
+        <meta
+          property="og:description"
+          content="Compare flight options and complete your reservation with clear information and real human support from The Final Seat."
+        />
+        <meta property="og:url" content="https://www.thefinalseat.com/" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="The Final Seat | Flight Search With Human Support" />
+        <meta
+          name="twitter:description"
+          content="Compare flight options and complete your reservation with clear information and real human support from The Final Seat."
+        />
+        <link rel="canonical" href="https://www.thefinalseat.com/" />
       </Helmet>
       <HeroSlider
         slides={flightHeroSlides}

@@ -12,17 +12,17 @@ function TermsAndConditions() {
           <section>
             <h2>1. Scope of Services</h2>
             <p>
-              The Final Seat LLC provides travel planning, logistics advisory, and itinerary support
+              The Final Seat LLC provides flight search, reservation assistance, and itinerary support
               services. We help customers evaluate and organize travel options based on urgency,
-              budget, and operational needs.
+              budget, and travel needs.
             </p>
           </section>
 
           <section>
-            <h2>2. Consultancy Disclaimer</h2>
+            <h2>2. Independent Service Disclaimer</h2>
             <p>
-              The Final Seat LLC is an independent travel consultancy and is not an airline, air
-              carrier, or ticket issuer. Final ticketing and transport fulfillment are subject to
+              The Final Seat LLC is an independent flight-search and reservation-assistance service and is not an airline, air
+              carrier, or official ticket issuer. Final ticketing and transport fulfillment are subject to
               third-party provider terms.
             </p>
           </section>

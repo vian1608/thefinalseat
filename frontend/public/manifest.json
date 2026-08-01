@@ -1,0 +1,21 @@
+{
+  "short_name": "The Final Seat",
+  "name": "The Final Seat",
+  "description": "Flight search and reservation assistance with real human support.",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    },
+    {
+      "src": "favicon.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#8B1538",
+  "theme_color": "#8B1538",
+  "display": "standalone"
+}

@@ -5,7 +5,7 @@ const CONTENT = {
   rail: {
     title: 'Seamless Direct Rail Advisory',
     subtitle:
-      'Our passenger support model delivers ticket clarity and stress-free logistics in three easy steps.',
+      'Our passenger support model delivers ticket clarity and stress-free travel support in three easy steps.',
     steps: [
       {
         title: 'Specify Route',
