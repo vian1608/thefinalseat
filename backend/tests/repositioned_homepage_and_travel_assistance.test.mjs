@@ -83,16 +83,12 @@ async function runRepositionedHomepageTests() {
   console.log('✔ CASE 7 PASSED: Form controls properly labeled for accessibility.\n');
 
   // ----------------------------------------------------
-  // CASE 8: WHAT CUSTOMERS CAN EXPECT (NO DEMO TESTIMONIALS)
+  // CASE 8: REMOVAL OF UNNEEDED BOTTOM CARDS / SECTIONS
   // ----------------------------------------------------
-  console.log('--- CASE 8: WHAT CUSTOMERS CAN EXPECT SECTION ---');
-  assert.ok(homeJsContent.includes('What Customers Can Expect'), 'What Customers Can Expect heading must exist on Home page');
-  assert.ok(homeJsContent.includes('Responsive Communication'), 'Expectation pillar 1 must exist');
-  assert.ok(homeJsContent.includes('Itinerary Review'), 'Expectation pillar 2 must exist');
-  assert.ok(homeJsContent.includes('Clear Reservation Details'), 'Expectation pillar 3 must exist');
-  assert.ok(homeJsContent.includes('Connection & Baggage Guidance'), 'Expectation pillar 4 must exist');
-  assert.ok(homeJsContent.includes('Support Through the Process'), 'Expectation pillar 5 must exist');
-  console.log('✔ CASE 8 PASSED: Placeholder testimonials replaced with "What Customers Can Expect".\n');
+  console.log('--- CASE 8: REMOVAL OF UNNEEDED BOTTOM CARDS / SECTIONS ---');
+  assert.ok(!homeJsContent.includes('More Than Just a Flight Search'), '"More Than Just a Flight Search" section must be removed from Home.js');
+  assert.ok(!homeJsContent.includes('What Customers Can Expect'), '"What Customers Can Expect" section must be removed from Home.js');
+  console.log('✔ CASE 8 PASSED: Bottom cards removed per user directive.\n');
 
   // ----------------------------------------------------
   // CASE 9: DEDICATED TRAVEL ASSISTANCE ROUTE & EXISTING SEARCH FUNCTIONALITY
