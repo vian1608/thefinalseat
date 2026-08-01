@@ -1496,15 +1496,78 @@ export const bookingRepository = {
     const oldTotal = parseFloat(booking.customer_price || booking.total_amount || 0);
 
     // 2. Save splits safely
+    const oldSplits = await bookingRepository.getPaymentSplits(realId);
     await bookingRepository.savePaymentSplits(realId, formattedSplits);
 
-    let newStatus = booking.status;
-    let newAuthStatus = booking.authorization_status;
+    // Update payments table authorized_amount & payment_amount
+    try {
+      await supabase
+        .from('payments')
+        .update({
+          authorized_amount: calculatedTotal,
+          payment_amount: calculatedTotal,
+          updated_at: new Date().toISOString()
+        })
+        .eq('booking_id', realId);
+    } catch (pErr) {}
 
-    // Automatic reauthorization trigger if authorized total changed
-    if (Math.abs(oldTotal - calculatedTotal) > 0.001 && (booking.status === 'AUTHORIZED' || booking.status === 'READY_FOR_TICKETING' || booking.authorization_status === 'AUTHORIZED')) {
-      newStatus = 'REAUTHORIZATION_REQUIRED';
-      newAuthStatus = 'REAUTHORIZATION_REQUIRED';
+    let newStatus = booking.status;
+    let newAuthStatus = booking.authorization_status || 'PENDING';
+    const amountChanged = Math.abs(oldTotal - calculatedTotal) > 0.001;
+
+    // Check passenger_authorizations record
+    let currentAuthRecord = null;
+    try {
+      const { data: authData } = await supabase
+        .from('passenger_authorizations')
+        .select('*')
+        .eq('booking_id', realId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (authData) currentAuthRecord = authData;
+    } catch (e) {}
+
+    const isAccepted = (currentAuthRecord?.status === 'accepted' || currentAuthRecord?.status === 'ACCEPTED' || booking.authorization_status === 'ACCEPTED' || booking.authorization_status === 'AUTHORIZED');
+
+    if (amountChanged) {
+      if (isAccepted) {
+        // Section 9: DO NOT mutate accepted authorization evidence!
+        // Mark old authorization as superseded and generate a new authorization token/version for the new amount.
+        newStatus = 'REAUTHORIZATION_REQUIRED';
+        newAuthStatus = 'REAUTHORIZATION_REQUIRED';
+
+        try {
+          const { passengerAuthorizationService } = await import('../authorizations/passenger-authorization.service.mjs');
+          const newAuth = await passengerAuthorizationService.createAuthorizationToken(realId, {
+            authorizedAmount: calculatedTotal,
+            currency: (booking.currency || 'USD').toUpperCase()
+          });
+
+          if (newAuth?.token) {
+            await bookingRepository.updateStatus(realId, {
+              authorization_token: newAuth.token,
+              authorization_expires_at: newAuth.expires_at
+            });
+          }
+        } catch (authCreateErr) {
+          logger.warn(`[SplitUpdate] Could not create reauthorization request: ${authCreateErr.message}`);
+        }
+      } else {
+        // Authorization is pending/awaiting: update existing pending authorization amount
+        if (currentAuthRecord) {
+          try {
+            await supabase
+              .from('passenger_authorizations')
+              .update({
+                authorized_amount: calculatedTotal,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', currentAuthRecord.id);
+          } catch (aErr) {}
+        }
+      }
     }
 
     const updatePayload = {
@@ -1517,6 +1580,15 @@ export const bookingRepository = {
 
     await bookingRepository.updateStatus(realId, updatePayload);
 
+    // Record PAYMENT_AUTHORIZATION_AMOUNT_CHANGED audit log
+    await bookingRepository.recordAuditLog({
+      bookingId: realId,
+      action: 'PAYMENT_AUTHORIZATION_AMOUNT_CHANGED',
+      oldValue: JSON.stringify({ authorizedAmount: oldTotal, splits: oldSplits }),
+      newValue: JSON.stringify({ authorizedAmount: calculatedTotal, splits: formattedSplits }),
+      actor: adminId
+    });
+
     await bookingRepository.recordPaymentEvent({
       bookingId: realId,
       eventType: 'SPLIT_PAYMENT_UPDATE',
@@ -1528,13 +1600,13 @@ export const bookingRepository = {
     });
 
     // 3. Post-execution flight count assertion
-    const postFlightCount = await bookingRepository.getFlightsCount(realId);
-    if (initialFlightCount > 0 && postFlightCount !== initialFlightCount) {
-      logger.error(`[DATA_INTEGRITY_CRITICAL] Flight count changed from ${initialFlightCount} to ${postFlightCount} during payment split save for booking ${realId}!`);
-      throw new Error(`DATA_INTEGRITY_CRITICAL_FAILURE: Flight count changed from ${initialFlightCount} to ${postFlightCount} during payment split update.`);
+    const finalFlightCount = await bookingRepository.getFlightsCount(realId);
+    if (finalFlightCount !== initialFlightCount) {
+      logger.error(`[CRITICAL DATA INTEGRITY FAILURE] Payment split update mutated flight count from ${initialFlightCount} to ${finalFlightCount} for booking ${realId}! Rolling back!`);
+      throw new Error(`CRITICAL_DATA_INTEGRITY_FAILURE: Payment split update mutated flight count from ${initialFlightCount} to ${finalFlightCount}.`);
     }
 
-    return bookingRepository.getCompleteBookingById(realId);
+    return await bookingRepository.getCompleteBookingById(realId);
   },
 
 

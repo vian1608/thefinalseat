@@ -458,7 +458,7 @@ function AdminDashboard() {
     });
 
     // Initial payment setup
-    const authAmount = booking.authorization?.authorizedAmount ?? (booking.payment?.paidAmount ?? customerTotal);
+    const authAmount = booking.payment?.authorized_amount ?? booking.payment?.authorizedAmount ?? booking.authorization?.authorizedAmount ?? booking.customer_price ?? booking.total_amount ?? customerTotal;
     const paid = booking.payment?.paidAmount ?? ((booking.payment_status || '').toLowerCase() === 'paid' ? customerTotal : null);
     const refunded = booking.payment?.refundedAmount ?? ((booking.payment_status || '').toLowerCase() === 'refunded' ? customerTotal : 0);
 
@@ -2688,8 +2688,14 @@ function AdminDashboard() {
                           {paymentForm.paymentStatus === 'PENDING' && (
                             <div className="drawer-grid-2col">
                               <div className="drawer-form-field">
-                                <label>Authorized Amount ($)</label>
-                                <input type="number" step="0.01" value={paymentForm.authorizedAmount} onChange={(e) => { setPaymentForm({ ...paymentForm, authorizedAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); }} />
+                                <label>Authorized Amount ($) {paymentSplits.length > 0 ? '(derived from splits)' : ''}</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={paymentSplits.length > 0 ? paymentSplits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0) : paymentForm.authorizedAmount}
+                                  readOnly={paymentSplits.length > 0}
+                                  onChange={(e) => { setPaymentForm({ ...paymentForm, authorizedAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); }}
+                                />
                               </div>
                               <div className="drawer-form-field">
                                 <label>Payment Method</label>
