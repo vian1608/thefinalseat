@@ -453,6 +453,38 @@ export const bookingService = {
     });
 
     return bookingService.getDetailsByCodeOrId(booking.id);
+  },
+
+  /**
+   * Save Tokenized Payment Method & Billing Metadata (PCI Compliant)
+   */
+  savePaymentMethod: async (id, paymentMethodPayload = {}) => {
+    const PROHIBITED_KEYS = [
+      'card_number', 'cardNumber', 'full_card_number', 'fullCardNumber',
+      'pan', 'cvv', 'cvc', 'cid', 'security_code', 'securityCode',
+      'pin', 'track_data', 'trackData'
+    ];
+
+    const inputKeys = Object.keys(paymentMethodPayload || {});
+    const matchedProhibited = inputKeys.filter(k => PROHIBITED_KEYS.some(pk => pk.toLowerCase() === k.toLowerCase()));
+
+    if (matchedProhibited.length > 0) {
+      const err = new Error(`Request rejected: contains prohibited raw card/CVV fields [${matchedProhibited.join(', ')}]. Sensitive card details must never be sent to the application backend.`);
+      err.code = 'PROHIBITED_CARD_PAYLOAD';
+      err.status = 400;
+      throw err;
+    }
+
+    const booking = await bookingRepository.getById(id);
+    if (!booking) {
+      const err = new Error(`Booking '${id}' not found.`);
+      err.code = 'BOOKING_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+
+    const savedPaymentMethod = await bookingRepository.savePaymentMethodRecord(booking.id, paymentMethodPayload);
+    return savedPaymentMethod;
   }
 };
 

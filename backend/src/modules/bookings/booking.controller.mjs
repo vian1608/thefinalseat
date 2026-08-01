@@ -193,6 +193,24 @@ export const bookingController = {
         error: { code: error.code || 'NOTES_UPDATE_FAILED', message: error.message }
       });
     }
+  },
+
+  savePaymentMethod: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const saved = await bookingService.savePaymentMethod(id, req.body || {});
+      res.status(200).json({
+        success: true,
+        message: 'Tokenized payment method and billing metadata saved successfully.',
+        data: saved
+      });
+    } catch (error) {
+      const statusCode = error.status || 400;
+      res.status(statusCode).json({
+        success: false,
+        error: { code: error.code || 'PAYMENT_METHOD_SAVE_FAILED', message: error.message }
+      });
+    }
   }
 };
 

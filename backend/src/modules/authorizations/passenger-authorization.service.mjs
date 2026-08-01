@@ -137,9 +137,9 @@ export const passengerAuthorizationService = {
       authorized_amount: customerPrice,
       currency: (completeBooking.currency || 'USD').toUpperCase(),
 
-      payment_method_token: vaultData.paymentMethodToken || vaultData.token || `pm_vault_${Date.now()}`,
-      card_brand: vaultData.cardBrand || vaultData.brand || 'Visa',
-      card_last4: vaultData.cardLast4 || vaultData.last4 || '4242',
+      payment_method_token: vaultData.paymentMethodToken || vaultData.token || completeBooking.paymentMethod?.provider_payment_method_id || `pm_vault_${Date.now()}`,
+      card_brand: vaultData.cardBrand || vaultData.brand || completeBooking.paymentMethod?.card_brand || 'Visa',
+      card_last4: vaultData.cardLast4 || vaultData.last4 || completeBooking.paymentMethod?.card_last4 || '4242',
       quote_snapshot: quoteSnapshot,
       itinerary_snapshot: itinerarySnapshot,
       policies_snapshot: policiesSnapshot,

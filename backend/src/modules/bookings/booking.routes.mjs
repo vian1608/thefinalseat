@@ -23,6 +23,9 @@ router.get('/user/:email', bookingController.getByUserEmail);
 router.use('/abandoned', abandonedBookingRouter);
 router.post('/:id/resend-confirmation', bookingController.resendConfirmation);
 
+router.post('/:id/payment-method', bookingController.savePaymentMethod);
+router.patch('/:id/payment-method', bookingController.savePaymentMethod);
+
 // Field-Level Isolated Update Endpoints
 router.patch('/:id/status', bookingController.updateStatus);
 router.patch('/:id/payment', bookingController.updatePayment);
