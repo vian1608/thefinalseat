@@ -10,9 +10,23 @@ function ModifySearchModal({
   onUpdateSearch,
   isCheckoutPage = false
 }) {
+  const resolveOriginVal = (search) => {
+    if (search.origin && typeof search.origin === 'object') return search.origin;
+    const code = search.origin || search.from || search.departure_airport || search.selectedFlight?.departure?.airport || '';
+    if (code) return { code, city: search.fromCity || search.city || code, name: search.fromName || code };
+    return '';
+  };
+
+  const resolveDestVal = (search) => {
+    if (search.destination && typeof search.destination === 'object') return search.destination;
+    const code = search.destination || search.to || search.arrival_airport || search.selectedFlight?.arrival?.airport || '';
+    if (code) return { code, city: search.toCity || search.city || code, name: search.toName || code };
+    return '';
+  };
+
   const [tripType, setTripType] = useState(initialSearch.tripType || (initialSearch.returnDate ? 'round-trip' : 'one-way'));
-  const [origin, setOrigin] = useState(initialSearch.origin || { code: initialSearch.from || 'JFK', city: 'New York', name: 'John F. Kennedy Intl' });
-  const [destination, setDestination] = useState(initialSearch.destination || { code: initialSearch.to || 'LHR', city: 'London', name: 'Heathrow Airport' });
+  const [origin, setOrigin] = useState(resolveOriginVal(initialSearch));
+  const [destination, setDestination] = useState(resolveDestVal(initialSearch));
   const [departureDate, setDepartureDate] = useState(initialSearch.departureDate || initialSearch.departure || '');
   const [returnDate, setReturnDate] = useState(initialSearch.returnDate || initialSearch.return || '');
   const [adults, setAdults] = useState(parseInt(initialSearch.adults || 1, 10));
@@ -31,8 +45,8 @@ function ModifySearchModal({
     if (isOpen) {
       const isRound = (initialSearch.tripType === 'round-trip') || !!(initialSearch.returnDate || initialSearch.return);
       setTripType(isRound ? 'round-trip' : 'one-way');
-      setOrigin(initialSearch.origin || { code: initialSearch.from || 'JFK', city: 'New York', name: 'John F. Kennedy Intl' });
-      setDestination(initialSearch.destination || { code: initialSearch.to || 'LHR', city: 'London', name: 'Heathrow Airport' });
+      setOrigin(resolveOriginVal(initialSearch));
+      setDestination(resolveDestVal(initialSearch));
       setDepartureDate(initialSearch.departureDate || initialSearch.departure || '');
       setReturnDate(initialSearch.returnDate || initialSearch.return || '');
       setAdults(parseInt(initialSearch.adults || 1, 10));

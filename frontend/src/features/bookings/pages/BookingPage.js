@@ -11,6 +11,12 @@ import InternationalPhoneInput from '../../../shared/components/InternationalPho
 import CountrySelect from '../../../shared/components/CountrySelect';
 import EmailInput from '../../../shared/components/EmailInput';
 import AddressAutocompleteInput from '../../../shared/components/AddressAutocompleteInput';
+import {
+  validatePostalCode,
+  validatePassportNumber,
+  validateDateOfBirth,
+  validatePassportExpiry
+} from '../../../shared/utils/validationHelpers';
 
 import ModifySearchModal from '../../flights/components/ModifySearchModal';
 
@@ -291,6 +297,37 @@ function Booking() {
       setOpenSections({ travellers: true, contact: false, requests: false, payment: false });
       return false;
     }
+
+    const depDate = flight?.departureDate || flight?.departure?.date || '';
+    for (let i = 0; i < passengersList.length; i++) {
+      const p = passengersList[i];
+      const pName = `${p.firstName || ''} ${p.lastName || ''}`.trim() || `Passenger #${i + 1}`;
+
+      const dobCheck = validateDateOfBirth(p.dateOfBirth, p.role || 'adult', depDate);
+      if (!dobCheck.valid) {
+        setError(`${pName}: ${dobCheck.message}`);
+        setOpenSections({ travellers: true, contact: false, requests: false, payment: false });
+        return false;
+      }
+
+      if (p.passportNumber) {
+        const passCheck = validatePassportNumber(p.passportNumber);
+        if (!passCheck.valid) {
+          setError(`${pName}: ${passCheck.message}`);
+          setOpenSections({ travellers: true, contact: false, requests: false, payment: false });
+          return false;
+        }
+      }
+
+      if (p.passportExpiry) {
+        const expCheck = validatePassportExpiry(p.passportExpiry, depDate);
+        if (!expCheck.valid) {
+          setError(`${pName}: ${expCheck.message}`);
+          setOpenSections({ travellers: true, contact: false, requests: false, payment: false });
+          return false;
+        }
+      }
+    }
     return true;
   };
 
@@ -453,11 +490,11 @@ function Booking() {
       return;
     }
 
-    if (!cardForm.billingZip.trim()) {
-      const err = 'Enter a valid postal or ZIP code.';
-      setFieldErrors({ billingZip: err });
+    const zipCheck = validatePostalCode(cardForm.billingZip, cardForm.billingCountry || 'United States');
+    if (!zipCheck.valid) {
+      setFieldErrors({ billingZip: zipCheck.message });
       setIsBillingExpanded(true);
-      setCardError(err);
+      setCardError(zipCheck.message);
       return;
     }
 
@@ -1256,15 +1293,18 @@ function Booking() {
         isOpen={isModifySearchOpen}
         onClose={() => setIsModifySearchOpen(false)}
         initialSearch={{
-          from: flight?.departureAirport || flight?.origin || 'JFK',
-          to: flight?.arrivalAirport || flight?.destination || 'LHR',
-          departure: flight?.departureDate || '',
-          return: returnFlight?.departureDate || '',
+          from: flight?.departure?.airport || flight?.departure_airport || flight?.departureAirport || (typeof flight?.origin === 'object' ? flight?.origin?.code : flight?.origin) || '',
+          to: flight?.arrival?.airport || flight?.arrival_airport || flight?.arrivalAirport || (typeof flight?.destination === 'object' ? flight?.destination?.code : flight?.destination) || '',
+          origin: flight?.departure || flight?.origin,
+          destination: flight?.arrival || flight?.destination,
+          selectedFlight: flight,
+          departure: flight?.departureDate || flight?.departure?.date || '',
+          return: returnFlight?.departureDate || returnFlight?.departure?.date || '',
           tripType: returnFlight ? 'round-trip' : 'one-way',
           adults: passengersList.filter(p => p.role === 'adult').length || 1,
           children: passengersList.filter(p => p.role === 'child').length || 0,
           infants: passengersList.filter(p => p.role === 'infant').length || 0,
-          cabinClass: flight?.cabinClass || 'Economy'
+          cabinClass: flight?.cabinClass || flight?.class || 'Economy'
         }}
         onUpdateSearch={handleUpdateSearchFromCheckout}
         isCheckoutPage={true}

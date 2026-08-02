@@ -5,6 +5,7 @@ import { sendBookingConfirmation, sendAdminBookingAcknowledgement } from '../../
 import { itineraryMapper } from '../itineraries/itinerary.mapper.mjs';
 import bookingValidatorService from './booking-validator.service.mjs';
 import logger from '../../config/logger.mjs';
+import { validatePostalCode } from '../../shared/utils/validationHelpers.mjs';
 
 function generateConfirmationCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -40,8 +41,19 @@ export const bookingService = {
     const passengerList = Array.isArray(payload.passengers) 
       ? payload.passengers 
       : JSON.parse(payload.passengers || '[]');
-      
-    travellerService.validateTravellers(passengerList);
+
+    const departureDate = payload.flight?.departure?.date || payload.flight?.departureDate || payload.departureDate || '';
+    travellerService.validateTravellers(passengerList, departureDate);
+
+    // 1.5 — Validate Billing Postal/ZIP Code
+    if (payload.billingZip || payload.billingPostalCode) {
+      const zipCheck = validatePostalCode(payload.billingZip || payload.billingPostalCode, payload.billingCountry || 'United States');
+      if (!zipCheck.valid) {
+        const err = new Error(zipCheck.message);
+        err.code = 'INVALID_POSTAL_CODE';
+        throw err;
+      }
+    }
 
     // 2 — Derive master passenger_name from first actual passenger (e.g. John Doe)
     const firstPass = passengerList[0] || {};
