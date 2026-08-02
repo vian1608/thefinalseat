@@ -54,11 +54,31 @@ function ModifySearchModal({
     return '';
   };
 
-  const [tripType, setTripType] = useState(initialSearch.tripType || (initialSearch.returnDate ? 'round-trip' : 'one-way'));
+  const getUrlDateParam = (key) => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(key) || '';
+    } catch {
+      return '';
+    }
+  };
+
+  const resolveDepartureDate = (search) => {
+    return search.departureDate || search.departure || getUrlDateParam('departureDate') || getUrlDateParam('departure') || '';
+  };
+
+  const resolveReturnDate = (search) => {
+    return search.returnDate || search.return || getUrlDateParam('returnDate') || getUrlDateParam('return') || '';
+  };
+
+  const initialDepDate = resolveDepartureDate(initialSearch);
+  const initialRetDate = resolveReturnDate(initialSearch);
+
+  const [tripType, setTripType] = useState(initialSearch.tripType || (initialRetDate ? 'round-trip' : 'one-way'));
   const [origin, setOrigin] = useState(resolveOriginVal(initialSearch));
   const [destination, setDestination] = useState(resolveDestVal(initialSearch));
-  const [departureDate, setDepartureDate] = useState(initialSearch.departureDate || initialSearch.departure || '');
-  const [returnDate, setReturnDate] = useState(initialSearch.returnDate || initialSearch.return || '');
+  const [departureDate, setDepartureDate] = useState(initialDepDate);
+  const [returnDate, setReturnDate] = useState(initialRetDate);
   const [adults, setAdults] = useState(parseInt(initialSearch.adults || 1, 10));
   const [children, setChildren] = useState(parseInt(initialSearch.children || 0, 10));
   const [infants, setInfants] = useState(parseInt(initialSearch.infants || 0, 10));
@@ -85,12 +105,14 @@ function ModifySearchModal({
   // Sync state when modal opens or initialSearch changes
   useEffect(() => {
     if (isOpen) {
-      const isRound = (initialSearch.tripType === 'round-trip') || !!(initialSearch.returnDate || initialSearch.return);
+      const depD = resolveDepartureDate(initialSearch);
+      const retD = resolveReturnDate(initialSearch);
+      const isRound = (initialSearch.tripType === 'round-trip') || !!retD;
       setTripType(isRound ? 'round-trip' : 'one-way');
       setOrigin(resolveOriginVal(initialSearch));
       setDestination(resolveDestVal(initialSearch));
-      setDepartureDate(initialSearch.departureDate || initialSearch.departure || '');
-      setReturnDate(initialSearch.returnDate || initialSearch.return || '');
+      setDepartureDate(depD);
+      setReturnDate(retD);
       setAdults(parseInt(initialSearch.adults || 1, 10));
       setChildren(parseInt(initialSearch.children || 0, 10));
       setInfants(parseInt(initialSearch.infants || 0, 10));
@@ -310,8 +332,13 @@ function ModifySearchModal({
                   <label className="form-label-title">Departure Date</label>
                   <TravelDatePicker
                     value={departureDate}
-                    onChange={setDepartureDate}
-                    placeholder="Select Date"
+                    onChange={(newDate) => {
+                      setDepartureDate(newDate);
+                      if (newDate && returnDate && newDate > returnDate) {
+                        setReturnDate(newDate);
+                      }
+                    }}
+                    placeholder="MM/DD/YYYY"
                     minDate={new Date().toISOString().split('T')[0]}
                   />
                 </div>
@@ -322,7 +349,7 @@ function ModifySearchModal({
                     <TravelDatePicker
                       value={returnDate}
                       onChange={setReturnDate}
-                      placeholder="Select Date"
+                      placeholder="MM/DD/YYYY"
                       minDate={departureDate || new Date().toISOString().split('T')[0]}
                     />
                   </div>

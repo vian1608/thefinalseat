@@ -1,11 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import './TravelDatePicker.css';
+
+function getPortalTarget() {
+  return document.getElementById('datepicker-portal-root') || document.body;
+}
 
 function TravelDatePicker({ id, value, onChange, label, placeholder = 'MM/DD/YYYY', minDate, required = false, disabled = false }) {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
-  
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -20,49 +24,75 @@ function TravelDatePicker({ id, value, onChange, label, placeholder = 'MM/DD/YYY
 
   useEffect(() => {
     if (value) {
-      const [y, m, d] = value.split('-');
-      if (y && m && d) {
-        setInputValue(`${m}/${d}/${y}`);
+      const parts = value.split('-');
+      if (parts.length === 3) {
+        const [y, m, d] = parts;
+        setInputValue(`${m.padStart(2, '0')}/${d.padStart(2, '0')}/${y}`);
         setCalMonth(parseInt(m, 10) - 1);
         setCalYear(parseInt(y, 10));
+      } else {
+        setInputValue(String(value));
       }
     } else {
       setInputValue('');
     }
   }, [value]);
 
+  const updatePosition = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const popupHeight = 320;
+
+    let top = rect.bottom + 6;
+    if (spaceBelow < popupHeight && spaceAbove > spaceBelow) {
+      top = Math.max(10, rect.top - popupHeight - 6);
+    }
+
+    let left = rect.left;
+    let width = Math.max(rect.width, 300);
+
+    if (window.innerWidth < 480) {
+      left = Math.max(10, (window.innerWidth - 300) / 2);
+      width = Math.min(320, window.innerWidth - 20);
+    } else if (left + width > window.innerWidth - 10) {
+      left = Math.max(10, window.innerWidth - width - 10);
+    }
+
+    setPopupStyle({
+      position: 'fixed',
+      top: `${top}px`,
+      left: `${left}px`,
+      width: `${width}px`,
+      zIndex: 10030,
+      pointerEvents: 'auto'
+    });
+  }, []);
+
   const handleOpen = () => {
     if (disabled) return;
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      const popupHeight = 320;
-      
-      let top = rect.bottom + window.scrollY + 5;
-      if (spaceBelow < popupHeight && spaceAbove > spaceBelow) {
-        top = rect.top + window.scrollY - popupHeight - 5;
-      }
-      
-      let left = rect.left + window.scrollX;
-      let width = Math.max(rect.width, 320);
-      if (window.innerWidth < 480) {
-        left = Math.max(10, (window.innerWidth - 300) / 2);
-        width = window.innerWidth - 20;
-      } else if (left + width > window.innerWidth) {
-        left = Math.max(10, window.innerWidth - width - 10);
-      }
-      
-      setPopupStyle({
-        position: 'absolute',
-        top: `${top}px`,
-        left: `${left}px`,
-        width: `${width}px`,
-        zIndex: 9999
-      });
-    }
+    updatePosition();
     setIsOpen(true);
   };
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    updatePosition();
+
+    const handleScrollOrResize = () => {
+      updatePosition();
+    };
+
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [isOpen, updatePosition]);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -108,7 +138,9 @@ function TravelDatePicker({ id, value, onChange, label, placeholder = 'MM/DD/YYY
         }
       }
     }
-    onChange(''); 
+    if (!val) {
+      onChange('');
+    }
   };
 
   const handleSelectDay = (day) => {
@@ -189,7 +221,7 @@ function TravelDatePicker({ id, value, onChange, label, placeholder = 'MM/DD/YYY
             })}
           </div>
         </div>,
-        document.body
+        getPortalTarget()
       )}
     </div>
   );

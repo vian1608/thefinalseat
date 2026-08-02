@@ -25,6 +25,8 @@
 
 /* 3-Row Grid Dialog Container (Fixed Header, Scrollable Body, Fixed Footer) */
 .modify-search-dialog {
+  position: relative;
+  z-index: 10010;
   width: min(100%, 760px);
   max-height: calc(100dvh - 24px);
   display: grid;

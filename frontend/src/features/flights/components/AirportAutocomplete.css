@@ -70,10 +70,10 @@
 
 .autocomplete-suggestions-list {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 4px);
   left: 0;
   right: 0;
-  z-index: 10050;
+  z-index: 10020;
   background-color: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
