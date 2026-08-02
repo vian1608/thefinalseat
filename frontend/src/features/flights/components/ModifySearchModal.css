@@ -1,22 +1,21 @@
 /* ═══════════════════════════════════════════════════════════════
-   MODIFY SEARCH MODAL & PANEL STYLES — THE FINAL SEAT
+   MODIFY SEARCH MODAL STYLES — THE FINAL SEAT
    ═══════════════════════════════════════════════════════════════ */
 
-.modify-search-backdrop {
+/* Fullscreen Backdrop Overlay */
+.modify-search-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(4px);
-  z-index: 9999;
+  inset: 0;
+  z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.25rem;
+  padding: 12px;
+  background: rgba(11, 19, 36, 0.65);
+  backdrop-filter: blur(4px);
+  overflow: hidden;
   box-sizing: border-box;
-  animation: fadeInBackdrop 0.25s ease-out;
+  animation: fadeInBackdrop 0.2s ease-out;
 }
 
 @keyframes fadeInBackdrop {
@@ -24,37 +23,40 @@
   to { opacity: 1; }
 }
 
-.modify-search-modal {
+/* 3-Row Grid Dialog Container (Fixed Header, Scrollable Body, Fixed Footer) */
+.modify-search-dialog {
+  width: min(100%, 760px);
+  max-height: calc(100dvh - 24px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border-radius: 22px;
   background: #ffffff;
-  border-radius: 20px;
-  width: 100%;
-  max-width: 720px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 40px rgba(79, 16, 43, 0.2);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
   border: 1px solid #e2e8f0;
-  padding: 2rem;
   box-sizing: border-box;
-  animation: slideUpModal 0.25s ease-out;
+  animation: slideUpModal 0.2s ease-out;
 }
 
 @keyframes slideUpModal {
-  from { transform: translateY(20px); opacity: 0; }
+  from { transform: translateY(16px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
 
-/* ── Header ── */
-.modify-search-header {
+/* ── Fixed Header ── */
+.modify-search-dialog__header {
+  position: relative;
+  padding: 18px 24px;
+  border-bottom: 1px solid #edf0f5;
+  background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #f1f5f9;
+  z-index: 5;
 }
 
-.modify-search-header h2 {
-  font-size: 1.4rem;
+.modify-search-dialog__header h2 {
+  font-size: 1.35rem;
   font-weight: 800;
   color: #7f0d2f;
   margin: 0;
@@ -66,15 +68,38 @@
 .close-btn {
   background: none;
   border: none;
-  font-size: 1.8rem;
+  font-size: 1.75rem;
   color: #64748b;
   cursor: pointer;
   padding: 0 4px;
   line-height: 1;
+  border-radius: 6px;
+  transition: color 0.15s ease;
 }
 
 .close-btn:hover {
   color: #0f172a;
+}
+
+/* ── Scrollable Body ── */
+.modify-search-dialog__body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+/* ── Fixed Footer ── */
+.modify-search-dialog__footer {
+  padding: 16px 24px;
+  border-top: 1px solid #edf0f5;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  z-index: 5;
 }
 
 /* ── Error Banner ── */
@@ -115,47 +140,45 @@
   height: 18px;
 }
 
-/* ── Airports Row ── */
-.form-row-airports {
-  display: flex;
+/* ── Route Row (From, Swap, To) ── */
+.modify-search-route {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: flex-end;
   gap: 12px;
-  margin-bottom: 1.25rem;
 }
 
-.form-row-airports .form-col {
-  flex: 1;
-}
-
-.form-col label {
-  display: block;
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: #475569;
-  margin-bottom: 6px;
-  letter-spacing: 0.5px;
-}
-
-.btn-swap-airports {
+.swap-airports-button {
   background: #f1f5f9;
   border: 1px solid #cbd5e1;
   color: #475569;
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
+  flex-shrink: 0;
   margin-bottom: 2px;
 }
 
-.btn-swap-airports:hover {
+.swap-airports-button:hover {
   background: #8b1236;
   color: #ffffff;
   border-color: #8b1236;
+}
+
+/* ── Field Labels ── */
+.form-label-title {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #475569;
+  margin-bottom: 0.35rem;
 }
 
 /* ── Dates Row ── */
@@ -163,7 +186,6 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
-  margin-bottom: 1.25rem;
 }
 
 /* ── Passengers Row ── */
@@ -171,29 +193,28 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 1rem;
-  margin-bottom: 1.75rem;
 }
 
 .counter-controls {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #f8fafc;
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 12px;
   padding: 4px 8px;
-  height: 42px;
+  height: 50px;
   box-sizing: border-box;
 }
 
 .counter-controls button {
-  background: #ffffff;
+  background: #f1f5f9;
   border: 1px solid #cbd5e1;
   color: #334155;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  font-size: 1rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 1.1rem;
   font-weight: 800;
   cursor: pointer;
   display: flex;
@@ -209,36 +230,36 @@
 }
 
 .counter-controls button:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
 .counter-controls span {
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 800;
   color: #0f172a;
 }
 
 .cabin-select {
   width: 100%;
-  height: 42px;
-  background: #f8fafc;
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
+  height: 50px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 12px;
   padding: 0 12px;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #0f172a;
   box-sizing: border-box;
+  outline: none;
 }
 
-/* ── Actions ── */
-.modify-search-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
+.cabin-select:focus {
+  border-color: #8b1236;
+  box-shadow: 0 0 0 3px rgba(139, 21, 56, 0.12);
 }
 
+/* ── Action Buttons ── */
 .btn-update-search {
   background: #8b1236;
   color: #ffffff;
@@ -330,19 +351,44 @@
 }
 
 /* ── Mobile Responsive ── */
-@media (max-width: 640px) {
-  .modify-search-modal {
-    padding: 1.5rem 1.25rem;
-    border-radius: 16px;
+@media (max-width: 767px) {
+  .modify-search-overlay {
+    padding: 12px;
   }
 
-  .form-row-airports {
-    flex-direction: column;
-    align-items: stretch;
+  .modify-search-dialog {
+    width: calc(100% - 24px);
+    max-height: calc(100dvh - 24px);
+    border-radius: 18px;
   }
 
-  .btn-swap-airports {
-    align-self: center;
+  .modify-search-dialog__header {
+    padding: 16px 18px;
+  }
+
+  .modify-search-dialog__body {
+    padding: 18px 16px;
+  }
+
+  .modify-search-dialog__footer {
+    padding: 14px 16px;
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .btn-update-search,
+  .btn-cancel-search {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .modify-search-route {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .swap-airports-button {
+    justify-self: center;
     margin: 4px 0;
   }
 
@@ -352,15 +398,5 @@
 
   .form-row-passengers {
     grid-template-columns: repeat(2, 1fr);
-  }
-
-  .modify-search-actions {
-    flex-direction: column;
-  }
-
-  .btn-update-search,
-  .btn-cancel-search {
-    width: 100%;
-    justify-content: center;
   }
 }

@@ -1,13 +1,17 @@
 .airport-autocomplete-container {
   position: relative;
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .autocomplete-label {
   display: block;
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #334155;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #475569;
   margin-bottom: 0.35rem;
 }
 
@@ -15,6 +19,9 @@
   position: relative;
   display: flex;
   align-items: center;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .autocomplete-input-wrapper .input-icon {
@@ -28,25 +35,27 @@
   z-index: 2;
 }
 
-/* Force left padding override on the form input specifically for desktop, tablet, and mobile screens */
-.flights-form__group .autocomplete-input-wrapper .autocomplete-input {
-  padding: 0 12px 0 42px !important;
-  height: 48px;
-  width: 100%;
-  box-sizing: border-box;
-  font-size: 1rem;
-  font-family: inherit;
-  color: #1e293b;
-  background-color: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  outline: none;
-  transition: all 0.2s ease-in-out;
+/* Global input styling for Airport Autocomplete (works everywhere: modal, form, cards) */
+.autocomplete-input {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 50px !important;
+  padding: 0 40px 0 44px !important;
+  font-size: 0.98rem !important;
+  font-family: inherit !important;
+  font-weight: 600 !important;
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  outline: none !important;
+  box-sizing: border-box !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
 }
 
-.flights-form__group .autocomplete-input-wrapper .autocomplete-input:focus {
-  border-color: #8b1538;
-  box-shadow: 0 0 0 3px rgba(139, 21, 56, 0.12);
+.autocomplete-input:focus {
+  border-color: #8b1538 !important;
+  box-shadow: 0 0 0 3px rgba(139, 21, 56, 0.12) !important;
 }
 
 .input-loading-icon {
@@ -64,11 +73,11 @@
   top: calc(100% + 6px);
   left: 0;
   right: 0;
-  z-index: 1050; /* Ensure dropdown displays on top of other form fields */
+  z-index: 10050;
   background-color: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.06);
   max-height: 280px;
   overflow-y: auto;
   list-style: none;
@@ -190,4 +199,3 @@
   font-weight: 600;
   margin-bottom: 6px;
 }
-

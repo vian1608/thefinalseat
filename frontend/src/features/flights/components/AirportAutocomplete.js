@@ -2,6 +2,42 @@ import React, { useState, useEffect, useRef } from 'react';
 import { airportAPI } from '../../../shared/api/api';
 import './AirportAutocomplete.css';
 
+export function formatAirportLabel(airport) {
+  if (!airport) return '';
+
+  if (typeof airport === 'string') {
+    let str = airport.trim();
+    const codeMatch = str.match(/\(([A-Z]{3,4})\)/i);
+    const code = codeMatch ? codeMatch[1].toUpperCase() : '';
+
+    let clean = str.replace(/\([^)]*\)/g, '').replace(/[^a-zA-Z\s]/g, '').trim();
+    const words = clean.split(/\s+/).filter(Boolean);
+    const uniqueWords = [];
+    for (const w of words) {
+      if (!uniqueWords.map(u => u.toLowerCase()).includes(w.toLowerCase())) {
+        uniqueWords.push(w);
+      }
+    }
+    clean = uniqueWords.join(' ');
+
+    if (clean && code) return `${clean} (${code})`;
+    return clean || code || str;
+  }
+
+  const code = (airport.code || airport.iata || '').toUpperCase();
+  let city = (airport.city || airport.municipality || '').trim();
+
+  if (code) {
+    city = city.replace(/\([^)]*\)/g, '').replace(new RegExp(`\\b${code}\\b`, 'gi'), '').trim();
+  }
+
+  if (city && code) {
+    return `${city} (${code})`;
+  }
+
+  return city || code || (airport.name ? `${airport.name}${code ? ` (${code})` : ''}` : '');
+}
+
 const LOCAL_FALLBACK_AIRPORTS = [
   { code: 'JFK', name: 'John F. Kennedy International Airport', city: 'New York', state: 'NY', country: 'United States' },
   { code: 'LGA', name: 'LaGuardia Airport', city: 'New York', state: 'NY', country: 'United States' },
@@ -22,6 +58,7 @@ const LOCAL_FALLBACK_AIRPORTS = [
   { code: 'BOS', name: 'Logan International Airport', city: 'Boston', state: 'MA', country: 'United States' },
   { code: 'IAD', name: 'Washington Dulles International Airport', city: 'Washington', state: 'DC', country: 'United States' },
   { code: 'DCA', name: 'Ronald Reagan Washington National Airport', city: 'Washington', state: 'DC', country: 'United States' },
+  { code: 'IAH', name: 'George Bush Intercontinental Airport', city: 'Houston', state: 'TX', country: 'United States' },
 
   // International
   { code: 'LHR', name: 'London Heathrow Airport', city: 'London', state: '', country: 'United Kingdom' },
@@ -46,28 +83,13 @@ function scoreAirportMatch(airport, queryStr) {
   const name = (airport.name || '').toLowerCase();
   const country = (airport.country || '').toLowerCase();
 
-  // 1. Exact IATA Code Match (Highest Priority)
   if (code === qUpper) return 10000;
-
-  // 2. IATA Code Prefix Match
   if (code.startsWith(qUpper)) return 8000;
-
-  // 3. Exact City Match
   if (city === q) return 6000;
-
-  // 4. City Prefix Match
   if (city.startsWith(q)) return 4000;
-
-  // 5. City Partial Match
   if (city.includes(q)) return 3000;
-
-  // 6. Airport Name Prefix Match
   if (name.startsWith(q)) return 2000;
-
-  // 7. Airport Name Substring Match
   if (name.includes(q)) return 1000;
-
-  // 8. Country Match
   if (country.startsWith(q) || country.includes(q)) return 500;
 
   return 0;
@@ -107,15 +129,10 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, excludeC
   const containerRef = useRef(null);
   const debounceTimer = useRef(null);
 
-  // Sync display query with external value (e.g. string or airport object)
+  // Sync display query with external value (always formatted cleanly without duplicate labels)
   useEffect(() => {
     if (value) {
-      if (typeof value === 'object') {
-        const text = value.city ? `${value.city} (${value.code})` : (value.name ? `${value.name} (${value.code})` : value.code);
-        setQuery(text);
-      } else {
-        setQuery(String(value));
-      }
+      setQuery(formatAirportLabel(value));
     } else {
       setQuery('');
     }
@@ -136,8 +153,6 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, excludeC
     return rankAirportSuggestions(LOCAL_FALLBACK_AIRPORTS, searchVal);
   };
 
-
-  // Fetch suggestions with debounce
   const fetchSuggestions = (searchVal) => {
     const trimmedVal = (searchVal || '').trim();
     if (!trimmedVal || trimmedVal.length < 2) {
@@ -156,18 +171,11 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, excludeC
           const filtered = list.filter(item => item.code !== excludeCode);
           setSuggestions(rankAirportSuggestions(filtered, trimmedVal));
           setErrorMsg('');
-
         } else {
-          // If API response is empty or unformatted, throw error to use local fallback
           throw new Error('API response invalid or empty');
         }
       })
       .catch(err => {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('Failed to fetch airport suggestions from API, falling back locally:', err?.message || err);
-        }
-        
-        // Use local fallback silently
         const localList = searchLocalFallback(trimmedVal);
         const filteredLocal = localList.filter(item => item.code !== excludeCode);
         setSuggestions(filteredLocal);
@@ -188,17 +196,16 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, excludeC
     const val = e.target.value;
     setQuery(val);
     
-    // Check if input is a 3-letter IATA code directly typed by user
     const cleanVal = val.trim().toUpperCase();
     const directMatch = LOCAL_FALLBACK_AIRPORTS.find(a => a.code === cleanVal);
     
     if (directMatch) {
-      onChange(val, directMatch);
+      if (typeof onChange === 'function') onChange(directMatch, directMatch);
     } else {
-      // Pass raw text and temporary structured object with extracted code
       const codeMatch = val.match(/\(([A-Z]{3,4})\)/i);
       const extractedCode = codeMatch ? codeMatch[1].toUpperCase() : (cleanVal.length === 3 ? cleanVal : '');
-      onChange(val, extractedCode ? { code: extractedCode, name: val, city: val.split('(')[0].trim() } : null);
+      const tempObj = extractedCode ? { code: extractedCode, name: val, city: val.split('(')[0].trim() } : val;
+      if (typeof onChange === 'function') onChange(tempObj, tempObj);
     }
 
     setShowSuggestions(true);
@@ -213,14 +220,22 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, excludeC
   };
 
   const handleSelectSuggestion = (suggestion) => {
-    const selectedText = `${suggestion.city} (${suggestion.code})`;
-    setQuery(selectedText);
-    onChange(selectedText, suggestion);
+    const canonicalObj = {
+      code: suggestion.code,
+      city: suggestion.city || suggestion.name,
+      name: suggestion.name,
+      state: suggestion.state,
+      country: suggestion.country
+    };
+    const formatted = formatAirportLabel(canonicalObj);
+    setQuery(formatted);
+    if (typeof onChange === 'function') {
+      onChange(canonicalObj, canonicalObj);
+    }
     setShowSuggestions(false);
     setErrorMsg('');
   };
 
-  // Keyboard navigation
   const handleKeyDown = (e) => {
     if (!showSuggestions) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -258,7 +273,6 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, excludeC
     }
   };
 
-  // Helper to highlight matching characters
   const highlightMatch = (text, queryText) => {
     if (!text || !queryText) return text;
     const cleanQuery = queryText.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
@@ -275,9 +289,9 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, excludeC
 
   return (
     <div className="airport-autocomplete-container" ref={containerRef}>
-      <label htmlFor={id} className="autocomplete-label">{label}</label>
+      {label && <label htmlFor={id} className="autocomplete-label">{label}</label>}
       <div className="autocomplete-input-wrapper">
-        <i className="fas fa-plane-departure input-icon"></i>
+        <i className="fas fa-plane-departure input-icon" aria-hidden="true"></i>
         <input
           type="text"
           id={id}
@@ -285,7 +299,7 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, excludeC
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           onFocus={() => setShowSuggestions(true)}
-          placeholder={placeholder}
+          placeholder={placeholder || 'City or Airport Code'}
           required={required}
           autoComplete="off"
           className="autocomplete-input"

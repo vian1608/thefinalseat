@@ -11,16 +11,22 @@ function ModifySearchModal({
   isCheckoutPage = false
 }) {
   const resolveOriginVal = (search) => {
-    if (search.origin && typeof search.origin === 'object') return search.origin;
+    if (search.origin && typeof search.origin === 'object' && search.origin.code) return search.origin;
     const code = search.origin || search.from || search.departure_airport || search.selectedFlight?.departure?.airport || '';
-    if (code) return { code, city: search.fromCity || search.city || code, name: search.fromName || code };
+    if (code) {
+      const cleanCode = (typeof code === 'object' ? code.code : code).toUpperCase();
+      return { code: cleanCode, city: search.fromCity || search.city || cleanCode, name: search.fromName || cleanCode };
+    }
     return '';
   };
 
   const resolveDestVal = (search) => {
-    if (search.destination && typeof search.destination === 'object') return search.destination;
+    if (search.destination && typeof search.destination === 'object' && search.destination.code) return search.destination;
     const code = search.destination || search.to || search.arrival_airport || search.selectedFlight?.arrival?.airport || '';
-    if (code) return { code, city: search.toCity || search.city || code, name: search.toName || code };
+    if (code) {
+      const cleanCode = (typeof code === 'object' ? code.code : code).toUpperCase();
+      return { code: cleanCode, city: search.toCity || search.city || cleanCode, name: search.toName || cleanCode };
+    }
     return '';
   };
 
@@ -38,7 +44,19 @@ function ModifySearchModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCheckoutWarning, setShowCheckoutWarning] = useState(false);
 
-  const modalRef = useRef(null);
+  const dialogRef = useRef(null);
+
+  // Prevent background body scrolling when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
   // Sync state when modal opens or initialSearch changes
   useEffect(() => {
@@ -72,9 +90,6 @@ function ModifySearchModal({
 
   if (!isOpen) return null;
 
-  const originCode = typeof origin === 'object' ? origin.code : origin;
-  const destCode = typeof destination === 'object' ? destination.code : destination;
-
   const handleSwapAirports = () => {
     const temp = origin;
     setOrigin(destination);
@@ -83,15 +98,19 @@ function ModifySearchModal({
 
   const validateSearchForm = () => {
     setFormError('');
-    if (!originCode) {
+    if (!origin) {
       setFormError('Please select a valid origin airport.');
       return false;
     }
-    if (!destCode) {
+    if (!destination) {
       setFormError('Please select a valid destination airport.');
       return false;
     }
-    if (originCode.toUpperCase() === destCode.toUpperCase()) {
+
+    const oCode = (typeof origin === 'object' ? origin.code : origin).toUpperCase();
+    const dCode = (typeof destination === 'object' ? destination.code : destination).toUpperCase();
+
+    if (oCode && dCode && oCode === dCode) {
       setFormError('Origin and destination airports cannot be the same.');
       return false;
     }
@@ -115,7 +134,7 @@ function ModifySearchModal({
   };
 
   const handleFormSubmit = (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!validateSearchForm()) return;
 
     if (isCheckoutPage && !showCheckoutWarning) {
@@ -131,8 +150,8 @@ function ModifySearchModal({
     setFormError('');
 
     const updatedParams = {
-      from: originCode,
-      to: destCode,
+      from: typeof origin === 'object' ? origin.code : origin,
+      to: typeof destination === 'object' ? destination.code : destination,
       origin,
       destination,
       departureDate,
@@ -153,243 +172,248 @@ function ModifySearchModal({
   };
 
   return (
-    <div className="modify-search-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modify-search-modal" ref={modalRef} role="dialog" aria-modal="true" aria-labelledby="modify-search-title">
+    <div className="modify-search-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modify-search-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="modify-search-title">
         
-        {/* Modal Header */}
-        <div className="modify-search-header">
+        {/* Fixed Header */}
+        <div className="modify-search-dialog__header">
           <h2 id="modify-search-title">
             <i className="fas fa-edit"></i> Modify Flight Search
           </h2>
-          <button type="button" className="close-btn" onClick={onClose} aria-label="Close panel">
+          <button type="button" className="close-btn" onClick={onClose} aria-label="Close modal">
             &times;
           </button>
         </div>
 
-        {/* Unsaved Checkout Warning Modal Overlay */}
-        {showCheckoutWarning ? (
-          <div className="checkout-warning-box">
-            <div className="warning-icon">
-              <i className="fas fa-exclamation-triangle"></i>
-            </div>
-            <h3>Change Your Search?</h3>
-            <p>
-              Changing your search will remove the currently selected flights and reset checkout details. Continue?
-            </p>
-            <div className="warning-actions">
-              <button
-                type="button"
-                className="btn-warn btn-warn--continue"
-                onClick={proceedWithUpdate}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Updating Search...' : 'Continue & Update Search'}
-              </button>
-              <button
-                type="button"
-                className="btn-warn btn-warn--stay"
-                onClick={() => setShowCheckoutWarning(false)}
-              >
-                Stay on This Page
-              </button>
-            </div>
-          </div>
-        ) : (
-          <form onSubmit={handleFormSubmit} className="modify-search-form">
-            
-            {formError && (
-              <div className="modify-search-error">
-                <i className="fas fa-exclamation-circle"></i> {formError}
+        {/* Scrollable Form Body */}
+        <div className="modify-search-dialog__body">
+          {showCheckoutWarning ? (
+            <div className="checkout-warning-box">
+              <div className="warning-icon">
+                <i className="fas fa-exclamation-triangle"></i>
               </div>
-            )}
-
-            {/* Trip Type Selector */}
-            <div className="form-group-trip-type">
-              <label className="radio-label">
-                <input
-                  type="radio"
-                  name="modalTripType"
-                  value="round-trip"
-                  checked={tripType === 'round-trip'}
-                  onChange={() => setTripType('round-trip')}
-                />
-                <span>Round Trip</span>
-              </label>
-              <label className="radio-label">
-                <input
-                  type="radio"
-                  name="modalTripType"
-                  value="one-way"
-                  checked={tripType === 'one-way'}
-                  onChange={() => setTripType('one-way')}
-                />
-                <span>One Way</span>
-              </label>
-            </div>
-
-            {/* Airports Row */}
-            <div className="form-row-airports">
-              <div className="form-col">
-                <label>From</label>
-                <AirportAutocomplete
-                  value={origin}
-                  onChange={setOrigin}
-                  placeholder="City or Airport Code"
-                />
-              </div>
-
-              <button
-                type="button"
-                className="btn-swap-airports"
-                onClick={handleSwapAirports}
-                title="Swap Airports"
-                aria-label="Swap Origin and Destination Airports"
-              >
-                <i className="fas fa-exchange-alt"></i>
-              </button>
-
-              <div className="form-col">
-                <label>To</label>
-                <AirportAutocomplete
-                  value={destination}
-                  onChange={setDestination}
-                  placeholder="City or Airport Code"
-                />
+              <h3>Change Your Search?</h3>
+              <p>
+                Changing your search will remove the currently selected flights and reset checkout details. Continue?
+              </p>
+              <div className="warning-actions">
+                <button
+                  type="button"
+                  className="btn-warn btn-warn--continue"
+                  onClick={proceedWithUpdate}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Updating Search...' : 'Continue & Update Search'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-warn btn-warn--stay"
+                  onClick={() => setShowCheckoutWarning(false)}
+                >
+                  Stay on This Page
+                </button>
               </div>
             </div>
-
-            {/* Dates Row */}
-            <div className="form-row-dates">
-              <div className="form-col">
-                <label>Departure Date</label>
-                <TravelDatePicker
-                  value={departureDate}
-                  onChange={setDepartureDate}
-                  placeholder="Select Date"
-                  minDate={new Date().toISOString().split('T')[0]}
-                />
-              </div>
-
-              {tripType === 'round-trip' && (
-                <div className="form-col">
-                  <label>Return Date</label>
-                  <TravelDatePicker
-                    value={returnDate}
-                    onChange={setReturnDate}
-                    placeholder="Select Date"
-                    minDate={departureDate || new Date().toISOString().split('T')[0]}
-                  />
+          ) : (
+            <form id="modify-search-form" onSubmit={handleFormSubmit} className="modify-search-form">
+              
+              {formError && (
+                <div className="modify-search-error">
+                  <i className="fas fa-exclamation-circle"></i> {formError}
                 </div>
               )}
-            </div>
 
-            {/* Passengers & Cabin Row */}
-            <div className="form-row-passengers">
-              <div className="form-col">
-                <label>Adults (12+)</label>
-                <div className="counter-controls">
-                  <button
-                    type="button"
-                    onClick={() => setAdults(Math.max(1, adults - 1))}
-                    disabled={adults <= 1}
-                  >
-                    -
-                  </button>
-                  <span>{adults}</span>
-                  <button
-                    type="button"
-                    onClick={() => setAdults(Math.min(9, adults + 1))}
-                  >
-                    +
-                  </button>
-                </div>
+              {/* Trip Type Selector */}
+              <div className="form-group-trip-type">
+                <label className="radio-label">
+                  <input
+                    type="radio"
+                    name="modalTripType"
+                    value="round-trip"
+                    checked={tripType === 'round-trip'}
+                    onChange={() => setTripType('round-trip')}
+                  />
+                  <span>Round Trip</span>
+                </label>
+                <label className="radio-label">
+                  <input
+                    type="radio"
+                    name="modalTripType"
+                    value="one-way"
+                    checked={tripType === 'one-way'}
+                    onChange={() => setTripType('one-way')}
+                  />
+                  <span>One Way</span>
+                </label>
               </div>
 
-              <div className="form-col">
-                <label>Children (2-11)</label>
-                <div className="counter-controls">
-                  <button
-                    type="button"
-                    onClick={() => setChildren(Math.max(0, children - 1))}
-                    disabled={children <= 0}
-                  >
-                    -
-                  </button>
-                  <span>{children}</span>
-                  <button
-                    type="button"
-                    onClick={() => setChildren(Math.min(8, children + 1))}
-                  >
-                    +
-                  </button>
+              {/* Airports Route Row */}
+              <div className="modify-search-route">
+                <div className="form-col">
+                  <AirportAutocomplete
+                    label="From"
+                    id="modal-origin-airport"
+                    value={origin}
+                    onChange={(obj) => setOrigin(obj)}
+                    placeholder="City or Airport Code"
+                  />
                 </div>
-              </div>
 
-              <div className="form-col">
-                <label>Infants (&lt;2)</label>
-                <div className="counter-controls">
-                  <button
-                    type="button"
-                    onClick={() => setInfants(Math.max(0, infants - 1))}
-                    disabled={infants <= 0}
-                  >
-                    -
-                  </button>
-                  <span>{infants}</span>
-                  <button
-                    type="button"
-                    onClick={() => setInfants(Math.min(adults, infants + 1))}
-                    disabled={infants >= adults}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              <div className="form-col">
-                <label>Cabin Class</label>
-                <select
-                  value={cabinClass}
-                  onChange={(e) => setCabinClass(e.target.value)}
-                  className="cabin-select"
+                <button
+                  type="button"
+                  className="swap-airports-button"
+                  onClick={handleSwapAirports}
+                  title="Swap Origin and Destination Airports"
+                  aria-label="Swap Origin and Destination Airports"
                 >
-                  <option value="Economy">Economy</option>
-                  <option value="Premium Economy">Premium Economy</option>
-                  <option value="Business">Business</option>
-                  <option value="First">First Class</option>
-                </select>
+                  <i className="fas fa-exchange-alt"></i>
+                </button>
+
+                <div className="form-col">
+                  <AirportAutocomplete
+                    label="To"
+                    id="modal-destination-airport"
+                    value={destination}
+                    onChange={(obj) => setDestination(obj)}
+                    placeholder="City or Airport Code"
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Actions */}
-            <div className="modify-search-actions">
-              <button
-                type="submit"
-                className="btn-update-search"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <>
-                    <i className="fas fa-circle-notch fa-spin"></i> Updating Search...
-                  </>
-                ) : (
-                  <>
-                    <i className="fas fa-search"></i> Update Search
-                  </>
+              {/* Dates Row */}
+              <div className="form-row-dates" style={{ marginTop: '1.25rem' }}>
+                <div className="form-col">
+                  <label className="form-label-title">Departure Date</label>
+                  <TravelDatePicker
+                    value={departureDate}
+                    onChange={setDepartureDate}
+                    placeholder="Select Date"
+                    minDate={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+
+                {tripType === 'round-trip' && (
+                  <div className="form-col">
+                    <label className="form-label-title">Return Date</label>
+                    <TravelDatePicker
+                      value={returnDate}
+                      onChange={setReturnDate}
+                      placeholder="Select Date"
+                      minDate={departureDate || new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
                 )}
-              </button>
-              <button
-                type="button"
-                className="btn-cancel-search"
-                onClick={onClose}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </button>
-            </div>
+              </div>
 
-          </form>
-        )}
+              {/* Passengers & Cabin Row */}
+              <div className="form-row-passengers" style={{ marginTop: '1.25rem' }}>
+                <div className="form-col">
+                  <label className="form-label-title">Adults (12+)</label>
+                  <div className="counter-controls">
+                    <button
+                      type="button"
+                      onClick={() => setAdults(Math.max(1, adults - 1))}
+                      disabled={adults <= 1}
+                    >
+                      -
+                    </button>
+                    <span>{adults}</span>
+                    <button
+                      type="button"
+                      onClick={() => setAdults(Math.min(9, adults + 1))}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-col">
+                  <label className="form-label-title">Children (2-11)</label>
+                  <div className="counter-controls">
+                    <button
+                      type="button"
+                      onClick={() => setChildren(Math.max(0, children - 1))}
+                      disabled={children <= 0}
+                    >
+                      -
+                    </button>
+                    <span>{children}</span>
+                    <button
+                      type="button"
+                      onClick={() => setChildren(Math.min(8, children + 1))}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-col">
+                  <label className="form-label-title">Infants (&lt;2)</label>
+                  <div className="counter-controls">
+                    <button
+                      type="button"
+                      onClick={() => setInfants(Math.max(0, infants - 1))}
+                      disabled={infants <= 0}
+                    >
+                      -
+                    </button>
+                    <span>{infants}</span>
+                    <button
+                      type="button"
+                      onClick={() => setInfants(Math.min(adults, infants + 1))}
+                      disabled={infants >= adults}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-col">
+                  <label className="form-label-title">Cabin Class</label>
+                  <select
+                    value={cabinClass}
+                    onChange={(e) => setCabinClass(e.target.value)}
+                    className="cabin-select"
+                  >
+                    <option value="Economy">Economy</option>
+                    <option value="Premium Economy">Premium Economy</option>
+                    <option value="Business">Business</option>
+                    <option value="First">First Class</option>
+                  </select>
+                </div>
+              </div>
+
+            </form>
+          )}
+        </div>
+
+        {/* Fixed Footer */}
+        <div className="modify-search-dialog__footer">
+          <button
+            type="button"
+            className="btn-cancel-search"
+            onClick={onClose}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn-update-search"
+            onClick={handleFormSubmit}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <>
+                <i className="fas fa-circle-notch fa-spin"></i> Updating...
+              </>
+            ) : (
+              <>
+                <i className="fas fa-search"></i> Update Search
+              </>
+            )}
+          </button>
+        </div>
 
       </div>
     </div>
