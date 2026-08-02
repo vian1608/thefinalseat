@@ -101,7 +101,7 @@
   min-height: 490px;
   max-height: 490px;
   padding-top: 1.25rem;
-  padding-bottom: 1rem;
+  padding-bottom: 3rem;
   box-sizing: border-box;
 }
 
@@ -109,7 +109,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: center;
   height: 100%;
   position: relative;
 }
@@ -172,6 +172,14 @@
   max-width: 760px;
 }
 
+.hero-lead-desktop {
+  display: inline;
+}
+
+.hero-lead-mobile {
+  display: none;
+}
+
 /* ── Trust Badges (No Hero Buttons) ── */
 .hero-trust-statement {
   margin-top: 0.4rem;
@@ -201,13 +209,18 @@
 
 /* ── Controls (Locked in fixed bottom position) ── */
 .hero-slider__controls {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 1.25rem;
-  margin-top: auto;
-  padding-top: 0.4rem;
   z-index: 12;
+  margin: 0;
+  padding: 0;
+  width: auto;
 }
 
 .hero-slider__arrow {
@@ -331,7 +344,7 @@
 
   .hero-slider__ui {
     padding-top: 1rem;
-    padding-bottom: 0.85rem;
+    padding-bottom: 3rem;
   }
 
   .hero-slider__title {
@@ -345,37 +358,56 @@
   }
 }
 
-/* ── Mobile Responsive (max-width: 640px) ── */
-@media (max-width: 640px) {
+/* ── Mobile Responsive (max-width: 767px) ── */
+@media (max-width: 767px) {
   .hero-slider,
   .hero-slider__slides,
   .hero-slider__slide,
   .hero-slider__ui {
-    height: 500px;
-    min-height: 500px;
-    max-height: 500px;
+    height: 480px;
+    min-height: 480px;
+    max-height: 480px;
   }
 
   .hero-slider__ui {
     padding-top: 0.85rem;
-    padding-bottom: 0.65rem;
+    padding-bottom: 3.25rem;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
   }
 
   .hero-slider__eyebrow {
     font-size: 0.72rem;
-    margin-bottom: 0.3rem;
+    margin-bottom: 0.25rem;
   }
 
   .hero-slider__title {
-    font-size: 1.3rem;
+    font-size: clamp(1.25rem, 5.2vw, 1.55rem);
     line-height: 1.25;
-    margin-bottom: 0.45rem;
+    margin-bottom: 0.35rem;
   }
 
   .hero-slider__lead {
-    font-size: 0.84rem;
-    line-height: 1.45;
-    margin-bottom: 0.6rem;
+    font-size: 0.88rem;
+    line-height: 1.42;
+    margin-bottom: 0.5rem;
+  }
+
+  .hero-lead-desktop {
+    display: none;
+  }
+
+  .hero-lead-mobile {
+    display: inline;
+  }
+
+  /* Hide middle 2 chips on mobile (keep Human Assistance & Secure Reservation) */
+  .hero-trust-badge--desktop-only {
+    display: none !important;
+  }
+
+  .hero-trust-badges {
+    gap: 0.35rem 0.5rem;
   }
 
   .hero-trust-badge {
@@ -385,7 +417,7 @@
   }
 
   .hero-slider__controls {
-    padding-top: 0.2rem;
+    bottom: 12px;
     gap: 0.75rem;
   }
 
@@ -401,10 +433,26 @@
   }
 
   .hero-offer-bar__inner {
-    padding: 0.45rem 0;
+    padding: 0.5rem 0.75rem;
   }
 
   .hero-offer-bar__tag {
+    flex-direction: column;
+    gap: 0.2rem;
+    text-align: center;
+    font-size: 0.8rem;
+  }
+
+  .hero-offer-bar__label {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.4rem;
+  }
+
+  .hero-offer-bar__highlight {
+    font-size: 0.88rem;
+  }
+
+  .hero-offer-bar__detail {
     font-size: 0.78rem;
   }
 }
@@ -415,13 +463,14 @@
   .hero-slider__slides,
   .hero-slider__slide,
   .hero-slider__ui {
-    height: 520px;
-    min-height: 520px;
-    max-height: 520px;
+    height: 500px;
+    min-height: 500px;
+    max-height: 500px;
   }
 
   .hero-slider__title {
     font-size: 1.15rem;
   }
 }
+
 

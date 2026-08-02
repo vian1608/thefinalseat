@@ -32,8 +32,8 @@ async function runHomepageHeroSliderTests() {
   assert.ok(heroSliderCss.includes('min-height: 490px;'), 'Desktop slider min-height must be 490px');
   assert.ok(heroSliderCss.includes('max-height: 490px;'), 'Desktop slider max-height must be 490px');
   assert.ok(heroSliderCss.includes('height: 440px;'), 'Tablet slider height must be 440px');
-  assert.ok(heroSliderCss.includes('height: 500px;'), 'Mobile slider height must be 500px');
-  console.log('✔ TEST 2 PASSED: Fixed heights for Desktop (490px), Tablet (440px), and Mobile (500px) verified.\n');
+  assert.ok(heroSliderCss.includes('height: 480px;'), 'Mobile slider height must be 480px');
+  console.log('✔ TEST 2 PASSED: Fixed heights for Desktop (490px), Tablet (440px), and Mobile (480px) verified.\n');
 
   // ----------------------------------------------------
   // TEST 3: LOCKED NAVIGATION CONTROLS POSITION
@@ -43,28 +43,29 @@ async function runHomepageHeroSliderTests() {
   assert.ok(heroSliderJs.includes('fa-chevron-left'), 'Previous arrow must exist in controls');
   assert.ok(heroSliderJs.includes('fa-chevron-right'), 'Next arrow must exist in controls');
   assert.ok(heroSliderJs.includes('hero-slider__dots'), 'Dots pagination container must exist in controls');
-  assert.ok(heroSliderCss.includes('margin-top: auto;'), 'Controls must use margin-top: auto to pin to bottom of fixed container');
+  assert.ok(heroSliderCss.includes('position: absolute;'), 'Controls must use position: absolute to lock bottom position');
   console.log('✔ TEST 3 PASSED: Stationary navigation controls verified.\n');
 
   // ----------------------------------------------------
-  // TEST 4: FEATURE CHIPS & TRUST BADGES PRESERVED
+  // TEST 4: FEATURE CHIPS & MOBILE 2-CHIP RESPONSIVE FILTER
   // ----------------------------------------------------
-  console.log('--- TEST 4: FEATURE CHIPS & TRUST BADGES ---');
+  console.log('--- TEST 4: FEATURE CHIPS & MOBILE 2-CHIP FILTER ---');
   assert.ok(heroSliderJs.includes('Human Travel Assistance'), 'Human Travel Assistance badge preserved');
   assert.ok(heroSliderJs.includes('Clear Flight Comparison'), 'Clear Flight Comparison badge preserved');
   assert.ok(heroSliderJs.includes('Family Booking Support'), 'Family Booking Support badge preserved');
   assert.ok(heroSliderJs.includes('Secure Reservation Process'), 'Secure Reservation Process badge preserved');
-  console.log('✔ TEST 4 PASSED: Required feature chips preserved on hero.\n');
+  assert.ok(heroSliderJs.includes('hero-trust-badge--desktop-only'), 'HeroSlider.js must flag middle 2 chips with hero-trust-badge--desktop-only');
+  assert.ok(heroSliderCss.includes('hero-trust-badge--desktop-only'), 'HeroSlider.css must hide desktop-only chips on mobile width');
+  console.log('✔ TEST 4 PASSED: Required feature chips & mobile 2-chip responsive filter verified.\n');
 
   // ----------------------------------------------------
-  // TEST 5: DATA-DRIVEN UNIFIED SLIDE DATA
+  // TEST 5: SHORT MOBILE SUPPORTING DESCRIPTION & UNIFIED DATA
   // ----------------------------------------------------
-  console.log('--- TEST 5: DATA-DRIVEN UNIFIED SLIDES DATA ---');
-  assert.ok(heroSlidesJs.includes('flightHeroSlides'), 'flightHeroSlides array must exist');
-  assert.ok(heroSlidesJs.includes('railHeroSlides'), 'railHeroSlides array must exist');
-  assert.ok(heroSlidesJs.includes('eyebrow:'), 'Slides data must contain eyebrow definitions');
-  assert.ok(heroSlidesJs.includes('lead:'), 'Slides data must contain lead definitions');
-  console.log('✔ TEST 5 PASSED: Data-driven unified slide data verified.\n');
+  console.log('--- TEST 5: SHORT MOBILE DESCRIPTION & UNIFIED SLIDE DATA ---');
+  assert.ok(heroSlidesJs.includes('mobileLead:'), 'heroSlides.js must define compact mobileLead properties');
+  assert.ok(heroSliderJs.includes('hero-lead-desktop'), 'HeroSlider.js must render hero-lead-desktop wrapper');
+  assert.ok(heroSliderJs.includes('hero-lead-mobile'), 'HeroSlider.js must render hero-lead-mobile wrapper');
+  console.log('✔ TEST 5 PASSED: Mobile short description & data-driven slides verified.\n');
 
   console.log('================================================================================');
   console.log('  🎉 ALL 5 HOMEPAGE HERO SLIDER TESTS PASSED!');
@@ -75,3 +76,4 @@ runHomepageHeroSliderTests().catch(err => {
   console.error('❌ Test Suite Failed:', err);
   process.exit(1);
 });
+

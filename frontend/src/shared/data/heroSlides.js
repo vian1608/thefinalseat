@@ -15,6 +15,7 @@ export const flightHeroSlides = [
     title: 'Simple Flight Booking With Real Human Support',
     lead:
       'We help travelers and families compare routes, connections, baggage and total travel time before completing a reservation.',
+    mobileLead: 'We help travelers compare routes, connections and total travel time.',
   },
   {
     id: 'flight-aircraft',
@@ -25,6 +26,7 @@ export const flightHeroSlides = [
     title: 'Strategic Routing Across Domestic & International Networks',
     lead:
       'Compare flight schedules, layovers, and airline baggage allowances with dedicated reservation guidance.',
+    mobileLead: 'Compare flight schedules, layovers and baggage allowances.',
   },
   {
     id: 'flight-cabin',
@@ -35,6 +37,7 @@ export const flightHeroSlides = [
     title: 'Cabin-Class Advisory Tailored To Your Travel Needs',
     lead:
       'From Economy to Premium & Business Class, find comfortable flight options configured for your itinerary.',
+    mobileLead: 'Find comfortable flight options configured for your trip.',
   },
   {
     id: 'flight-travelers',
@@ -45,6 +48,7 @@ export const flightHeroSlides = [
     title: 'Trusted Flight Support For Families & Independent Travelers',
     lead:
       'Personal coordination for parents, relatives, and multi-city travel with 24/7 travel day support.',
+    mobileLead: 'Personal travel coordination with 24/7 support.',
   },
 ];
 
@@ -57,6 +61,7 @@ export const railHeroSlides = [
     title: 'Amtrak & National Rail Travel Support',
     lead:
       'Independent assistance for rail itineraries, connection planning, and journey optimization across Amtrak and partner rail networks.',
+    mobileLead: 'Independent assistance for Amtrak and national rail itineraries.',
   },
   {
     id: 'rail-train',
@@ -67,6 +72,7 @@ export const railHeroSlides = [
     title: 'National Rail Corridors Planned With Connection Precision',
     lead:
       'Compare Northeast Corridor, Acela, and long-distance train schedules with expert passenger assistance.',
+    mobileLead: 'Compare Northeast Corridor and long-distance train schedules.',
   },
   {
     id: 'rail-interior',
@@ -77,6 +83,7 @@ export const railHeroSlides = [
     title: 'Class & Seating Strategy For Every Segment Of Your Journey',
     lead:
       'Get clear information on Coach, Business, and Sleeper accommodation for a comfortable trip.',
+    mobileLead: 'Clear info on Coach, Business and Sleeper seats.',
   },
   {
     id: 'rail-travelers',
@@ -87,5 +94,7 @@ export const railHeroSlides = [
     title: 'Compassionate Support When Your Travel Plans Cannot Wait',
     lead:
       'Priority booking assistance and route comparison when you need to travel on short notice.',
+    mobileLead: 'Priority route comparison for urgent travel.',
   },
 ];
+

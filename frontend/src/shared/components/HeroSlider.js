@@ -104,14 +104,20 @@ function HeroSlider({ slides, variant = 'flights', serviceNavActive, offerTag })
                 <p className="hero-slider__eyebrow">{slide.eyebrow || defaultEyebrow}</p>
                 <h1 className="hero-slider__title">{slide.title || slide.caption}</h1>
                 {(slide.lead || slide.description) && (
-                  <p className="hero-slider__lead">{slide.lead || slide.description}</p>
+                  <p className="hero-slider__lead">
+                    <span className="hero-lead-desktop">{slide.lead || slide.description}</span>
+                    <span className="hero-lead-mobile">{slide.mobileLead || slide.lead || slide.description}</span>
+                  </p>
                 )}
                 
-                {/* Feature Chips / Trust Statement (Hero buttons removed as required) */}
+                {/* Feature Chips / Trust Badges (2 on mobile, 4 on desktop) */}
                 <div className="hero-trust-statement">
                   <div className="hero-trust-badges">
                     {defaultChips.map((chip, idx) => (
-                      <span key={idx} className="hero-trust-badge">
+                      <span 
+                        key={idx} 
+                        className={`hero-trust-badge ${idx === 1 || idx === 2 ? 'hero-trust-badge--desktop-only' : ''}`}
+                      >
                         <i className={chip.icon} aria-hidden="true" /> {chip.label}
                       </span>
                     ))}
@@ -172,4 +178,5 @@ function HeroSlider({ slides, variant = 'flights', serviceNavActive, offerTag })
 }
 
 export default HeroSlider;
+
 
