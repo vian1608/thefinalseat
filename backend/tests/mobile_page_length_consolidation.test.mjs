@@ -30,9 +30,10 @@ async function runMobilePageLengthConsolidationTests() {
   // TEST 2: THREE ACCESSIBLE TABS & CONTENT PRESERVATION
   // ----------------------------------------------------
   console.log('--- TEST 2: THREE ACCESSIBLE TABS & CONTENT PRESERVATION ---');
-  assert.ok(componentJs.includes("id: 'who_we_help', label: 'Who We Help'"), 'Tab 1 "Who We Help" must exist');
-  assert.ok(componentJs.includes("id: 'why_choose_us', label: 'Why Choose Us'"), 'Tab 2 "Why Choose Us" must exist');
-  assert.ok(componentJs.includes("id: 'what_we_compare', label: 'What We Compare'"), 'Tab 3 "What We Compare" must exist');
+  assert.ok(componentJs.includes("id: 'who_we_help', fullLabel: 'Who We Help'"), 'Tab 1 "Who We Help" must exist');
+  assert.ok(componentJs.includes("id: 'why_choose_us', fullLabel: 'Why Choose Us'"), 'Tab 2 "Why Choose Us" must exist');
+  assert.ok(componentJs.includes("id: 'what_we_compare', fullLabel: 'What We Compare'"), 'Tab 3 "What We Compare" must exist');
+  assert.ok(componentCss.includes('grid-template-columns: repeat(3, minmax(0, 1fr))'), 'Tabs must render as 3 equal-width columns in grid');
 
   // All required content subjects must be preserved
   const topics = [
@@ -54,7 +55,7 @@ async function runMobilePageLengthConsolidationTests() {
   for (const topic of topics) {
     assert.ok(componentJs.includes(topic), `Component must preserve topic content: "${topic}"`);
   }
-  console.log('✔ TEST 2 PASSED: All 3 tabs and 16 card topics preserved cleanly.\n');
+  console.log('✔ TEST 2 PASSED: All 3 tabs (in 3-column grid) and 16 card topics preserved cleanly.\n');
 
   // ----------------------------------------------------
   // TEST 3: MANUAL CAROUSEL NAVIGATION & NO AUTO-ROTATE
@@ -65,7 +66,8 @@ async function runMobilePageLengthConsolidationTests() {
   assert.ok(componentJs.includes('onTouchEnd'), 'Component must support touch swipe end');
   assert.ok(componentJs.includes('Previous card'), 'Previous arrow must have accessible label');
   assert.ok(componentJs.includes('Next card'), 'Next arrow must have accessible label');
-  assert.ok(componentCss.includes('height: 210px;'), 'Card stage height must be fixed (210px) to prevent height jumps');
+  assert.ok(componentJs.includes('how-helps-nav-row'), 'Bottom navigation row must exist');
+  assert.ok(componentCss.includes('height: 220px;'), 'Card stage height must be fixed (220px) to prevent height jumps');
   console.log('✔ TEST 3 PASSED: Manual navigation controls & fixed stage height verified.\n');
 
   // ----------------------------------------------------

@@ -3,9 +3,9 @@ import analytics from '../utils/analytics';
 import './HowTheFinalSeatHelps.css';
 
 const TABS = [
-  { id: 'who_we_help', label: 'Who We Help' },
-  { id: 'why_choose_us', label: 'Why Choose Us' },
-  { id: 'what_we_compare', label: 'What We Compare' },
+  { id: 'who_we_help', fullLabel: 'Who We Help', shortLabel: 'Who We Help' },
+  { id: 'why_choose_us', fullLabel: 'Why Choose Us', shortLabel: 'Why Us' },
+  { id: 'what_we_compare', fullLabel: 'What We Compare', shortLabel: 'We Compare' },
 ];
 
 const TAB_DATA = {
@@ -13,86 +13,86 @@ const TAB_DATA = {
     {
       icon: 'fas fa-user-check',
       title: 'Personal Assistance',
-      description: 'Travelers who prefer personal booking assistance over automated forms.',
+      description: 'Personal help for travelers who prefer guidance instead of automated forms.',
     },
     {
       icon: 'fas fa-users',
       title: 'Family Booking',
-      description: 'Families arranging flights for parents, relatives or friends.',
+      description: 'Dedicated support for booking flights for parents, relatives and friends.',
     },
     {
       icon: 'fas fa-route',
       title: 'Complex Routes',
-      description: 'Passengers comparing complex routes or multiple connecting flights.',
+      description: 'Expert help for multi-city travel, layovers and connecting flights.',
     },
     {
       icon: 'fas fa-suitcase-rolling',
       title: 'Fare & Baggage Rules',
-      description: 'Travelers who want help understanding baggage allowances and fare conditions.',
+      description: 'Clear explanations of baggage allowances and fare conditions.',
     },
   ],
   why_choose_us: [
     {
       icon: 'fas fa-headset',
       title: 'Personal Travel Assistance',
-      description: 'Get help comparing flights, routes, baggage rules and travel options.',
+      description: 'Direct help comparing flights, layovers and route options.',
     },
     {
       icon: 'fas fa-heart',
       title: 'Support For Family Bookings',
-      description: 'Book flights for parents, relatives and travelers who need extra assistance.',
+      description: 'Support for booking flights for parents, relatives and friends.',
     },
     {
       icon: 'fas fa-balance-scale',
       title: 'More Than Just The Cheapest Fare',
-      description: 'We help you understand connections, travel time, baggage and total journey quality.',
+      description: 'We evaluate connection times, total travel time and journey quality.',
     },
     {
       icon: 'fas fa-check-circle',
       title: 'Simple Reservation Experience',
-      description: 'Clear information and human support from search to confirmation.',
+      description: 'Transparent guidance and human support from search to confirmation.',
     },
   ],
   what_we_compare: [
     {
       icon: 'fas fa-plane-arrival',
       title: 'Number of Stops',
-      description: 'Help identifying more manageable options with minimal connections.',
+      description: 'Identifying routes with minimal layovers and comfortable transfers.',
     },
     {
       icon: 'fas fa-clock',
       title: 'Connection Duration',
-      description: 'Sufficient layover times for comfortable airport transfers.',
+      description: 'Ensuring adequate transfer time to make every connection comfortably.',
     },
     {
       icon: 'fas fa-exchange-alt',
       title: 'Airport Changes',
-      description: 'Clear warnings for terminal or airport transfers between legs.',
+      description: 'Clear alerts for terminal transfers or airport changes.',
     },
     {
       icon: 'fas fa-stopwatch',
       title: 'Total Journey Time',
-      description: 'Balancing duration, comfort, and schedule convenience.',
+      description: 'Balancing flight duration, schedule convenience and comfort.',
     },
     {
       icon: 'fas fa-luggage-cart',
       title: 'Baggage Allowance',
-      description: 'Guidance on included baggage rules and carry-on limits.',
+      description: 'Checking included carry-on and checked bag limits for your fare.',
     },
     {
       icon: 'fas fa-shield-alt',
       title: 'Refund & Change Rules',
-      description: 'Clear explanations of ticket flexibility and cancellation terms.',
+      description: 'Explaining ticket flexibility, cancellation fees and change terms.',
     },
     {
       icon: 'fas fa-sun',
       title: 'Departure & Arrival Times',
-      description: 'Convenient daytime schedules when available for easier travel.',
+      description: 'Finding daytime flights to avoid inconvenient early or late arrivals.',
     },
     {
       icon: 'fas fa-wheelchair',
       title: 'Mobility Assistance',
-      description: 'Help requesting airport assistance and special handling when needed.',
+      description: 'Requesting wheelchair handling and special airport assistance.',
     },
   ],
 };
@@ -160,7 +160,7 @@ function HowTheFinalSeatHelps() {
           </p>
         </div>
 
-        {/* Segmented Control / Tab list */}
+        {/* 3-Column Segmented Control Container */}
         <div className="how-helps-tablist" role="tablist" aria-label="Help categories">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
@@ -172,10 +172,12 @@ function HowTheFinalSeatHelps() {
                 id={`tab-${tab.id}`}
                 aria-selected={isActive}
                 aria-controls={`panel-${tab.id}`}
+                aria-label={tab.fullLabel}
                 className={`how-helps-tab ${isActive ? 'how-helps-tab--active' : ''}`}
                 onClick={() => handleTabChange(tab.id)}
               >
-                {tab.label}
+                <span className="tab-label-desktop">{tab.fullLabel}</span>
+                <span className="tab-label-mobile">{tab.shortLabel}</span>
               </button>
             );
           })}
@@ -193,6 +195,24 @@ function HowTheFinalSeatHelps() {
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
+            <div className="how-helps-card-stage">
+              {currentCard && (
+                <div key={`${activeTab}-${cardIndex}`} className="how-helps-card">
+                  <div className="how-helps-icon">
+                    <i className={currentCard.icon} aria-hidden="true" />
+                  </div>
+                  <h3>{currentCard.title}</h3>
+                  <p>{currentCard.description}</p>
+                  <div className="how-helps-card-counter">
+                    {cardIndex + 1} of {cards.length}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Integrated Bottom Navigation Row */}
+          <div className="how-helps-nav-row">
             <button
               type="button"
               className="how-helps-arrow how-helps-arrow--prev"
@@ -202,16 +222,22 @@ function HowTheFinalSeatHelps() {
               <i className="fas fa-chevron-left" aria-hidden="true" />
             </button>
 
-            <div className="how-helps-card-stage">
-              {currentCard && (
-                <div key={`${activeTab}-${cardIndex}`} className="how-helps-card">
-                  <div className="how-helps-icon">
-                    <i className={currentCard.icon} aria-hidden="true" />
-                  </div>
-                  <h3>{currentCard.title}</h3>
-                  <p>{currentCard.description}</p>
-                </div>
-              )}
+            {/* Dots Pagination */}
+            <div className="how-helps-dots" role="tablist" aria-label="Card pagination">
+              {cards.map((cardItem, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  role="tab"
+                  aria-selected={idx === cardIndex}
+                  aria-label={`Go to card ${idx + 1}: ${cardItem.title}`}
+                  className={`how-helps-dot ${idx === cardIndex ? 'how-helps-dot--active' : ''}`}
+                  onClick={() => {
+                    setCardIndex(idx);
+                    analytics.trackMobileHelpCardViewed(activeTab, cardItem.title, idx);
+                  }}
+                />
+              ))}
             </div>
 
             <button
@@ -222,24 +248,6 @@ function HowTheFinalSeatHelps() {
             >
               <i className="fas fa-chevron-right" aria-hidden="true" />
             </button>
-          </div>
-
-          {/* Dots Pagination */}
-          <div className="how-helps-dots" role="tablist" aria-label="Card pagination">
-            {cards.map((cardItem, idx) => (
-              <button
-                key={idx}
-                type="button"
-                role="tab"
-                aria-selected={idx === cardIndex}
-                aria-label={`Go to card ${idx + 1}: ${cardItem.title}`}
-                className={`how-helps-dot ${idx === cardIndex ? 'how-helps-dot--active' : ''}`}
-                onClick={() => {
-                  setCardIndex(idx);
-                  analytics.trackMobileHelpCardViewed(activeTab, cardItem.title, idx);
-                }}
-              />
-            ))}
           </div>
         </div>
       </div>

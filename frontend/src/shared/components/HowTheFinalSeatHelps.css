@@ -1,9 +1,11 @@
-/* ── How The Final Seat Helps Consolidated Section ── */
+/* ── How The Final Seat Helps Modern Consolidated Section ── */
 .how-helps-section {
   padding: 3rem 0;
   background-color: #f8fafc;
   border-top: 1px solid #e2e8f0;
   border-bottom: 1px solid #e2e8f0;
+  box-sizing: border-box;
+  overflow-x: clip;
 }
 
 .how-helps-header {
@@ -12,88 +14,102 @@
 }
 
 .how-helps-header h2 {
-  font-size: 1.75rem;
+  font-size: clamp(1.85rem, 4vw, 2.1rem);
   color: #1e293b;
   font-weight: 800;
+  line-height: 1.18;
   margin-top: 0;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.5rem;
 }
 
 .how-helps-sub {
-  color: #64748b;
-  font-size: 0.98rem;
-  line-height: 1.5;
-  max-width: 600px;
+  color: #475569;
+  font-size: clamp(0.95rem, 2.5vw, 1.05rem);
+  line-height: 1.45;
+  max-width: 580px;
   margin: 0 auto;
 }
 
-/* ── Segmented Control / Tabs Row ── */
+/* ── 3-Column Segmented Control Tab Row ── */
 .how-helps-tablist {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-  overflow-x: auto;
-  padding: 0.25rem;
-  -webkit-overflow-scrolling: touch;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto 1.5rem;
+  padding: 5px;
+  background: #f1f5f9;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  box-sizing: border-box;
+  gap: 4px;
 }
 
 .how-helps-tab {
-  flex: 1;
-  min-width: 110px;
-  max-width: 160px;
-  min-height: 44px;
-  padding: 0.6rem 0.85rem;
-  font-size: 0.88rem;
+  min-width: 0;
+  min-height: 48px;
+  height: 48px;
+  padding: 0 0.35rem;
+  font-size: 0.92rem;
   font-weight: 600;
-  color: #475569;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  color: #334155;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
   cursor: pointer;
-  white-space: nowrap;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s ease;
   outline-offset: 2px;
+  box-sizing: border-box;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .how-helps-tab:hover {
   color: #8b1538;
-  border-color: #8b1538;
 }
 
 .how-helps-tab--active {
   color: #ffffff !important;
   background: #8b1538 !important;
-  border-color: #8b1538 !important;
-  box-shadow: 0 2px 8px rgba(139, 21, 56, 0.25);
+  box-shadow: 0 2px 6px rgba(139, 21, 56, 0.28);
 }
 
 .how-helps-tab:focus-visible {
   outline: 2px solid #8b1538;
 }
 
+.tab-label-desktop {
+  display: inline;
+}
+
+.tab-label-mobile {
+  display: none;
+}
+
 /* ── Tab Panel & Stage ── */
 .how-helps-panel {
   position: relative;
-  max-width: 580px;
+  max-width: 440px;
   margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .how-helps-carousel {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  width: 100%;
   touch-action: pan-y;
+  box-sizing: border-box;
 }
 
 .how-helps-card-stage {
-  flex: 1;
-  height: 210px;
-  min-height: 210px;
-  max-height: 210px;
+  width: 100%;
+  height: 220px;
+  min-height: 220px;
+  max-height: 220px;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -102,14 +118,14 @@
   height: 100%;
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 1.25rem 1rem;
+  border-radius: 20px;
+  padding: 1.25rem 1.25rem 1rem;
   text-align: center;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   box-sizing: border-box;
   animation: cardFadeIn 0.3s ease;
 }
@@ -126,53 +142,70 @@
 }
 
 .how-helps-icon {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   background: #faf5f7;
   color: #8b1538;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
-  margin-bottom: 0.65rem;
+  font-size: 1.15rem;
+  margin-bottom: 0.35rem;
   border: 1px solid rgba(139, 21, 56, 0.15);
 }
 
 .how-helps-card h3 {
-  font-size: 1.08rem;
+  font-size: 1.22rem;
   color: #1e293b;
   font-weight: 700;
   margin-top: 0;
-  margin-bottom: 0.35rem;
-  line-height: 1.3;
+  margin-bottom: 0.3rem;
+  line-height: 1.22;
 }
 
 .how-helps-card p {
-  font-size: 0.88rem;
-  color: #64748b;
+  font-size: 0.95rem;
+  color: #475569;
   line-height: 1.45;
   margin: 0;
-  max-width: 440px;
+  max-width: 390px;
 }
 
-/* ── Navigation Arrows ── */
+.how-helps-card-counter {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-top: 0.4rem;
+}
+
+/* ── Integrated Bottom Navigation Row ── */
+.how-helps-nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
 .how-helps-arrow {
-  min-width: 40px;
-  min-height: 40px;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 50%;
   border: 1px solid #cbd5e1;
   background: #ffffff;
-  color: #1e293b;
+  color: #8b1538;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.95rem;
+  font-size: 1rem;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
   transition: all 0.2s ease;
-  z-index: 5;
   flex-shrink: 0;
 }
 
@@ -186,9 +219,7 @@
 .how-helps-dots {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  margin-top: 1rem;
+  gap: 0.5rem;
 }
 
 .how-helps-dot {
@@ -204,59 +235,60 @@
 
 .how-helps-dot--active {
   background: #8b1538;
-  transform: scale(1.25);
-  width: 18px;
+  width: 24px;
+  height: 8px;
   border-radius: 999px;
 }
 
 /* ── Responsive Viewport Adjustments ── */
-@media (max-width: 640px) {
+@media (max-width: 480px) {
+  .tab-label-desktop {
+    display: none;
+  }
+
+  .tab-label-mobile {
+    display: inline;
+  }
+
+  .how-helps-tab {
+    font-size: 0.84rem;
+  }
+}
+
+@media (max-width: 380px) {
   .how-helps-section {
     padding: 2.25rem 0;
   }
 
-  .how-helps-header h2 {
-    font-size: 1.4rem;
-  }
-
-  .how-helps-sub {
-    font-size: 0.88rem;
-  }
-
   .how-helps-tablist {
-    justify-content: flex-start;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
+    max-width: 100%;
+    padding: 4px;
+    gap: 3px;
   }
 
   .how-helps-tab {
-    font-size: 0.82rem;
-    min-width: 100px;
-    padding: 0.55rem 0.65rem;
+    font-size: 0.8rem;
+    padding: 0 0.15rem;
+    min-height: 44px;
+    height: 44px;
   }
 
   .how-helps-card-stage {
-    height: 200px;
-    min-height: 200px;
-    max-height: 200px;
+    height: 230px;
+    min-height: 230px;
+    max-height: 230px;
   }
 
   .how-helps-card {
     padding: 1rem 0.85rem;
-  }
-
-  .how-helps-icon {
-    width: 42px;
-    height: 42px;
-    font-size: 1.1rem;
-    margin-bottom: 0.5rem;
+    border-radius: 16px;
   }
 
   .how-helps-card h3 {
-    font-size: 1rem;
+    font-size: 1.1rem;
   }
 
   .how-helps-card p {
-    font-size: 0.84rem;
+    font-size: 0.88rem;
   }
 }
