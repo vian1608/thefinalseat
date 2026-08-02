@@ -555,7 +555,7 @@ ${confirmationCode} is a reservation reference number issued by The Final Seat. 
 
 Track your reservation at: https://www.thefinalseat.com/my-bookings?code=${confirmationCode}
 
-Support 24/7: Call +1 (213) 965-9727 or Email support@thefinalseat.com
+Support 24/7: Call ${env.supportPhoneDisplay} or Email support@thefinalseat.com
     `.trim();
 
     const subject = `Your reservation has been received – ${confirmationCode}`;
@@ -776,7 +776,7 @@ IMPORTANT NOTICE:
 This temporary confirmation number is not the airline's final PNR or electronic ticket. Final airline confirmation and ticket details will be sent separately after processing.
 
 Track your booking request at: https://www.thefinalseat.com/my-bookings?code=${confirmationCode}
-Support: +1 (213) 965-9727 | support@thefinalseat.com
+Support: ${env.supportPhoneDisplay} | support@thefinalseat.com
     `.trim();
 
     const subject = `Booking Request Received — ${confirmationCode}`;
@@ -908,7 +908,7 @@ ${authUrl}
 
 This single-use link expires in 24 hours.
 
-Support 24/7: +1 (213) 965-9727 | support@thefinalseat.com
+Support 24/7: ${env.supportPhoneDisplay} | support@thefinalseat.com
     `.trim();
 
     const itineraryHtml = renderFlightItineraryHtml(booking);
@@ -941,7 +941,7 @@ Support 24/7: +1 (213) 965-9727 | support@thefinalseat.com
           <p style="font-size: 12px; color: #64748b; line-height: 1.4; text-align: center;">This secure, single-use authorization link expires in 24 hours. Your saved card will only be processed after you review and authorize.</p>
         </div>
         <div style="background: #fbf8f9; padding: 16px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid #e2e8f0;">
-          The Final Seat LLC &bull; 24/7 Customer Desk: support@thefinalseat.com &bull; +1 (213) 965-9727
+          The Final Seat LLC &bull; 24/7 Customer Desk: support@thefinalseat.com &bull; ${env.supportPhoneDisplay}
         </div>
       </div>
     `.trim();
@@ -1008,7 +1008,7 @@ ${retryUrl}
 
 If you require assistance, contact our 24/7 support desk:
 Email: support@thefinalseat.com
-Phone: +1 (213) 965-9727
+Phone: ${env.supportPhoneDisplay}
 
 The Final Seat LLC
     `.trim();
@@ -1027,7 +1027,7 @@ The Final Seat LLC
   </p>
   <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
   <p style="font-size: 12px; color: #64748b;">
-    The Final Seat LLC &middot; Support: support@thefinalseat.com | +1 (213) 965-9727
+    The Final Seat LLC &middot; Support: support@thefinalseat.com | ${env.supportPhoneDisplay}
   </p>
 </div>
     `.trim();
@@ -1256,7 +1256,7 @@ Payment Status: PAID & VERIFIED
 
 Thank you for choosing The Final Seat! Have a wonderful trip.
 
-24/7 Support Desk: +1 (213) 965-9727 | support@thefinalseat.com
+24/7 Support Desk: ${env.supportPhoneDisplay} | support@thefinalseat.com
     `.trim();
 
     const htmlBody = `
@@ -1303,7 +1303,7 @@ Thank you for choosing The Final Seat! Have a wonderful trip.
       </div>
     </div>
     <div class="footer">
-      The Final Seat LLC &middot; 24/7 Customer Support: support@thefinalseat.com &middot; +1 (213) 965-9727
+      The Final Seat LLC &middot; 24/7 Customer Support: support@thefinalseat.com &middot; ${env.supportPhoneDisplay}
     </div>
   </div>
 </body>

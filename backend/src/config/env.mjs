@@ -64,7 +64,13 @@ export const env = {
   // Google Analytics 4
   get ga4PropertyId() { return process.env.GA4_PROPERTY_ID || '456789123'; },
   get ga4ClientEmail() { return process.env.GA4_CLIENT_EMAIL || 'the-final-seat-analytics@the-final-seat.iam.gserviceaccount.com'; },
-  get ga4PrivateKey() { return process.env.GA4_PRIVATE_KEY || (process.env.GA4_CREDENTIALS_JSON ? JSON.parse(process.env.GA4_CREDENTIALS_JSON).private_key : '') }
+  get ga4PrivateKey() { return process.env.GA4_PRIVATE_KEY || (process.env.GA4_CREDENTIALS_JSON ? JSON.parse(process.env.GA4_CREDENTIALS_JSON).private_key : '') },
+
+  // Business Support Contact
+  get supportPhoneDisplay() { return process.env.BUSINESS_SUPPORT_PHONE_DISPLAY || '(888) 780-8855'; },
+  get supportPhoneInternational() { return process.env.BUSINESS_SUPPORT_PHONE_INTL || '+1 (888) 780-8855'; },
+  get supportPhoneHref() { return process.env.BUSINESS_SUPPORT_PHONE_HREF || 'tel:+18887808855'; },
+  get supportPhoneSchema() { return process.env.BUSINESS_SUPPORT_PHONE_SCHEMA || '+1-888-780-8855'; }
 };
 
 

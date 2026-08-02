@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
+import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
 import './PassengerAuthorizationPage.css';
 
 function PassengerAuthorizationPage() {
@@ -324,7 +325,7 @@ function PassengerAuthorizationPage() {
         </div>
 
         <div className="auth-card-footer">
-          The Final Seat LLC &middot; 24/7 Passenger Support: support@thefinalseat.com &middot; +1 (213) 965-9727
+          The Final Seat LLC &middot; 24/7 Passenger Support: support@thefinalseat.com &middot; <a href={SUPPORT_PHONE_HREF} style={{ color: 'inherit', textDecoration: 'none' }}>{SUPPORT_PHONE_DISPLAY}</a>
         </div>
       </div>
     </div>

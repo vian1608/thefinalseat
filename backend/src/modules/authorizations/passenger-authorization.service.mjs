@@ -235,7 +235,7 @@ ${authUrl}
 NOTE: Your saved card ending in ${cardLast4} will NOT be charged from an email link click alone. You will review full flight segments, fare breakdown, and passenger names on our secure authorization page before confirming. This authorization link expires in 24 hours.
 
 Need assistance? Contact our 24/7 Support Desk:
-Email: support@thefinalseat.com | Call: +1 (213) 965-9727
+Email: support@thefinalseat.com | Call: ${env.supportPhoneDisplay}
     `.trim();
 
     let splitsHtml = '';
@@ -329,7 +329,7 @@ Email: support@thefinalseat.com | Call: +1 (213) 965-9727
       </div>
     </div>
     <div class="footer">
-      The Final Seat LLC &middot; 24/7 Support: support@thefinalseat.com &middot; +1 (213) 965-9727
+      The Final Seat LLC &middot; 24/7 Support: support@thefinalseat.com &middot; ${env.supportPhoneDisplay}
     </div>
   </div>
 </body>
