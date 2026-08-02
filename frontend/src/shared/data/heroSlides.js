@@ -2,8 +2,8 @@ const heroImage = (filename) => `${process.env.PUBLIC_URL}/images/hero/${filenam
 
 export const heroOfferTag = {
   label: 'Urgent Travel',
-  highlight: 'Need to travel within 3 days?',
-  detail: 'Get priority assistance and save up to 20% on eligible reservations.',
+  highlight: 'Up to 20% off',
+  detail: 'on travel within 3 days',
 };
 
 export const flightHeroSlides = [
@@ -15,28 +15,36 @@ export const flightHeroSlides = [
     title: 'Simple Flight Booking With Real Human Support',
     lead:
       'We help travelers and families compare routes, connections, baggage and total travel time before completing a reservation.',
-    showActions: true,
   },
   {
     id: 'flight-aircraft',
-    type: 'image',
-    image: heroImage('flight-aircraft.jpg'),
+    type: 'content',
+    backgroundImage: heroImage('flight-aircraft.jpg'),
     alt: 'Commercial aircraft prepared for departure',
-    caption: 'Strategic routing across domestic and international networks',
+    eyebrow: 'The Final Seat — Flight Booking Assistance',
+    title: 'Strategic Routing Across Domestic & International Networks',
+    lead:
+      'Compare flight schedules, layovers, and airline baggage allowances with dedicated reservation guidance.',
   },
   {
     id: 'flight-cabin',
-    type: 'image',
-    image: heroImage('flight-cabin.jpg'),
+    type: 'content',
+    backgroundImage: heroImage('flight-cabin.jpg'),
     alt: 'Premium aircraft cabin seating',
-    caption: 'Cabin-class advisory tailored to your travel needs',
+    eyebrow: 'The Final Seat — Flight Booking Assistance',
+    title: 'Cabin-Class Advisory Tailored To Your Travel Needs',
+    lead:
+      'From Economy to Premium & Business Class, find comfortable flight options configured for your itinerary.',
   },
   {
     id: 'flight-travelers',
-    type: 'image',
-    image: heroImage('flight-travelers.jpg'),
+    type: 'content',
+    backgroundImage: heroImage('flight-travelers.jpg'),
     alt: 'Travelers satisfied with their journey',
-    caption: 'Trusted flight reservation support for travelers and families',
+    eyebrow: 'The Final Seat — Flight Booking Assistance',
+    title: 'Trusted Flight Support For Families & Independent Travelers',
+    lead:
+      'Personal coordination for parents, relatives, and multi-city travel with 24/7 travel day support.',
   },
 ];
 
@@ -49,27 +57,35 @@ export const railHeroSlides = [
     title: 'Amtrak & National Rail Travel Support',
     lead:
       'Independent assistance for rail itineraries, connection planning, and journey optimization across Amtrak and partner rail networks.',
-    showActions: true,
   },
   {
     id: 'rail-train',
-    type: 'image',
-    image: heroImage('rail-train.jpg'),
+    type: 'content',
+    backgroundImage: heroImage('rail-train.jpg'),
     alt: 'Passenger train traveling through scenic landscape',
-    caption: 'National rail corridors planned with connection precision',
+    eyebrow: 'The Final Seat — Rail Travel Support',
+    title: 'National Rail Corridors Planned With Connection Precision',
+    lead:
+      'Compare Northeast Corridor, Acela, and long-distance train schedules with expert passenger assistance.',
   },
   {
     id: 'rail-interior',
-    type: 'image',
-    image: heroImage('rail-interior.jpg'),
+    type: 'content',
+    backgroundImage: heroImage('rail-interior.jpg'),
     alt: 'Comfortable passenger train interior seating',
-    caption: 'Class and seating strategy for every segment of your journey',
+    eyebrow: 'The Final Seat — Rail Travel Support',
+    title: 'Class & Seating Strategy For Every Segment Of Your Journey',
+    lead:
+      'Get clear information on Coach, Business, and Sleeper accommodation for a comfortable trip.',
   },
   {
     id: 'rail-travelers',
-    type: 'image',
-    image: heroImage('rail-travelers.jpg'),
+    type: 'content',
+    backgroundImage: heroImage('rail-travelers.jpg'),
     alt: 'Happy group of travelers on a trip',
-    caption: 'Compassionate support when your plans cannot wait',
+    eyebrow: 'The Final Seat — Rail Travel Support',
+    title: 'Compassionate Support When Your Travel Plans Cannot Wait',
+    lead:
+      'Priority booking assistance and route comparison when you need to travel on short notice.',
   },
 ];
