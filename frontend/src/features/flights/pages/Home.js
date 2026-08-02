@@ -11,6 +11,7 @@ import { inquiryAPI } from '../../../shared/api/api';
 import { flightHeroSlides, heroOfferTag } from '../../../shared/data/heroSlides';
 import RouteSlider from '../../../shared/components/RouteSlider';
 import SeamlessAdvisorySection from '../../../shared/components/SeamlessAdvisorySection';
+import HowTheFinalSeatHelps from '../../../shared/components/HowTheFinalSeatHelps';
 import { flightFamousRoutes } from '../../../shared/data/famousRoutes';
 import { SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
 import EmailInput from '../../../shared/components/EmailInput';
@@ -65,6 +66,7 @@ function Home() {
   const [searchData, setSearchData] = useState(initialSearchData);
   const [showPassengerPopup, setShowPassengerPopup] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [showAllBenefits, setShowAllBenefits] = useState(false);
 
   const passengerRef = useRef(null);
 
@@ -730,41 +732,54 @@ function Home() {
             <div className="inquiry-side-panel" id="support-section">
               <div className="flights-inquiry-card support-inquiry-card" style={{ height: 'auto', margin: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
-                  <h2 style={{ fontSize: '1.6rem', color: '#1e293b', marginBottom: '0.75rem', fontWeight: 800 }}>Need help choosing a flight?</h2>
-                  <p style={{ color: '#475569', fontSize: '0.98rem', lineHeight: '1.6', marginBottom: '1.25rem' }}>
-                    Our travel specialists can assist you with comparing connections, baggage rules, total travel time and reservation details.
+                  <h2 style={{ fontSize: '1.5rem', color: '#1e293b', marginBottom: '0.5rem', fontWeight: 800 }}>Need Help Choosing a Flight?</h2>
+                  <p style={{ color: '#475569', fontSize: '0.94rem', lineHeight: '1.5', marginBottom: '1rem' }}>
+                    Get help reviewing connections, baggage rules and total travel time.
                   </p>
                   
-                  <div className="benefits-list" style={{ marginTop: '1.25rem' }}>
-                    <h3 style={{ fontSize: '1.05rem', marginBottom: '0.85rem', color: '#1e293b', fontWeight: 700 }}>Benefits of booking with us:</h3>
-                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                      <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
+                  <div className="benefits-list" style={{ marginTop: '1rem' }}>
+                    <h3 style={{ fontSize: '1rem', marginBottom: '0.65rem', color: '#1e293b', fontWeight: 700 }}>Benefits of booking with us:</h3>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      <li style={{ display: 'flex', gap: '0.65rem', alignItems: 'start', fontSize: '0.88rem', color: '#475569' }}>
                         <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
-                        <span>Personal help reviewing flight options</span>
+                        <span>Compare practical flight options</span>
                       </li>
-                      <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
+                      <li style={{ display: 'flex', gap: '0.65rem', alignItems: 'start', fontSize: '0.88rem', color: '#475569' }}>
                         <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
-                        <span>Assistance comparing stops and connection times</span>
+                        <span>Understand baggage and fare rules</span>
                       </li>
-                      <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
+                      <li style={{ display: 'flex', gap: '0.65rem', alignItems: 'start', fontSize: '0.88rem', color: '#475569' }}>
                         <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
-                        <span>Guidance with baggage and fare conditions</span>
+                        <span>Support before and after booking</span>
                       </li>
-                      <li style={{ display: 'flex', gap: '0.75rem', alignItems: 'start', fontSize: '0.92rem', color: '#475569' }}>
-                        <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
-                        <span>Support before and after reservation</span>
-                      </li>
+                      
+                      {showAllBenefits && (
+                        <>
+                          <li style={{ display: 'flex', gap: '0.65rem', alignItems: 'start', fontSize: '0.88rem', color: '#475569' }}>
+                            <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
+                            <span>Personal help reviewing flight options</span>
+                          </li>
+                          <li style={{ display: 'flex', gap: '0.65rem', alignItems: 'start', fontSize: '0.88rem', color: '#475569' }}>
+                            <i className="fas fa-check-circle" style={{ color: '#8b1538', marginTop: '0.2rem' }}></i>
+                            <span>Assistance comparing stops and connection times</span>
+                          </li>
+                        </>
+                      )}
                     </ul>
-                  </div>
 
-                  <p style={{ marginTop: '1.25rem', fontSize: '0.85rem', color: '#64748b', fontStyle: 'italic', lineHeight: '1.4' }}>
-                    Urgent travel assistance is available 24/7 when immediate booking support is needed.
-                  </p>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowAllBenefits(!showAllBenefits)} 
+                      style={{ background: 'none', border: 'none', color: '#8b1538', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', marginTop: '0.65rem', padding: 0 }}
+                    >
+                      {showAllBenefits ? 'Show Fewer Benefits' : 'View All Benefits'} <i className={`fas fa-chevron-${showAllBenefits ? 'up' : 'down'}`} style={{ fontSize: '0.75rem', marginLeft: '0.25rem' }} />
+                    </button>
+                  </div>
                 </div>
                 
-                <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center' }}>
-                  <a href={SUPPORT_PHONE_HREF} className="call-btn flights-btn flights-btn--cta" style={{ width: '100%', minHeight: '48px', height: '48px', padding: '0 1.5rem', fontSize: '1rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <i className="fas fa-headset"></i> Talk to a Travel Specialist
+                <div style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'center' }}>
+                  <a href={SUPPORT_PHONE_HREF} className="call-btn flights-btn flights-btn--cta" style={{ width: '100%', minHeight: '44px', height: '44px', padding: '0 1rem', fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <i className="fas fa-headset" style={{ marginRight: '0.5rem' }}></i> Talk to a Travel Specialist
                   </a>
                 </div>
               </div>
@@ -773,7 +788,10 @@ function Home() {
         </div>
       </section>
 
-      {/* WHO WE HELP SECTION */}
+      {/* CONSOLIDATED TABBED CAROUSEL SECTION */}
+      <HowTheFinalSeatHelps />
+
+      {/* WHO WE HELP SECTION (Desktop view) */}
       <section className="who-we-help-section" style={{ backgroundColor: '#ffffff', padding: '3.5rem 0', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0' }}>
         <div className="container">
           <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
@@ -814,7 +832,7 @@ function Home() {
         </div>
       </section>
 
-      {/* WHY CHOOSE THE FINAL SEAT */}
+      {/* WHY CHOOSE THE FINAL SEAT (Desktop view) */}
       <section className="why-choose-section" style={{ backgroundColor: '#f8fafc', padding: '4rem 0', borderTop: '1px solid #e2e8f0' }}>
         <div className="container">
           <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
@@ -851,7 +869,7 @@ function Home() {
       {/* PERSONAL BOOKING ASSISTANCE */}
       <SeamlessAdvisorySection variant="flight" />
 
-      {/* WE HELP YOU COMPARE MORE THAN PRICE */}
+      {/* WE HELP YOU COMPARE MORE THAN PRICE (Desktop view) */}
       <section className="compare-more-section" style={{ padding: '4rem 0', backgroundColor: '#ffffff', borderTop: '1px solid #e2e8f0' }}>
         <div className="container">
           <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
@@ -910,3 +928,4 @@ function Home() {
 }
 
 export default Home;
+

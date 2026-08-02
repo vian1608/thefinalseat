@@ -976,3 +976,13 @@
   line-height: 1.5;
   margin: 0;
 }
+
+/* ── Mobile Page Length Consolidation Rules ── */
+@media (max-width: 767px) {
+  .who-we-help-section,
+  .why-choose-section,
+  .compare-more-section {
+    display: none !important;
+  }
+}
+

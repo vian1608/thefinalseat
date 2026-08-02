@@ -41,8 +41,8 @@ async function runRepositionedHomepageTests() {
   // ----------------------------------------------------
   console.log('--- CASE 3: GET BOOKING HELP & SUPPORT BOX ---');
   const homeJsContent = await fs.readFile(path.join(ROOT_DIR, 'frontend/src/features/flights/pages/Home.js'), 'utf8');
-  assert.ok(homeJsContent.includes('Would You Like Help Booking?') || homeJsContent.includes('Need help choosing a flight?'), 'Support box heading must exist');
-  assert.ok(homeJsContent.includes('Our travel specialists can assist you with comparing connections'), 'Support box text must match');
+  assert.ok(homeJsContent.includes('Would You Like Help Booking?') || homeJsContent.includes('Need Help Choosing a Flight?') || homeJsContent.includes('Need help choosing a flight?'), 'Support box heading must exist');
+  assert.ok(homeJsContent.includes('connections') && homeJsContent.includes('baggage'), 'Support box text must match');
   assert.ok(homeJsContent.includes('Talk to a Travel Specialist') || homeJsContent.includes('Call for Booking Help'), 'Support box CTA must exist');
   console.log('✔ CASE 3 PASSED: Support box heading, copy, and CTA updated.\n');
 

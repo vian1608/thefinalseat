@@ -113,6 +113,10 @@ export const analytics = {
   trackCallCtaClicked: (pageId) => trackEvent('call_cta_clicked', { page: pageId }),
   trackAssistanceRequested: (pageId) => trackEvent('assistance_requested', { page: pageId }),
   trackLeadConversion: (source = 'lead_form', dedupeId = null) => trackLeadConversion(source, dedupeId),
+  trackMobileHelpTabSelected: (tabName) =>
+    trackEvent('mobile_help_tab_selected', { tab_name: tabName }),
+  trackMobileHelpCardViewed: (tabName, cardName, cardIndex) =>
+    trackEvent('mobile_help_card_viewed', { tab_name: tabName, card_name: cardName, card_index: cardIndex }),
 };
 
 export default analytics;
