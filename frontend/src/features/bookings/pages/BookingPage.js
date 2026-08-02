@@ -523,17 +523,26 @@ function Booking() {
         <div className="booking-hero-premium__inner">
           <p className="booking-hero-premium__eyebrow">
             <i className="fas fa-star"></i>
-            Exclusive Member Fare · 10% Discount Applied
+            <span className="hero-eyebrow-desktop">Exclusive Member Fare · 10% Discount Applied</span>
+            <span className="hero-eyebrow-mobile">10% Member Fare Applied</span>
           </p>
-          <h1>
+          <h1 className="hero-title-desktop">
             Secure Your <span className="highlight-gold">Discounted</span> Flight Reservation
           </h1>
-          <p className="booking-hero-premium__subtitle">
+          <h1 className="hero-title-mobile">
+            Complete Your Flight Reservation
+          </h1>
+          <p className="booking-hero-premium__subtitle hero-sub-desktop">
             Review your itinerary below and enter traveler details to lock in your{' '}
             <strong style={{ color: '#f59e0b' }}>10% discounted airfare</strong> with fast
             electronic ticketing and secure, encrypted checkout.
           </p>
-          <div className="booking-hero-premium__badges">
+          <p className="booking-hero-premium__subtitle hero-sub-mobile">
+            Review your itinerary and enter traveler details to submit your reservation.
+          </p>
+
+          {/* Desktop badges */}
+          <div className="booking-hero-premium__badges hero-badges-desktop">
             <span className="booking-hero-badge booking-hero-badge--discount">
               <i className="fas fa-tag"></i>
               10% Final Seat Discount
@@ -544,11 +553,23 @@ function Booking() {
             </span>
             <span className="booking-hero-badge">
               <i className="fas fa-bolt"></i>
-              Instant E-Ticket Delivery
+              E-Ticket Delivery
             </span>
             <span className="booking-hero-badge">
               <i className="fas fa-headset"></i>
               24/7 Booking Support
+            </span>
+          </div>
+
+          {/* Mobile badges (max 2 compact indicators in one row) */}
+          <div className="booking-hero-premium__badges hero-badges-mobile">
+            <span className="booking-hero-badge">
+              <i className="fas fa-shield-alt"></i>
+              Secure Checkout
+            </span>
+            <span className="booking-hero-badge">
+              <i className="fas fa-headset"></i>
+              Booking Support
             </span>
           </div>
         </div>
@@ -559,10 +580,9 @@ function Booking() {
         <div className="booking-itinerary-top-panel__inner">
           <p className="booking-itinerary-top-panel__title">
             <i className="fas fa-map-marked-alt"></i>
-            Your Selected Itinerary
+            YOUR SELECTED ITINERARY
           </p>
-          <div className={`booking-itinerary-top-grid${returnFlight ? '' : '--single'}`}
-               style={{ display: 'grid', gridTemplateColumns: returnFlight ? '1fr 1fr auto' : '1fr auto', gap: '1.25rem', alignItems: 'start' }}>
+          <div className={`booking-itinerary-top-grid ${returnFlight ? 'booking-itinerary-top-grid--roundtrip' : 'booking-itinerary-top-grid--single'}`}>
             <ItineraryCard
               flight={flight}
               label="Outbound Flight"
@@ -598,7 +618,7 @@ function Booking() {
                   </p>
                 </>
               )}
-              <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '0.5rem', marginBottom: 0 }}>
+              <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.5rem', marginBottom: 0 }}>
                 {passengersList.length || 1} traveler{(passengersList.length > 1) ? 's' : ''} · All taxes included
               </p>
             </div>
