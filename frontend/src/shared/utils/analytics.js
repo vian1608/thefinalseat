@@ -22,6 +22,19 @@ export const trackEvent = (eventName, payload = {}) => {
   }
 };
 
+export const trackLeadConversion = (source = 'lead_form') => {
+  if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
+    window.gtag('event', 'conversion', {
+      send_to: 'AW-18364862445/mIOvCMHyndocEO2fhrVE',
+      value: 1.0,
+      currency: 'USD',
+    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Google Ads Conversion Tracked]: Submit Lead Form (${source})`);
+    }
+  }
+};
+
 export const analytics = {
   trackSeoPageView: (pageId) => trackEvent('seo_page_view', { page: pageId }),
   trackFlightSearchStarted: (pageId, criteria = {}) =>
@@ -43,6 +56,7 @@ export const analytics = {
     trackEvent('flight_search_failed', { page: pageId, error: errorMsg }),
   trackCallCtaClicked: (pageId) => trackEvent('call_cta_clicked', { page: pageId }),
   trackAssistanceRequested: (pageId) => trackEvent('assistance_requested', { page: pageId }),
+  trackLeadConversion: (source = 'lead_form') => trackLeadConversion(source),
 };
 
 export default analytics;

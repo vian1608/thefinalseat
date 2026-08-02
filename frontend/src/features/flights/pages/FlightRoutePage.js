@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet-async';
 import { useLocation } from 'react-router-dom';
 import { inquiryAPI } from '../../../shared/api/api';
 import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
+import { trackLeadConversion } from '../../../shared/utils/analytics';
 import './FlightRoutePage.css';
 
 const FlightRoute = ({ title, metaTitle, metaDescription, keywords, originCity, destinationCity, originCode, destinationCode }) => {
@@ -100,6 +101,7 @@ const FlightRoute = ({ title, metaTitle, metaDescription, keywords, originCity, 
         result.message || 'Availability request received. We will contact you shortly.'
       );
       setFormData({ fullName: '', travelDateTime: '', paxCount: '1', cabinClass: 'economy', tripType: 'roundtrip', specialRequests: '', phone: '', email: '' });
+      trackLeadConversion('flight_route_inquiry');
     } catch (error) {
       setSubmitStatus('error');
       setSubmitMessage('Unable to check availability right now. Please call us.');

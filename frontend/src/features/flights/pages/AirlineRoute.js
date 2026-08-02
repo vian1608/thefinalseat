@@ -4,6 +4,7 @@ import { useParams, Navigate } from 'react-router-dom';
 import airlinesData from '../../../shared/data/airlinesData.json';
 import airlineKeywords from '../../../shared/data/airline-keywords.json';
 import { inquiryAPI } from '../../../shared/api/api';
+import { trackLeadConversion } from '../../../shared/utils/analytics';
 import './AirlineRoute.css';
 
 const AirlineRoute = () => {
@@ -67,6 +68,7 @@ const AirlineRoute = () => {
         result.message || 'Flight query received. Our team will reach out with itinerary quotes shortly.'
       );
       setFormData({ passengerName: '', passengerEmail: '', passengerPhone: '', originCity: '', destinationCity: '', passengerCount: '1' });
+      trackLeadConversion('airline_route_inquiry');
     } catch (error) {
       setSubmitStatus('error');
       setSubmitMessage('Unable to submit your request right now. Please call us directly.');

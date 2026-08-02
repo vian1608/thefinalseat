@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet-async';
 import { useLocation } from 'react-router-dom';
 import { inquiryAPI } from '../../../shared/api/api';
 import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
+import { trackLeadConversion } from '../../../shared/utils/analytics';
 import './TrainRoutePage.css';
 
 const TrainRoute = ({ title, metaTitle, metaDescription, keywords, originCity, destinationCity, originCode, destinationCode }) => {
@@ -101,6 +102,7 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords, originCity, d
         result.message || 'Availability request received. We will contact you shortly.'
       );
       setFormData({ fullName: '', travelDateTime: '', paxCount: '1', specialRequests: '', phone: '', email: '' });
+      trackLeadConversion('train_route_inquiry');
     } catch (error) {
       setSubmitStatus('error');
       setSubmitMessage('Unable to check availability right now. Please call us.');

@@ -15,6 +15,7 @@ import { flightFamousRoutes } from '../../../shared/data/famousRoutes';
 import { SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
 import EmailInput from '../../../shared/components/EmailInput';
 import InternationalPhoneInput from '../../../shared/components/InternationalPhoneInput';
+import { trackLeadConversion } from '../../../shared/utils/analytics';
 import './Home.css';
 
 const initialFormData = {
@@ -244,13 +245,8 @@ function Home() {
       );
       setFormData(initialFormData);
 
-      // Fire Google Ads conversion event
-      if (typeof window !== 'undefined' && window.gtag) {
-        window.gtag('event', 'conversion', {
-            'send_to': 'AW-18166581434/W9aXCMPzpq8cELqRwNZD',
-            'transaction_id': ''
-        });
-      }
+      // Fire Google Ads Lead Conversion tracking event
+      trackLeadConversion('home_inquiry');
     } catch (error) {
       setSubmitStatus('error');
       if (error.response?.data?.error) {
