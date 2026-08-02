@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import AirportAutocomplete from './AirportAutocomplete';
+import AirportAutocomplete, { formatAirportLabel } from './AirportAutocomplete';
 import TravelDatePicker from './TravelDatePicker';
 import './ModifySearchModal.css';
+
+function extractIataCode(val) {
+  if (!val) return '';
+  if (typeof val === 'object') return (val.code || val.iata || '').toUpperCase();
+  const str = String(val).toUpperCase();
+  const match = str.match(/\b([A-Z]{3,4})\b/);
+  return match ? match[1] : (str.length === 3 ? str : '');
+}
 
 function ModifySearchModal({
   isOpen,
@@ -11,21 +19,37 @@ function ModifySearchModal({
   isCheckoutPage = false
 }) {
   const resolveOriginVal = (search) => {
-    if (search.origin && typeof search.origin === 'object' && search.origin.code) return search.origin;
-    const code = search.origin || search.from || search.departure_airport || search.selectedFlight?.departure?.airport || '';
+    const rawVal = search.origin || search.from || search.departure_airport || search.selectedFlight?.departure?.airport || '';
+    const code = extractIataCode(rawVal);
+    if (typeof search.origin === 'object' && search.origin && search.origin.code) {
+      const cleanCity = formatAirportLabel(search.origin).replace(/\s*\([A-Z]{3,4}\)/i, '').trim();
+      return {
+        code: (search.origin.code).toUpperCase(),
+        city: cleanCity || search.origin.code,
+        name: search.origin.name || cleanCity || search.origin.code
+      };
+    }
     if (code) {
-      const cleanCode = (typeof code === 'object' ? code.code : code).toUpperCase();
-      return { code: cleanCode, city: search.fromCity || search.city || cleanCode, name: search.fromName || cleanCode };
+      const cleanCity = formatAirportLabel(rawVal).replace(/\s*\([A-Z]{3,4}\)/i, '').trim();
+      return { code, city: cleanCity || code, name: cleanCity || code };
     }
     return '';
   };
 
   const resolveDestVal = (search) => {
-    if (search.destination && typeof search.destination === 'object' && search.destination.code) return search.destination;
-    const code = search.destination || search.to || search.arrival_airport || search.selectedFlight?.arrival?.airport || '';
+    const rawVal = search.destination || search.to || search.arrival_airport || search.selectedFlight?.arrival?.airport || '';
+    const code = extractIataCode(rawVal);
+    if (typeof search.destination === 'object' && search.destination && search.destination.code) {
+      const cleanCity = formatAirportLabel(search.destination).replace(/\s*\([A-Z]{3,4}\)/i, '').trim();
+      return {
+        code: (search.destination.code).toUpperCase(),
+        city: cleanCity || search.destination.code,
+        name: search.destination.name || cleanCity || search.destination.code
+      };
+    }
     if (code) {
-      const cleanCode = (typeof code === 'object' ? code.code : code).toUpperCase();
-      return { code: cleanCode, city: search.toCity || search.city || cleanCode, name: search.toName || cleanCode };
+      const cleanCity = formatAirportLabel(rawVal).replace(/\s*\([A-Z]{3,4}\)/i, '').trim();
+      return { code, city: cleanCity || code, name: cleanCity || code };
     }
     return '';
   };
@@ -107,8 +131,8 @@ function ModifySearchModal({
       return false;
     }
 
-    const oCode = (typeof origin === 'object' ? origin.code : origin).toUpperCase();
-    const dCode = (typeof destination === 'object' ? destination.code : destination).toUpperCase();
+    const oCode = extractIataCode(origin);
+    const dCode = extractIataCode(destination);
 
     if (oCode && dCode && oCode === dCode) {
       setFormError('Origin and destination airports cannot be the same.');
@@ -150,8 +174,8 @@ function ModifySearchModal({
     setFormError('');
 
     const updatedParams = {
-      from: typeof origin === 'object' ? origin.code : origin,
-      to: typeof destination === 'object' ? destination.code : destination,
+      from: extractIataCode(origin) || (typeof origin === 'object' ? origin.code : origin),
+      to: extractIataCode(destination) || (typeof destination === 'object' ? destination.code : destination),
       origin,
       destination,
       departureDate,
