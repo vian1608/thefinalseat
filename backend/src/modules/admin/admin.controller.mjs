@@ -284,24 +284,39 @@ export const adminController = {
   updatePaymentSplits: async (req, res, next) => {
     try {
       const { id } = req.params;
+
+      // Section 4 & 15: Guard against improper payload containing unrelated entity fields
+      const forbiddenFields = ['itinerary', 'flights', 'segments', 'itinerarySegments', 'travellers', 'contacts', 'passenger_details'];
+      const presentForbidden = forbiddenFields.filter(f => req.body && req.body[f] !== undefined);
+      if (presentForbidden.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_PAYMENT_SPLIT_PAYLOAD',
+            message: `Payment split updates cannot include unrelated fields (${presentForbidden.join(', ')}). Use dedicated section endpoints.`
+          }
+        });
+      }
+
       const splits = req.body.splits || req.body.payment_splits;
       const adminId = req.user?.email || 'admin';
       const reason = req.body.reason || 'Payment split breakdown update';
+      const expectedVersion = req.body.bookingVersion || req.body.updated_at;
 
-      await bookingRepository.updatePaymentSplitsAndTotal(id, splits, adminId, reason);
-      const completeBooking = await bookingRepository.getCompleteBookingById(id);
+      const completeBooking = await bookingRepository.updatePaymentSplitsAndTotal(id, splits, adminId, reason, expectedVersion);
 
       res.json({
         success: true,
-        message: 'Payment splits and customer total updated successfully.',
+        message: 'Payment splits updated successfully. Itinerary unchanged.',
         data: completeBooking,
         booking: completeBooking
       });
     } catch (error) {
-      res.status(400).json({
+      const statusCode = error.status || (error.message.includes('BOOKING_VERSION_CONFLICT') ? 409 : 400);
+      res.status(statusCode).json({
         success: false,
         error: {
-          code: 'PAYMENT_SPLIT_ERROR',
+          code: error.status === 409 ? 'BOOKING_VERSION_CONFLICT' : 'PAYMENT_SPLIT_ERROR',
           message: error.message
         }
       });

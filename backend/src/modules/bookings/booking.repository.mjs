@@ -1189,9 +1189,12 @@ export const bookingRepository = {
       // Perform database update
       await bookingRepository.updateStatus(realId, bookingUpdateFields);
 
-      // Save Itinerary Segments if provided
+      // Save Itinerary Segments ONLY if non-empty valid segments list is provided
       if (Array.isArray(payload.itinerarySegments) && payload.itinerarySegments.length > 0) {
-        await bookingRepository.saveItinerarySegments(realId, payload.itinerarySegments);
+        const validSegs = payload.itinerarySegments.filter(s => (s.origin_airport || s.originCode || s.origin_code) && (s.destination_airport || s.destinationCode || s.destination_code));
+        if (validSegs.length > 0) {
+          await bookingRepository.saveItinerarySegments(realId, validSegs);
+        }
       }
 
       // Record Audit Event with detailed changes list
@@ -1353,17 +1356,19 @@ export const bookingRepository = {
   // Persist segment rows to the legacy flights table using its column schema
   _persistToFlightsTable: async (bookingId, canonicalRows = []) => {
     try {
-      // Delete existing flights for this booking
-      await supabase.from('flights').delete().eq('booking_id', bookingId);
+      if (!Array.isArray(canonicalRows) || canonicalRows.length === 0) {
+        logger.warn(`[_persistToFlightsTable] Refusing to delete flights for ${bookingId} with empty canonicalRows!`);
+        return;
+      }
 
-      if (canonicalRows.length === 0) return;
+      // Delete existing flights for this booking ONLY when non-empty valid replacement rows exist!
+      await supabase.from('flights').delete().eq('booking_id', bookingId);
 
       const flightRows = canonicalRows.map((seg) => ({
         booking_id: bookingId,
         leg: seg.journey_direction === 'return' ? 'return' : 'outbound',
         trip_type: seg.direction === 'return' ? 'round-trip' : 'one-way',
         airline_name: seg.carrier_name || seg.airline_name || '',
-        carrier_code: seg.carrier_code || seg.marketing_carrier_code || '',
         flight_number: seg.flight_number || '',
         departure_airport: seg.origin_airport || '',
         arrival_airport: seg.destination_airport || '',
@@ -1447,10 +1452,16 @@ export const bookingRepository = {
     }
   },
 
-  updatePaymentSplitsAndTotal: async (bookingId, splitsInput = [], adminId = 'admin', reason = 'Payment splits update') => {
+  updatePaymentSplitsAndTotal: async (bookingId, splitsInput = [], adminId = 'admin', reason = 'Payment splits update', expectedVersion = null) => {
     const booking = await bookingRepository.getById(bookingId);
     if (!booking) throw new Error('Booking not found');
     const realId = booking.id;
+
+    if (expectedVersion && booking.updated_at && String(expectedVersion) !== String(booking.updated_at)) {
+      const conflictErr = new Error('BOOKING_VERSION_CONFLICT: This booking changed after you opened it. Reload before saving.');
+      conflictErr.status = 409;
+      throw conflictErr;
+    }
 
     // 1. Record initial flight count prior to split update
     const initialFlightCount = await bookingRepository.getFlightsCount(realId);
@@ -1573,7 +1584,6 @@ export const bookingRepository = {
     const updatePayload = {
       total_amount: calculatedTotal,
       customer_price: calculatedTotal,
-      amount: calculatedTotal,
       status: newStatus,
       authorization_status: newAuthStatus
     };

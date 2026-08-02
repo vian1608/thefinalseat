@@ -955,10 +955,12 @@ function AdminDashboard() {
     try {
       setUpdatingRecord(true);
       const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/payment-splits`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
         body: JSON.stringify({
-          splits: paymentSplits
+          splits: paymentSplits,
+          paymentState: paymentForm.paymentStatus,
+          bookingVersion: selectedBooking.updated_at
         })
       });
 
@@ -985,7 +987,7 @@ function AdminDashboard() {
       }
 
       setHasUnsavedEdits(false);
-      setDrawerSuccess('Payment authorization splits and customer total updated successfully!');
+      setDrawerSuccess('Payment splits updated successfully. Itinerary unchanged.');
     } catch (err) {
       setHasUnsavedEdits(true);
       setDrawerError(`Payment split save error: ${err.message}`);
