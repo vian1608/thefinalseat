@@ -73,7 +73,7 @@ export const bookingMapper = {
 
     const authorizedAmount = booking.authorized_amount !== undefined && booking.authorized_amount !== null
       ? parseFloat(booking.authorized_amount)
-      : (booking.authorization?.authorizedAmount ?? customerTotal);
+      : (booking.authorized_amount ?? (booking.authorization?.authorizedAmount ?? customerTotal));
 
     const isPaid = (booking.payment_status || '').toLowerCase() === 'paid' || (paymentRecord.payment_status || '').toLowerCase() === 'paid';
     const isRefunded = (booking.payment_status || '').toLowerCase() === 'refunded' || (paymentRecord.payment_status || '').toLowerCase() === 'refunded';
@@ -244,7 +244,7 @@ export const bookingMapper = {
           currency
         },
         authorization: {
-          authorizedAmount: customerPrice
+          authorizedAmount: parseFloat(b.authorized_amount ?? b.customer_price ?? b.total_amount ?? 0) || customerPrice
         },
         payment: {
           paidAmount: (b.payment_status || '').toLowerCase() === 'paid' ? customerPrice : null,

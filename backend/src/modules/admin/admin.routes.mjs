@@ -42,6 +42,9 @@ router.put('/bookings/:id/save-all', authenticate, authorize(['admin']), adminCo
 router.put('/bookings/:id', authenticate, authorize(['admin']), adminController.updateBooking);
 router.put('/bookings/:id/payment-splits', authenticate, authorize(['admin']), adminController.updatePaymentSplits);
 router.patch('/bookings/:id/payment-splits', authenticate, authorize(['admin']), adminController.updatePaymentSplits);
+// Dedicated payment-authorization endpoint (preferred over payment-splits)
+router.patch('/bookings/:id/payment-authorization', authenticate, authorize(['admin']), adminController.updatePaymentAuthorization);
+
 router.put('/bookings/:id/ticket-details', authenticate, authorize(['admin']), adminController.saveTicketDetails);
 router.post('/bookings/:id/send-final-ticket', authenticate, authorize(['admin']), adminController.sendFinalTicketEmail);
 router.post('/bookings/:id/resend-admin-email', authenticate, authorize(['admin']), adminController.resendAdminAcknowledgement);

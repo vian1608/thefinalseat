@@ -1590,6 +1590,45 @@ export const bookingRepository = {
 
     await bookingRepository.updateStatus(realId, updatePayload);
 
+    // ── Patch pending passenger_authorizations record ────────────────────
+    // This ensures the authorization page and email immediately reflect the
+    // new amount. Accepted (immutable) records are never touched.
+    let newAuthToken = null;
+    try {
+      const { passengerAuthorizationService } = await import('../authorizations/passenger-authorization.service.mjs');
+      const splitCurrency = formattedSplits[0]?.currency || booking.currency || 'USD';
+      const updatedAuth = await passengerAuthorizationService.updateAuthorizationAmountAndSplits(
+        realId,
+        calculatedTotal,
+        formattedSplits,
+        splitCurrency
+      );
+      if (updatedAuth?.token) {
+        newAuthToken = updatedAuth.token;
+        // Persist new token on bookings so /authorize/:newToken resolves
+        await bookingRepository.updateStatus(realId, {
+          authorization_token: updatedAuth.token,
+          authorization_expires_at: updatedAuth.expires_at
+        });
+
+        // Send a new authorization email to the passenger with the updated amount
+        if (!isAccepted) {
+          try {
+            const freshBooking = await bookingRepository.getById(realId);
+            await passengerAuthorizationService.sendAuthorizationEmail(updatedAuth, freshBooking);
+            await bookingRepository.updateStatus(realId, {
+              authorization_email_sent_at: new Date().toISOString()
+            });
+            logger.info(`[SplitUpdate] Re-authorization email sent for booking ${realId} with new amount $${calculatedTotal}.`);
+          } catch (emailErr) {
+            logger.warn(`[SplitUpdate] Could not send re-authorization email: ${emailErr.message}`);
+          }
+        }
+      }
+    } catch (authPatchErr) {
+      logger.warn(`[SplitUpdate] Non-fatal: could not patch pending auth record: ${authPatchErr.message}`);
+    }
+
     // Record PAYMENT_AUTHORIZATION_AMOUNT_CHANGED audit log
     await bookingRepository.recordAuditLog({
       bookingId: realId,

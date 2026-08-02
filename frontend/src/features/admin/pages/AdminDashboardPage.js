@@ -458,7 +458,8 @@ function AdminDashboard() {
     });
 
     // Initial payment setup
-    const authAmount = booking.payment?.authorized_amount ?? booking.payment?.authorizedAmount ?? booking.authorization?.authorizedAmount ?? booking.customer_price ?? booking.total_amount ?? customerTotal;
+    const authAmount = booking.authorized_amount ?? booking.payment?.authorized_amount ?? booking.payment?.authorizedAmount ?? booking.authorization?.authorizedAmount ?? booking.customer_price ?? booking.total_amount ?? customerTotal;
+
     const paid = booking.payment?.paidAmount ?? ((booking.payment_status || '').toLowerCase() === 'paid' ? customerTotal : null);
     const refunded = booking.payment?.refundedAmount ?? ((booking.payment_status || '').toLowerCase() === 'refunded' ? customerTotal : 0);
 
@@ -954,25 +955,53 @@ function AdminDashboard() {
     const adminToken = localStorage.getItem('token');
     try {
       setUpdatingRecord(true);
-      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/payment-splits`, {
+
+      // ── Call the dedicated payment-authorization endpoint ─────────────────
+      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/payment-authorization`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
         body: JSON.stringify({
           splits: paymentSplits,
-          paymentState: paymentForm.paymentStatus,
           bookingVersion: selectedBooking.updated_at
         })
       });
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error?.message || data.message || 'Failed to update payment splits.');
+        throw new Error(data.error?.message || data.message || 'Failed to update payment authorization.');
       }
 
-      const updated = data.booking || data.data;
-      if (updated) {
-        handleSelectBooking(updated);
-        const newTotal = parseFloat(updated.customer_price || updated.total_amount || 0);
+      // ── Force-refetch booking from server to guarantee authoritative state ─
+      // This eliminates any possibility of stale-response race conditions.
+      let freshBooking = data.booking || data.data;
+      try {
+        const refetchRes = await fetch(`/api/admin/bookings/${selectedBooking.id}`, {
+          headers: { Authorization: `Bearer ${adminToken}` }
+        });
+        if (refetchRes.ok) {
+          const refetchData = await refetchRes.json();
+          if (refetchData.success && (refetchData.booking || refetchData.data)) {
+            freshBooking = refetchData.booking || refetchData.data;
+          }
+        }
+      } catch (refetchErr) {
+        // Non-fatal — use response body as fallback
+        console.warn('[PaymentAuth] Refetch failed, using response body:', refetchErr.message);
+      }
+
+      if (freshBooking) {
+        // Reload selected booking panel with all fresh data
+        handleSelectBooking(freshBooking);
+
+        // Canonical new total from server
+        const newTotal = parseFloat(
+          freshBooking.authorized_amount ??
+          freshBooking.customer_price ??
+          freshBooking.total_amount ??
+          data.paymentAuthorization?.authorizedAmount ??
+          0
+        );
+
         setPricingForm(prev => ({
           ...prev,
           customerTotal: newTotal,
@@ -983,18 +1012,37 @@ function AdminDashboard() {
           authorizedAmount: newTotal
         }));
 
-        setBookings(prevList => prevList.map(b => b.id === updated.id ? { ...b, ...updated } : b));
+        // Refresh splits in state from the server's response
+        const updatedSplits = freshBooking.payment_splits || freshBooking.paymentSplits || [];
+        setPaymentSplits(updatedSplits.map((s, idx) => ({
+          id: s.id || `split_${idx}_${Date.now()}`,
+          merchant_name: s.merchant_name || s.merchantName || '',
+          amount: parseFloat(s.amount || 0),
+          currency: s.currency || freshBooking.currency || 'USD'
+        })));
+
+        // Update booking in the list table
+        setBookings(prevList => prevList.map(b =>
+          b.id === freshBooking.id ? { ...b, ...freshBooking } : b
+        ));
+
+        setDrawerSuccess(
+          `Payment authorization updated to $${newTotal.toFixed(2)}. Itinerary unchanged.`
+        );
+      } else {
+        setDrawerSuccess('Payment splits updated successfully. Itinerary unchanged.');
       }
 
       setHasUnsavedEdits(false);
-      setDrawerSuccess('Payment splits updated successfully. Itinerary unchanged.');
     } catch (err) {
       setHasUnsavedEdits(true);
-      setDrawerError(`Payment split save error: ${err.message}`);
+      setDrawerError(`Payment authorization save error: ${err.message}`);
     } finally {
       setUpdatingRecord(false);
     }
   };
+
+
 
 
 

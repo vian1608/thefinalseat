@@ -323,6 +323,101 @@ export const adminController = {
     }
   },
 
+  /**
+   * PATCH /api/admin/bookings/:id/payment-authorization
+   *
+   * Dedicated, isolated endpoint that ONLY updates payment splits and
+   * propagates the calculated total to:
+   *   - bookings.customer_price, total_amount, authorized_amount
+   *   - passenger_authorizations.authorized_amount, quote_snapshot
+   *   - payments.payment_amount, authorized_amount
+   *   - Audit log + re-authorization email for pending auths
+   *
+   * This endpoint CANNOT mutate itinerary, flights, travellers, or ticket data.
+   */
+  updatePaymentAuthorization: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+
+      // Strict payload isolation — reject any attempt to piggyback unrelated entities
+      const forbiddenFields = [
+        'itinerary', 'flights', 'segments', 'itinerarySegments',
+        'travellers', 'contacts', 'passenger_details',
+        'airlineCode', 'airlineName', 'ticketNumber', 'ticketIssuedAt', 'pnr',
+        'airline_confirmation_number', 'supplier_confirmation'
+      ];
+      const presentForbidden = forbiddenFields.filter(f => req.body && req.body[f] !== undefined);
+      if (presentForbidden.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_PAYMENT_AUTHORIZATION_PAYLOAD',
+            message: `Payment authorization updates cannot include unrelated fields (${presentForbidden.join(', ')}). Use dedicated section endpoints.`
+          }
+        });
+      }
+
+      const splits = req.body.splits || req.body.payment_splits;
+      if (!splits || !Array.isArray(splits) || splits.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'SPLITS_REQUIRED', message: 'At least one payment split is required.' }
+        });
+      }
+
+      const adminId = req.user?.email || 'admin';
+      const reason = req.body.reason || 'Payment authorization splits update';
+      const expectedVersion = req.body.bookingVersion || req.body.updated_at;
+
+      const completeBooking = await bookingRepository.updatePaymentSplitsAndTotal(
+        id, splits, adminId, reason, expectedVersion
+      );
+
+      // Derive canonical authorizedAmount from the freshly updated booking
+      const authorizedAmount = parseFloat(
+        completeBooking.authorized_amount ??
+        completeBooking.customer_price ??
+        completeBooking.total_amount ??
+        completeBooking.pricing?.customerTotal ??
+        0
+      );
+
+      const paymentSplits = completeBooking.paymentSplits || completeBooking.payment_splits || [];
+
+      return res.json({
+        success: true,
+        message: `Payment authorization updated to $${authorizedAmount.toFixed(2)}. Itinerary unchanged.`,
+        booking: {
+          ...completeBooking,
+          // Ensure these surface at the top level for frontend convenience
+          customer_price: authorizedAmount,
+          total_amount: authorizedAmount,
+          authorized_amount: authorizedAmount,
+          payment_splits: paymentSplits
+        },
+        paymentAuthorization: {
+          authorizedAmount,
+          currency: completeBooking.currency || 'USD',
+          splits: paymentSplits,
+          updatedAt: new Date().toISOString()
+        },
+        bookingVersion: completeBooking.updated_at
+      });
+    } catch (error) {
+      logger.error(`Error in updatePaymentAuthorization for ${req.params.id}: ${error.message}`, error);
+      const statusCode = error.status || (error.message?.includes('BOOKING_VERSION_CONFLICT') ? 409 : 400);
+      return res.status(statusCode).json({
+        success: false,
+        error: {
+          code: error.status === 409 ? 'BOOKING_VERSION_CONFLICT' : 'PAYMENT_AUTHORIZATION_ERROR',
+          message: error.message
+        }
+      });
+    }
+  },
+
+
+
 
 
   getStats: async (req, res, next) => {

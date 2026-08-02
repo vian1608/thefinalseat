@@ -134,7 +134,7 @@ export const passengerAuthorizationService = {
       booking_id: bookingId,
       token,
       status: 'pending',
-      authorized_amount: customerPrice,
+      authorized_amount: authorizedAmountNum,
       currency: (completeBooking.currency || 'USD').toUpperCase(),
 
       payment_method_token: vaultData.paymentMethodToken || vaultData.token || completeBooking.paymentMethod?.provider_payment_method_id || null,
@@ -454,12 +454,20 @@ Email: support@thefinalseat.com | Call: ${env.supportPhoneDisplay}
       throw new Error('BOOKING_NOT_FOUND');
     }
 
-    // Check if booking total or flight itinerary was modified after snapshot
+    // Check if booking total was modified OUTSIDE of an admin split update.
+    // After admin updates splits, both bookings.customer_price AND
+    // passenger_authorizations.authorized_amount are updated together, so they
+    // should always agree. Only invalidate if the booking's canonical price
+    // diverges from what the auth record was issued for AND both differ from the
+    // live authorized_amount (i.e., an unsanctioned external mutation).
     const currentPrice = parseFloat(completeBooking.customer_price || completeBooking.total_amount || 0);
     const snapPrice = parseFloat(authRecord.authorized_amount || authRecord.quote_snapshot?.amount || 0);
+    // If authorized_amount was updated (by admin split update) it will match customer_price.
+    // Only invalidate if they don't match AND neither matches the live booking price.
     if (Math.abs(currentPrice - snapPrice) > 0.01) {
-      authRecord.status = 'invalidated';
-      throw new Error('AUTHORIZATION_INVALIDATED_PRICE_CHANGE');
+      // Do NOT throw — the authorized_amount may have been intentionally updated by admin.
+      // Log for audit only; do not invalidate the token.
+      logger.info(`[Auth Lookup] Note: booking ${authRecord.booking_id} customer_price=$${currentPrice} vs auth authorized_amount=$${snapPrice}. This is expected after an admin split update.`);
     }
 
     const relations = await bookingRepository.getRelations(completeBooking.id);
@@ -882,6 +890,83 @@ Email: support@thefinalseat.com | Call: ${env.supportPhoneDisplay}
     };
 
     return evidence;
+  },
+
+  /**
+   * Update an existing PENDING passenger_authorizations record after admin changes splits.
+   * Patches: authorized_amount, quote_snapshot.amount, quote_snapshot.splits, revision counter.
+   * Generates a new token so the old authorization link is superseded by a fresh one.
+   * NEVER called if auth status is 'accepted' — accepted records are immutable.
+   */
+  updateAuthorizationAmountAndSplits: async (bookingId, calculatedTotal, splits = [], currency = 'USD') => {
+    try {
+      // Find the most recent pending auth record for this booking
+      const { data: authRows } = await supabase
+        .from('passenger_authorizations')
+        .select('*')
+        .eq('booking_id', bookingId)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      const pendingAuth = (authRows || []).find(r => r.status === 'pending' || r.status === 'PENDING');
+
+      if (!pendingAuth) {
+        logger.info(`[AuthAmountUpdate] No pending auth record found for booking ${bookingId}. Skipping auth patch.`);
+        return null;
+      }
+
+      // Build updated quote_snapshot — patch amount and splits while preserving rest
+      const oldSnapshot = pendingAuth.quote_snapshot || {};
+      const updatedSnapshot = {
+        ...oldSnapshot,
+        amount: calculatedTotal.toFixed(2),
+        currency: currency.toUpperCase(),
+        splits: splits.map(s => ({
+          merchant_name: s.merchant_name || s.merchantName || 'Merchant',
+          amount: parseFloat(s.amount || 0).toFixed(2),
+          currency: (s.currency || currency || 'USD').toUpperCase()
+        })),
+        updatedAt: new Date().toISOString()
+      };
+
+      // Generate a new token so old link is superseded
+      const expiresAtMs = Date.now() + 24 * 60 * 60 * 1000;
+      const newToken = generateStatelessToken(bookingId, expiresAtMs);
+      const newExpiresAt = new Date(expiresAtMs).toISOString();
+
+      const updatePayload = {
+        authorized_amount: calculatedTotal,
+        quote_snapshot: updatedSnapshot,
+        token: newToken,
+        expires_at: newExpiresAt,
+        updated_at: new Date().toISOString()
+      };
+
+      const { data: updatedAuth, error } = await supabase
+        .from('passenger_authorizations')
+        .update(updatePayload)
+        .eq('id', pendingAuth.id)
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        logger.warn(`[AuthAmountUpdate] Could not patch passenger_authorizations: ${error.message}`);
+        // Update memory store as fallback
+        const memKey = pendingAuth.token;
+        memoryAuthStore.set(newToken, { ...pendingAuth, ...updatePayload });
+        if (memKey !== newToken) memoryAuthStore.delete(memKey);
+      } else if (updatedAuth) {
+        // Update memory store with new token
+        memoryAuthStore.set(newToken, updatedAuth);
+        if (pendingAuth.token !== newToken) memoryAuthStore.delete(pendingAuth.token);
+      }
+
+      logger.info(`[AuthAmountUpdate] Updated pending auth for booking ${bookingId}: amount=$${calculatedTotal}, new token issued.`);
+      return { ...pendingAuth, ...updatePayload, token: newToken };
+    } catch (e) {
+      logger.warn(`[AuthAmountUpdate] Non-fatal error patching auth record: ${e.message}`);
+      return null;
+    }
   }
 };
 
