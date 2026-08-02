@@ -5,6 +5,7 @@ import './SearchResultsPage.css';
 import ModifySearchSummaryBar from '../components/ModifySearchSummaryBar';
 import ModifySearchModal from '../components/ModifySearchModal';
 import FlightResultRow, { normalizeFlight } from '../components/FlightResultRow';
+import { normalizeSelectedItinerary, validateItineraryIntegrity } from '../../../shared/utils/itineraryNormalizer';
 
 // Helper to safely format error into string
 function getErrorMessage(err) {
@@ -339,10 +340,21 @@ function SearchResultsContent() {
   };
 
   const handleBookFlight = (flight) => {
+    const isRound = (searchType === 'roundtrip' || searchType === 'round-trip' || searchParams?.tripType === 'round-trip' || searchParams?.tripType === 'roundtrip' || !!searchParams?.return);
+
+    const normalized = normalizeSelectedItinerary(flight, searchParams);
+    const integrityCheck = validateItineraryIntegrity(normalized);
+
+    if (!integrityCheck.valid) {
+      setError(integrityCheck.message);
+      return;
+    }
+
     sessionStorage.setItem('selectedFlight', JSON.stringify(flight));
-    sessionStorage.setItem('searchType', searchType);
-    
-    if (searchType === 'roundtrip') {
+    sessionStorage.setItem('selectedItinerary', JSON.stringify(normalized));
+    sessionStorage.setItem('searchType', isRound ? 'roundtrip' : 'oneway');
+
+    if (isRound) {
       navigate('/return-flight');
     } else {
       navigate('/booking');

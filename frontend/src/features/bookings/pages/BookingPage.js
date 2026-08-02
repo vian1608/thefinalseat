@@ -19,6 +19,7 @@ import {
 } from '../../../shared/utils/validationHelpers';
 
 import ModifySearchModal from '../../flights/components/ModifySearchModal';
+import { safeUpper } from '../../../shared/utils/itineraryNormalizer';
 
 import './BookingPage.css';
 
@@ -539,9 +540,25 @@ function Booking() {
 
   if (!flight) {
     return (
-      <div className="booking-page-loading">
-        <i className="fas fa-circle-notch fa-spin"></i>
-        <p>Loading itinerary details...</p>
+      <div className="booking-page booking-page-loading">
+        <Helmet>
+          <title>Flight Checkout | The Final Seat</title>
+        </Helmet>
+        <div className="container" style={{ padding: '4rem 1rem', textAlign: 'center' }}>
+          <div style={{ maxWidth: '580px', margin: '0 auto', background: '#ffffff', padding: '2.5rem', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+            <i className="fas fa-exclamation-triangle" style={{ fontSize: '3rem', color: '#d97706', marginBottom: '1rem' }}></i>
+            <h2 style={{ color: '#1e293b', marginBottom: '0.75rem' }}>No Itinerary Selected</h2>
+            <p style={{ color: '#64748b', marginBottom: '1.5rem', lineHeight: '1.6' }}>
+              {error || 'We could not prepare this flight for checkout. Loading itinerary details... Please choose another option or search again.'}
+            </p>
+            <button
+              onClick={() => navigate('/')}
+              style={{ padding: '0.85rem 1.75rem', borderRadius: '12px', background: '#8b1538', color: '#ffffff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '1rem' }}
+            >
+              <i className="fas fa-search" style={{ marginRight: '0.5rem' }}></i> Search Flights
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -688,7 +705,7 @@ function Booking() {
                 {passengersList.map((passenger, idx) => (
                   <div key={idx} className="passenger-card-block">
                     <h4 className="passenger-card-title">
-                      <i className="fas fa-user"></i> Passenger #{idx + 1} ({passenger.role.toUpperCase()})
+                      <i className="fas fa-user"></i> Passenger #{idx + 1} ({safeUpper(passenger?.role || 'ADULT')})
                     </h4>
 
                     <div className="booking-form-grid booking-form-grid--3col">
@@ -780,7 +797,7 @@ function Booking() {
                         <input
                           type="text"
                           value={passenger.passportNumber}
-                          onChange={(e) => handlePassengerChange(idx, 'passportNumber', e.target.value.toUpperCase())}
+                          onChange={(e) => handlePassengerChange(idx, 'passportNumber', safeUpper(e.target.value))}
                           placeholder="Passport Number (if intl)"
                         />
                       </label>
