@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
@@ -233,6 +234,159 @@ function AdminDashboard() {
   const [openOutboundGroup, setOpenOutboundGroup] = useState(true);
   const [openReturnGroup, setOpenReturnGroup] = useState(true);
   const [isImportItineraryModalOpen, setIsImportItineraryModalOpen] = useState(false);
+  const handleSelectBooking = useCallback((booking) => {
+    setSelectedBooking(booking);
+    setIsEditMode(false);
+    setShowThreeDotMenu(false);
+    setInternalNotes(booking.internal_notes || booking.internalNotes || '');
+    setNewStatus(booking.status || booking.bookingStatus || 'PENDING');
+    setHasUnsavedEdits(false);
+    setPaymentDirty(false);
+    setPaymentSaving(false);
+    setPaymentSaveStatus('default');
+    setPaymentSaveError('');
+    setPaymentSaveSuccessMsg('');
+
+    setOpenAccordion(null);
+    setFinalTicketEmailError('');
+    setFinalTicketEmailSuccess('');
+
+    // Initial itinerary segments setup (Journey Grouped)
+    let rawOutbound = booking.outbound_segments || [];
+    let rawReturn = booking.return_segments || [];
+    const allSegments = booking.itinerary_segments || booking.flights || [];
+
+    if (rawOutbound.length === 0 && rawReturn.length === 0 && allSegments.length > 0) {
+      rawOutbound = allSegments.filter(s => (s.journey_direction || s.direction) === 'outbound');
+      rawReturn = allSegments.filter(s => (s.journey_direction || s.direction) === 'return');
+
+      if (rawOutbound.length === 0 && rawReturn.length === 0) {
+        rawOutbound = [allSegments[0]];
+        if (allSegments.length > 1 && (booking.trip_type === 'round_trip' || booking.tripType === 'round_trip')) {
+          rawReturn = allSegments.slice(1);
+        }
+      }
+    }
+
+    const mappedOutbound = rawOutbound.map((s, i) => ({
+      journey_direction: 'outbound',
+      segment_sequence: i + 1,
+      carrier_name: s.carrier_name || s.airline || s.airlineName || '',
+      carrier_code: s.carrier_code || s.carrier || s.carrierCode || '',
+      operating_carrier: s.operating_carrier || s.operatingCarrier || '',
+      flight_number: s.flight_number || s.flightNumber || '',
+      origin_airport: s.origin_airport || s.originCode || s.departure_airport || '',
+      origin_city: s.origin_city || s.originCity || '',
+      destination_airport: s.destination_airport || s.destinationCode || s.arrival_airport || '',
+      destination_city: s.destination_city || s.destinationCity || '',
+      departure_date: s.departure_date || s.departureDate || '',
+      departure_time: s.departure_time || s.departureTime || '',
+      arrival_date: s.arrival_date || s.arrivalDate || '',
+      arrival_time: s.arrival_time || s.arrivalTime || '',
+      arrival_next_day: !!(s.arrival_next_day || s.arrivalNextDay),
+      cabin: s.cabin || s.cabinClass || 'Economy',
+      booking_class: s.booking_class || 'Y',
+      terminal: s.terminal || '',
+      baggage_allowance: s.baggage_allowance || '1 Bag',
+      aircraft: s.aircraft || '',
+      stop_count: 0
+    }));
+
+    const mappedReturn = rawReturn.map((s, i) => ({
+      journey_direction: 'return',
+      segment_sequence: i + 1,
+      carrier_name: s.carrier_name || s.airline || s.airlineName || '',
+      carrier_code: s.carrier_code || s.carrier || s.carrierCode || '',
+      operating_carrier: s.operating_carrier || s.operatingCarrier || '',
+      flight_number: s.flight_number || s.flightNumber || '',
+      origin_airport: s.origin_airport || s.originCode || s.departure_airport || '',
+      origin_city: s.origin_city || s.originCity || '',
+      destination_airport: s.destination_airport || s.destinationCode || s.arrival_airport || '',
+      destination_city: s.destination_city || s.destinationCity || '',
+      departure_date: s.departure_date || s.departureDate || '',
+      departure_time: s.departure_time || s.departureTime || '',
+      arrival_date: s.arrival_date || s.arrivalDate || '',
+      arrival_time: s.arrival_time || s.arrivalTime || '',
+      arrival_next_day: !!(s.arrival_next_day || s.arrivalNextDay),
+      cabin: s.cabin || s.cabinClass || 'Economy',
+      booking_class: s.booking_class || 'Y',
+      terminal: s.terminal || 'T1',
+      baggage_allowance: s.baggage_allowance || '1 Bag',
+      aircraft: s.aircraft || '',
+      stop_count: 0
+    }));
+
+    setOutboundSegments(mappedOutbound);
+    setReturnSegments(mappedReturn);
+    setHasReturnJourney(mappedReturn.length > 0 || (booking.trip_type === 'round_trip' || booking.tripType === 'round_trip'));
+
+    // Initial pricing setup
+    const customerTotal = booking.pricing?.customerTotal ?? (typeof booking.customer_price === 'number' ? booking.customer_price : (typeof booking.total_amount === 'number' ? booking.total_amount : parseFloat(booking.customer_price || booking.total_amount || 0)));
+    const supplierCost = booking.pricing?.supplierCost ?? (typeof booking.supplier_price === 'number' ? booking.supplier_price : (typeof booking.original_api_price === 'number' ? booking.original_api_price : customerTotal));
+    const disc = booking.pricing?.discount ?? parseFloat(booking.discount_amount || 0);
+    const base = booking.pricing?.baseFare ?? supplierCost;
+    const tax = booking.pricing?.taxes ?? 45.00;
+    const fee = booking.pricing?.serviceFee ?? 15.00;
+    const mgn = booking.pricing?.margin ?? (customerTotal - supplierCost);
+
+    setPricingForm({
+      supplierFare: toFiniteNumber(supplierCost, 0),
+      baseFare: toFiniteNumber(base, 0),
+      taxes: toFiniteNumber(tax, 45.00),
+      serviceFee: toFiniteNumber(fee, 15.00),
+      discount: toFiniteNumber(disc, 0),
+      customerTotal: toFiniteNumber(customerTotal, 0),
+      currency: booking.currency || booking.pricing?.currency || 'USD',
+      margin: toFiniteNumber(mgn, 0),
+      adminMargin: toFiniteNumber(mgn, 0),
+      reason: ''
+    });
+
+    // Initial payment setup
+    const authAmount = booking.authorized_amount ?? booking.payment?.authorized_amount ?? booking.payment?.authorizedAmount ?? booking.authorization?.authorizedAmount ?? booking.customer_price ?? booking.total_amount ?? customerTotal;
+
+    const paid = booking.payment?.paidAmount ?? ((booking.payment_status || '').toLowerCase() === 'paid' ? customerTotal : null);
+    const refunded = booking.payment?.refundedAmount ?? ((booking.payment_status || '').toLowerCase() === 'refunded' ? customerTotal : 0);
+
+    setPaymentForm({
+      paymentStatus: (booking.payment_status || 'PENDING').toUpperCase(),
+      provider: booking.payment?.provider || 'Whop',
+      methodType: 'card',
+      brand: booking.paymentMethod?.card_brand || booking.paymentMethod?.cardBrand || '',
+      last4: booking.paymentMethod?.card_last4 || booking.paymentMethod?.cardLast4 || '',
+      authorizedAmount: toFiniteNumber(authAmount, customerTotal),
+      capturedAmount: paid !== null ? toFiniteNumber(paid, 0) : 0,
+      refundedAmount: toFiniteNumber(refunded, 0),
+      referenceId: booking.transactionReference || booking.payment?.transactionReference || booking.transaction_id || booking.payment_intent_id || '',
+      reason: '',
+      password: ''
+    });
+
+    const rawSplits = booking.payment_splits || [];
+    const mappedSplits = rawSplits.map((s, idx) => ({
+      id: s.id || `split_${idx}_${Date.now()}`,
+      merchant_name: s.merchant_name || s.merchantName || '',
+      amount: parseFloat(s.amount || 0),
+      currency: s.currency || booking.currency || 'USD'
+    }));
+    setPaymentSplits(mappedSplits);
+
+    const savedPnr = booking.airline_confirmation_number || booking.airlineConfirmationNumber || booking.airline_pnr || booking.pnr || '';
+    setTicketForm({
+      airlineCode: booking.airline_code || booking.airlineCode || '',
+      airlineName: booking.airline_name || booking.airlineName || booking.carrier || '',
+      airlineLogoUrl: booking.airline_logo_url || booking.airlineLogoUrl || '',
+      airlineConfirmationNumber: savedPnr,
+      airlinePnr: savedPnr,
+      supplierConfirmation: booking.supplier_confirmation || booking.supplierConfirmation || '',
+      ticketNumber: booking.ticket_number || booking.ticketNumber || '',
+      ticketIssuedAt: booking.ticket_issued_at ? String(booking.ticket_issued_at).slice(0, 10) : (booking.ticketIssuedAt ? String(booking.ticketIssuedAt).slice(0, 10) : ''),
+      ticketNotes: booking.ticket_notes || booking.ticketNotes || ''
+    });
+    setEditingTicketField(null);
+    setTicketDetailsError('');
+    setTicketDetailsSuccess('');
+  }, []);
 
   const handleItineraryImported = useCallback((updatedBooking) => {
     if (updatedBooking) {
@@ -367,167 +521,6 @@ function AdminDashboard() {
   const handleTimeframeChange = (days) => {
     setTimeframe(days);
     loadAllDashboardData(filters, days);
-  };
-
-  const handleSelectBooking = (booking) => {
-    setSelectedBooking(booking);
-    setIsEditMode(false);
-    setShowThreeDotMenu(false);
-    setInternalNotes(booking.internal_notes || booking.internalNotes || '');
-    setNewStatus(booking.status || booking.bookingStatus || 'PENDING');
-    setHasUnsavedEdits(false);
-    setPaymentDirty(false);
-    setPaymentSaving(false);
-    setPaymentSaveStatus('default');
-    setPaymentSaveError('');
-    setPaymentSaveSuccessMsg('');
-
-    setOpenAccordion(null);
-    setFinalTicketEmailError('');
-    setFinalTicketEmailSuccess('');
-
-    // Initial itinerary segments setup (Journey Grouped)
-    let rawOutbound = booking.outbound_segments || [];
-    let rawReturn = booking.return_segments || [];
-    const allSegments = booking.itinerary_segments || booking.flights || [];
-
-    if (rawOutbound.length === 0 && rawReturn.length === 0 && allSegments.length > 0) {
-      rawOutbound = allSegments.filter(s => (s.journey_direction || s.direction) === 'outbound');
-      rawReturn = allSegments.filter(s => (s.journey_direction || s.direction) === 'return');
-
-      if (rawOutbound.length === 0 && rawReturn.length === 0) {
-        rawOutbound = [allSegments[0]];
-        if (allSegments.length > 1 && (booking.trip_type === 'round_trip' || booking.tripType === 'round_trip')) {
-          rawReturn = allSegments.slice(1);
-        }
-      }
-    }
-
-    // Do NOT inject blank/dummy template rows into rawOutbound if empty.
-    // An empty array indicates no itinerary segments exist yet.
-
-    const mappedOutbound = rawOutbound.map((s, i) => ({
-      journey_direction: 'outbound',
-      segment_sequence: i + 1,
-      carrier_name: s.carrier_name || s.airline || s.airlineName || '',
-      carrier_code: s.carrier_code || s.carrier || s.carrierCode || '',
-      operating_carrier: s.operating_carrier || s.operatingCarrier || '',
-      flight_number: s.flight_number || s.flightNumber || '',
-      origin_airport: s.origin_airport || s.originCode || s.departure_airport || '',
-      origin_city: s.origin_city || s.originCity || '',
-      destination_airport: s.destination_airport || s.destinationCode || s.arrival_airport || '',
-      destination_city: s.destination_city || s.destinationCity || '',
-      departure_date: s.departure_date || s.departureDate || '',
-      departure_time: s.departure_time || s.departureTime || '',
-      arrival_date: s.arrival_date || s.arrivalDate || '',
-      arrival_time: s.arrival_time || s.arrivalTime || '',
-      arrival_next_day: !!(s.arrival_next_day || s.arrivalNextDay),
-      cabin: s.cabin || s.cabinClass || 'Economy',
-      booking_class: s.booking_class || 'Y',
-      terminal: s.terminal || '',
-      baggage_allowance: s.baggage_allowance || '1 Bag',
-      aircraft: s.aircraft || '',
-      stop_count: 0
-    }));
-
-    const mappedReturn = rawReturn.map((s, i) => ({
-      journey_direction: 'return',
-      segment_sequence: i + 1,
-      carrier_name: s.carrier_name || s.airline || s.airlineName || '',
-      carrier_code: s.carrier_code || s.carrier || s.carrierCode || '',
-      operating_carrier: s.operating_carrier || s.operatingCarrier || '',
-      flight_number: s.flight_number || s.flightNumber || '',
-      origin_airport: s.origin_airport || s.originCode || s.departure_airport || '',
-      origin_city: s.origin_city || s.originCity || '',
-      destination_airport: s.destination_airport || s.destinationCode || s.arrival_airport || '',
-      destination_city: s.destination_city || s.destinationCity || '',
-      departure_date: s.departure_date || s.departureDate || '',
-      departure_time: s.departure_time || s.departureTime || '',
-      arrival_date: s.arrival_date || s.arrivalDate || '',
-      arrival_time: s.arrival_time || s.arrivalTime || '',
-      arrival_next_day: !!(s.arrival_next_day || s.arrivalNextDay),
-      cabin: s.cabin || s.cabinClass || 'Economy',
-      booking_class: s.booking_class || 'Y',
-      terminal: s.terminal || 'T1',
-      baggage_allowance: s.baggage_allowance || '1 Bag',
-      aircraft: s.aircraft || '',
-      stop_count: 0
-    }));
-
-    setOutboundSegments(mappedOutbound);
-    setReturnSegments(mappedReturn);
-    setHasReturnJourney(mappedReturn.length > 0 || (booking.trip_type === 'round_trip' || booking.tripType === 'round_trip'));
-
-
-    // Initial pricing setup
-    const customerTotal = booking.pricing?.customerTotal ?? (typeof booking.customer_price === 'number' ? booking.customer_price : (typeof booking.total_amount === 'number' ? booking.total_amount : parseFloat(booking.customer_price || booking.total_amount || 0)));
-    const supplierCost = booking.pricing?.supplierCost ?? (typeof booking.supplier_price === 'number' ? booking.supplier_price : (typeof booking.original_api_price === 'number' ? booking.original_api_price : customerTotal));
-    const disc = booking.pricing?.discount ?? parseFloat(booking.discount_amount || 0);
-    const base = booking.pricing?.baseFare ?? supplierCost;
-    const tax = booking.pricing?.taxes ?? 45.00;
-    const fee = booking.pricing?.serviceFee ?? 15.00;
-    const mgn = booking.pricing?.margin ?? (customerTotal - supplierCost);
-
-    setPricingForm({
-      supplierFare: toFiniteNumber(supplierCost, 0),
-      baseFare: toFiniteNumber(base, 0),
-      taxes: toFiniteNumber(tax, 45.00),
-      serviceFee: toFiniteNumber(fee, 15.00),
-      discount: toFiniteNumber(disc, 0),
-      customerTotal: toFiniteNumber(customerTotal, 0),
-      currency: booking.currency || booking.pricing?.currency || 'USD',
-      margin: toFiniteNumber(mgn, 0),
-      adminMargin: toFiniteNumber(mgn, 0),
-      reason: ''
-    });
-
-    // Initial payment setup
-    const authAmount = booking.authorized_amount ?? booking.payment?.authorized_amount ?? booking.payment?.authorizedAmount ?? booking.authorization?.authorizedAmount ?? booking.customer_price ?? booking.total_amount ?? customerTotal;
-
-    const paid = booking.payment?.paidAmount ?? ((booking.payment_status || '').toLowerCase() === 'paid' ? customerTotal : null);
-    const refunded = booking.payment?.refundedAmount ?? ((booking.payment_status || '').toLowerCase() === 'refunded' ? customerTotal : 0);
-
-    setPaymentForm({
-      paymentStatus: (booking.payment_status || 'PENDING').toUpperCase(),
-      provider: booking.payment?.provider || 'Whop',
-      methodType: 'card',
-      brand: booking.paymentMethod?.card_brand || booking.paymentMethod?.cardBrand || '',
-      last4: booking.paymentMethod?.card_last4 || booking.paymentMethod?.cardLast4 || '',
-      authorizedAmount: toFiniteNumber(authAmount, customerTotal),
-      capturedAmount: paid !== null ? toFiniteNumber(paid, 0) : 0,
-      refundedAmount: toFiniteNumber(refunded, 0),
-      referenceId: booking.transactionReference || booking.payment?.transactionReference || booking.transaction_id || booking.payment_intent_id || '',
-      reason: '',
-      password: ''
-    });
-
-    // Initial payment splits setup — do NOT generate fake/dummy splits if empty
-    const rawSplits = booking.payment_splits || [];
-    const mappedSplits = rawSplits.map((s, idx) => ({
-      id: s.id || `split_${idx}_${Date.now()}`,
-      merchant_name: s.merchant_name || s.merchantName || '',
-      amount: parseFloat(s.amount || 0),
-      currency: s.currency || booking.currency || 'USD'
-    }));
-    setPaymentSplits(mappedSplits);
-
-
-    // Initial ticket details setup
-    const savedPnr = booking.airline_confirmation_number || booking.airlineConfirmationNumber || booking.airline_pnr || booking.pnr || '';
-    setTicketForm({
-      airlineCode: booking.airline_code || booking.airlineCode || '',
-      airlineName: booking.airline_name || booking.airlineName || booking.carrier || '',
-      airlineLogoUrl: booking.airline_logo_url || booking.airlineLogoUrl || '',
-      airlineConfirmationNumber: savedPnr,
-      airlinePnr: savedPnr,
-      supplierConfirmation: booking.supplier_confirmation || booking.supplierConfirmation || '',
-      ticketNumber: booking.ticket_number || booking.ticketNumber || '',
-      ticketIssuedAt: booking.ticket_issued_at ? String(booking.ticket_issued_at).slice(0, 10) : (booking.ticketIssuedAt ? String(booking.ticketIssuedAt).slice(0, 10) : ''),
-      ticketNotes: booking.ticket_notes || booking.ticketNotes || ''
-    });
-    setEditingTicketField(null);
-    setTicketDetailsError('');
-    setTicketDetailsSuccess('');
   };
 
   const handleSaveAllChanges = async (e) => {

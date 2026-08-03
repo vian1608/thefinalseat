@@ -24,9 +24,21 @@ class AppErrorBoundary extends Component {
 
   render() {
     if (this.state.hasError) {
-      const errorMessage = typeof this.state.error === 'object' 
-        ? (this.state.error?.message || JSON.stringify(this.state.error)) 
-        : String(this.state.error || 'An unexpected rendering error occurred');
+      const rawError = this.state.error;
+      const rawMessage = typeof rawError === 'object' 
+        ? (rawError?.message || JSON.stringify(rawError)) 
+        : String(rawError || 'An unexpected rendering error occurred');
+
+      const correlationId = `ERR-ADM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      console.error(`[AppErrorBoundary Diagnostics] Correlation ID: ${correlationId}`, rawError);
+
+      const isDev = process.env.NODE_ENV === 'development';
+      const isMinifiedJsError = rawMessage.includes('before initialization') || rawMessage.includes('Cannot access') || rawMessage.includes('ReferenceError') || rawMessage.includes('TypeError');
+      
+      let userFriendlyMessage = 'Unable to load the admin dashboard. Please reload or contact support.';
+      if (isDev && !isMinifiedJsError) {
+        userFriendlyMessage = rawMessage;
+      }
 
       return (
         <div style={{
@@ -50,8 +62,8 @@ class AppErrorBoundary extends Component {
           }}>
             <i className="fas fa-exclamation-circle" style={{ fontSize: '3rem', color: '#8b1538', marginBottom: '1rem' }}></i>
             <h2 style={{ color: '#0f172a', marginBottom: '0.5rem', fontSize: '1.5rem', fontWeight: 800 }}>Something Went Wrong</h2>
-            <p style={{ color: '#64748b', fontSize: '0.92rem', marginBottom: '1.5rem', lineHeight: '1.5' }}>
-              An unexpected error occurred while loading this page.
+            <p style={{ color: '#64748b', fontSize: '0.92rem', marginBottom: '1rem', lineHeight: '1.5' }}>
+              {userFriendlyMessage}
             </p>
             <div style={{
               backgroundColor: '#fef2f2',
@@ -60,12 +72,12 @@ class AppErrorBoundary extends Component {
               padding: '10px 14px',
               borderRadius: '8px',
               fontSize: '0.82rem',
-              textAlign: 'left',
+              textAlign: 'center',
               marginBottom: '1.5rem',
               wordBreak: 'break-word',
               fontFamily: 'monospace'
             }}>
-              {errorMessage}
+              Reference ID: <strong>{correlationId}</strong>
             </div>
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
               <button
