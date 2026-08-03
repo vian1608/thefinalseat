@@ -1,6 +1,44 @@
 {
   "buildCommand": "cd backend && npm install && cd ../frontend && npm install && npm run build",
   "outputDirectory": "frontend/build",
+  "headers": [
+    {
+      "source": "/static/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(assets|images|logo)/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=2592000"
+        }
+      ]
+    },
+    {
+      "source": "/(favicon.png|favicon.svg|manifest.json|robots.txt|sitemap.xml)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
+    },
+    {
+      "source": "/(index.html)?",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    }
+  ],
   "redirects": [
     { "source": "/amtrak-assistance", "destination": "/amtrak", "permanent": true },
     { "source": "/amtrak-assitance", "destination": "/amtrak", "permanent": true },

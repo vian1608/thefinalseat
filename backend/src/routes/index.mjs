@@ -11,6 +11,8 @@ import whopRouter from '../modules/payments/whop.routes.mjs';
 import paypalController from '../modules/payments/paypal.controller.mjs';
 import rateLimit from '../middleware/rate-limit.mjs';
 
+import { noStore, publicLookupCache } from '../middleware/cache-control.middleware.mjs';
+
 const router = express.Router();
 
 const paypalRateLimiter = rateLimit({
@@ -28,23 +30,26 @@ const authorizationRouter = express.Router();
 authorizationRouter.get('/:token', passengerAuthorizationController.getAuthorization);
 authorizationRouter.post('/accept', passengerAuthorizationController.acceptAuthorization);
 
-router.use('/auth', authRouter);
-router.use('/customers', customerRouter);
-router.use('/bookings', bookingRouter);
-router.use('/payments', paymentRouter);
-router.use('/paypal', paypalRouter);
-router.use('/authorizations', authorizationRouter);
-router.use('/authorization', authorizationRouter);
+// Private & User-Specific Routes — Strict No-Store Protection
+router.use('/auth', noStore, authRouter);
+router.use('/customers', noStore, customerRouter);
+router.use('/bookings', noStore, bookingRouter);
+router.use('/my-bookings', noStore, bookingRouter);
+router.use('/payments', noStore, paymentRouter);
+router.use('/paypal', noStore, paypalRouter);
+router.use('/authorizations', noStore, authorizationRouter);
+router.use('/authorization', noStore, authorizationRouter);
+router.use('/admin', noStore, adminRouter);
 
 router.post('/webhooks/paypal', paypalController.handleWebhook);
 router.use('/', whopRouter);
 
+// Public Flight & Lookup Routes
 router.use('/flights', flightRouter);
-router.use('/airports', airportRouter);
+router.use('/airports', publicLookupCache(300, 86400, 3600), airportRouter);
 import addressAutocompleteController from '../modules/flights/address-autocomplete.controller.mjs';
 
-router.get('/address-autocomplete', addressAutocompleteController.getAddressAutocomplete);
-router.use('/admin', adminRouter);
+router.get('/address-autocomplete', publicLookupCache(300, 86400, 3600), addressAutocompleteController.getAddressAutocomplete);
 
 // Health check endpoint
 router.get('/health', (req, res) => {
