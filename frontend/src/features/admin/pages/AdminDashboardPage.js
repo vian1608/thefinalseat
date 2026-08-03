@@ -208,6 +208,12 @@ function AdminDashboard() {
   // 3-Accordion States ('itinerary' | 'pricing' | 'payment' | null)
   const [openAccordion, setOpenAccordion] = useState(null);
   const [hasUnsavedEdits, setHasUnsavedEdits] = useState(false);
+  const [paymentDirty, setPaymentDirty] = useState(false);
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentSaveStatus, setPaymentSaveStatus] = useState('default'); // 'default', 'saving', 'success', 'failure'
+  const [paymentSaveError, setPaymentSaveError] = useState('');
+  const [paymentSaveSuccessMsg, setPaymentSaveSuccessMsg] = useState('');
+
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
 
@@ -358,6 +364,12 @@ function AdminDashboard() {
     setInternalNotes(booking.internal_notes || booking.internalNotes || '');
     setNewStatus(booking.status || booking.bookingStatus || 'PENDING');
     setHasUnsavedEdits(false);
+    setPaymentDirty(false);
+    setPaymentSaving(false);
+    setPaymentSaveStatus('default');
+    setPaymentSaveError('');
+    setPaymentSaveSuccessMsg('');
+
     setOpenAccordion(null);
     setFinalTicketEmailError('');
     setFinalTicketEmailSuccess('');
@@ -510,7 +522,13 @@ function AdminDashboard() {
     if (e) e.preventDefault();
     if (!selectedBooking) return;
 
+    if (paymentDirty) {
+      setDrawerError('Save the Payment section before completing other booking changes.');
+      return;
+    }
+
     setDrawerError('');
+
     setDrawerSuccess('');
     setUpdatingRecord(true);
 
@@ -948,21 +966,69 @@ function AdminDashboard() {
   };
 
 
+  const markPaymentDirty = () => {
+    setPaymentDirty(true);
+    setPaymentSaveStatus('default');
+    setPaymentSaveSuccessMsg('');
+    setPaymentSaveError('');
+  };
+
+  const isPaymentInvalid = () => {
+    if (!paymentSplits || paymentSplits.length === 0) return true;
+    return paymentSplits.some((s, idx) => {
+      const mName = (s.merchant_name || '').trim();
+      const val = Number(s.amount);
+      return !mName || isNaN(val) || val <= 0;
+    });
+  };
+
   const handleSavePaymentSplits = async () => {
     if (!selectedBooking) return;
-    setDrawerError('');
-    setDrawerSuccess('');
+    setPaymentSaveError('');
+    setPaymentSaveSuccessMsg('');
+    setPaymentSaveStatus('saving');
+    setPaymentSaving(true);
+
+    // Front-end Validation
+    try {
+      if (!paymentSplits || paymentSplits.length === 0) {
+        throw new Error('At least one payment split row is required.');
+      }
+      paymentSplits.forEach((s, idx) => {
+        const mName = (s.merchant_name || '').trim();
+        if (!mName) {
+          throw new Error(`Split #${idx + 1}: Merchant name is required.`);
+        }
+        const val = Number(s.amount);
+        if (isNaN(val) || val <= 0 || !isFinite(val)) {
+          throw new Error(`Split #${idx + 1} (${mName}): Amount must be a positive number.`);
+        }
+      });
+    } catch (valErr) {
+      setPaymentSaveStatus('failure');
+      setPaymentSaveError(valErr.message);
+      setPaymentSaving(false);
+      return;
+    }
+
     const adminToken = localStorage.getItem('token');
     try {
-      setUpdatingRecord(true);
-
-      // ── Call the dedicated payment-authorization endpoint ─────────────────
+      // Send only the payment payload to the dedicated endpoint
       const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/payment-authorization`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
         body: JSON.stringify({
-          splits: paymentSplits,
-          bookingVersion: selectedBooking.updated_at
+          bookingVersion: selectedBooking.updated_at,
+          paymentState: paymentForm.paymentStatus,
+          referenceId: paymentForm.referenceId,
+          reason: paymentForm.reason,
+          paidAmount: paymentForm.paidAmount,
+          refundAmount: paymentForm.refundAmount,
+          refundReferenceId: paymentForm.refundReferenceId,
+          splits: paymentSplits.map(s => ({
+            merchantName: s.merchant_name,
+            amount: parseFloat(s.amount)
+          }))
         })
       });
 
@@ -971,8 +1037,7 @@ function AdminDashboard() {
         throw new Error(data.error?.message || data.message || 'Failed to update payment authorization.');
       }
 
-      // ── Force-refetch booking from server to guarantee authoritative state ─
-      // This eliminates any possibility of stale-response race conditions.
+      // Force-refetch booking from server to guarantee authoritative state
       let freshBooking = data.booking || data.data;
       try {
         const refetchRes = await fetch(`/api/admin/bookings/${selectedBooking.id}`, {
@@ -985,13 +1050,14 @@ function AdminDashboard() {
           }
         }
       } catch (refetchErr) {
-        // Non-fatal — use response body as fallback
         console.warn('[PaymentAuth] Refetch failed, using response body:', refetchErr.message);
       }
 
       if (freshBooking) {
-        // Reload selected booking panel with all fresh data
-        handleSelectBooking(freshBooking);
+        // Load selected booking panel with all fresh data
+        setSelectedBooking(freshBooking);
+        setInternalNotes(freshBooking.internal_notes || freshBooking.internalNotes || '');
+        setNewStatus(freshBooking.status || freshBooking.bookingStatus || 'PENDING');
 
         // Canonical new total from server
         const newTotal = parseFloat(
@@ -1007,9 +1073,14 @@ function AdminDashboard() {
           customerTotal: newTotal,
           margin: newTotal - prev.supplierFare
         }));
+
         setPaymentForm(prev => ({
           ...prev,
-          authorizedAmount: newTotal
+          paymentStatus: (freshBooking.payment_status || 'PENDING').toUpperCase(),
+          authorizedAmount: newTotal,
+          capturedAmount: freshBooking.payment?.paidAmount ? parseFloat(freshBooking.payment.paidAmount) : (freshBooking.payment_status === 'paid' ? newTotal : 0),
+          refundedAmount: freshBooking.payment?.refundedAmount ? parseFloat(freshBooking.payment.refundedAmount) : 0,
+          referenceId: freshBooking.transaction_id || freshBooking.payment_intent_id || ''
         }));
 
         // Refresh splits in state from the server's response
@@ -1026,21 +1097,22 @@ function AdminDashboard() {
           b.id === freshBooking.id ? { ...b, ...freshBooking } : b
         ));
 
-        setDrawerSuccess(
-          `Payment authorization updated to $${newTotal.toFixed(2)}. Itinerary unchanged.`
-        );
+        setPaymentDirty(false);
+        setPaymentSaveStatus('success');
+        setPaymentSaveSuccessMsg(`Payment splits and booking amount updated to $${newTotal.toFixed(2)}.`);
       } else {
-        setDrawerSuccess('Payment splits updated successfully. Itinerary unchanged.');
+        setPaymentDirty(false);
+        setPaymentSaveStatus('success');
+        setPaymentSaveSuccessMsg('Payment splits updated successfully.');
       }
-
-      setHasUnsavedEdits(false);
     } catch (err) {
-      setHasUnsavedEdits(true);
-      setDrawerError(`Payment authorization save error: ${err.message}`);
+      setPaymentSaveStatus('failure');
+      setPaymentSaveError(err.message);
     } finally {
-      setUpdatingRecord(false);
+      setPaymentSaving(false);
     }
   };
+
 
 
 
@@ -2653,13 +2725,15 @@ function AdminDashboard() {
                                     type="text"
                                     placeholder="e.g. United Airlines"
                                     value={split.merchant_name}
+                                    disabled={paymentSaving}
                                     onChange={(e) => {
                                       const next = [...paymentSplits];
                                       next[idx].merchant_name = e.target.value;
                                       setPaymentSplits(next);
                                       setHasUnsavedEdits(true);
+                                      markPaymentDirty();
                                     }}
-                                    style={{ width: '100%', padding: '6px 10px', fontSize: '0.8rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#ffffff' }}
+                                    style={{ width: '100%', padding: '6px 10px', fontSize: '0.8rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: paymentSaving ? '#f1f5f9' : '#ffffff' }}
                                   />
                                 </div>
                                 <div style={{ flex: '1' }}>
@@ -2669,6 +2743,7 @@ function AdminDashboard() {
                                     step="0.01"
                                     placeholder="0.00"
                                     value={split.amount}
+                                    disabled={paymentSaving}
                                     onChange={(e) => {
                                       const next = [...paymentSplits];
                                       next[idx].amount = parseFloat(e.target.value || 0);
@@ -2676,21 +2751,24 @@ function AdminDashboard() {
                                       const totalSplits = next.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0);
                                       setPaymentForm({ ...paymentForm, authorizedAmount: totalSplits });
                                       setHasUnsavedEdits(true);
+                                      markPaymentDirty();
                                     }}
-                                    style={{ width: '100%', padding: '6px 10px', fontSize: '0.8rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#ffffff' }}
+                                    style={{ width: '100%', padding: '6px 10px', fontSize: '0.8rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: paymentSaving ? '#f1f5f9' : '#ffffff' }}
                                   />
                                 </div>
                                 <div style={{ paddingTop: '16px' }}>
                                   <button
                                     type="button"
+                                    disabled={paymentSaving}
                                     onClick={() => {
                                       const next = paymentSplits.filter((_, i) => i !== idx);
                                       setPaymentSplits(next);
                                       const totalSplits = next.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0);
                                       setPaymentForm({ ...paymentForm, authorizedAmount: totalSplits });
                                       setHasUnsavedEdits(true);
+                                      markPaymentDirty();
                                     }}
-                                    style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.88rem', padding: '4px 6px' }}
+                                    style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: paymentSaving ? 'not-allowed' : 'pointer', fontSize: '0.88rem', padding: '4px 6px' }}
                                     title="Remove split"
                                   >
                                     <i className="fas fa-trash-alt"></i>
@@ -2702,14 +2780,16 @@ function AdminDashboard() {
                             <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
                               <button
                                 type="button"
+                                disabled={paymentSaving}
                                 onClick={() => {
                                   setPaymentSplits([
                                     ...paymentSplits,
                                     { id: `split_${Date.now()}`, merchant_name: 'The Final Seat LLC', amount: 0, currency: 'USD' }
                                   ]);
                                   setHasUnsavedEdits(true);
+                                  markPaymentDirty();
                                 }}
-                                style={{ width: '100%', background: '#ffffff', border: '1px dashed #8b1236', color: '#8b1236', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer' }}
+                                style={{ width: '100%', background: '#ffffff', border: '1px dashed #8b1236', color: '#8b1236', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '700', cursor: paymentSaving ? 'not-allowed' : 'pointer' }}
                               >
                                 + Add Payment Split
                               </button>
@@ -2721,7 +2801,7 @@ function AdminDashboard() {
 
                             <div className="drawer-form-field">
                               <label>Payment State</label>
-                              <select value={paymentForm.paymentStatus} onChange={(e) => { setPaymentForm({ ...paymentForm, paymentStatus: e.target.value }); setHasUnsavedEdits(true); }}>
+                              <select value={paymentForm.paymentStatus} disabled={paymentSaving} onChange={(e) => { setPaymentForm({ ...paymentForm, paymentStatus: e.target.value }); setHasUnsavedEdits(true); markPaymentDirty(); }}>
                                 <option value="PENDING">Pending</option>
                                 <option value="PROCESSING">Processing</option>
                                 <option value="PAID">Paid</option>
@@ -2743,8 +2823,8 @@ function AdminDashboard() {
                                   type="number"
                                   step="0.01"
                                   value={paymentSplits.length > 0 ? paymentSplits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0) : paymentForm.authorizedAmount}
-                                  readOnly={paymentSplits.length > 0}
-                                  onChange={(e) => { setPaymentForm({ ...paymentForm, authorizedAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); }}
+                                  readOnly={paymentSplits.length > 0 || paymentSaving}
+                                  onChange={(e) => { setPaymentForm({ ...paymentForm, authorizedAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); markPaymentDirty(); }}
                                 />
                               </div>
                               <div className="drawer-form-field">
@@ -2758,7 +2838,7 @@ function AdminDashboard() {
                             <div className="drawer-grid-2col">
                               <div className="drawer-form-field">
                                 <label>Transaction / Ref ID</label>
-                                <input type="text" value={paymentForm.referenceId} onChange={(e) => { setPaymentForm({ ...paymentForm, referenceId: e.target.value }); setHasUnsavedEdits(true); }} placeholder="TXN-PROCESSING-001" />
+                                <input type="text" value={paymentForm.referenceId} disabled={paymentSaving} onChange={(e) => { setPaymentForm({ ...paymentForm, referenceId: e.target.value }); setHasUnsavedEdits(true); markPaymentDirty(); }} placeholder="TXN-PROCESSING-001" />
                               </div>
                               <div className="drawer-form-field">
                                 <label>Authorized Amount ($)</label>
@@ -2772,11 +2852,11 @@ function AdminDashboard() {
                               <div className="drawer-grid-2col">
                                 <div className="drawer-form-field">
                                   <label>Paid Amount ($)</label>
-                                  <input type="number" step="0.01" value={paymentForm.paidAmount || selectedBooking.total_amount || 0} onChange={(e) => { setPaymentForm({ ...paymentForm, paidAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); }} />
+                                  <input type="number" step="0.01" value={paymentForm.paidAmount || selectedBooking.total_amount || 0} disabled={paymentSaving} onChange={(e) => { setPaymentForm({ ...paymentForm, paidAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); markPaymentDirty(); }} />
                                 </div>
                                 <div className="drawer-form-field">
                                   <label>Transaction / Ref ID *</label>
-                                  <input type="text" value={paymentForm.referenceId} onChange={(e) => { setPaymentForm({ ...paymentForm, referenceId: e.target.value }); setHasUnsavedEdits(true); }} placeholder="Required TXN ID" />
+                                  <input type="text" value={paymentForm.referenceId} disabled={paymentSaving} onChange={(e) => { setPaymentForm({ ...paymentForm, referenceId: e.target.value }); setHasUnsavedEdits(true); markPaymentDirty(); }} placeholder="Required TXN ID" />
                                 </div>
                               </div>
                               <div className="drawer-form-field">
@@ -2790,7 +2870,7 @@ function AdminDashboard() {
                             <div className="drawer-grid-2col">
                               <div className="drawer-form-field">
                                 <label>Failure Reason</label>
-                                <input type="text" value={paymentForm.reason} onChange={(e) => { setPaymentForm({ ...paymentForm, reason: e.target.value }); setHasUnsavedEdits(true); }} placeholder="Card declined by issuing bank" />
+                                <input type="text" value={paymentForm.reason} disabled={paymentSaving} onChange={(e) => { setPaymentForm({ ...paymentForm, reason: e.target.value }); setHasUnsavedEdits(true); markPaymentDirty(); }} placeholder="Card declined by issuing bank" />
                               </div>
                               <div className="drawer-form-field">
                                 <label>Failed Timestamp</label>
@@ -2804,17 +2884,90 @@ function AdminDashboard() {
                               <div className="drawer-grid-2col">
                                 <div className="drawer-form-field">
                                   <label>Refunded Amount ($) *</label>
-                                  <input type="number" step="0.01" value={paymentForm.refundAmount || selectedBooking.total_amount || 0} onChange={(e) => { setPaymentForm({ ...paymentForm, refundAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); }} />
+                                  <input type="number" step="0.01" value={paymentForm.refundAmount || selectedBooking.total_amount || 0} disabled={paymentSaving} onChange={(e) => { setPaymentForm({ ...paymentForm, refundAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); markPaymentDirty(); }} />
                                 </div>
                                 <div className="drawer-form-field">
                                   <label>Refund Reference ID *</label>
-                                  <input type="text" value={paymentForm.refundReferenceId} onChange={(e) => { setPaymentForm({ ...paymentForm, refundReferenceId: e.target.value }); setHasUnsavedEdits(true); }} placeholder="REF-883921" />
+                                  <input type="text" value={paymentForm.refundReferenceId} disabled={paymentSaving} onChange={(e) => { setPaymentForm({ ...paymentForm, refundReferenceId: e.target.value }); setHasUnsavedEdits(true); markPaymentDirty(); }} placeholder="REF-883921" />
                                 </div>
                               </div>
                             </>
                           )}
+
+                          {/* DEDICATED SAVE BUTTON & FEEDBACK BANNERS */}
+                          <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {paymentSaveStatus === 'success' && paymentSaveSuccessMsg && (
+                              <div style={{ color: '#15803d', background: '#dcfce7', border: '1px solid #bbf7d0', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600' }}>
+                                <i className="fas fa-check-circle" style={{ marginRight: '6px' }}></i>
+                                {paymentSaveSuccessMsg}
+                              </div>
+                            )}
+                            {paymentSaveStatus === 'failure' && paymentSaveError && (
+                              <div style={{ color: '#b91c1c', background: '#fee2e2', border: '1px solid #fecaca', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600' }}>
+                                <i className="fas fa-exclamation-triangle" style={{ marginRight: '6px' }}></i>
+                                Payment save error: {paymentSaveError}
+                              </div>
+                            )}
+                            {paymentDirty && (
+                              <div style={{ color: '#b45309', background: '#fffbeb', border: '1px solid #fef3c7', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600' }}>
+                                <i className="fas fa-info-circle" style={{ marginRight: '6px' }}></i>
+                                Unsaved payment changes
+                              </div>
+                            )}
+                            {!paymentDirty && paymentSaveStatus === 'success' && (
+                              <div style={{ color: '#15803d', background: '#dcfce7', border: '1px solid #bbf7d0', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600' }}>
+                                <i className="fas fa-check" style={{ marginRight: '6px' }}></i>
+                                Payment changes saved
+                              </div>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={handleSavePaymentSplits}
+                              disabled={paymentSaving || isPaymentInvalid() || !paymentDirty}
+                              style={{
+                                width: '100%',
+                                background: paymentSaving ? '#cbd5e1' : (isPaymentInvalid() || !paymentDirty ? '#e2e8f0' : '#8b1236'),
+                                color: paymentSaving ? '#64748b' : (isPaymentInvalid() || !paymentDirty ? '#94a3b8' : '#ffffff'),
+                                border: 'none',
+                                padding: '10px 16px',
+                                borderRadius: '6px',
+                                fontSize: '0.82rem',
+                                fontWeight: '700',
+                                cursor: paymentSaving || isPaymentInvalid() || !paymentDirty ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              {paymentSaving ? (
+                                <>
+                                  <i className="fas fa-spinner fa-spin"></i>
+                                  Saving Payment…
+                                </>
+                              ) : paymentSaveStatus === 'success' && !paymentDirty ? (
+                                <>
+                                  <i className="fas fa-check-double"></i>
+                                  Payment Updated
+                                </>
+                              ) : paymentSaveStatus === 'failure' ? (
+                                <>
+                                  <i className="fas fa-redo"></i>
+                                  Retry Payment Save
+                                </>
+                              ) : (
+                                <>
+                                  <i className="fas fa-save"></i>
+                                  Save Payment & Update Booking
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
                       )}
+
                     </div>
 
 

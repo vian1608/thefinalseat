@@ -369,8 +369,17 @@ export const adminController = {
       const reason = req.body.reason || 'Payment authorization splits update';
       const expectedVersion = req.body.bookingVersion || req.body.updated_at;
 
+      const paymentState = req.body.paymentState || req.body.paymentStatus || req.body.payment_status || null;
+      const paymentMetadata = {
+        referenceId: req.body.referenceId || req.body.reference_id || req.body.payment_intent_id || null,
+        reason: req.body.reason || null,
+        paidAmount: req.body.paidAmount !== undefined ? parseFloat(req.body.paidAmount) : null,
+        refundAmount: req.body.refundAmount !== undefined ? parseFloat(req.body.refundAmount) : null,
+        refundReferenceId: req.body.refundReferenceId || null
+      };
+
       const completeBooking = await bookingRepository.updatePaymentSplitsAndTotal(
-        id, splits, adminId, reason, expectedVersion
+        id, splits, adminId, reason, expectedVersion, paymentState, paymentMetadata
       );
 
       // Derive canonical authorizedAmount from the freshly updated booking
