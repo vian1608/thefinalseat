@@ -120,7 +120,8 @@ export const bookingMapper = {
       status: (booking.payment_status || paymentRecord.payment_status || 'PENDING').toUpperCase(),
       paymentDate: paymentRecord.payment_date || booking.paid_at || null,
       paidAmount,
-      refundedAmount
+      refundedAmount,
+      transactionReference: booking.transaction_reference || booking.provider_payment_id || paymentRecord.stripe_payment_id || null
     };
 
     return {
@@ -128,6 +129,7 @@ export const bookingMapper = {
       confirmationCode: booking.confirmation_code,
       confirmation_code: booking.confirmation_code,
       bookingReference: booking.confirmation_code,
+      transactionReference: booking.transaction_reference || booking.provider_payment_id || null,
       customer: {
         name: booking.passenger_name,
         email: booking.email,

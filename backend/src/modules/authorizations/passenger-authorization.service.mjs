@@ -699,8 +699,10 @@ Email: support@thefinalseat.com | Call: ${env.supportPhoneDisplay}
     const updatedRecord = { ...authRecord, ...paUpdateFields };
     memoryAuthStore.set(token, updatedRecord);
 
-    // Also update the booking's authorization_token field to record authorized_at
+    // Also update the booking's status & authorization_status to AUTHORIZED
     await bookingRepository.updateStatus(authRecord.booking_id, {
+      status: 'AUTHORIZED',
+      authorization_status: 'AUTHORIZED',
       authorized_at: consumedAt
     });
 

@@ -51,7 +51,24 @@ export const passengerAuthorizationController = {
         });
       }
 
-      const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+      let clientIp = null;
+      const xForwardedFor = req.headers['x-forwarded-for'];
+      if (xForwardedFor) {
+        const ips = String(xForwardedFor).split(',').map(ip => ip.trim());
+        clientIp = ips[0];
+      }
+      if (!clientIp) {
+        clientIp = req.headers['x-real-ip'] || req.ip || (req.socket ? req.socket.remoteAddress : null) || null;
+      }
+      if (clientIp) {
+        clientIp = String(clientIp).replace(/^::ffff:/, '');
+        if (clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost' || clientIp === '198.51.100.1') {
+          if (process.env.NODE_ENV === 'production') {
+            clientIp = null;
+          }
+        }
+      }
+
       const userAgent = req.headers['user-agent'] || 'Browser Client';
 
       const result = await passengerAuthorizationService.acceptAuthorization({

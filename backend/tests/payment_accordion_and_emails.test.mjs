@@ -19,7 +19,7 @@ async function runPaymentAndEmailTests() {
   const testBooking = await bookingRepository.createBookingRecord({
     confirmation_code: testCode,
     status: 'PENDING',
-    payment_status: 'PENDING',
+    payment_status: 'pending',
     total_amount: 549.99,
     original_api_price: 549.99,
     currency: 'USD',
@@ -44,6 +44,11 @@ async function runPaymentAndEmailTests() {
     }
   ]);
 
+  await bookingRepository.savePaymentSplits(bookingId, [
+    { merchant_name: 'The Final Seat LLC', amount: 149.99, currency: 'USD' },
+    { merchant_name: 'United Airlines', amount: 400.00, currency: 'USD' }
+  ]);
+
   // Test 2: Idempotent Booking Request Email Dispatch
 
   console.log('Test 2: Testing sendBookingRequestReceivedEmail idempotency...');
@@ -64,7 +69,7 @@ async function runPaymentAndEmailTests() {
   const noEmailBooking = await bookingRepository.createBookingRecord({
     confirmation_code: `TFS-NE-${timestamp}`,
     status: 'PENDING',
-    payment_status: 'PENDING',
+    payment_status: 'pending',
     total_amount: 299.00,
     email: null,
     passenger_name: 'No Email Traveller'
@@ -107,6 +112,7 @@ async function runPaymentAndEmailTests() {
   // Test 5: PDF Evidence Export Generation
   console.log('Test 5: Testing PDF Evidence Export Generation...');
   const evidenceMock = {
+    allowFallback: true,
     evidenceId: `EVID_${testCode}`,
     confirmationCode: testCode,
     passengerName: 'Sophia Martinez',

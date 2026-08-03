@@ -7,6 +7,9 @@ import notFound from './middleware/not-found.mjs';
 
 const app = express();
 
+// Enable Express trust proxy for Vercel/proxies IP forwarding headers
+app.set('trust proxy', true);
+
 // Apply global middlewares
 app.use(cors(corsOptions));
 

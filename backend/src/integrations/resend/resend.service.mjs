@@ -2,11 +2,26 @@ import nodemailer from 'nodemailer';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import Handlebars from 'handlebars';
 import env from '../../config/env.mjs';
 import logger from '../../config/logger.mjs';
 import bookingRepository from '../../modules/bookings/booking.repository.mjs';
 import passengerAuthorizationService from '../../modules/authorizations/passenger-authorization.service.mjs';
 import { resolveAirlineName, getCarrierLogoUrl, buildCanonicalItinerary } from '../../shared/utils/airline-lookup.mjs';
+
+export function validateHtmlOutput(html, templateName, bookingRef) {
+  const unresolvedTemplatePattern = /{{[\s\S]*?}}/;
+  if (unresolvedTemplatePattern.test(html)) {
+    const unresolvedTokens = [];
+    let match;
+    const regex = /{{([\s\S]*?)}}/g;
+    while ((match = regex.exec(html)) !== null) {
+      unresolvedTokens.push(match[0]);
+    }
+    logger.error(`[EMAIL_TEMPLATE_RENDER_FAILED] Unresolved template tokens in template "${templateName}" for booking "${bookingRef}": ${unresolvedTokens.join(', ')}`);
+    throw new Error("EMAIL_TEMPLATE_RENDER_FAILED: Unresolved template token detected");
+  }
+}
 
 /**
  * Customer-Facing Payment Wording Formatter for Booking Confirmation Emails
@@ -450,63 +465,56 @@ export const sendBookingConfirmation = async (bookingInput, options = {}) => {
     }
 
     const templatePath = path.join(__dirname, 'templates/booking-confirmation.html');
-    let html = await fs.readFile(templatePath, 'utf8');
+    const templateSource = await fs.readFile(templatePath, 'utf8');
 
-    if (retSeg) {
-      html = html.replace(/\{\{#if hasReturnFlight\}\}/g, '').replace(/\{\{\/if\}\}/g, '');
-      const returnReplacements = {
-        '{{returnAirline}}': retSeg.airlineName,
-        '{{returnFlightNumber}}': retSeg.flightNumber,
-        '{{returnOriginCity}}': retSeg.originName,
-        '{{returnOriginCode}}': retSeg.originCode,
-        '{{returnDestinationCity}}': returnSegs[returnSegs.length - 1].destinationName,
-        '{{returnDestinationCode}}': returnSegs[returnSegs.length - 1].destinationCode,
-        '{{returnDepartureDate}}': formatUsDate(retSeg.departureDate),
-        '{{returnDepartureTime}}': formatUsTime(retSeg.departureTime),
-        '{{returnArrivalDate}}': formatUsDate(retSeg.arrivalDate),
-        '{{returnArrivalTime}}': formatUsTime(retSeg.arrivalTime),
-        '{{returnCabin}}': retSeg.cabinClass,
-        '{{returnStops}}': returnSegs.length > 1 ? `${returnSegs.length - 1} Stop(s)` : (retSeg.stops === 0 ? 'Nonstop' : `${retSeg.stops} Stop(s)`)
-      };
-      for (const [key, val] of Object.entries(returnReplacements)) {
-        html = html.replaceAll(key, val || '');
-      }
-    } else {
-      html = html.replace(/\{\{#if hasReturnFlight\}\}[\s\S]*?\{\{\/if\}\}/g, '');
-    }
+    const template = Handlebars.compile(templateSource);
 
-    const replacements = {
-      '{{emailHeaderSubtitle}}': 'FLIGHT RESERVATION CONFIRMATION',
-      '{{customerPaymentStatus}}': customerPaymentLabel,
-      '{{confirmationCode}}': confirmationCode,
-      '{{passengerFirstName}}': passengerFirstName,
-      '{{passengerName}}': passengerName,
-      '{{currencySymbol}}': currencySymbol,
-      '{{amountPaid}}': amountPaid,
-      '{{currency}}': currency,
-      '{{paymentMethod}}': paymentMethod,
-      '{{paymentDate}}': paymentDate,
-      '{{passengerCount}}': passengerCount,
-      '{{customerEmail}}': customerEmail,
-      '{{outboundAirline}}': outSeg.airlineName,
-      '{{outboundFlightNumber}}': outSeg.flightNumber,
-      '{{outboundOriginCity}}': outSeg.originName,
-      '{{outboundOriginCode}}': outSeg.originCode,
-      '{{outboundDestinationCity}}': outboundSegs[outboundSegs.length - 1]?.destinationName || '',
-      '{{outboundDestinationCode}}': outboundSegs[outboundSegs.length - 1]?.destinationCode || '',
-      '{{outboundDepartureDate}}': formatUsDate(outSeg.departureDate),
-      '{{outboundDepartureTime}}': formatUsTime(outSeg.departureTime),
-      '{{outboundArrivalDate}}': formatUsDate(outSeg.arrivalDate),
-      '{{outboundArrivalTime}}': formatUsTime(outSeg.arrivalTime),
-      '{{outboundCabin}}': outSeg.cabinClass,
-      '{{outboundStops}}': outboundSegs.length > 1 ? `${outboundSegs.length - 1} Stop(s)` : (outSeg.stops === 0 ? 'Nonstop' : `${outSeg.stops} Stop(s)`)
+    const templateData = {
+      emailHeaderSubtitle: 'FLIGHT RESERVATION CONFIRMATION',
+      customerPaymentStatus: customerPaymentLabel,
+      confirmationCode: confirmationCode,
+      passengerFirstName: passengerFirstName,
+      passengerName: passengerName,
+      currencySymbol: currencySymbol,
+      amountPaid: amountPaid,
+      currency: currency,
+      paymentMethod: paymentMethod,
+      paymentDate: paymentDate,
+      passengerCount: passengerCount,
+      customerEmail: customerEmail,
+
+      outboundAirline: outSeg.airlineName,
+      outboundFlightNumber: outSeg.flightNumber,
+      outboundOriginCity: outSeg.originName,
+      outboundOriginCode: outSeg.originCode,
+      outboundDestinationCity: outboundSegs[outboundSegs.length - 1]?.destinationName || '',
+      outboundDestinationCode: outboundSegs[outboundSegs.length - 1]?.destinationCode || '',
+      outboundDepartureDate: formatUsDate(outSeg.departureDate),
+      outboundDepartureTime: formatUsTime(outSeg.departureTime),
+      outboundArrivalDate: formatUsDate(outSeg.arrivalDate),
+      outboundArrivalTime: formatUsTime(outSeg.arrivalTime),
+      outboundCabin: outSeg.cabinClass,
+      outboundStops: outboundSegs.length > 1 ? `${outboundSegs.length - 1} Stop(s)` : (outSeg.stops === 0 ? 'Nonstop' : `${outSeg.stops || 0} Stop(s)`),
+
+      hasReturnFlight: !!retSeg,
+
+      returnAirline: retSeg?.airlineName || '',
+      returnFlightNumber: retSeg?.flightNumber || '',
+      returnOriginCity: retSeg?.originName || '',
+      returnOriginCode: retSeg?.originCode || '',
+      returnDestinationCity: returnSegs.length > 0 ? returnSegs[returnSegs.length - 1]?.destinationName : '',
+      returnDestinationCode: returnSegs.length > 0 ? returnSegs[returnSegs.length - 1]?.destinationCode : '',
+      returnDepartureDate: retSeg ? formatUsDate(retSeg.departureDate) : '',
+      returnDepartureTime: retSeg ? formatUsTime(retSeg.departureTime) : '',
+      returnArrivalDate: retSeg ? formatUsDate(retSeg.arrivalDate) : '',
+      returnArrivalTime: retSeg ? formatUsTime(retSeg.arrivalTime) : '',
+      returnCabin: retSeg?.cabinClass || '',
+      returnStops: returnSegs.length > 1 ? `${returnSegs.length - 1} Stop(s)` : (retSeg?.stops === 0 ? 'Nonstop' : `${retSeg?.stops || 0} Stop(s)`)
     };
 
-    for (const [key, val] of Object.entries(replacements)) {
-      html = html.replaceAll(key, val || '');
-    }
+    const html = template(templateData);
 
-    html = html.replace(/\{\{[^}]+\\}\}/g, '');
+    validateHtmlOutput(html, 'booking-confirmation', confirmationCode);
 
     const outboundAirlineTxt = outSeg.airlineName || '';
     const outboundFlightNumberTxt = outSeg.flightNumber || '';
@@ -692,70 +700,64 @@ export const sendBookingRequestReceivedEmail = async (bookingIdInput, { force = 
     const retSeg = returnSegs[0] || null;
 
     const templatePath = path.join(__dirname, 'templates', 'booking-confirmation.html');
-    let html = await fs.readFile(templatePath, 'utf8').catch(() => null);
+    let templateSource = await fs.readFile(templatePath, 'utf8').catch(() => null);
 
-    if (!html) {
-      html = `<h2>Booking Request Received</h2><p>Thank you ${passengerFirstName}! Confirmation Number: <strong>${confirmationCode}</strong></p>`;
+    if (!templateSource) {
+      templateSource = `<h2>Booking Request Received</h2><p>Thank you {{passengerFirstName}}! Confirmation Number: <strong>{{confirmationCode}}</strong></p>`;
+    } else {
+      templateSource = templateSource.replace('Payment Confirmation', 'Booking Request Received');
+      templateSource = templateSource.replace('Payment Successfully Received', 'Booking Request Received');
+      templateSource = templateSource.replace('Your payment has been successfully processed.', 'Your booking request has been received.');
+      templateSource = templateSource.replace(/This temporary confirmation number is not the airline's final PNR[\s\S]*?processing\./g, '');
     }
 
-    html = html.replace('Payment Confirmation', 'Booking Request Received');
-    html = html.replace('Payment Successfully Received', 'Booking Request Received');
-    html = html.replace('Your payment has been successfully processed.', 'Your booking request has been received.');
-    html = html.replace(/This temporary confirmation number is not the airline's final PNR[\s\S]*?processing\./g, '');
+    const template = Handlebars.compile(templateSource);
 
-    const replacements = {
-      '{{emailHeaderSubtitle}}': 'FLIGHT RESERVATION CONFIRMATION',
-      '{{confirmationCode}}': confirmationCode,
-      '{{passengerFirstName}}': passengerFirstName,
-      '{{passengerName}}': passengerName,
-      '{{currencySymbol}}': currencySymbol,
-      '{{amountPaid}}': customerTotal,
-      '{{currency}}': currency,
-      '{{paymentMethod}}': 'Card Authorization Pending',
-      '{{paymentDate}}': bookingDate,
-      '{{passengerCount}}': passengerCount,
-      '{{customerEmail}}': customerEmail,
-      '{{outboundAirline}}': outSeg.airlineName,
-      '{{outboundFlightNumber}}': outSeg.flightNumber,
-      '{{outboundOriginCity}}': outSeg.originName,
-      '{{outboundOriginCode}}': outSeg.originCode,
-      '{{outboundDestinationCity}}': outboundSegs[outboundSegs.length - 1].destinationName,
-      '{{outboundDestinationCode}}': outboundSegs[outboundSegs.length - 1].destinationCode,
-      '{{outboundDepartureDate}}': formatUsDate(outSeg.departureDate),
-      '{{outboundDepartureTime}}': formatUsTime(outSeg.departureTime),
-      '{{outboundArrivalDate}}': formatUsDate(outSeg.arrivalDate),
-      '{{outboundArrivalTime}}': formatUsTime(outSeg.arrivalTime),
-      '{{outboundCabin}}': outSeg.cabinClass,
-      '{{outboundStops}}': outboundSegs.length > 1 ? `${outboundSegs.length - 1} Stop(s)` : (outSeg.stops === 0 ? 'Nonstop' : `${outSeg.stops} Stop(s)`)
+    const templateData = {
+      emailHeaderSubtitle: 'FLIGHT RESERVATION CONFIRMATION',
+      confirmationCode: confirmationCode,
+      passengerFirstName: passengerFirstName,
+      passengerName: passengerName,
+      currencySymbol: currencySymbol,
+      amountPaid: customerTotal,
+      currency: currency,
+      paymentMethod: 'Card Authorization Pending',
+      paymentDate: bookingDate,
+      passengerCount: passengerCount,
+      customerEmail: customerEmail,
+
+      outboundAirline: outSeg.airlineName,
+      outboundFlightNumber: outSeg.flightNumber,
+      outboundOriginCity: outSeg.originName,
+      outboundOriginCode: outSeg.originCode,
+      outboundDestinationCity: outboundSegs[outboundSegs.length - 1]?.destinationName || '',
+      outboundDestinationCode: outboundSegs[outboundSegs.length - 1]?.destinationCode || '',
+      outboundDepartureDate: formatUsDate(outSeg.departureDate),
+      outboundDepartureTime: formatUsTime(outSeg.departureTime),
+      outboundArrivalDate: formatUsDate(outSeg.arrivalDate),
+      outboundArrivalTime: formatUsTime(outSeg.arrivalTime),
+      outboundCabin: outSeg.cabinClass,
+      outboundStops: outboundSegs.length > 1 ? `${outboundSegs.length - 1} Stop(s)` : (outSeg.stops === 0 ? 'Nonstop' : `${outSeg.stops || 0} Stop(s)`),
+
+      hasReturnFlight: !!retSeg,
+
+      returnAirline: retSeg?.airlineName || '',
+      returnFlightNumber: retSeg?.flightNumber || '',
+      returnOriginCity: retSeg?.originName || '',
+      returnOriginCode: retSeg?.originCode || '',
+      returnDestinationCity: returnSegs.length > 0 ? returnSegs[returnSegs.length - 1]?.destinationName : '',
+      returnDestinationCode: returnSegs.length > 0 ? returnSegs[returnSegs.length - 1]?.destinationCode : '',
+      returnDepartureDate: retSeg ? formatUsDate(retSeg.departureDate) : '',
+      returnDepartureTime: retSeg ? formatUsTime(retSeg.departureTime) : '',
+      returnArrivalDate: retSeg ? formatUsDate(retSeg.arrivalDate) : '',
+      returnArrivalTime: retSeg ? formatUsTime(retSeg.arrivalTime) : '',
+      returnCabin: retSeg?.cabinClass || '',
+      returnStops: returnSegs.length > 1 ? `${returnSegs.length - 1} Stop(s)` : (retSeg?.stops === 0 ? 'Nonstop' : `${retSeg?.stops || 0} Stop(s)`)
     };
 
-    for (const [key, val] of Object.entries(replacements)) {
-      html = html.replaceAll(key, val || '');
-    }
+    const html = template(templateData);
 
-    if (retSeg) {
-      const returnReplacements = {
-        '{{returnAirline}}': retSeg.airlineName,
-        '{{returnFlightNumber}}': retSeg.flightNumber,
-        '{{returnOriginCity}}': retSeg.originName,
-        '{{returnOriginCode}}': retSeg.originCode,
-        '{{returnDestinationCity}}': returnSegs[returnSegs.length - 1].destinationName,
-        '{{returnDestinationCode}}': returnSegs[returnSegs.length - 1].destinationCode,
-        '{{returnDepartureDate}}': formatUsDate(retSeg.departureDate),
-        '{{returnDepartureTime}}': formatUsTime(retSeg.departureTime),
-        '{{returnArrivalDate}}': formatUsDate(retSeg.arrivalDate),
-        '{{returnArrivalTime}}': formatUsTime(retSeg.arrivalTime),
-        '{{returnCabin}}': retSeg.cabinClass,
-        '{{returnStops}}': returnSegs.length > 1 ? `${returnSegs.length - 1} Stop(s)` : (retSeg.stops === 0 ? 'Nonstop' : `${retSeg.stops} Stop(s)`)
-      };
-      for (const [key, val] of Object.entries(returnReplacements)) {
-        html = html.replaceAll(key, val || '');
-      }
-    } else {
-      html = html.replace(/\{\{#if hasReturnFlight\}\}[\s\S]*?\{\{\/if\}\}/g, '');
-    }
-
-    html = html.replace(/\{\{[^}]+\\}\}/g, '');
+    validateHtmlOutput(html, 'booking-confirmation', confirmationCode);
 
 
     const textBody = `
@@ -831,13 +833,9 @@ export const sendPassengerAuthorizationEmail = async (bookingIdInput) => {
       return { success: false, error: errMsg };
     }
 
-    const splits = booking.payment_splits && booking.payment_splits.length > 0
-      ? booking.payment_splits
-      : await bookingRepository.getPaymentSplits(booking.id);
-
-    if (!splits || splits.length === 0) {
-      const errMsg = 'EMAIL_PROTECTION_BLOCKED: Cannot dispatch authorization request email because payment splits breakdown is missing.';
-      logger.error(`[Email Protection] ${errMsg} (bookingId=${bookingId})`);
+    const customerEmail = booking.email || booking.contacts?.[0]?.email || booking.travellers?.[0]?.email;
+    if (!customerEmail || !customerEmail.includes('@')) {
+      const errMsg = 'This booking does not have a valid passenger email address.';
       await bookingRepository.updateBookingStatus(bookingId, {
         authorization_email_status: 'FAILED',
         authorization_email_error: errMsg
@@ -845,9 +843,13 @@ export const sendPassengerAuthorizationEmail = async (bookingIdInput) => {
       return { success: false, error: errMsg };
     }
 
-    const customerEmail = booking.email || booking.contacts?.[0]?.email || booking.travellers?.[0]?.email;
-    if (!customerEmail || !customerEmail.includes('@')) {
-      const errMsg = 'This booking does not have a valid passenger email address.';
+    const splits = booking.payment_splits && booking.payment_splits.length > 0
+      ? booking.payment_splits
+      : await bookingRepository.getPaymentSplits(booking.id);
+
+    if (!splits || splits.length === 0) {
+      const errMsg = 'EMAIL_PROTECTION_BLOCKED: Cannot dispatch authorization request email because payment splits breakdown is missing.';
+      logger.error(`[Email Protection] ${errMsg} (bookingId=${bookingId})`);
       await bookingRepository.updateBookingStatus(bookingId, {
         authorization_email_status: 'FAILED',
         authorization_email_error: errMsg
@@ -872,22 +874,32 @@ export const sendPassengerAuthorizationEmail = async (bookingIdInput) => {
     let splitsHtml = '';
     if (splits && splits.length > 0) {
       splitsHtml = `
-        <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin: 20px 0;">
-          <div style="font-size: 12px; font-weight: 800; text-transform: uppercase; color: #8b1236; letter-spacing: 0.8px; margin-bottom: 12px;">
+        <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; margin: 16px 0;">
+          <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #8b1236; letter-spacing: 0.8px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">
             Payment Authorization Breakdown
           </div>
-          ${splits.map((s, idx) => `
-            <div style="padding: 8px 0; ${idx > 0 ? 'border-top: 1px dashed #e2e8f0;' : ''}">
-              <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Merchant:</div>
-              <div style="font-size: 14px; font-weight: 800; color: #1e293b; margin-top: 2px;">${s.merchant_name || s.merchantName || 'Merchant'}</div>
-              <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 6px;">Amount:</div>
-              <div style="font-size: 15px; font-weight: 800; color: #8b1236; margin-top: 2px;">$${parseFloat(s.amount || 0).toFixed(2)} ${(s.currency || currency).toUpperCase()}</div>
-            </div>
-          `).join('')}
-          <div style="border-top: 2px solid #8b1236; margin-top: 12px; padding-top: 10px; display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 13px; font-weight: 800; color: #1e293b; text-transform: uppercase;">Total Authorized Amount:</span>
-            <span style="font-size: 16px; font-weight: 900; color: #8b1236;">$${amount} ${currency}</span>
-          </div>
+          <table role="presentation" width="100%" style="width: 100%; border-collapse: collapse; margin-bottom: 8px;">
+            ${splits.map((s) => `
+              <tr>
+                <td style="font-size: 13px; color: #475569; padding: 6px 0; font-family: Arial, sans-serif;">
+                  ${s.merchant_name || s.merchantName || 'Merchant'}
+                </td>
+                <td style="font-size: 13px; font-weight: 700; color: #1e293b; text-align: right; padding: 6px 0; font-family: Arial, sans-serif;">
+                  $${parseFloat(s.amount || 0).toFixed(2)} ${(s.currency || currency).toUpperCase()}
+                </td>
+              </tr>
+            `).join('')}
+          </table>
+          <table role="presentation" width="100%" style="width: 100%; border-collapse: collapse; border-top: 2px solid #8b1236; margin-top: 4px; padding-top: 8px;">
+            <tr>
+              <td style="font-size: 12px; font-weight: 800; color: #1e293b; text-transform: uppercase; padding: 8px 0; font-family: Arial, sans-serif;">
+                Total Authorized Amount:
+              </td>
+              <td style="font-size: 15px; font-weight: 900; color: #8b1236; text-align: right; padding: 8px 0; font-family: Arial, sans-serif;">
+                $${amount} ${currency}
+              </td>
+            </tr>
+          </table>
         </div>
       `;
     }

@@ -235,10 +235,21 @@ export const bookingController = {
       const { id } = req.params;
       const adminId = req.user?.email || 'admin';
       const updated = await bookingService.updatePayment(id, { ...req.body, adminId });
+      
+      const splitsList = (updated.paymentSplits || updated.payment_splits || []).map(s => ({
+        merchantName: s.merchant_name || s.merchantName || s.name,
+        amount: parseFloat(s.amount || 0)
+      }));
+
       res.json({
         success: true,
-        message: 'Payment details updated successfully.',
-        data: updated
+        payment: {
+          status: (updated.paymentStatus || updated.payment_status || 'PENDING').toUpperCase(),
+          paidAmount: parseFloat(updated.payment?.paidAmount || updated.paid_amount || 0),
+          transactionReference: updated.transactionReference || updated.payment?.transactionReference || '',
+          authorizedAmount: parseFloat(updated.authorization?.authorizedAmount || updated.authorized_amount || 0),
+          splits: splitsList
+        }
       });
     } catch (error) {
       const statusCode = error.status || 400;
@@ -264,6 +275,26 @@ export const bookingController = {
       res.status(statusCode).json({
         success: false,
         error: { code: error.code || 'ITINERARY_UPDATE_FAILED', message: error.message }
+      });
+    }
+  },
+
+  importItineraryText: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const adminId = req.user?.email || 'admin';
+      const updated = await bookingService.importItineraryFromText(id, { ...req.body, adminId });
+      res.json({
+        success: true,
+        message: 'Flight itinerary text imported and updated successfully.',
+        booking: updated,
+        data: updated
+      });
+    } catch (error) {
+      const statusCode = error.status || 400;
+      res.status(statusCode).json({
+        success: false,
+        error: { code: error.code || 'IMPORT_ITINERARY_FAILED', message: error.message }
       });
     }
   },

@@ -260,3 +260,40 @@
     gap: 0.35rem;
   }
 }
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 10pt !important;
+  }
+  
+  .auth-page-container {
+    padding: 0 !important;
+    background: none !important;
+    min-height: auto !important;
+  }
+  
+  .auth-card-shell {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    max-width: 100% !important;
+  }
+  
+  .auth-card-header {
+    background: #8b1236 !important;
+    padding: 1rem !important;
+  }
+  
+  .auth-card-body {
+    padding: 1rem !important;
+  }
+  
+  .auth-notice-banner,
+  .auth-checkbox-container,
+  .auth-primary-btn,
+  .no-print {
+    display: none !important;
+  }
+}

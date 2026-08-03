@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { adminAPI } from '../../../shared/api/api';
+import GdsItineraryImportModal from '../components/GdsItineraryImportModal';
 import './AdminDashboardPage.css';
 
 const AIRLINE_DIRECTORY = [
@@ -231,6 +232,17 @@ function AdminDashboard() {
   const [hasReturnJourney, setHasReturnJourney] = useState(false);
   const [openOutboundGroup, setOpenOutboundGroup] = useState(true);
   const [openReturnGroup, setOpenReturnGroup] = useState(true);
+  const [isImportItineraryModalOpen, setIsImportItineraryModalOpen] = useState(false);
+
+  const handleItineraryImported = useCallback((updatedBooking) => {
+    if (updatedBooking) {
+      handleSelectBooking(updatedBooking);
+    } else if (selectedBooking?.id) {
+      adminAPI.getBookingById(selectedBooking.id).then(fresh => {
+        if (fresh) handleSelectBooking(fresh);
+      }).catch(err => console.error(err));
+    }
+  }, [handleSelectBooking, selectedBooking]);
 
 
   // Pricing Editor State
@@ -484,7 +496,7 @@ function AdminDashboard() {
       authorizedAmount: toFiniteNumber(authAmount, customerTotal),
       capturedAmount: paid !== null ? toFiniteNumber(paid, 0) : 0,
       refundedAmount: toFiniteNumber(refunded, 0),
-      referenceId: booking.transaction_id || booking.payment_intent_id || '',
+      referenceId: booking.transactionReference || booking.payment?.transactionReference || booking.transaction_id || booking.payment_intent_id || '',
       reason: '',
       password: ''
     });
@@ -1012,19 +1024,26 @@ function AdminDashboard() {
     }
 
     const adminToken = localStorage.getItem('token');
+    
+    if (paymentForm.paymentStatus === 'PAID') {
+      console.log('[PAYMENT_SAVE_DIAGNOSTIC]', {
+        paymentState: paymentForm.paymentStatus,
+        paidAmount: paymentForm.paidAmount || selectedBooking.total_amount || 0,
+        hasTransactionReference: !!paymentForm.referenceId,
+        transactionReferenceLength: (paymentForm.referenceId || '').length
+      });
+    }
+
     try {
       // Send only the payment payload to the dedicated endpoint
-      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/payment-authorization`, {
+      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/payment`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
         body: JSON.stringify({
           bookingVersion: selectedBooking.updated_at,
           paymentState: paymentForm.paymentStatus,
-          referenceId: paymentForm.referenceId,
-          reason: paymentForm.reason,
           paidAmount: paymentForm.paidAmount,
-          refundAmount: paymentForm.refundAmount,
-          refundReferenceId: paymentForm.refundReferenceId,
+          transactionReference: paymentForm.referenceId,
           splits: paymentSplits.map(s => ({
             merchantName: s.merchant_name,
             amount: parseFloat(s.amount)
@@ -1034,7 +1053,7 @@ function AdminDashboard() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error?.message || data.message || 'Failed to update payment authorization.');
+        throw new Error(data.error?.message || data.message || 'Failed to update payment.');
       }
 
       // Force-refetch booking from server to guarantee authoritative state
@@ -1064,7 +1083,7 @@ function AdminDashboard() {
           freshBooking.authorized_amount ??
           freshBooking.customer_price ??
           freshBooking.total_amount ??
-          data.paymentAuthorization?.authorizedAmount ??
+          data.payment?.authorizedAmount ??
           0
         );
 
@@ -1080,7 +1099,7 @@ function AdminDashboard() {
           authorizedAmount: newTotal,
           capturedAmount: freshBooking.payment?.paidAmount ? parseFloat(freshBooking.payment.paidAmount) : (freshBooking.payment_status === 'paid' ? newTotal : 0),
           refundedAmount: freshBooking.payment?.refundedAmount ? parseFloat(freshBooking.payment.refundedAmount) : 0,
-          referenceId: freshBooking.transaction_id || freshBooking.payment_intent_id || ''
+          referenceId: freshBooking.transactionReference || freshBooking.payment?.transactionReference || freshBooking.transaction_id || freshBooking.payment_intent_id || ''
         }));
 
         // Refresh splits in state from the server's response
@@ -1971,6 +1990,30 @@ function AdminDashboard() {
 
                         {openAccordion === 'itinerary' && (
                           <div className="admin-accordion-body">
+                            
+                            {/* IMPORT ITINERARY ACTION BUTTON */}
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+                              <button
+                                type="button"
+                                onClick={() => setIsImportItineraryModalOpen(true)}
+                                style={{
+                                  background: '#8b1236',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  padding: '6px 14px',
+                                  borderRadius: '6px',
+                                  fontSize: '0.82rem',
+                                  fontWeight: '600',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                }}
+                              >
+                                <i className="fas fa-file-import"></i> Import Itinerary Text
+                              </button>
+                            </div>
                             
                             {/* OUTBOUND JOURNEY GROUP */}
                             <div className="journey-group-card" style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '10px', marginBottom: '12px' }}>
@@ -3486,6 +3529,14 @@ function AdminDashboard() {
             </div>
           </div>
         )}
+
+        {/* GDS ITINERARY IMPORT MODAL */}
+        <GdsItineraryImportModal
+          isOpen={isImportItineraryModalOpen}
+          onClose={() => setIsImportItineraryModalOpen(false)}
+          bookingId={selectedBooking?.id}
+          onItineraryImported={handleItineraryImported}
+        />
 
       </main>
     </div>

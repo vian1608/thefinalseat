@@ -225,6 +225,19 @@ export const adminController = {
         });
       }
 
+      // State Machine Enforcement: block PENDING -> TICKETED/DONE without passenger authorization
+      if (targetStatus && ['TICKETED', 'DONE'].includes(targetStatus.toUpperCase())) {
+        const isAuthorized = existingBooking.authorization_status === 'AUTHORIZED' ||
+                             existingBooking.authorization_status === 'ACCEPTED' ||
+                             ['AUTHORIZED', 'ACCEPTED', 'CONSUMED', 'READY_FOR_TICKETING', 'TICKETED', 'DONE'].includes(existingBooking.status?.toUpperCase());
+        if (!isAuthorized && !override) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'TRANSITION_BLOCKED', message: `Cannot transition booking to ${targetStatus} directly from PENDING status without passenger authorization.` }
+          });
+        }
+      }
+
 
       const updatePayload = {};
       if (targetStatus) updatePayload.status = targetStatus;

@@ -3,6 +3,25 @@ import { bookingRepository } from '../src/modules/bookings/booking.repository.mj
 import passengerAuthorizationService from '../src/modules/authorizations/passenger-authorization.service.mjs';
 import { generateAuthorizationPdfBuffer } from '../src/modules/authorizations/authorization-pdf.service.mjs';
 import adminController from '../src/modules/admin/admin.controller.mjs';
+import { supabase } from '../src/config/supabase.mjs';
+
+async function createTestFlight(bookingId) {
+  const { error } = await supabase.from('flights').insert({
+    booking_id: bookingId,
+    leg: 'outbound',
+    departure_airport: 'IAH',
+    arrival_airport: 'MIA',
+    airline_name: 'Frontier Airlines',
+    flight_number: 'F9 123',
+    departure_date: '2026-09-15',
+    departure_time_str: '10:00',
+    arrival_date: '2026-09-15',
+    arrival_time_str: '14:00',
+    cabin_class: 'Economy',
+    stops: 0
+  });
+  if (error) throw new Error(`Failed to create test flight: ${error.message}`);
+}
 
 async function runPassengerAuthFlowAndPdfTests() {
   console.log('\n=== RUNNING PASSENGER AUTHORIZATION FLOW & PDF EXPORT TESTS ===\n');
@@ -13,7 +32,7 @@ async function runPassengerAuthFlowAndPdfTests() {
   const testBooking = await bookingRepository.createBookingRecord({
     confirmation_code: testCode,
     status: 'PENDING',
-    payment_status: 'PENDING',
+    payment_status: 'pending',
     total_amount: 1590.00,
     original_api_price: 1590.00,
     currency: 'USD',
@@ -23,6 +42,9 @@ async function runPassengerAuthFlowAndPdfTests() {
   });
 
   const bookingId = testBooking.id;
+
+  // Insert a test flight segment
+  await createTestFlight(bookingId);
 
   // Test 1: State Machine Enforcement (PENDING -> TICKETED blocked without authorization)
   console.log('Test 1: Verifying PENDING -> TICKETED direct transition is blocked...');

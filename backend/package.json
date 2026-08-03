@@ -24,6 +24,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "handlebars": "^4.7.9",
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.23.0",
     "nodemailer": "^6.9.7",

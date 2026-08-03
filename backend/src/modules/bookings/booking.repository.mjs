@@ -886,6 +886,8 @@ export const bookingRepository = {
       delete safeFields.refund_amount;
       delete safeFields.refund_timestamp;
       delete safeFields.delete_reason;
+      delete safeFields.transaction_reference;
+      delete safeFields.transactionReference;
 
       if (Object.keys(safeFields).length > 0) {
         const { data: safeData, error: safeErr } = await supabase
@@ -1022,21 +1024,24 @@ export const bookingRepository = {
       }
 
       if (targetPaymentStatus === 'PAID') {
-        const transactionRef = payload.transactionReference || payload.transaction_id || payload.payment_intent_id || existingBooking.transaction_id;
+        const rawRef = payload.transactionReference ?? payload.transaction_reference ?? payload.transactionRef ?? payload.referenceId ?? payload.transaction_id ?? payload.payment_intent_id ?? existingBooking.transaction_id ?? existingBooking.provider_payment_id ?? null;
+        const transactionRef = rawRef ? String(rawRef).trim() : '';
         const paidAmount = payload.paidAmount !== undefined ? parseFloat(payload.paidAmount) : parseFloat(existingBooking.customer_price || existingBooking.total_amount || 0);
-        if (!transactionRef && !payload.override) {
+        
+        const refRegex = /^[A-Za-z0-9_-]{4,100}$/;
+        if (!transactionRef || !refRegex.test(transactionRef)) {
           return {
             success: false,
             code: 'PAYMENT_UPDATE_FAILED',
-            message: 'Unable to update payment status to PAID: transaction reference is missing.',
+            message: 'Enter a valid transaction or reference ID.',
             field: 'transactionReference'
           };
         }
-        if (paidAmount <= 0 && !payload.override) {
+        if (isNaN(paidAmount) || paidAmount <= 0) {
           return {
             success: false,
             code: 'PAYMENT_UPDATE_FAILED',
-            message: 'Paid status requires a paid amount greater than zero.',
+            message: 'Paid amount must be greater than zero.',
             field: 'paidAmount'
           };
         }
@@ -1150,6 +1155,14 @@ export const bookingRepository = {
       // Payment Status & Totals
       if (targetPaymentStatus) {
         bookingUpdateFields.payment_status = targetPaymentStatus.toLowerCase();
+        if (targetPaymentStatus === 'PAID') {
+          const rawRef = payload.transactionReference ?? payload.transaction_reference ?? payload.transactionRef ?? payload.referenceId ?? payload.transaction_id ?? payload.payment_intent_id ?? existingBooking.transaction_id ?? existingBooking.provider_payment_id ?? null;
+          const transactionRef = rawRef ? String(rawRef).trim() : null;
+          if (transactionRef) {
+            bookingUpdateFields.transaction_reference = transactionRef;
+            bookingUpdateFields.provider_payment_id = transactionRef;
+          }
+        }
       }
       if (payload.customerTotal !== undefined && payload.customerTotal !== null) {
         const totalNum = parseFloat(payload.customerTotal);
@@ -1284,6 +1297,7 @@ export const bookingRepository = {
         return {
           booking_id: bookingId,
           trip_type: seg.trip_type || 'one_way',
+          leg: dir,
           direction: dir,
           journey_direction: dir,
           segment_sequence: seq,
@@ -1526,6 +1540,10 @@ export const bookingRepository = {
   },
 
   updatePaymentSplitsAndTotal: async (bookingId, splitsInput = [], adminId = 'admin', reason = 'Payment splits update', expectedVersion = null, paymentState = null, paymentMetadata = {}) => {
+    // 1. Log Booking ID received by API
+    logger.info(`[Transaction] --- updatePaymentSplitsAndTotal START ---`);
+    logger.info(`[Transaction] 1. Booking ID received: ${bookingId}`);
+
     const booking = await bookingRepository.getById(bookingId);
     if (!booking) throw new Error('Booking not found');
     const realId = booking.id;
@@ -1536,7 +1554,11 @@ export const bookingRepository = {
       throw conflictErr;
     }
 
-    // 1. Get before-state of itinerary
+    // 2. Log Existing booking amount from database
+    const oldTotal = parseFloat(booking.customer_price || booking.total_amount || 0);
+    logger.info(`[Transaction] 2. Existing booking amount: $${oldTotal.toFixed(2)}`);
+
+    // Get before-state of itinerary
     const initialItinerary = await bookingRepository.getItineraryState(realId);
 
     // Backup current DB/memory values for rollback
@@ -1633,6 +1655,9 @@ export const bookingRepository = {
     };
 
     try {
+      // 3. Log Payment splits received
+      logger.info(`[Transaction] 3. Payment splits received: ${JSON.stringify(splitsInput)}`);
+
       // 4. Validate all splits
       if (!Array.isArray(splitsInput) || splitsInput.length === 0) {
         throw new Error('At least one payment split row is required.');
@@ -1673,34 +1698,90 @@ export const bookingRepository = {
         0
       );
       const calculatedTotal = totalCents / 100;
-      const oldTotal = parseFloat(booking.customer_price || booking.total_amount || 0);
+
+      // 4. Log Calculated split total
+      logger.info(`[Transaction] 4. Calculated split total: $${calculatedTotal.toFixed(2)}`);
 
       // 5 & 6. Remove and insert splits (in-memory + DB)
       splitsMemoryStore.set(realId, formattedSplits);
-      try {
-        await supabase.from('payment_authorization_splits').delete().eq('booking_id', realId);
-        if (formattedSplits.length > 0) {
-          await supabase.from('payment_authorization_splits').insert(formattedSplits);
+
+      // 5. Log SQL update query executed (splits delete & insert) & Rows affected
+      logger.info(`[Transaction] 5. Executing: DELETE FROM payment_authorization_splits WHERE booking_id = '${realId}'`);
+      let splitsTableAvailable = true;
+      const { data: delSplitsData, error: delSplitsErr } = await supabase
+        .from('payment_authorization_splits')
+        .delete()
+        .eq('booking_id', realId)
+        .select();
+      if (delSplitsErr) {
+        const isSchemaMiss = delSplitsErr.message?.includes('schema cache') || delSplitsErr.message?.includes('not found');
+        if (isSchemaMiss) {
+          logger.warn(`[Transaction] payment_authorization_splits table not in schema cache; splits stored in memory only.`);
+          splitsTableAvailable = false;
+        } else {
+          throw new Error(`DATABASE_ERROR [payment_authorization_splits delete]: ${delSplitsErr.message}`);
         }
-      } catch (dbSplitsErr) {
-        logger.warn(`[Transaction] Could not write splits to DB: ${dbSplitsErr.message}`);
+      }
+      // 6. Log Rows affected (deleted splits)
+      logger.info(`[Transaction] 6. Rows affected (deleted splits): ${delSplitsData?.length || 0}`);
+
+      if (splitsTableAvailable && formattedSplits.length > 0) {
+        logger.info(`[Transaction] 5. Executing: INSERT INTO payment_authorization_splits VALUES ${JSON.stringify(formattedSplits)}`);
+        const { data: insSplitsData, error: insSplitsErr } = await supabase
+          .from('payment_authorization_splits')
+          .insert(formattedSplits)
+          .select();
+        if (insSplitsErr) {
+          const isSchemaMiss = insSplitsErr.message?.includes('schema cache') || insSplitsErr.message?.includes('not found');
+          if (!isSchemaMiss) {
+            throw new Error(`DATABASE_ERROR [payment_authorization_splits insert]: ${insSplitsErr.message}`);
+          }
+          logger.warn(`[Transaction] payment_authorization_splits insert skipped (schema cache miss).`);
+        }
+        // 6. Log Rows affected (inserted splits)
+        logger.info(`[Transaction] 6. Rows affected (inserted splits): ${insSplitsData?.length || 0}`);
       }
 
       // 7 & 8. Update payments and bookings
       const targetPaymentStatus = (paymentState || paymentMetadata.paymentStatus || booking.payment_status || 'pending').toLowerCase();
-      try {
-        await supabase
-          .from('payments')
-          .update({
-            authorized_amount: calculatedTotal,
-            payment_amount: calculatedTotal,
-            payment_status: targetPaymentStatus,
-            updated_at: new Date().toISOString()
-          })
-          .eq('booking_id', realId);
-      } catch (pErr) {
-        logger.warn(`[Transaction] Could not update payments table: ${pErr.message}`);
+      
+      // 5. Log SQL update query executed (payments table update)
+      logger.info(`[Transaction] 5. Executing: UPDATE payments SET authorized_amount = ${calculatedTotal}, payment_amount = ${calculatedTotal}, payment_status = '${targetPaymentStatus}' WHERE booking_id = '${realId}'`);
+      let { data: pData, error: pErr } = await supabase
+        .from('payments')
+        .update({
+          authorized_amount: calculatedTotal,
+          payment_amount: calculatedTotal,
+          payment_status: targetPaymentStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('booking_id', realId)
+        .select();
+      if (pErr) {
+        const isSchemaMiss = pErr.message?.includes('schema cache') || pErr.message?.includes('not found');
+        if (isSchemaMiss) {
+          logger.warn(`[Transaction] payments schema column missing (${pErr.message}). Retrying with minimal fields.`);
+          // Retry with only columns guaranteed to exist
+          const { data: pDataRetry, error: pErrRetry } = await supabase
+            .from('payments')
+            .update({
+              payment_amount: calculatedTotal,
+              payment_status: targetPaymentStatus,
+              updated_at: new Date().toISOString()
+            })
+            .eq('booking_id', realId)
+            .select();
+          if (pErrRetry) {
+            logger.warn(`[Transaction] payments update retry also failed: ${pErrRetry.message}. Continuing — bookings table is the canonical source.`);
+          } else {
+            pData = pDataRetry;
+          }
+        } else {
+          throw new Error(`DATABASE_ERROR [payments update]: ${pErr.message}`);
+        }
       }
+      // 6. Log Rows affected (payments update)
+      logger.info(`[Transaction] 6. Rows affected (payments update): ${pData?.length || 0}`);
 
       let newStatus = booking.status;
       let newAuthStatus = booking.authorization_status || 'PENDING';
@@ -1720,25 +1801,55 @@ export const bookingRepository = {
             });
 
             if (newAuth?.token) {
-              await bookingRepository.updateStatus(realId, {
+              const bAuthFields = {
                 authorization_token: newAuth.token,
                 authorization_expires_at: newAuth.expires_at
-              });
+              };
+              // 5. Log SQL update query executed (bookings auth token update)
+              logger.info(`[Transaction] 5. Executing: UPDATE bookings SET authorization_token = '${newAuth.token}', authorization_expires_at = '${newAuth.expires_at}' WHERE id = '${realId}'`);
+              const { data: bAuthData, error: bAuthErr } = await supabase
+                .from('bookings')
+                .update(bAuthFields)
+                .eq('id', realId)
+                .select();
+              if (bAuthErr) {
+                throw new Error(`DATABASE_ERROR [bookings auth update]: ${bAuthErr.message}`);
+              }
+              // 6. Log Rows affected
+              logger.info(`[Transaction] 6. Rows affected (bookings auth update): ${bAuthData?.length || 0}`);
+
+              // Sync memory
+              const existingMem = bookingsMemoryStore.get(realId) || {};
+              const updatedMemAuth = { ...existingMem, ...bAuthFields, ...(bAuthData?.[0] || {}) };
+              bookingsMemoryStore.set(realId, updatedMemAuth);
+              if (updatedMemAuth.confirmation_code) {
+                bookingsMemoryStore.set(updatedMemAuth.confirmation_code, updatedMemAuth);
+              }
             }
           } catch (authCreateErr) {
+            // Re-throw if it was a DB error during auth create to ensure rollback
+            if (authCreateErr.message?.includes('DATABASE_ERROR')) {
+              throw authCreateErr;
+            }
             logger.warn(`[Transaction] Could not create reauthorization request: ${authCreateErr.message}`);
           }
         } else {
           if (originalAuthRecord) {
-            try {
-              await supabase
-                .from('passenger_authorizations')
-                .update({
-                  authorized_amount: calculatedTotal,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', originalAuthRecord.id);
-            } catch (aErr) {}
+            // 5. Log SQL update query executed (passenger_authorizations update)
+            logger.info(`[Transaction] 5. Executing: UPDATE passenger_authorizations SET authorized_amount = ${calculatedTotal} WHERE id = '${originalAuthRecord.id}'`);
+            const { data: pAuthData, error: pAuthErr } = await supabase
+              .from('passenger_authorizations')
+              .update({
+                authorized_amount: calculatedTotal,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', originalAuthRecord.id)
+              .select();
+            if (pAuthErr) {
+              throw new Error(`DATABASE_ERROR [passenger_authorizations update]: ${pAuthErr.message}`);
+            }
+            // 6. Log Rows affected
+            logger.info(`[Transaction] 6. Rows affected (passenger_authorizations update): ${pAuthData?.length || 0}`);
           }
         }
       }
@@ -1748,10 +1859,65 @@ export const bookingRepository = {
         customer_price: calculatedTotal,
         status: newStatus,
         authorization_status: newAuthStatus,
-        payment_status: targetPaymentStatus
+        payment_status: targetPaymentStatus,
+        transaction_reference: paymentMetadata.referenceId || null,
+        provider_payment_id: paymentMetadata.referenceId || null
       };
 
-      await bookingRepository.updateStatus(realId, updatePayload);
+      // 5. Log SQL update query executed (bookings core update)
+      logger.info(`[Transaction] 5. Executing: UPDATE bookings SET total_amount = ${calculatedTotal}, customer_price = ${calculatedTotal}, status = '${newStatus}', authorization_status = '${newAuthStatus}', payment_status = '${targetPaymentStatus}', transaction_reference = '${paymentMetadata.referenceId || ''}' WHERE id = '${realId}'`);
+      let { data: bData, error: bErr } = await supabase
+        .from('bookings')
+        .update(updatePayload)
+        .eq('id', realId)
+        .select();
+
+      if (bErr) {
+        logger.warn(`bookings update schema notice: ${bErr.message}. Retrying without transaction_reference.`);
+        const safePayload = { ...updatePayload };
+        delete safePayload.transaction_reference;
+        
+        const { data: bDataRetry, error: bErrRetry } = await supabase
+          .from('bookings')
+          .update(safePayload)
+          .eq('id', realId)
+          .select();
+        
+        if (bErrRetry) {
+          throw new Error(`DATABASE_ERROR [bookings update retry]: ${bErrRetry.message}`);
+        }
+        bData = bDataRetry;
+      }
+      
+      // 6. Log Rows affected
+      logger.info(`[Transaction] 6. Rows affected (bookings core update): ${bData?.length || 0}`);
+
+      // Record specialized PAID audit event if applicable
+      if (targetPaymentStatus.toUpperCase() === 'PAID') {
+        const rawRef = paymentMetadata.referenceId || '';
+        const maskedRef = rawRef ? '••••••' + String(rawRef).slice(-4) : '••••••';
+        await bookingRepository.recordAuditLog({
+          bookingId: realId,
+          action: 'PAYMENT_STATUS_UPDATED_TO_PAID',
+          oldValue: booking.payment_status,
+          newValue: JSON.stringify({
+            paymentStatus: 'PAID',
+            paidAmount: calculatedTotal,
+            transactionReference: maskedRef,
+            administratorId: adminId,
+            timestamp: new Date().toISOString()
+          }),
+          actor: adminId
+        });
+      }
+
+      // Sync memory
+      const existingB = bookingsMemoryStore.get(realId) || {};
+      const updatedMemB = { ...existingB, ...updatePayload, ...(bData?.[0] || {}) };
+      bookingsMemoryStore.set(realId, updatedMemB);
+      if (updatedMemB.confirmation_code) {
+        bookingsMemoryStore.set(updatedMemB.confirmation_code, updatedMemB);
+      }
 
       // ── Patch pending passenger_authorizations record ────────────────────
       try {
@@ -1764,29 +1930,76 @@ export const bookingRepository = {
           splitCurrency
         );
         if (updatedAuth?.token) {
-          await bookingRepository.updateStatus(realId, {
+          const authFields = {
             authorization_token: updatedAuth.token,
             authorization_expires_at: updatedAuth.expires_at
-          });
+          };
+          // 5. Log SQL update query executed
+          logger.info(`[Transaction] 5. Executing: UPDATE bookings SET authorization_token = '${updatedAuth.token}', authorization_expires_at = '${updatedAuth.expires_at}' WHERE id = '${realId}'`);
+          const { data: bAuthData2, error: bAuthErr2 } = await supabase
+            .from('bookings')
+            .update(authFields)
+            .eq('id', realId)
+            .select();
+          if (bAuthErr2) {
+            throw new Error(`DATABASE_ERROR [bookings auth patch update]: ${bAuthErr2.message}`);
+          }
+          // 6. Log Rows affected
+          logger.info(`[Transaction] 6. Rows affected (bookings auth patch update): ${bAuthData2?.length || 0}`);
+
+          // Sync memory
+          const existingMem2 = bookingsMemoryStore.get(realId) || {};
+          const updatedMemAuth2 = { ...existingMem2, ...authFields, ...(bAuthData2?.[0] || {}) };
+          bookingsMemoryStore.set(realId, updatedMemAuth2);
+          if (updatedMemAuth2.confirmation_code) {
+            bookingsMemoryStore.set(updatedMemAuth2.confirmation_code, updatedMemAuth2);
+          }
 
           // Send a new authorization email to the passenger if pending
           if (!isAccepted) {
             try {
               const freshBooking = await bookingRepository.getById(realId);
               await passengerAuthorizationService.sendAuthorizationEmail(updatedAuth, freshBooking);
-              await bookingRepository.updateStatus(realId, {
+              
+              const emailFields = {
                 authorization_email_sent_at: new Date().toISOString()
-              });
+              };
+              // 5. Log SQL update query executed
+              logger.info(`[Transaction] 5. Executing: UPDATE bookings SET authorization_email_sent_at = '${emailFields.authorization_email_sent_at}' WHERE id = '${realId}'`);
+              const { data: bEmailData, error: bEmailErr } = await supabase
+                .from('bookings')
+                .update(emailFields)
+                .eq('id', realId)
+                .select();
+              if (bEmailErr) {
+                throw new Error(`DATABASE_ERROR [bookings email update]: ${bEmailErr.message}`);
+              }
+              // 6. Log Rows affected
+              logger.info(`[Transaction] 6. Rows affected (bookings email update): ${bEmailData?.length || 0}`);
+
+              // Sync memory
+              const existingMem3 = bookingsMemoryStore.get(realId) || {};
+              const updatedMemEmail = { ...existingMem3, ...emailFields, ...(bEmailData?.[0] || {}) };
+              bookingsMemoryStore.set(realId, updatedMemEmail);
+              if (updatedMemEmail.confirmation_code) {
+                bookingsMemoryStore.set(updatedMemEmail.confirmation_code, updatedMemEmail);
+              }
             } catch (emailErr) {
+              if (emailErr.message?.includes('DATABASE_ERROR')) {
+                throw emailErr;
+              }
               logger.warn(`[Transaction] Could not send re-authorization email: ${emailErr.message}`);
             }
           }
         }
       } catch (authPatchErr) {
+        if (authPatchErr.message?.includes('DATABASE_ERROR')) {
+          throw authPatchErr;
+        }
         logger.warn(`[Transaction] Non-fatal: could not patch pending auth: ${authPatchErr.message}`);
       }
 
-      // Record PAYMENT_SPLITS_AND_BOOKING_AMOUNT_UPDATED audit log
+      // Record audit logs
       await bookingRepository.recordAuditLog({
         bookingId: realId,
         action: 'PAYMENT_SPLITS_AND_BOOKING_AMOUNT_UPDATED',
@@ -1816,21 +2029,50 @@ export const bookingRepository = {
         throw new Error('PAYMENT_SAFETY_VIOLATION: Itinerary details (count, hash, carriers, or routes) mutated during payment save. Rolling back.');
       }
 
-      // 14. Read back and verify complete saved payment state (Read-After-Write Verification)
-      const readBackBooking = await bookingRepository.getById(realId);
-      const readBackSplits = await bookingRepository.getPaymentSplits(realId);
-      const readBackTotal = readBackSplits.reduce((sum, s) => sum + Math.round(Number(s.amount) * 100), 0) / 100;
+      // 14. Read back and verify complete saved payment state (Read-After-Write Verification directly from DB)
+      logger.info(`[Transaction] 5. Executing: SELECT customer_price, total_amount FROM bookings WHERE id = '${realId}'`);
+      const { data: dbBooking, error: dbBkErr } = await supabase
+        .from('bookings')
+        .select('customer_price, total_amount')
+        .eq('id', realId)
+        .single();
+      if (dbBkErr) {
+        throw new Error(`READ_AFTER_WRITE_VERIFICATION_FAILED: Could not read back booking from database: ${dbBkErr.message}`);
+      }
+
+      logger.info(`[Transaction] 5. Executing: SELECT amount FROM payment_authorization_splits WHERE booking_id = '${realId}'`);
+      const { data: dbSplits, error: dbSplitsErr } = await supabase
+        .from('payment_authorization_splits')
+        .select('amount')
+        .eq('booking_id', realId);
+
+      let readBackTotal = calculatedTotal; // default: trust calculated total if table unavailable
+      if (dbSplitsErr) {
+        const isSchemaMiss = dbSplitsErr.message?.includes('schema cache') || dbSplitsErr.message?.includes('not found');
+        if (isSchemaMiss) {
+          logger.warn(`[Transaction] payment_authorization_splits not in schema cache; skipping DB read-after-write for splits. Using in-memory total.`);
+        } else {
+          throw new Error(`READ_AFTER_WRITE_VERIFICATION_FAILED: Could not read back splits from database: ${dbSplitsErr.message}`);
+        }
+      } else {
+        readBackTotal = (dbSplits || []).reduce((sum, s) => sum + Math.round(Number(s.amount) * 100), 0) / 100;
+      }
+
+      // 7. Log Final booking amount after update query (readBackTotal and dbCustomerPrice)
+      logger.info(`[Transaction] 7. Final splits total from DB: $${readBackTotal.toFixed(2)}`);
 
       if (Math.abs(readBackTotal - calculatedTotal) > 0.01) {
         throw new Error(`READ_AFTER_WRITE_VERIFICATION_FAILED: Persisted splits total $${readBackTotal.toFixed(2)} does not match server-calculated total $${calculatedTotal.toFixed(2)}.`);
       }
 
-      const dbCustomerPrice = parseFloat(readBackBooking.customer_price || readBackBooking.total_amount || 0);
+      const dbCustomerPrice = parseFloat(dbBooking.customer_price || dbBooking.total_amount || 0);
+      logger.info(`[Transaction] 7. Final booking amount (customer_price/total_amount) from DB: $${dbCustomerPrice.toFixed(2)}`);
       if (Math.abs(dbCustomerPrice - calculatedTotal) > 0.01) {
         throw new Error(`READ_AFTER_WRITE_VERIFICATION_FAILED: Persisted booking customer price $${dbCustomerPrice.toFixed(2)} does not match server-calculated total $${calculatedTotal.toFixed(2)}.`);
       }
 
       logger.info(`[Transaction] Commit successful for booking ${realId}. Splits total: $${calculatedTotal.toFixed(2)}`);
+      logger.info(`[Transaction] --- updatePaymentSplitsAndTotal END ---`);
 
       // Return refreshed full booking representation
       return await bookingRepository.getCompleteBookingById(realId);

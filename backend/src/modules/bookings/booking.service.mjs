@@ -266,7 +266,17 @@ export const bookingService = {
    * Field-Isolated Update 1: Status
    */
   updateStatus: async (id, { status, internalNotes, adminId = 'system', reason } = {}) => {
-    const ALLOWED = ['PENDING', 'DONE', 'CANCELLED', 'FAILED'];
+    const ALLOWED = [
+      'PENDING',
+      'AWAITING_AUTHORIZATION',
+      'AUTHORIZED',
+      'REAUTHORIZATION_REQUIRED',
+      'READY_FOR_TICKETING',
+      'TICKETED',
+      'DONE',
+      'FAILED',
+      'CANCELLED'
+    ];
     const targetStatus = (status || '').toUpperCase();
     if (!ALLOWED.includes(targetStatus)) {
       const err = new Error(`Invalid status '${status}'. Allowed canonical statuses are: ${ALLOWED.join(', ')}.`);
@@ -309,7 +319,7 @@ export const bookingService = {
    * Field-Isolated Update 2: Payment
    */
   updatePayment: async (id, paymentData = {}) => {
-    const { paymentStatus, paidAmount, refundedAmount, paymentProvider, adminId = 'system', reason } = paymentData;
+    const { paymentState, paymentStatus, paidAmount, refundedAmount, paymentProvider, adminId = 'system', reason, bookingVersion, splits, transactionReference } = paymentData;
 
     // 1. Strict Forbidden Domain Keys Guard
     const FORBIDDEN_KEYS = [
@@ -329,7 +339,7 @@ export const bookingService = {
       throw err;
     }
 
-    const ALLOWED_PAY_STATUS = ['pending', 'paid', 'failed', 'refunded', 'authorized'];
+    const ALLOWED_PAY_STATUS = ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'AUTHORIZED'];
     const booking = await bookingRepository.getById(id);
     if (!booking) {
       const err = new Error(`Booking '${id}' not found.`);
@@ -338,101 +348,58 @@ export const bookingService = {
       throw err;
     }
 
-    // 2. Pre-Update Structural Snapshot
-    const beforeRelations = await bookingRepository.getRelations(booking.id);
-    const beforeSegmentsCount = (beforeRelations.itinerarySegments || booking.itinerary_segments || []).length;
-    const beforeTravellersCount = (beforeRelations.travellers || booking.passengers || []).length;
-    const beforePassengerName = booking.passenger_name;
-    const beforeAmount = parseFloat(booking.customer_price || booking.total_amount || 0);
+    const targetStatus = (paymentState || paymentStatus || booking.payment_status || 'pending').toUpperCase();
+    if (!ALLOWED_PAY_STATUS.includes(targetStatus)) {
+      const err = new Error(`Invalid payment status '${targetStatus}'. Allowed: ${ALLOWED_PAY_STATUS.join(', ')}.`);
+      err.code = 'INVALID_PAYMENT_STATUS';
+      err.status = 400;
+      throw err;
+    }
 
-    const updateFields = { updated_at: new Date().toISOString() };
-    if (paymentStatus !== undefined) {
-      const ps = String(paymentStatus).toLowerCase();
-      if (!ALLOWED_PAY_STATUS.includes(ps)) {
-        const err = new Error(`Invalid payment status '${paymentStatus}'. Allowed: ${ALLOWED_PAY_STATUS.join(', ')}.`);
-        err.code = 'INVALID_PAYMENT_STATUS';
+    const ref = transactionReference ?? paymentData.referenceId ?? null;
+    const amount = paidAmount !== undefined ? parseFloat(paidAmount) : parseFloat(booking.customer_price || booking.total_amount || 0);
+
+    // Validation
+    if (targetStatus === 'PAID') {
+      const trimmedRef = String(ref || '').trim();
+      const refRegex = /^[A-Za-z0-9_-]{4,100}$/;
+      if (!ref || !refRegex.test(trimmedRef)) {
+        const err = new Error('Enter a valid transaction or reference ID.');
+        err.code = 'INVALID_TRANSACTION_REFERENCE';
         err.status = 400;
         throw err;
       }
-      updateFields.payment_status = ps;
-    }
-
-    if (paidAmount !== undefined && paidAmount !== null) {
-      const num = parseFloat(paidAmount);
-      if (!Number.isFinite(num) || num < 0) {
-        const err = new Error('paidAmount must be a non-negative number.');
-        err.code = 'INVALID_AMOUNT';
+      if (isNaN(amount) || amount <= 0) {
+        const err = new Error('Paid amount must be greater than zero.');
+        err.code = 'INVALID_PAID_AMOUNT';
         err.status = 400;
         throw err;
       }
-      updateFields.paid_amount = num;
-      updateFields.paid_at = new Date().toISOString();
     }
 
-    if (refundedAmount !== undefined && refundedAmount !== null) {
-      const num = parseFloat(refundedAmount);
-      if (!Number.isFinite(num) || num < 0) {
-        const err = new Error('refundedAmount must be a non-negative number.');
-        err.code = 'INVALID_AMOUNT';
-        err.status = 400;
-        throw err;
-      }
-      updateFields.refund_amount = num;
-      updateFields.refund_timestamp = new Date().toISOString();
-    }
+    const currentSplits = await bookingRepository.getPaymentSplits(id);
+    const targetSplits = splits || paymentData.paymentSplits || currentSplits || [];
 
-    if (paymentProvider !== undefined) {
-      updateFields.payment_provider = paymentProvider;
-    }
+    const paymentMetadata = {
+      referenceId: ref,
+      reason: reason || 'Payment updated via API',
+      paidAmount: amount,
+      refundAmount: refundedAmount !== undefined ? parseFloat(refundedAmount) : null,
+      refundReferenceId: paymentData.refundReferenceId || null
+    };
 
-    await bookingRepository.updateStatus(booking.id, updateFields);
-
-    // 3. Post-Update Structural Verification Routine
-    const afterBooking = await bookingRepository.getById(booking.id);
-    const afterRelations = await bookingRepository.getRelations(booking.id);
-    const afterSegmentsCount = (afterRelations.itinerarySegments || afterBooking.itinerary_segments || []).length;
-    const afterTravellersCount = (afterRelations.travellers || afterBooking.passengers || []).length;
-    const afterPassengerName = afterBooking.passenger_name;
-    const afterAmount = parseFloat(afterBooking.customer_price || afterBooking.total_amount || 0);
-
-    if (afterSegmentsCount !== beforeSegmentsCount) {
-      const err = new Error(`PAYMENT_SAFETY_VIOLATION: Flight count changed from ${beforeSegmentsCount} to ${afterSegmentsCount} during payment update.`);
-      err.code = 'PAYMENT_UPDATE_VERIFICATION_FAILED';
-      throw err;
-    }
-    if (afterTravellersCount !== beforeTravellersCount) {
-      const err = new Error(`PAYMENT_SAFETY_VIOLATION: Passenger count changed from ${beforeTravellersCount} to ${afterTravellersCount} during payment update.`);
-      err.code = 'PAYMENT_UPDATE_VERIFICATION_FAILED';
-      throw err;
-    }
-    if (afterPassengerName !== beforePassengerName) {
-      const err = new Error(`PAYMENT_SAFETY_VIOLATION: Passenger name changed from '${beforePassengerName}' to '${afterPassengerName}' during payment update.`);
-      err.code = 'PAYMENT_UPDATE_VERIFICATION_FAILED';
-      throw err;
-    }
-    if (Math.abs(afterAmount - beforeAmount) > 0.01) {
-      const err = new Error(`PAYMENT_SAFETY_VIOLATION: Booking total amount changed from $${beforeAmount} to $${afterAmount} during payment update.`);
-      err.code = 'PAYMENT_UPDATE_VERIFICATION_FAILED';
-      throw err;
-    }
-
-    await bookingRepository.recordStatusAudit({
-      bookingId: booking.id,
-      oldStatus: booking.status,
-      newStatus: booking.status,
+    // Execute atomic update
+    const updatedBooking = await bookingRepository.updatePaymentSplitsAndTotal(
+      id,
+      targetSplits,
       adminId,
-      reason: reason || `Payment details updated (${Object.keys(updateFields).join(', ')})`
-    });
+      reason || 'Payment status updated to ' + targetStatus,
+      bookingVersion || booking.updated_at,
+      targetStatus,
+      paymentMetadata
+    );
 
-    await bookingRepository.recordAuditLog({
-      bookingId: booking.id,
-      action: 'PAYMENT_UPDATED',
-      oldValue: { payment_status: booking.payment_status, paid_amount: booking.paid_amount },
-      newValue: updateFields,
-      actor: adminId
-    });
-
-    return bookingService.getDetailsByCodeOrId(booking.id);
+    return updatedBooking;
   },
 
   /**
@@ -468,6 +435,58 @@ export const bookingService = {
       action: 'FLIGHT_UPDATED',
       oldValue: relations.itinerarySegments || booking.itinerary_segments || [],
       newValue: segments,
+      actor: adminId
+    });
+
+    return bookingService.getDetailsByCodeOrId(booking.id);
+  },
+
+  /**
+   * Field-Isolated Update 3b: Import Itinerary From Text (GDS Importer)
+   */
+  importItineraryFromText: async (id, { text, segments, tripType = 'ONE_WAY', sourceFormat = 'text_import', warnings = [], adminId = 'system' } = {}) => {
+    const booking = await bookingRepository.getById(id);
+    if (!booking) {
+      const err = new Error(`Booking '${id}' not found.`);
+      err.code = 'BOOKING_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+
+    if (!Array.isArray(segments) || segments.length === 0) {
+      const err = new Error('Imported itinerary requires at least one valid flight segment.');
+      err.code = 'INVALID_IMPORT_SEGMENTS';
+      err.status = 400;
+      throw err;
+    }
+
+    // 1. Structural Snapshot before import
+    const relations = await bookingRepository.getRelations(booking.id);
+    const prevSegments = relations.itinerarySegments || booking.itinerary_segments || [];
+
+    // 2. Atomic Save of imported segments
+    await bookingRepository.saveItinerarySegments(booking.id, segments);
+
+    // Compute text hash safely
+    let textHash = 'N/A';
+    if (text && typeof text === 'string') {
+      const crypto = await import('crypto');
+      textHash = crypto.createHash('sha256').update(text).digest('hex').substring(0, 16);
+    }
+
+    // 3. Record Specialized Audit Log: ITINERARY_IMPORTED_FROM_TEXT
+    await bookingRepository.recordAuditLog({
+      bookingId: booking.id,
+      action: 'ITINERARY_IMPORTED_FROM_TEXT',
+      oldValue: { segmentCount: prevSegments.length, segments: prevSegments },
+      newValue: {
+        sourceFormat,
+        originalTextHash: textHash,
+        parsedSegmentCount: segments.length,
+        journeyCount: tripType === 'MULTI_CITY' ? 3 : (tripType === 'ROUND_TRIP' ? 2 : 1),
+        warnings,
+        segments
+      },
       actor: adminId
     });
 
