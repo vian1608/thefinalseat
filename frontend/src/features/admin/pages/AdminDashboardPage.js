@@ -1569,6 +1569,21 @@ function AdminDashboard() {
                         <>
                           <button
                             type="button"
+                            onClick={() => {
+                              if (selectedBooking?.id) {
+                                adminAPI.getBookingById(selectedBooking.id).then(fresh => {
+                                  if (fresh) handleSelectBooking(fresh);
+                                }).catch(err => console.error(err));
+                              }
+                            }}
+                            className="admin-secondary-btn"
+                            style={{ padding: '6px 10px', fontSize: '0.78rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}
+                            title="Refetch latest booking details"
+                          >
+                            <i className="fas fa-sync-alt"></i> Refresh
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setIsEditMode(true)}
                             className="admin-primary-btn"
                             style={{ padding: '6px 14px', fontSize: '0.78rem', fontWeight: 700, background: '#1e3a5f' }}
@@ -3022,9 +3037,14 @@ function AdminDashboard() {
                         <span className="accordion-summary-right">
                           {(() => {
                             let count = 0;
-                            if ((selectedBooking.booking_request_email_status || '').toUpperCase() === 'SENT') count++;
-                            if ((selectedBooking.authorization_email_status || '').toUpperCase() === 'SENT') count++;
-                            if ((selectedBooking.final_confirmation_email_status || '').toUpperCase() === 'SENT') count++;
+                            const reqStatus = (selectedBooking.emailActivity?.bookingRequest?.status || selectedBooking.booking_request_email_status || '').toUpperCase();
+                            const authStatus = (selectedBooking.emailActivity?.authorization?.status || selectedBooking.authorization_email_status || (selectedBooking.authorization_email_id ? 'SENT' : '')).toUpperCase();
+                            const finalStatus = (selectedBooking.emailActivity?.finalTicket?.status || selectedBooking.final_confirmation_email_status || '').toUpperCase();
+
+                            if (['SENT', 'ACCEPTED', 'DELIVERED'].includes(reqStatus)) count++;
+                            if (['SENT', 'ACCEPTED', 'DELIVERED'].includes(authStatus)) count++;
+                            if (['SENT', 'ACCEPTED', 'DELIVERED'].includes(finalStatus)) count++;
+
                             return `${count} Sent`;
                           })()}
                         </span>
@@ -3036,15 +3056,15 @@ function AdminDashboard() {
                           <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '10px', fontSize: '0.8rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                               <strong style={{ color: '#1e293b', fontSize: '0.85rem' }}>Booking Request Email</strong>
-                              <span className={`status-badge status-badge--${(selectedBooking.booking_request_email_status || 'NOT_SENT') === 'SENT' ? 'done' : ((selectedBooking.booking_request_email_status || 'NOT_SENT') === 'FAILED' ? 'failed' : 'pending')}`}>
-                                {selectedBooking.booking_request_email_status || 'NOT_SENT'}
+                              <span className={`status-badge status-badge--${(selectedBooking.emailActivity?.bookingRequest?.status || selectedBooking.booking_request_email_status || 'NOT_SENT') === 'SENT' ? 'done' : (((selectedBooking.emailActivity?.bookingRequest?.status || selectedBooking.booking_request_email_status || 'NOT_SENT') === 'FAILED') ? 'failed' : 'pending')}`}>
+                                {selectedBooking.emailActivity?.bookingRequest?.status || selectedBooking.booking_request_email_status || 'NOT_SENT'}
                               </span>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', color: '#64748b', fontSize: '0.75rem', marginBottom: '10px' }}>
-                              <div><strong>Recipient:</strong> {selectedBooking.booking_request_email_recipient || selectedBooking.email || 'N/A'}</div>
-                              <div><strong>Sent:</strong> {selectedBooking.booking_request_email_sent_at ? new Date(selectedBooking.booking_request_email_sent_at).toLocaleString() : 'N/A'}</div>
-                              <div style={{ gridColumn: '1 / -1' }}><strong>Provider ID:</strong> {selectedBooking.booking_request_email_id || 'N/A'}</div>
-                              {selectedBooking.booking_request_email_error && <div style={{ color: '#dc2626', gridColumn: '1 / -1' }}><strong>Error:</strong> {selectedBooking.booking_request_email_error}</div>}
+                              <div><strong>Recipient:</strong> {selectedBooking.emailActivity?.bookingRequest?.recipient || selectedBooking.booking_request_email_recipient || selectedBooking.email || 'N/A'}</div>
+                              <div><strong>Sent:</strong> {selectedBooking.emailActivity?.bookingRequest?.sentAt || selectedBooking.booking_request_email_sent_at ? new Date(selectedBooking.emailActivity?.bookingRequest?.sentAt || selectedBooking.booking_request_email_sent_at).toLocaleString() : 'N/A'}</div>
+                              <div style={{ gridColumn: '1 / -1' }}><strong>Provider ID:</strong> {selectedBooking.emailActivity?.bookingRequest?.providerMessageId || selectedBooking.booking_request_email_id || 'N/A'}</div>
+                              {(selectedBooking.emailActivity?.bookingRequest?.error || selectedBooking.booking_request_email_error) && <div style={{ color: '#dc2626', gridColumn: '1 / -1' }}><strong>Error:</strong> {selectedBooking.emailActivity?.bookingRequest?.error || selectedBooking.booking_request_email_error}</div>}
                             </div>
                             <button type="button" onClick={() => handlePaymentActionSubmit('resend_booking_request_email')} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
                               <i className="fas fa-redo" style={{ marginRight: '4px' }}></i> Resend Booking Request Email
@@ -3052,63 +3072,92 @@ function AdminDashboard() {
                           </div>
 
                           {/* 2. Authorization Email Card */}
-                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '10px', fontSize: '0.8rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                              <strong style={{ color: '#1e293b', fontSize: '0.85rem' }}>Authorization Email</strong>
-                              <span className={`status-badge status-badge--${(selectedBooking.authorization_email_status || 'NOT_SENT') === 'SENT' ? 'done' : ((selectedBooking.authorization_email_status || 'NOT_SENT') === 'FAILED' ? 'failed' : 'pending')}`}>
-                                {selectedBooking.authorization_email_status || 'NOT_SENT'}
-                              </span>
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', color: '#64748b', fontSize: '0.75rem', marginBottom: '10px' }}>
-                              <div><strong>Recipient:</strong> {selectedBooking.authorization_email_recipient || selectedBooking.email || 'N/A'}</div>
-                              <div><strong>Sent:</strong> {selectedBooking.authorization_email_sent_at ? new Date(selectedBooking.authorization_email_sent_at).toLocaleString() : 'N/A'}</div>
-                              <div><strong>Expires:</strong> {selectedBooking.authorization_expires_at ? new Date(selectedBooking.authorization_expires_at).toLocaleString() : 'N/A'}</div>
-                              <div><strong>Provider ID:</strong> {selectedBooking.authorization_email_id || 'N/A'}</div>
-                              {selectedBooking.authorization_email_error && <div style={{ color: '#dc2626', gridColumn: '1 / -1' }}><strong>Error:</strong> {selectedBooking.authorization_email_error}</div>}
-                            </div>
+                          {(() => {
+                            const authActivity = selectedBooking.emailActivity?.authorization || {};
+                            const rawStatus = (authActivity.status || selectedBooking.authorization_email_status || '').toUpperCase();
+                            const providerId = authActivity.providerMessageId || selectedBooking.authorization_email_id || null;
+                            const sentAt = authActivity.sentAt || selectedBooking.authorization_email_sent_at || null;
+                            const expiresAt = authActivity.expiresAt || selectedBooking.authorization_expires_at || null;
+                            const recipient = authActivity.recipient || selectedBooking.authorization_email_recipient || selectedBooking.email || 'N/A';
+                            const errorMsg = authActivity.error || selectedBooking.authorization_email_error || null;
 
-                            {/* Authorization State-based Actions */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              {['AUTHORIZED', 'READY_FOR_TICKETING', 'TICKETED', 'DONE'].includes(selectedBooking.status) ? (
-                                <>
-                                  <div style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', padding: '6px', borderRadius: '6px', fontWeight: '700', textAlign: 'center', fontSize: '0.78rem' }}>
-                                    ✓ Authorization Completed
+                            let computedStatus = 'NOT_SENT';
+                            if (rawStatus && rawStatus !== 'NOT_SENT') {
+                              computedStatus = rawStatus;
+                            } else if (providerId) {
+                              computedStatus = 'SENT';
+                            } else if (sentAt) {
+                              computedStatus = 'SENT';
+                            }
+
+                            const isAuthCompleted = ['AUTHORIZED', 'READY_FOR_TICKETING', 'TICKETED', 'DONE'].includes((selectedBooking.authorization_status || selectedBooking.status || '').toUpperCase());
+
+                            return (
+                              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '10px', fontSize: '0.8rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                  <strong style={{ color: '#1e293b', fontSize: '0.85rem' }}>Authorization Email</strong>
+                                  <span className={`status-badge status-badge--${['SENT', 'ACCEPTED', 'DELIVERED'].includes(computedStatus) ? 'done' : (computedStatus === 'FAILED' ? 'failed' : 'pending')}`}>
+                                    {computedStatus}
+                                  </span>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', color: '#64748b', fontSize: '0.75rem', marginBottom: '10px' }}>
+                                  <div><strong>Recipient:</strong> {recipient}</div>
+                                  <div><strong>Sent:</strong> {sentAt ? new Date(sentAt).toLocaleString() : 'N/A'}</div>
+                                  <div><strong>Expires:</strong> {expiresAt ? new Date(expiresAt).toLocaleString() : 'N/A'}</div>
+                                  <div><strong>Provider ID:</strong> {providerId || 'N/A'}</div>
+                                  {errorMsg && <div style={{ color: '#dc2626', gridColumn: '1 / -1' }}><strong>Error:</strong> {errorMsg}</div>}
+                                </div>
+
+                                {isAuthCompleted && computedStatus === 'NOT_SENT' && (
+                                  <div style={{ background: '#fffbe6', color: '#b45309', border: '1px solid #ffe58f', borderRadius: '6px', padding: '6px 8px', fontSize: '0.75rem', fontStyle: 'italic', marginBottom: '8px' }}>
+                                    Authorization completed, but email delivery record is unavailable.
                                   </div>
-                                  <button type="button" onClick={() => handleDownloadEvidence(selectedBooking.id)} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
-                                    <i className="fas fa-file-pdf" style={{ marginRight: '4px', color: '#8B1236' }}></i> Download Authorization Evidence (PDF)
-                                  </button>
-                                </>
-                              ) : (selectedBooking.status === 'EXPIRED' || selectedBooking.authorization_email_status === 'EXPIRED') ? (
-                                <>
-                                  <button type="button" onClick={() => handlePaymentActionSubmit('send_authorization')} className="admin-primary-btn" style={{ background: '#b45309', width: '100%', fontSize: '0.78rem', height: '34px' }}>
-                                    <i className="fas fa-paper-plane" style={{ marginRight: '4px' }}></i> Send New Authorization Email
-                                  </button>
-                                </>
-                              ) : (selectedBooking.authorization_email_status === 'SENT' || ['AWAITING_AUTH', 'AWAITING_AUTHORIZATION', 'REAUTHORIZATION_REQUIRED'].includes(selectedBooking.status)) ? (
-                                <>
-                                  <button type="button" onClick={() => handlePaymentActionSubmit('resend_authorization')} className="admin-primary-btn" style={{ background: '#b45309', width: '100%', fontSize: '0.78rem', height: '34px' }}>
-                                    <i className="fas fa-sync" style={{ marginRight: '4px' }}></i> Resend Authorization Email
-                                  </button>
-                                  {selectedBooking.authorization_token && (
-                                    <button type="button" onClick={() => {
-                                      const link = `https://www.thefinalseat.com/authorize/${selectedBooking.authorization_token}`;
-                                      navigator.clipboard.writeText(link);
-                                      alert(`Authorization link copied to clipboard:\n${link}`);
-                                    }} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
-                                      <i className="fas fa-copy" style={{ marginRight: '4px' }}></i> Copy Authorization Link
+                                )}
+
+                                {/* Authorization State-based Actions */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                  {isAuthCompleted ? (
+                                    <>
+                                      <div style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', padding: '6px', borderRadius: '6px', fontWeight: '700', textAlign: 'center', fontSize: '0.78rem' }}>
+                                        ✓ Authorization Completed ({selectedBooking.authorization_status || 'AUTHORIZED'})
+                                      </div>
+                                      <button type="button" onClick={() => handleDownloadEvidence(selectedBooking.id)} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
+                                        <i className="fas fa-file-pdf" style={{ marginRight: '4px', color: '#8B1236' }}></i> Download Authorization Evidence (PDF)
+                                      </button>
+                                    </>
+                                  ) : (selectedBooking.status === 'EXPIRED' || computedStatus === 'EXPIRED') ? (
+                                    <>
+                                      <button type="button" onClick={() => handlePaymentActionSubmit('send_authorization')} className="admin-primary-btn" style={{ background: '#b45309', width: '100%', fontSize: '0.78rem', height: '34px' }}>
+                                        <i className="fas fa-paper-plane" style={{ marginRight: '4px' }}></i> Send New Authorization Email
+                                      </button>
+                                    </>
+                                  ) : (computedStatus === 'SENT' || computedStatus === 'ACCEPTED' || ['AWAITING_AUTH', 'AWAITING_AUTHORIZATION', 'REAUTHORIZATION_REQUIRED'].includes(selectedBooking.status)) ? (
+                                    <>
+                                      <button type="button" onClick={() => handlePaymentActionSubmit('resend_authorization')} className="admin-primary-btn" style={{ background: '#b45309', width: '100%', fontSize: '0.78rem', height: '34px' }}>
+                                        <i className="fas fa-sync" style={{ marginRight: '4px' }}></i> Resend Authorization Email
+                                      </button>
+                                      {selectedBooking.authorization_token && (
+                                        <button type="button" onClick={() => {
+                                          const link = `https://www.thefinalseat.com/authorize/${selectedBooking.authorization_token}`;
+                                          navigator.clipboard.writeText(link);
+                                          alert(`Authorization link copied to clipboard:\n${link}`);
+                                        }} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
+                                          <i className="fas fa-copy" style={{ marginRight: '4px' }}></i> Copy Authorization Link
+                                        </button>
+                                      )}
+                                      <button type="button" onClick={() => handleDownloadEvidence(selectedBooking.id)} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
+                                        <i className="fas fa-file-pdf" style={{ marginRight: '4px', color: '#8B1236' }}></i> Download Authorization Evidence (PDF)
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button type="button" onClick={() => handlePaymentActionSubmit('send_authorization')} className="admin-primary-btn" style={{ background: '#8B1236', width: '100%', fontSize: '0.78rem', height: '34px' }}>
+                                      <i className="fas fa-paper-plane" style={{ marginRight: '4px' }}></i> Send Authorization Email
                                     </button>
                                   )}
-                                  <button type="button" onClick={() => handleDownloadEvidence(selectedBooking.id)} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
-                                    <i className="fas fa-file-pdf" style={{ marginRight: '4px', color: '#8B1236' }}></i> Download Authorization Evidence (PDF)
-                                  </button>
-                                </>
-                              ) : (
-                                <button type="button" onClick={() => handlePaymentActionSubmit('send_authorization')} className="admin-primary-btn" style={{ background: '#8B1236', width: '100%', fontSize: '0.78rem', height: '34px' }}>
-                                  <i className="fas fa-paper-plane" style={{ marginRight: '4px' }}></i> Send Authorization Email
-                                </button>
-                              )}
-                            </div>
-                          </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
 
                           {/* 3. Final Ticket Email Card */}
                           {(() => {

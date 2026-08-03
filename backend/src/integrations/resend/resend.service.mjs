@@ -971,6 +971,15 @@ Support 24/7: ${env.supportPhoneDisplay} | support@thefinalseat.com
     const sentAt = new Date().toISOString();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
+    await bookingRepository.saveEmailActivity(bookingId, {
+      template_type: 'AUTHORIZATION_EMAIL',
+      status: 'SENT',
+      provider_message_id: emailId,
+      recipient: customerEmail,
+      sent_at: sentAt,
+      expires_at: expiresAt
+    });
+
     await bookingRepository.updateBookingStatus(bookingId, {
       status: 'AWAITING_AUTHORIZATION',
       authorization_email_status: 'SENT',
@@ -987,6 +996,12 @@ Support 24/7: ${env.supportPhoneDisplay} | support@thefinalseat.com
   } catch (err) {
     const errorMsg = err.message || 'Authorization email dispatch failed';
     logger.error(`[Email Log] bookingId=${bookingId} emailType=authorization result=failed error=${errorMsg}`);
+    await bookingRepository.saveEmailActivity(bookingId, {
+      template_type: 'AUTHORIZATION_EMAIL',
+      status: 'FAILED',
+      recipient: customerEmail,
+      error: errorMsg
+    });
     await bookingRepository.updateBookingStatus(bookingId, {
       authorization_email_status: 'FAILED',
       authorization_email_error: errorMsg

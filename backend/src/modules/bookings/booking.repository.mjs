@@ -172,22 +172,18 @@ export const bookingRepository = {
   },
 
   getRelations: async (bookingId) => {
-    const [travellers, contacts, flights, payments, itinerarySegmentsResult] = await Promise.all([
+    const [travellers, contacts, flights, payments, itinerarySegmentsResult, emailLogsResult] = await Promise.all([
       supabase.from('travellers').select('*').eq('booking_id', bookingId),
       supabase.from('contacts').select('*').eq('booking_id', bookingId),
       supabase.from('flights').select('*').eq('booking_id', bookingId),
       supabase.from('payments').select('*').eq('booking_id', bookingId),
-      supabase.from('booking_itinerary_segments').select('*').eq('booking_id', bookingId).order('segment_sequence', { ascending: true })
+      supabase.from('booking_itinerary_segments').select('*').eq('booking_id', bookingId).order('segment_sequence', { ascending: true }),
+      supabase.from('email_logs').select('*').or(`booking_id.eq.${bookingId},booking_reference.eq.${bookingId}`).order('created_at', { ascending: false })
     ]);
 
     const memorySegs = segmentsMemoryStore.get(bookingId) || [];
     const normalizedDbSegs = itinerarySegmentsResult.data || [];
 
-    // PRODUCTION FALLBACK: If booking_itinerary_segments table doesn't exist (schema not migrated yet)
-    // or returned 0 rows, map the legacy `flights` table rows to the canonical segment shape.
-    // The flights table uses: leg ('outbound'/'return'), departure_airport, arrival_airport,
-    // airline_name, flight_number, departure_date, departure_time_str, arrival_date,
-    // arrival_time_str, cabin_class, stops.
     let finalSegs;
     const flightRows = flights.data || [];
     if (normalizedDbSegs.length > 0) {
@@ -195,7 +191,6 @@ export const bookingRepository = {
     } else if (memorySegs.length > 0) {
       finalSegs = memorySegs;
     } else if (flightRows.length > 0) {
-      // Map legacy flights table to canonical segment shape so buildCanonicalItinerary can read it
       let outSeq = 1;
       let retSeq = 1;
       finalSegs = flightRows.map((f) => {
@@ -222,7 +217,6 @@ export const bookingRepository = {
           arrival_time: f.arrival_time_str || f.arrival_time || '',
           cabin: f.cabin_class || f.cabin || 'Economy',
           stop_count: parseInt(f.stops || 0, 10),
-          // source marker so we can distinguish
           _source: 'flights_table'
         };
       });
@@ -230,6 +224,17 @@ export const bookingRepository = {
     } else {
       finalSegs = [];
     }
+
+    const memoryEmailLogs = emailDeliveriesMemoryStore.get(bookingId) || [];
+    const dbEmailLogs = emailLogsResult?.data || [];
+    const combinedEmailLogs = [...dbEmailLogs, ...memoryEmailLogs];
+    const seenLogIds = new Set();
+    const emailLogs = combinedEmailLogs.filter(l => {
+      const id = l.id || l.provider_message_id;
+      if (!id || seenLogIds.has(id)) return false;
+      seenLogIds.add(id);
+      return true;
+    });
 
     const paymentSplits = await bookingRepository.getPaymentSplits(bookingId);
     const paymentMethod = await bookingRepository.getPaymentMethodByBookingId(bookingId);
@@ -241,7 +246,8 @@ export const bookingRepository = {
       payments: payments.data || [],
       itinerarySegments: finalSegs,
       paymentSplits: paymentSplits || [],
-      paymentMethod: paymentMethod || null
+      paymentMethod: paymentMethod || null,
+      emailLogs: emailLogs
     };
   },
 
@@ -405,10 +411,66 @@ export const bookingRepository = {
       supplierConfirmation: enriched.supplier_confirmation || enriched.supplierConfirmation || null
     };
 
-    const emailActivity = {
-      logs: relations.emailLogs || [],
-      lastSentAt: enriched.authorization_email_sent_at || null
+    const rawLogs = relations.emailLogs || [];
+
+    const resolveActivity = (typeKeyword, columnPrefix) => {
+      const log = rawLogs.find(l => (l.template_type || '').toUpperCase().includes(typeKeyword));
+      if (log) {
+        return {
+          status: (log.status || 'SENT').toUpperCase(),
+          recipient: log.recipient || enriched.email || null,
+          sentAt: log.sent_at || log.created_at || null,
+          expiresAt: log.expires_at || null,
+          providerMessageId: log.provider_message_id || null,
+          error: log.error_message || null
+        };
+      }
+
+      const columnId = enriched[`${columnPrefix}_email_id`];
+      const columnSentAt = enriched[`${columnPrefix}_email_sent_at`] || enriched[`${columnPrefix}_sent_at`];
+      const columnStatus = enriched[`${columnPrefix}_email_status`];
+      const columnExpiresAt = enriched[`${columnPrefix}_expires_at`] || enriched.authorization_expires_at;
+
+      if (columnId || columnSentAt || columnStatus) {
+        return {
+          status: (columnStatus || (columnId ? 'SENT' : 'NOT_SENT')).toUpperCase(),
+          recipient: enriched[`${columnPrefix}_email_recipient`] || enriched.email || null,
+          sentAt: columnSentAt || null,
+          expiresAt: columnExpiresAt || null,
+          providerMessageId: columnId || null,
+          error: enriched[`${columnPrefix}_email_error`] || null
+        };
+      }
+
+      return {
+        status: 'NOT_SENT',
+        recipient: enriched.email || null,
+        sentAt: null,
+        expiresAt: null,
+        providerMessageId: null,
+        error: null
+      };
     };
+
+    const bookingRequestActivity = resolveActivity('REQUEST', 'booking_request');
+    const authActivity = resolveActivity('AUTH', 'authorization');
+    const finalTicketActivity = resolveActivity('TICKET', 'final_confirmation');
+
+    let sentCount = 0;
+    if (['SENT', 'ACCEPTED', 'DELIVERED'].includes(bookingRequestActivity.status)) sentCount++;
+    if (['SENT', 'ACCEPTED', 'DELIVERED'].includes(authActivity.status)) sentCount++;
+    if (['SENT', 'ACCEPTED', 'DELIVERED'].includes(finalTicketActivity.status)) sentCount++;
+
+    const emailActivity = {
+      count: sentCount,
+      bookingRequest: bookingRequestActivity,
+      authorization: authActivity,
+      finalTicket: finalTicketActivity,
+      logs: rawLogs,
+      lastSentAt: authActivity.sentAt || bookingRequestActivity.sentAt || enriched.authorization_email_sent_at || null
+    };
+
+    const authStatus = (enriched.authorization_status || (enriched.status === 'AUTHORIZED' ? 'AUTHORIZED' : (enriched.authorization_token ? 'PENDING' : 'NOT_CREATED'))).toUpperCase();
 
     return {
       ...enriched,
@@ -420,7 +482,19 @@ export const bookingRepository = {
       return_segments: itinerary.return,
       pricing: canonical.pricing || enriched.pricing || {},
       ticketDetails,
-      authorization: canonical.authorization || enriched.authorization || {},
+      authorization: {
+        ...canonical.authorization,
+        ...enriched.authorization,
+        status: authStatus,
+        authorizedAt: enriched.authorized_at || canonical.authorization?.authorizedAt || null,
+        revision: enriched.authorization_revision || 1
+      },
+      authorization_status: authStatus,
+      authorization_email_status: authActivity.status,
+      authorization_email_id: authActivity.providerMessageId,
+      authorization_email_sent_at: authActivity.sentAt,
+      authorization_email_recipient: authActivity.recipient,
+      authorization_expires_at: authActivity.expiresAt,
       payment: canonical.payment || enriched.payment || {},
       paymentSplits: relations.paymentSplits || enriched.payment_splits || [],
       paymentMethod: relations.paymentMethod || enriched.paymentMethod || null,
@@ -428,6 +502,82 @@ export const bookingRepository = {
       trip_summary: tripSummary,
       tripSummary: tripSummary
     };
+  },
+
+  saveEmailActivity: async (bookingId, emailData = {}) => {
+    const booking = await bookingRepository.getById(bookingId);
+    const realId = booking ? booking.id : bookingId;
+    const refCode = booking ? (booking.confirmation_code || booking.bookingReference || realId) : bookingId;
+
+    const templateType = (emailData.template_type || emailData.templateType || 'AUTHORIZATION_EMAIL').toUpperCase();
+    const status = (emailData.status || 'SENT').toUpperCase();
+    const providerMessageId = emailData.provider_message_id || emailData.providerMessageId || emailData.emailId || `msg_${Date.now()}`;
+    const recipient = emailData.recipient || emailData.email || (booking ? booking.email : '');
+    const sentAt = emailData.sent_at || emailData.sentAt || new Date().toISOString();
+    const expiresAt = emailData.expires_at || emailData.expiresAt || new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+    const errorMsg = emailData.error || emailData.errorMessage || null;
+
+    const logRecord = {
+      id: emailData.id || `email_log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      booking_id: realId,
+      booking_reference: refCode,
+      template_type: templateType,
+      recipient,
+      provider: emailData.provider || 'Resend',
+      provider_message_id: providerMessageId,
+      status,
+      error_message: errorMsg,
+      sent_at: sentAt,
+      expires_at: templateType.includes('AUTH') ? expiresAt : null,
+      created_at: sentAt,
+      updated_at: sentAt
+    };
+
+    const currentMemoryLogs = emailDeliveriesMemoryStore.get(realId) || [];
+    currentMemoryLogs.unshift(logRecord);
+    emailDeliveriesMemoryStore.set(realId, currentMemoryLogs);
+    if (refCode && refCode !== realId) {
+      const refLogs = emailDeliveriesMemoryStore.get(refCode) || [];
+      refLogs.unshift(logRecord);
+      emailDeliveriesMemoryStore.set(refCode, refLogs);
+    }
+
+    try {
+      const { error } = await supabase.from('email_logs').insert(logRecord);
+      if (error) {
+        logger.warn(`[saveEmailActivity] email_logs insert notice: ${error.message}`);
+      }
+    } catch (err) {
+      logger.warn(`[saveEmailActivity] Supabase notice: ${err.message}`);
+    }
+
+    const updatePayload = {};
+    if (templateType.includes('AUTH')) {
+      updatePayload.authorization_email_status = status;
+      updatePayload.authorization_email_id = providerMessageId;
+      updatePayload.authorization_email_sent_at = sentAt;
+      updatePayload.authorization_email_recipient = recipient;
+      updatePayload.authorization_expires_at = expiresAt;
+      if (errorMsg) updatePayload.authorization_email_error = errorMsg;
+    } else if (templateType.includes('REQUEST') || templateType.includes('CONFIRMATION')) {
+      updatePayload.booking_request_email_status = status;
+      updatePayload.booking_request_email_id = providerMessageId;
+      updatePayload.booking_request_email_sent_at = sentAt;
+      updatePayload.booking_request_email_recipient = recipient;
+      if (errorMsg) updatePayload.booking_request_email_error = errorMsg;
+    } else if (templateType.includes('TICKET')) {
+      updatePayload.final_confirmation_email_status = status;
+      updatePayload.final_confirmation_email_id = providerMessageId;
+      updatePayload.final_confirmation_email_sent_at = sentAt;
+      updatePayload.final_confirmation_email_recipient = recipient;
+      if (errorMsg) updatePayload.final_confirmation_email_error = errorMsg;
+    }
+
+    if (Object.keys(updatePayload).length > 0) {
+      await bookingRepository.updateBookingStatus(realId, updatePayload);
+    }
+
+    return logRecord;
   },
 
   saveTicketDetails: async (bookingId, ticketData = {}, adminId = 'admin') => {

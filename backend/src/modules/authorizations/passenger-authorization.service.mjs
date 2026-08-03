@@ -336,7 +336,10 @@ Email: support@thefinalseat.com | Call: ${env.supportPhoneDisplay}
 </html>
     `.trim();
 
-    const apiKey = env.resendApiKey?.trim();
+    let messageId = `log_auth_${Date.now()}`;
+    let isSuccess = false;
+    let errorMsg = null;
+
     if (apiKey) {
       try {
         const response = await fetch('https://api.resend.com/emails', {
@@ -352,13 +355,32 @@ Email: support@thefinalseat.com | Call: ${env.supportPhoneDisplay}
           })
         });
         const resData = await response.json();
-        logger.info(`[Auth Email] Sent authorization email for ${confirmationCode} to ${email}:`, resData.id);
-        return resData.id;
+        if (resData?.id) {
+          messageId = resData.id;
+          isSuccess = true;
+        } else {
+          errorMsg = resData?.message || 'Resend response missing message id';
+        }
+        logger.info(`[Auth Email] Sent authorization email for ${confirmationCode} to ${email}:`, messageId);
       } catch (err) {
+        errorMsg = err.message;
         logger.error(`[Auth Email] Failed sending authorization email for ${confirmationCode}:`, err.message);
       }
+    } else {
+      isSuccess = true;
     }
-    return `log_auth_${Date.now()}`;
+
+    await bookingRepository.saveEmailActivity(booking.id || booking.booking_id || confirmationCode, {
+      template_type: 'AUTHORIZATION_EMAIL',
+      status: isSuccess ? 'SENT' : 'FAILED',
+      provider_message_id: messageId,
+      recipient: email,
+      sent_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+      error: errorMsg
+    });
+
+    return messageId;
   },
 
   /**
