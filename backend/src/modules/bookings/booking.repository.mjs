@@ -392,13 +392,19 @@ export const bookingRepository = {
     const enriched = bookingRepository.enrichBookingRecord(baseBooking, relations);
     const itinerary = buildCanonicalItinerary(enriched);
     const tripSummary = calculateTripSummary(enriched);
+
+    // Fetch payment method record (billing details) — always try DB first
+    const paymentMethod = await bookingRepository.getPaymentMethodByBookingId(realId);
+
     const canonical = bookingMapper.toCanonicalModel(
       baseBooking,
       relations.travellers || [],
       relations.contacts || [],
       relations.flights || [],
-      relations.payments || []
+      relations.payments || [],
+      paymentMethod || null
     ) || {};
+
 
     const ticketDetails = {
       airlineCode: enriched.airline_code || enriched.airlineCode || null,
@@ -754,7 +760,7 @@ export const bookingRepository = {
     const record = {
       id: payload.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `pm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`),
       booking_id: bookingId,
-      payment_provider: payload.payment_provider || payload.paymentProvider || 'stripe',
+      payment_provider: payload.payment_provider || payload.paymentProvider || 'card',
       provider_customer_id: payload.provider_customer_id || payload.providerCustomerId || null,
       provider_payment_method_id: payload.provider_payment_method_id || payload.providerPaymentMethodId || payload.paymentMethodToken || `pm_tok_${Date.now()}`,
       cardholder_name: payload.cardholder_name || payload.cardholderName || null,
@@ -763,15 +769,16 @@ export const bookingRepository = {
         const raw = String(payload.card_last4 || payload.cardLast4 || '').replace(/\D/g, '');
         return /^\d{4}$/.test(raw) ? raw : null;
       })(),
-      card_exp_month: payload.card_exp_month !== undefined ? parseInt(payload.card_exp_month) : (payload.cardExpMonth ? parseInt(payload.cardExpMonth) : null),
-      card_exp_year: payload.card_exp_year !== undefined ? parseInt(payload.card_exp_year) : (payload.cardExpYear ? parseInt(payload.cardExpYear) : null),
+      card_exp_month: payload.card_exp_month !== undefined && payload.card_exp_month !== null ? parseInt(payload.card_exp_month) : (payload.cardExpMonth ? parseInt(payload.cardExpMonth) : null),
+      card_exp_year: payload.card_exp_year !== undefined && payload.card_exp_year !== null ? parseInt(payload.card_exp_year) : (payload.cardExpYear ? parseInt(payload.cardExpYear) : null),
+      billing_email: payload.billing_email || payload.billingEmail || null,
+      billing_phone: payload.billing_phone || payload.billingPhone || null,
       billing_address_line1: payload.billing_address_line1 || payload.billingAddressLine1 || payload.billingAddress || null,
       billing_address_line2: payload.billing_address_line2 || payload.billingAddressLine2 || null,
       billing_city: payload.billing_city || payload.billingCity || null,
       billing_state: payload.billing_state || payload.billingState || null,
       billing_postal_code: payload.billing_postal_code || payload.billingPostalCode || payload.billingZip || null,
       billing_country: payload.billing_country || payload.billingCountry || 'United States',
-      billing_phone: payload.billing_phone || payload.billingPhone || null,
       tokenization_status: payload.tokenization_status || payload.tokenizationStatus || 'TOKENIZED',
       removed_at: null,
       created_at: new Date().toISOString(),
@@ -782,43 +789,147 @@ export const bookingRepository = {
     paymentMethodsMemoryStore.set(bookingId, record);
     paymentMethodsMemoryStore.set(record.id, record);
 
-    // 2. Database persistent insert
+    // 2. Database persistent upsert
     const { data, error } = await supabase
       .from('booking_payment_methods')
-      .upsert(record)
+      .upsert(record, { onConflict: 'booking_id' })
       .select()
       .maybeSingle();
 
     if (error) {
       logger.warn(`booking_payment_methods upsert notice (stored in memory store): ${error.message}`);
+    } else {
+      // Keep memory store in sync with DB response
+      const saved = data || record;
+      paymentMethodsMemoryStore.set(bookingId, saved);
     }
 
-    logger.info(`[PaymentMethod] Saved tokenized payment method ${record.provider_payment_method_id} for booking ${bookingId} (${record.card_brand} ending in ${record.card_last4})`);
+    logger.info(`[PaymentMethod] Saved payment method for booking ${bookingId} (${record.card_brand || 'unknown brand'} ending in ${record.card_last4 || 'N/A'})`);
     return data || record;
   },
 
   /**
-   * Get Active Tokenized Payment Method for a Booking
+   * Update billing details for a booking (admin-only PATCH endpoint).
+   * Only updates the booking_payment_methods record — never touches booking amounts, itinerary, or passengers.
+   */
+  saveBillingDetailsUpdate: async (bookingId, billingPayload = {}) => {
+    const PROHIBITED_FIELDS = ['cvv', 'cvc', 'fullCardNumber', 'pan', 'securityCode', 'pin', 'track_data', 'raw_card'];
+    for (const field of PROHIBITED_FIELDS) {
+      if (billingPayload[field] !== undefined) {
+        const err = new Error(`PROHIBITED_BILLING_FIELD: Field '${field}' must not be stored.`);
+        err.code = 'PROHIBITED_BILLING_FIELD';
+        throw err;
+      }
+    }
+
+    // Validate cardLast4
+    const rawLast4 = String(billingPayload.cardLast4 || billingPayload.card_last4 || '').replace(/\D/g, '');
+    const validLast4 = rawLast4.length === 4 ? rawLast4 : null;
+    if ((billingPayload.cardLast4 || billingPayload.card_last4) && !validLast4) {
+      const err = new Error('INVALID_CARD_LAST4: Must be exactly 4 numeric digits.');
+      err.code = 'INVALID_CARD_LAST4';
+      throw err;
+    }
+
+    // Validate expiry
+    const expMonth = billingPayload.cardExpMonth !== undefined ? parseInt(billingPayload.cardExpMonth) : null;
+    const expYear = billingPayload.cardExpYear !== undefined ? parseInt(billingPayload.cardExpYear) : null;
+    if (expMonth !== null && (expMonth < 1 || expMonth > 12)) {
+      const err = new Error('INVALID_CARD_EXP_MONTH: Must be between 1 and 12.');
+      err.code = 'INVALID_CARD_EXP_MONTH';
+      throw err;
+    }
+    if (expYear !== null && (expYear < 2020 || expYear > 2099)) {
+      const err = new Error('INVALID_CARD_EXP_YEAR: Must be a 4-digit year between 2020 and 2099.');
+      err.code = 'INVALID_CARD_EXP_YEAR';
+      throw err;
+    }
+
+    const updates = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (billingPayload.cardholderName !== undefined) updates.cardholder_name = billingPayload.cardholderName;
+    if (validLast4) updates.card_last4 = validLast4;
+    if (billingPayload.cardBrand !== undefined) updates.card_brand = billingPayload.cardBrand;
+    if (expMonth !== null) updates.card_exp_month = expMonth;
+    if (expYear !== null) updates.card_exp_year = expYear;
+    if (billingPayload.billingEmail !== undefined) updates.billing_email = billingPayload.billingEmail;
+    if (billingPayload.billingPhone !== undefined) updates.billing_phone = billingPayload.billingPhone;
+    if (billingPayload.addressLine1 !== undefined) updates.billing_address_line1 = billingPayload.addressLine1;
+    if (billingPayload.addressLine2 !== undefined) updates.billing_address_line2 = billingPayload.addressLine2;
+    if (billingPayload.city !== undefined) updates.billing_city = billingPayload.city;
+    if (billingPayload.stateProvince !== undefined) updates.billing_state = billingPayload.stateProvince;
+    if (billingPayload.postalCode !== undefined) updates.billing_postal_code = billingPayload.postalCode;
+    if (billingPayload.country !== undefined) updates.billing_country = billingPayload.country;
+
+    // Try to update existing record
+    const { data, error } = await supabase
+      .from('booking_payment_methods')
+      .update(updates)
+      .eq('booking_id', bookingId)
+      .is('removed_at', null)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      logger.warn(`[BillingUpdate] DB update failed, applying to memory store: ${error.message}`);
+    }
+
+    // If no existing record, create one
+    const resultRecord = data || (await (async () => {
+      const memRecord = paymentMethodsMemoryStore.get(bookingId) || {};
+      const merged = { ...memRecord, ...updates, booking_id: bookingId };
+      if (!merged.id) merged.id = `pm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      if (!merged.provider_payment_method_id) merged.provider_payment_method_id = `pm_tok_${Date.now()}`;
+      paymentMethodsMemoryStore.set(bookingId, merged);
+
+      const { data: newData } = await supabase
+        .from('booking_payment_methods')
+        .upsert({ ...merged, payment_provider: merged.payment_provider || 'card' }, { onConflict: 'booking_id' })
+        .select()
+        .maybeSingle();
+      return newData || merged;
+    })());
+
+    // Update memory store
+    paymentMethodsMemoryStore.set(bookingId, resultRecord);
+
+    // Read-after-write verification
+    const verified = await bookingRepository.getPaymentMethodByBookingId(bookingId);
+    logger.info(`[BillingUpdate] Updated billing details for booking ${bookingId}`);
+    return verified || resultRecord;
+  },
+
+  /**
+   * Get Active Tokenized Payment Method for a Booking.
+   * Always queries DB first — memory store supplements but does not replace DB as source of truth.
    */
   getPaymentMethodByBookingId: async (bookingId) => {
     if (!bookingId) return null;
-    const memRecord = paymentMethodsMemoryStore.get(bookingId);
-    if (memRecord) return memRecord;
 
+    // Always attempt DB first (primary source of truth)
     try {
       const { data, error } = await supabase
         .from('booking_payment_methods')
         .select('*')
         .eq('booking_id', bookingId)
         .is('removed_at', null)
+        .order('created_at', { ascending: false })
         .maybeSingle();
 
       if (!error && data) {
         paymentMethodsMemoryStore.set(bookingId, data);
         return data;
       }
-    } catch (e) {}
+      if (error) {
+        logger.warn(`[PaymentMethod] DB lookup failed for ${bookingId}: ${error.message}`);
+      }
+    } catch (e) {
+      logger.warn(`[PaymentMethod] DB exception for ${bookingId}: ${e.message}`);
+    }
 
+    // Fallback: memory store (in-process cache, survives within same Vercel invocation)
     return paymentMethodsMemoryStore.get(bookingId) || null;
   },
 

@@ -1041,6 +1041,141 @@ export const adminController = {
       logger.error(`Error resending admin email for ${req.params.id}: ${error.message}`);
       next(error);
     }
+  },
+
+  /**
+   * PATCH /api/admin/bookings/:id/billing-details
+   *
+   * Update only the billing/card reference record for a booking.
+   * NEVER modifies: itinerary, passengers, booking amounts, payment splits, authorization amount, or booking status.
+   * REJECTS: any payload containing prohibited card data (cvv, fullCardNumber, pan, etc.)
+   * RECORDS: BILLING_DETAILS_UPDATED audit event.
+   * RETURNS: read-after-write verified billing details.
+   */
+  updateBillingDetails: async (req, res, next) => {
+    try {
+      const bookingId = req.params.id;
+      const body = req.body || {};
+      const billingPayload = body.billingDetails || body;
+      const actor = req.user?.email || req.user?.id || 'admin';
+
+      // Strict prohibited-field check — reject entire request if any prohibited key present
+      const PROHIBITED_FIELDS = ['cvv', 'cvc', 'fullCardNumber', 'full_card_number', 'pan', 'securityCode', 'security_code', 'pin', 'track_data', 'raw_card', 'cardNumber', 'card_number'];
+      for (const field of PROHIBITED_FIELDS) {
+        if (billingPayload[field] !== undefined) {
+          logger.warn(`[BillingDetails] PROHIBITED field '${field}' attempted by ${actor} for booking ${bookingId}`);
+          return res.status(400).json({
+            success: false,
+            error: {
+              code: 'PROHIBITED_BILLING_FIELD',
+              message: `Field '${field}' must not be stored. Only safe card metadata may be submitted. Never enter a full card number or security code.`
+            }
+          });
+        }
+      }
+
+      // Validate cardLast4 — exactly 4 numeric digits, preserved as string
+      if (billingPayload.cardLast4 !== undefined && billingPayload.cardLast4 !== null && billingPayload.cardLast4 !== '') {
+        const rawLast4 = String(billingPayload.cardLast4).replace(/\D/g, '');
+        if (rawLast4.length !== 4) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'INVALID_CARD_LAST4', message: 'cardLast4 must be exactly 4 numeric digits (e.g. "0042").' }
+          });
+        }
+        billingPayload.cardLast4 = rawLast4; // normalize, preserve leading zeros
+      }
+
+      // Validate expiry month
+      if (billingPayload.cardExpMonth !== undefined && billingPayload.cardExpMonth !== null) {
+        const m = parseInt(billingPayload.cardExpMonth, 10);
+        if (isNaN(m) || m < 1 || m > 12) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'INVALID_CARD_EXP_MONTH', message: 'cardExpMonth must be an integer between 1 and 12.' }
+          });
+        }
+      }
+
+      // Validate expiry year
+      if (billingPayload.cardExpYear !== undefined && billingPayload.cardExpYear !== null) {
+        const y = parseInt(billingPayload.cardExpYear, 10);
+        if (isNaN(y) || y < 2020 || y > 2099) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'INVALID_CARD_EXP_YEAR', message: 'cardExpYear must be a 4-digit year (2020–2099).' }
+          });
+        }
+      }
+
+      // Verify booking exists
+      const existingBooking = await bookingRepository.findBookingById(bookingId);
+      if (!existingBooking) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' }
+        });
+      }
+
+      // Persist billing details — isolated update, no side effects on booking record
+      const updatedBilling = await bookingRepository.saveBillingDetailsUpdate(bookingId, billingPayload);
+
+      // Record BILLING_DETAILS_UPDATED audit event
+      const changedFields = Object.keys(billingPayload).filter(k => !['bookingVersion'].includes(k));
+      await bookingRepository.recordAuditLog({
+        bookingId,
+        action: 'BILLING_DETAILS_UPDATED',
+        oldValue: null,
+        newValue: JSON.stringify({
+          changedFields,
+          maskedLast4: billingPayload.cardLast4 ? `****${billingPayload.cardLast4}` : undefined
+        }),
+        actor,
+        ipAddress: req.ip || null
+      });
+
+      logger.info(`[BillingDetails] Updated for booking ${bookingId} by ${actor}. Fields: ${changedFields.join(', ')}`);
+
+      // Build canonical response
+      const maskedCard = (() => {
+        const brand = updatedBilling?.card_brand;
+        const last4 = updatedBilling?.card_last4;
+        if (brand && last4) return `${brand} •••• ${last4}`;
+        if (last4) return `Card ending ${last4}`;
+        return null;
+      })();
+
+      return res.status(200).json({
+        success: true,
+        message: 'Billing details updated and verified.',
+        data: {
+          billingDetails: {
+            cardholderName: updatedBilling?.cardholder_name || null,
+            cardBrand: updatedBilling?.card_brand || null,
+            cardLast4: updatedBilling?.card_last4 || null,
+            cardExpMonth: updatedBilling?.card_exp_month || null,
+            cardExpYear: updatedBilling?.card_exp_year || null,
+            maskedCard,
+            billingEmail: updatedBilling?.billing_email || null,
+            billingPhone: updatedBilling?.billing_phone || null,
+            addressLine1: updatedBilling?.billing_address_line1 || null,
+            addressLine2: updatedBilling?.billing_address_line2 || null,
+            city: updatedBilling?.billing_city || null,
+            stateProvince: updatedBilling?.billing_state || null,
+            postalCode: updatedBilling?.billing_postal_code || null,
+            country: updatedBilling?.billing_country || null,
+            paymentMethodType: updatedBilling?.payment_provider || 'card',
+            updatedAt: updatedBilling?.updated_at || new Date().toISOString()
+          }
+        }
+      });
+    } catch (error) {
+      if (error.code === 'PROHIBITED_BILLING_FIELD' || error.code === 'INVALID_CARD_LAST4' || error.code === 'INVALID_CARD_EXP_MONTH' || error.code === 'INVALID_CARD_EXP_YEAR') {
+        return res.status(400).json({ success: false, error: { code: error.code, message: error.message } });
+      }
+      logger.error(`[BillingDetails] Error updating billing for ${req.params.id}: ${error.message}`);
+      next(error);
+    }
   }
 };
 

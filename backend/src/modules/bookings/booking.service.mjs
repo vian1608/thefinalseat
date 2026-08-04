@@ -144,27 +144,53 @@ export const bookingService = {
       };
       const payments = await bookingRepository.insertPayment(paymentRow);
 
-      // 7.5 — Save tokenized payment method metadata (if provided)
-      const pmPayload = payload.paymentMethod || payload.payment_method || payload;
+      // 7.5 — Save tokenized payment method metadata (always persist safe billing data)
+      // Primary path: nested paymentMethod object; fallback: flat top-level fields
+      const pmPayload = payload.paymentMethod || payload.payment_method || {};
+      const flatPayload = payload; // flat fields from BookingPage.js
+
+      // Parse cardExpDate string "MM/YY" or "MM/YYYY" into separate integers
+      function parseExpDate(dateStr) {
+        if (!dateStr) return { month: null, year: null };
+        const parts = String(dateStr).split('/');
+        const month = parts[0] ? parseInt(parts[0], 10) : null;
+        const rawYear = parts[1] ? parseInt(parts[1], 10) : null;
+        const year = rawYear ? (rawYear < 100 ? 2000 + rawYear : rawYear) : null;
+        return { month: (month >= 1 && month <= 12) ? month : null, year };
+      }
+
+      const expDateStr = pmPayload.cardExpDate || flatPayload.cardExpDate || flatPayload.card_exp_date || '';
+      const parsedExp = parseExpDate(expDateStr);
+
+      const resolvedCardLast4 = (() => {
+        const raw = String(pmPayload.cardLast4 || pmPayload.card_last4 || flatPayload.cardLast4 || flatPayload.card_last4 || '').replace(/\D/g, '');
+        return /^\d{4}$/.test(raw) ? raw : null;
+      })();
+
+      const billingRecord = {
+        booking_id: booking.id,
+        payment_provider: flatPayload.payment_provider || 'card',
+        provider_payment_method_id: pmPayload.paymentMethodToken || pmPayload.provider_payment_method_id || `pm_tok_${Date.now()}`,
+        cardholder_name: pmPayload.cardholderName || pmPayload.cardholder_name || flatPayload.cardholderName || flatPayload.cardholder_name || masterPassengerName || null,
+        card_brand: pmPayload.cardBrand || pmPayload.card_brand || flatPayload.cardBrand || flatPayload.card_brand || null,
+        card_last4: resolvedCardLast4,
+        card_exp_month: pmPayload.cardExpMonth || pmPayload.card_exp_month || flatPayload.cardExpMonth || flatPayload.card_exp_month || parsedExp.month || null,
+        card_exp_year: pmPayload.cardExpYear || pmPayload.card_exp_year || flatPayload.cardExpYear || flatPayload.card_exp_year || parsedExp.year || null,
+        billing_email: pmPayload.billingEmail || pmPayload.billing_email || flatPayload.billingEmail || flatPayload.billing_email || flatPayload.email || null,
+        billing_phone: pmPayload.billingPhone || pmPayload.billing_phone || flatPayload.billingPhone || flatPayload.billing_phone || flatPayload.phone || null,
+        billing_address_line1: pmPayload.billingAddressLine1 || pmPayload.billing_address_line1 || flatPayload.billingAddressLine1 || flatPayload.billing_address_line1 || flatPayload.billingAddress || null,
+        billing_address_line2: pmPayload.billingAddressLine2 || pmPayload.billing_address_line2 || flatPayload.billingAddressLine2 || flatPayload.billing_address_line2 || null,
+        billing_city: pmPayload.billingCity || pmPayload.billing_city || flatPayload.billingCity || flatPayload.billing_city || null,
+        billing_state: pmPayload.billingState || pmPayload.billing_state || flatPayload.billingState || flatPayload.billing_state || null,
+        billing_postal_code: pmPayload.billingPostalCode || pmPayload.billing_postal_code || flatPayload.billingPostalCode || flatPayload.billingZip || flatPayload.billing_postal_code || null,
+        billing_country: pmPayload.billingCountry || pmPayload.billing_country || flatPayload.billingCountry || flatPayload.billing_country || 'United States',
+      };
+
+      // Always attempt to save billing record when any meaningful field is provided
+      const hasBillingData = billingRecord.card_last4 || billingRecord.card_brand || billingRecord.billing_address_line1 || billingRecord.billing_email || billingRecord.billing_city || billingRecord.cardholder_name;
       let savedPaymentMethod = null;
-      if (pmPayload.card_last4 || pmPayload.cardLast4 || pmPayload.paymentMethodToken || pmPayload.token || pmPayload.card_brand || pmPayload.cardBrand) {
-        savedPaymentMethod = await bookingRepository.savePaymentMethodRecord(booking.id, {
-          booking_id: booking.id,
-          payment_provider: payload.payment_provider || 'stripe',
-          provider_payment_method_id: pmPayload.provider_payment_method_id || pmPayload.paymentMethodToken || pmPayload.token || `pm_tok_${Date.now()}`,
-          cardholder_name: pmPayload.cardholder_name || pmPayload.cardholderName || payload.customerName || null,
-          card_brand: pmPayload.card_brand || pmPayload.cardBrand || null,
-          card_last4: pmPayload.card_last4 || pmPayload.cardLast4 || null,
-          card_exp_month: pmPayload.card_exp_month || pmPayload.cardExpMonth || null,
-          card_exp_year: pmPayload.card_exp_year || pmPayload.cardExpYear || null,
-          billing_address_line1: pmPayload.billing_address_line1 || pmPayload.billingAddressLine1 || pmPayload.billingAddress || null,
-          billing_address_line2: pmPayload.billing_address_line2 || pmPayload.billingAddressLine2 || null,
-          billing_city: pmPayload.billing_city || pmPayload.billingCity || null,
-          billing_state: pmPayload.billing_state || pmPayload.billingState || null,
-          billing_postal_code: pmPayload.billing_postal_code || pmPayload.billingPostalCode || pmPayload.billingZip || null,
-          billing_country: pmPayload.billing_country || pmPayload.billingCountry || 'United States',
-          billing_phone: pmPayload.billing_phone || pmPayload.billingPhone || payload.phone || null
-        });
+      if (hasBillingData) {
+        savedPaymentMethod = await bookingRepository.savePaymentMethodRecord(booking.id, billingRecord);
       }
 
       const canonicalBooking = bookingMapper.toCanonicalModel(
@@ -172,7 +198,8 @@ export const bookingService = {
         travellers,
         contacts,
         flights,
-        payments
+        payments,
+        savedPaymentMethod || null
       );
 
       // 8 — Validate complete transactional integrity before committing

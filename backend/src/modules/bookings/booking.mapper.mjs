@@ -51,11 +51,12 @@ export const bookingMapper = {
     };
   },
 
-  toCanonicalModel: (booking, travellers = [], contacts = [], flights = [], payments = []) => {
+  toCanonicalModel: (booking, travellers = [], contacts = [], flights = [], payments = [], paymentMethod = null) => {
     if (!booking) return null;
 
     const contact = contacts[0] || {};
     const paymentRecord = payments[0] || {};
+    const pm = paymentMethod || {}; // tokenized payment method record
     const itinerary = itineraryMapper.toDomainModel(flights);
 
     const hasCustomerPrice = (booking.customer_price !== undefined && booking.customer_price !== null) || (booking.total_amount !== undefined && booking.total_amount !== null);
@@ -192,18 +193,52 @@ export const bookingMapper = {
       ticketNotes: booking.ticket_notes,
       supplierConfirmation: booking.supplier_confirmation,
       cardReference: {
-        cardBrand: booking.card_brand || paymentRecord.card_brand || booking.cardBrand || paymentRecord.cardBrand || null,
-        cardLast4: booking.card_last4 || paymentRecord.card_last4 || booking.cardLast4 || paymentRecord.cardLast4 || null,
-        cardExpMonth: booking.card_exp_month || paymentRecord.card_exp_month || booking.cardExpMonth || paymentRecord.cardExpMonth || null,
-        cardExpYear: booking.card_exp_year || paymentRecord.card_exp_year || booking.cardExpYear || paymentRecord.cardExpYear || null,
-        cardExpDate: booking.card_exp_date || paymentRecord.card_exp_date || (booking.card_exp_month && booking.card_exp_year ? `${booking.card_exp_month}/${booking.card_exp_year}` : null),
-        cardholderName: booking.cardholder_name || paymentRecord.cardholder_name || booking.passenger_name || null,
-        billingPhone: booking.billing_phone || booking.phone || null,
-        billingAddress: booking.billing_address || (booking.billing_city ? `${booking.billing_city}, ${booking.billing_state || ''} ${booking.billing_zip || ''}`.trim() : null)
+        cardBrand: pm.card_brand || booking.card_brand || paymentRecord.card_brand || null,
+        cardLast4: pm.card_last4 || booking.card_last4 || paymentRecord.card_last4 || null,
+        cardExpMonth: pm.card_exp_month || booking.card_exp_month || paymentRecord.card_exp_month || null,
+        cardExpYear: pm.card_exp_year || booking.card_exp_year || paymentRecord.card_exp_year || null,
+        cardExpDate: (pm.card_exp_month && pm.card_exp_year)
+          ? `${pm.card_exp_month}/${pm.card_exp_year}`
+          : (booking.card_exp_date || paymentRecord.card_exp_date || null),
+        cardholderName: pm.cardholder_name || booking.cardholder_name || paymentRecord.cardholder_name || booking.passenger_name || null,
+        billingPhone: pm.billing_phone || booking.billing_phone || booking.phone || null,
+        billingAddress: pm.billing_address_line1 || booking.billing_address || null
       },
-      cardBrand: booking.card_brand || paymentRecord.card_brand || booking.cardBrand || paymentRecord.cardBrand || null,
-      cardLast4: booking.card_last4 || paymentRecord.card_last4 || booking.cardLast4 || paymentRecord.cardLast4 || null,
-      cardExpDate: booking.card_exp_date || paymentRecord.card_exp_date || null,
+      // Structured billingDetails object — canonical form for admin dashboard
+      billingDetails: {
+        cardholderName: pm.cardholder_name || booking.cardholder_name || paymentRecord.cardholder_name || booking.passenger_name || null,
+        cardBrand: pm.card_brand || booking.card_brand || paymentRecord.card_brand || null,
+        cardLast4: pm.card_last4 || booking.card_last4 || paymentRecord.card_last4 || null,
+        cardExpMonth: pm.card_exp_month || booking.card_exp_month || paymentRecord.card_exp_month || null,
+        cardExpYear: pm.card_exp_year || booking.card_exp_year || paymentRecord.card_exp_year || null,
+        maskedCard: (() => {
+          const brand = pm.card_brand || booking.card_brand || paymentRecord.card_brand;
+          const last4 = pm.card_last4 || booking.card_last4 || paymentRecord.card_last4;
+          if (brand && last4) return `${brand} \u2022\u2022\u2022\u2022 ${last4}`;
+          if (last4) return `Card ending ${last4}`;
+          return null;
+        })(),
+        billingEmail: pm.billing_email || null,
+        billingPhone: pm.billing_phone || booking.billing_phone || booking.phone || null,
+        addressLine1: pm.billing_address_line1 || null,
+        addressLine2: pm.billing_address_line2 || null,
+        city: pm.billing_city || null,
+        stateProvince: pm.billing_state || null,
+        postalCode: pm.billing_postal_code || null,
+        country: pm.billing_country || null,
+        paymentMethodType: pm.payment_provider || 'card',
+        paymentMethodToken: pm.provider_payment_method_id || null,
+        transactionReference: booking.transaction_reference || paymentRecord.provider_payment_id || null,
+        createdAt: pm.created_at || null,
+        updatedAt: pm.updated_at || null
+      },
+      cardBrand: pm.card_brand || booking.card_brand || paymentRecord.card_brand || null,
+      cardLast4: pm.card_last4 || booking.card_last4 || paymentRecord.card_last4 || null,
+      cardExpDate: (pm.card_exp_month && pm.card_exp_year)
+        ? `${pm.card_exp_month}/${pm.card_exp_year}`
+        : (booking.card_exp_date || paymentRecord.card_exp_date || null),
+      // paymentMethod record (raw, for admin diagnostics)
+      paymentMethod: pm && pm.id ? pm : null,
       createdAt: booking.created_at,
       updatedAt: booking.updated_at,
       created_at: booking.created_at,

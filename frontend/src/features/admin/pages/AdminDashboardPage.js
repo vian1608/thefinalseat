@@ -216,6 +216,19 @@ function AdminDashboard() {
   const [paymentSaveError, setPaymentSaveError] = useState('');
   const [paymentSaveSuccessMsg, setPaymentSaveSuccessMsg] = useState('');
 
+  // Billing & Card Reference section state
+  const [billingForm, setBillingForm] = useState({
+    cardholderName: '', cardBrand: '', cardLast4: '', cardExpMonth: '', cardExpYear: '',
+    billingEmail: '', billingPhone: '',
+    addressLine1: '', addressLine2: '', city: '', stateProvince: '', postalCode: '', country: '',
+    transactionReference: ''
+  });
+  const [billingDirty, setBillingDirty] = useState(false);
+  const [billingSaving, setBillingSaving] = useState(false);
+  const [billingSaveStatus, setBillingSaveStatus] = useState('default');
+  const [billingSaveError, setBillingSaveError] = useState('');
+  const [billingSaveSuccessMsg, setBillingSaveSuccessMsg] = useState('');
+
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
 
@@ -246,6 +259,11 @@ function AdminDashboard() {
     setPaymentSaveStatus('default');
     setPaymentSaveError('');
     setPaymentSaveSuccessMsg('');
+    setBillingDirty(false);
+    setBillingSaving(false);
+    setBillingSaveStatus('default');
+    setBillingSaveError('');
+    setBillingSaveSuccessMsg('');
 
     setOpenAccordion(null);
     setFinalTicketEmailError('');
@@ -370,6 +388,30 @@ function AdminDashboard() {
       currency: s.currency || booking.currency || 'USD'
     }));
     setPaymentSplits(mappedSplits);
+
+    // Initialize Billing & Card Reference form from persisted billingDetails
+    const bd = booking.billingDetails || booking.cardReference || {};
+    const pm = booking.paymentMethod || {};
+    setBillingForm({
+      cardholderName: bd.cardholderName || pm.cardholder_name || booking.passenger_name || '',
+      cardBrand: bd.cardBrand || pm.card_brand || '',
+      cardLast4: bd.cardLast4 || pm.card_last4 || '',
+      cardExpMonth: bd.cardExpMonth || pm.card_exp_month || '',
+      cardExpYear: bd.cardExpYear || pm.card_exp_year || '',
+      billingEmail: bd.billingEmail || pm.billing_email || booking.email || '',
+      billingPhone: bd.billingPhone || pm.billing_phone || booking.phone || '',
+      addressLine1: bd.addressLine1 || pm.billing_address_line1 || '',
+      addressLine2: bd.addressLine2 || pm.billing_address_line2 || '',
+      city: bd.city || pm.billing_city || '',
+      stateProvince: bd.stateProvince || pm.billing_state || '',
+      postalCode: bd.postalCode || pm.billing_postal_code || '',
+      country: bd.country || pm.billing_country || 'United States',
+      transactionReference: bd.transactionReference || booking.transactionReference || booking.transaction_reference || ''
+    });
+    setBillingDirty(false);
+    setBillingSaveStatus('default');
+    setBillingSaveError('');
+    setBillingSaveSuccessMsg('');
 
     const savedPnr = booking.airline_confirmation_number || booking.airlineConfirmationNumber || booking.airline_pnr || booking.pnr || '';
     setTicketForm({
@@ -980,6 +1022,90 @@ function AdminDashboard() {
     setPaymentSaveStatus('default');
     setPaymentSaveSuccessMsg('');
     setPaymentSaveError('');
+  };
+
+  const markBillingDirty = () => {
+    setBillingDirty(true);
+    setBillingSaveStatus('default');
+    setBillingSaveSuccessMsg('');
+    setBillingSaveError('');
+  };
+
+  const handleSaveBillingDetails = async () => {
+    if (!selectedBooking) return;
+    setBillingSaveError('');
+    setBillingSaveSuccessMsg('');
+    setBillingSaveStatus('saving');
+    setBillingSaving(true);
+
+    // Validate cardLast4 — only if provided
+    if (billingForm.cardLast4 && !/^\d{4}$/.test(String(billingForm.cardLast4).replace(/\D/g, ''))) {
+      setBillingSaveStatus('failure');
+      setBillingSaveError('Card last 4 must be exactly 4 digits.');
+      setBillingSaving(false);
+      return;
+    }
+    // Validate expiry month
+    if (billingForm.cardExpMonth && (parseInt(billingForm.cardExpMonth) < 1 || parseInt(billingForm.cardExpMonth) > 12)) {
+      setBillingSaveStatus('failure');
+      setBillingSaveError('Expiry month must be between 1 and 12.');
+      setBillingSaving(false);
+      return;
+    }
+    // Validate expiry year
+    if (billingForm.cardExpYear && (parseInt(billingForm.cardExpYear) < 2020 || parseInt(billingForm.cardExpYear) > 2099)) {
+      setBillingSaveStatus('failure');
+      setBillingSaveError('Expiry year must be a 4-digit year (2020–2099).');
+      setBillingSaving(false);
+      return;
+    }
+
+    try {
+      const adminToken = localStorage.getItem('token');
+      const payload = {
+        billingDetails: {
+          cardholderName: billingForm.cardholderName || undefined,
+          cardBrand: billingForm.cardBrand || undefined,
+          cardLast4: billingForm.cardLast4 ? String(billingForm.cardLast4).replace(/\D/g, '') : undefined,
+          cardExpMonth: billingForm.cardExpMonth ? parseInt(billingForm.cardExpMonth) : undefined,
+          cardExpYear: billingForm.cardExpYear ? parseInt(billingForm.cardExpYear) : undefined,
+          billingEmail: billingForm.billingEmail || undefined,
+          billingPhone: billingForm.billingPhone || undefined,
+          addressLine1: billingForm.addressLine1 || undefined,
+          addressLine2: billingForm.addressLine2 || undefined,
+          city: billingForm.city || undefined,
+          stateProvince: billingForm.stateProvince || undefined,
+          postalCode: billingForm.postalCode || undefined,
+          country: billingForm.country || undefined,
+          transactionReference: billingForm.transactionReference || undefined
+        }
+      };
+
+      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/billing-details`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error?.message || 'Failed to save billing details.');
+      }
+
+      setBillingSaveStatus('success');
+      setBillingSaveSuccessMsg('Billing details saved and verified.');
+      setBillingDirty(false);
+
+      // Update local booking state with fresh billing details
+      if (data.data?.billingDetails) {
+        setSelectedBooking(prev => ({ ...prev, billingDetails: data.data.billingDetails }));
+      }
+    } catch (err) {
+      setBillingSaveStatus('failure');
+      setBillingSaveError(err.message);
+    } finally {
+      setBillingSaving(false);
+    }
   };
 
   const isPaymentInvalid = () => {
@@ -3027,7 +3153,231 @@ function AdminDashboard() {
 
 
 
-                    {/* 5. EMAIL DELIVERY ACTIVITY ACCORDION */}
+                    {/* 5. BILLING & CARD REFERENCE ACCORDION */}
+                    <div className="admin-accordion-card">
+                      <button
+                        type="button"
+                        className="admin-accordion-header"
+                        onClick={() => setOpenAccordion(openAccordion === 'billing_details' ? null : 'billing_details')}
+                      >
+                        <span className="accordion-title-left">
+                          <i className={`fas ${openAccordion === 'billing_details' ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
+                          Billing &amp; Card Reference
+                        </span>
+                        <span className="accordion-summary-right" style={{ fontStyle: 'italic' }}>
+                          {(() => {
+                            const bd = selectedBooking?.billingDetails || selectedBooking?.cardReference || {};
+                            const pm = selectedBooking?.paymentMethod || {};
+                            const brand = bd.cardBrand || pm.card_brand || '';
+                            const last4 = bd.cardLast4 || pm.card_last4 || '';
+                            if (brand && last4) return `${brand} •••• ${last4}`;
+                            if (last4) return `Card ending ${last4}`;
+                            return 'Not recorded';
+                          })()}
+                        </span>
+                      </button>
+
+                      {openAccordion === 'billing_details' && (
+                        <div className="admin-accordion-body" style={{ padding: '14px' }}>
+                          {/* Security notice */}
+                          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '6px', padding: '8px 12px', marginBottom: '14px', fontSize: '0.77rem', color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                            <i className="fas fa-shield-alt" style={{ marginTop: '1px', flexShrink: 0 }}></i>
+                            <span><strong>Safe metadata only.</strong> Never enter a full card number, CVV, PIN, or any security code. Only card brand, last 4 digits, expiry, and billing address may be stored.</span>
+                          </div>
+
+                          {/* Feedback banners */}
+                          {billingSaveStatus === 'success' && billingSaveSuccessMsg && (
+                            <div style={{ color: '#15803d', background: '#dcfce7', border: '1px solid #bbf7d0', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600', marginBottom: '10px' }}>
+                              <i className="fas fa-check-circle" style={{ marginRight: '6px' }}></i>{billingSaveSuccessMsg}
+                            </div>
+                          )}
+                          {billingSaveStatus === 'failure' && billingSaveError && (
+                            <div style={{ color: '#b91c1c', background: '#fee2e2', border: '1px solid #fecaca', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600', marginBottom: '10px' }}>
+                              <i className="fas fa-exclamation-triangle" style={{ marginRight: '6px' }}></i>{billingSaveError}
+                            </div>
+                          )}
+
+                          {/* Card Reference */}
+                          <div style={{ marginBottom: '14px' }}>
+                            <div style={{ fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid #f1f5f9' }}>
+                              Card Reference
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <div className="drawer-form-field">
+                                <label>Cardholder Name</label>
+                                <input
+                                  type="text"
+                                  value={billingForm.cardholderName}
+                                  placeholder="e.g. John Smith"
+                                  disabled={billingSaving}
+                                  onChange={e => { setBillingForm(f => ({ ...f, cardholderName: e.target.value })); markBillingDirty(); }}
+                                />
+                              </div>
+                              <div className="drawer-form-field">
+                                <label>Card Brand</label>
+                                <select value={billingForm.cardBrand} disabled={billingSaving} onChange={e => { setBillingForm(f => ({ ...f, cardBrand: e.target.value })); markBillingDirty(); }}>
+                                  <option value="">— Unknown —</option>
+                                  <option value="Visa">Visa</option>
+                                  <option value="Mastercard">Mastercard</option>
+                                  <option value="American Express">American Express</option>
+                                  <option value="Discover">Discover</option>
+                                  <option value="Diners Club">Diners Club</option>
+                                  <option value="UnionPay">UnionPay</option>
+                                  <option value="JCB">JCB</option>
+                                </select>
+                              </div>
+                              <div className="drawer-form-field">
+                                <label>Last 4 Digits (safe)</label>
+                                <input
+                                  type="text"
+                                  value={billingForm.cardLast4}
+                                  placeholder="e.g. 4242"
+                                  maxLength={4}
+                                  disabled={billingSaving}
+                                  onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setBillingForm(f => ({ ...f, cardLast4: v })); markBillingDirty(); }}
+                                />
+                              </div>
+                              <div className="drawer-form-field">
+                                <label>Expiry (MM / YYYY)</label>
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                  <input
+                                    type="number" min="1" max="12"
+                                    value={billingForm.cardExpMonth}
+                                    placeholder="MM"
+                                    disabled={billingSaving}
+                                    style={{ width: '60px' }}
+                                    onChange={e => { setBillingForm(f => ({ ...f, cardExpMonth: e.target.value })); markBillingDirty(); }}
+                                  />
+                                  <input
+                                    type="number" min="2020" max="2099"
+                                    value={billingForm.cardExpYear}
+                                    placeholder="YYYY"
+                                    disabled={billingSaving}
+                                    style={{ flex: 1 }}
+                                    onChange={e => { setBillingForm(f => ({ ...f, cardExpYear: e.target.value })); markBillingDirty(); }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            {/* Masked preview */}
+                            {(billingForm.cardBrand || billingForm.cardLast4) && (
+                              <div style={{ marginTop: '8px', padding: '6px 10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.8rem', color: '#475569', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                <i className="fas fa-credit-card" style={{ color: '#8b1236' }}></i>
+                                <span>
+                                  <strong>{billingForm.cardBrand || 'Card'}</strong>
+                                  {billingForm.cardLast4 ? ` •••• ${billingForm.cardLast4}` : ''}
+                                  {billingForm.cardExpMonth && billingForm.cardExpYear ? ` · ${billingForm.cardExpMonth}/${billingForm.cardExpYear}` : ''}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Billing Contact */}
+                          <div style={{ marginBottom: '14px' }}>
+                            <div style={{ fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid #f1f5f9' }}>
+                              Billing Contact
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <div className="drawer-form-field">
+                                <label>Billing Email</label>
+                                <input type="email" value={billingForm.billingEmail} placeholder="customer@email.com" disabled={billingSaving} onChange={e => { setBillingForm(f => ({ ...f, billingEmail: e.target.value })); markBillingDirty(); }} />
+                              </div>
+                              <div className="drawer-form-field">
+                                <label>Billing Phone</label>
+                                <input type="text" value={billingForm.billingPhone} placeholder="+1 (555) 000-0000" disabled={billingSaving} onChange={e => { setBillingForm(f => ({ ...f, billingPhone: e.target.value })); markBillingDirty(); }} />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Billing Address */}
+                          <div style={{ marginBottom: '14px' }}>
+                            <div style={{ fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid #f1f5f9' }}>
+                              Billing Address
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
+                              <div className="drawer-form-field">
+                                <label>Address Line 1</label>
+                                <input type="text" value={billingForm.addressLine1} placeholder="123 Main Street" disabled={billingSaving} onChange={e => { setBillingForm(f => ({ ...f, addressLine1: e.target.value })); markBillingDirty(); }} />
+                              </div>
+                              <div className="drawer-form-field">
+                                <label>Address Line 2 (Optional)</label>
+                                <input type="text" value={billingForm.addressLine2} placeholder="Apt 4B, Suite 100" disabled={billingSaving} onChange={e => { setBillingForm(f => ({ ...f, addressLine2: e.target.value })); markBillingDirty(); }} />
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                                <div className="drawer-form-field">
+                                  <label>City</label>
+                                  <input type="text" value={billingForm.city} placeholder="New York" disabled={billingSaving} onChange={e => { setBillingForm(f => ({ ...f, city: e.target.value })); markBillingDirty(); }} />
+                                </div>
+                                <div className="drawer-form-field">
+                                  <label>State / Province</label>
+                                  <input type="text" value={billingForm.stateProvince} placeholder="NY" disabled={billingSaving} onChange={e => { setBillingForm(f => ({ ...f, stateProvince: e.target.value })); markBillingDirty(); }} />
+                                </div>
+                                <div className="drawer-form-field">
+                                  <label>Postal Code</label>
+                                  <input type="text" value={billingForm.postalCode} placeholder="10001" disabled={billingSaving} onChange={e => { setBillingForm(f => ({ ...f, postalCode: e.target.value })); markBillingDirty(); }} />
+                                </div>
+                              </div>
+                              <div className="drawer-form-field">
+                                <label>Country</label>
+                                <input type="text" value={billingForm.country} placeholder="United States" disabled={billingSaving} onChange={e => { setBillingForm(f => ({ ...f, country: e.target.value })); markBillingDirty(); }} />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Transaction Reference */}
+                          <div style={{ marginBottom: '14px' }}>
+                            <div style={{ fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid #f1f5f9' }}>
+                              Transaction Reference
+                            </div>
+                            <div className="drawer-form-field">
+                              <label>Transaction / Payment Reference ID</label>
+                              <input type="text" value={billingForm.transactionReference} placeholder="TXN-XXXXX or Whop receipt ID" disabled={billingSaving} onChange={e => { setBillingForm(f => ({ ...f, transactionReference: e.target.value })); markBillingDirty(); }} />
+                            </div>
+                          </div>
+
+                          {/* Save button */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {billingDirty && (
+                              <div style={{ color: '#b45309', background: '#fffbeb', border: '1px solid #fef3c7', padding: '7px 10px', borderRadius: '5px', fontSize: '0.78rem', fontWeight: '600' }}>
+                                <i className="fas fa-info-circle" style={{ marginRight: '5px' }}></i>Unsaved billing changes
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              id="billing-details-save-btn"
+                              onClick={handleSaveBillingDetails}
+                              disabled={billingSaving || !billingDirty}
+                              style={{
+                                width: '100%',
+                                background: billingSaving ? '#cbd5e1' : (!billingDirty ? '#e2e8f0' : '#1e3a5f'),
+                                color: billingSaving || !billingDirty ? '#94a3b8' : '#ffffff',
+                                border: 'none',
+                                padding: '10px 16px',
+                                borderRadius: '6px',
+                                fontSize: '0.82rem',
+                                fontWeight: '700',
+                                cursor: billingSaving || !billingDirty ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              {billingSaving ? (
+                                <><i className="fas fa-spinner fa-spin"></i> Saving Billing Details…</>
+                              ) : billingSaveStatus === 'success' && !billingDirty ? (
+                                <><i className="fas fa-check-double"></i> Billing Details Saved</>
+                              ) : (
+                                <><i className="fas fa-save"></i> Save Billing Details</>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 6. EMAIL DELIVERY ACTIVITY ACCORDION */}
                     <div className="admin-accordion-card">
                       <button
                         type="button"

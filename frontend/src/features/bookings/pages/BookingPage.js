@@ -386,6 +386,29 @@ function Booking() {
     const cardLast4 = /^\d{4}$/.test(cleanCardNum.slice(-4)) ? cleanCardNum.slice(-4) : null;
     const cardBrand = detectCardBrand(cardForm.cardNumber).name;
 
+    // Parse expDate "MM/YY" or "MM/YYYY" into separate integers
+    const expParts = (cardForm.expDate || '').split('/');
+    const cardExpMonth = expParts[0] ? parseInt(expParts[0], 10) : null;
+    const rawYear = expParts[1] ? parseInt(expParts[1], 10) : null;
+    const cardExpYear = rawYear ? (rawYear < 100 ? 2000 + rawYear : rawYear) : null;
+
+    // Canonical nested paymentMethod object for reliable service-layer pickup
+    const paymentMethod = {
+      cardholderName: cardForm.cardholderName || customerName,
+      cardBrand,
+      cardLast4,
+      cardExpMonth,
+      cardExpYear,
+      billingPhone: cardForm.billingPhone,
+      billingEmail: primaryContact.email,
+      billingAddressLine1: cardForm.billingAddress,
+      billingAddressLine2: cardForm.billingAddress2 || '',
+      billingCity: cardForm.billingCity,
+      billingState: cardForm.billingState,
+      billingPostalCode: cardForm.billingZip,
+      billingCountry: cardForm.billingCountry,
+    };
+
     const bookingPayload = {
       idempotency_key: idempotencyKeyRef.current,
       customerName,
@@ -402,16 +425,25 @@ function Booking() {
       displayedWebsitePrice: pricing.total,
       paymentStatus: 'pending',
       payment_provider: 'card',
-      cardholderName: cardForm.cardholderName,
+      // Nested canonical object (primary pickup path)
+      paymentMethod,
+      // Flat fields (legacy fallback path)
+      cardholderName: paymentMethod.cardholderName,
       cardLast4,
       cardBrand,
+      cardExpMonth,
+      cardExpYear,
       cardExpDate: cardForm.expDate,
       card_exp_date: cardForm.expDate,
       billingPhone: cardForm.billingPhone,
-      billingAddress: `${cardForm.billingAddress}${cardForm.billingAddress2 ? `, ${cardForm.billingAddress2}` : ''}`,
+      billingEmail: primaryContact.email,
+      billingAddressLine1: cardForm.billingAddress,
+      billingAddressLine2: cardForm.billingAddress2 || '',
+      billingAddress: cardForm.billingAddress,
       billingCity: cardForm.billingCity,
       billingState: cardForm.billingState,
       billingZip: cardForm.billingZip,
+      billingPostalCode: cardForm.billingZip,
       billingCountry: cardForm.billingCountry,
       currency: 'USD',
       status: 'PENDING',
