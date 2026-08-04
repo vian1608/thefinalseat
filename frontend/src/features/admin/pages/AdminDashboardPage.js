@@ -476,6 +476,10 @@ function AdminDashboard() {
 
       if (bookingsRes.status === 'fulfilled' && bookingsRes.value?.success) {
         setBookings(bookingsRes.value.data || []);
+      } else {
+        const errorMsg = bookingsRes.status === 'rejected' ? bookingsRes.reason?.message : (bookingsRes.value?.error || 'Failed to fetch bookings');
+        console.error('Bookings API failed:', errorMsg);
+        setError(`Unable to load bookings: ${errorMsg}`);
       }
       if (statsRes.status === 'fulfilled' && statsRes.value?.success) {
         setStats(statsRes.value.data || null);

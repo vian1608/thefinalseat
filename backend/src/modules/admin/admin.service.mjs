@@ -26,23 +26,7 @@ export const adminService = {
   },
 
   getAllBookings: async (filters) => {
-    const bookings = await bookingRepository.findAllBookings(filters);
-    // Enrich with relations if requested or available
-    const enriched = await Promise.all((bookings || []).map(async (b) => {
-      try {
-        const rels = await bookingRepository.getRelations(b.id);
-        return {
-          ...b,
-          travellers: rels.travellers || [],
-          contacts: rels.contacts || [],
-          flights: rels.flights || [],
-          payments: rels.payments || []
-        };
-      } catch (e) {
-        return b;
-      }
-    }));
-    return enriched;
+    return bookingRepository.findAllBookings(filters);
   },
 
   getBookingDetails: async (id) => {

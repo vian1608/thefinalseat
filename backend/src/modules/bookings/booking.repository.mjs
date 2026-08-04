@@ -955,13 +955,116 @@ export const bookingRepository = {
 
     const { data, error } = await query;
     if (error) throw new Error(error.message);
+    if (!data || data.length === 0) return [];
 
-    const enrichedList = await Promise.all((data || []).map(async b => {
+    const bookingIds = data.map(b => b.id).filter(Boolean);
+
+    // Parallel batch query relations for all returned bookings (6 queries total for the entire page)
+    const [travellersRes, contactsRes, flightsRes, paymentsRes, segmentsRes, emailLogsRes] = await Promise.all([
+      supabase.from('travellers').select('*').in('booking_id', bookingIds),
+      supabase.from('contacts').select('*').in('booking_id', bookingIds),
+      supabase.from('flights').select('*').in('booking_id', bookingIds),
+      supabase.from('payments').select('*').in('booking_id', bookingIds),
+      supabase.from('booking_itinerary_segments').select('*').in('booking_id', bookingIds).order('segment_sequence', { ascending: true }),
+      supabase.from('email_logs').select('*').in('booking_id', bookingIds).order('created_at', { ascending: false })
+    ]);
+
+    const travellersMap = new Map();
+    (travellersRes.data || []).forEach(row => {
+      const list = travellersMap.get(row.booking_id) || [];
+      list.push(row);
+      travellersMap.set(row.booking_id, list);
+    });
+
+    const contactsMap = new Map();
+    (contactsRes.data || []).forEach(row => {
+      const list = contactsMap.get(row.booking_id) || [];
+      list.push(row);
+      contactsMap.set(row.booking_id, list);
+    });
+
+    const flightsMap = new Map();
+    (flightsRes.data || []).forEach(row => {
+      const list = flightsMap.get(row.booking_id) || [];
+      list.push(row);
+      flightsMap.set(row.booking_id, list);
+    });
+
+    const paymentsMap = new Map();
+    (paymentsRes.data || []).forEach(row => {
+      const list = paymentsMap.get(row.booking_id) || [];
+      list.push(row);
+      paymentsMap.set(row.booking_id, list);
+    });
+
+    const segmentsMap = new Map();
+    (segmentsRes.data || []).forEach(row => {
+      const list = segmentsMap.get(row.booking_id) || [];
+      list.push(row);
+      segmentsMap.set(row.booking_id, list);
+    });
+
+    const emailLogsMap = new Map();
+    (emailLogsRes.data || []).forEach(row => {
+      const list = emailLogsMap.get(row.booking_id) || [];
+      list.push(row);
+      emailLogsMap.set(row.booking_id, list);
+    });
+
+    const enrichedList = data.map(b => {
       const memOverridden = bookingsMemoryStore.get(b.id) || (b.confirmation_code ? bookingsMemoryStore.get(b.confirmation_code) : null);
       const merged = memOverridden ? { ...b, ...memOverridden } : b;
-      const rels = await bookingRepository.getRelations(merged.id);
+
+      const bTravellers = travellersMap.get(merged.id) || [];
+      const bContacts = contactsMap.get(merged.id) || [];
+      const bFlights = flightsMap.get(merged.id) || [];
+      const bPayments = paymentsMap.get(merged.id) || [];
+      const bSegments = segmentsMap.get(merged.id) || [];
+      const bEmailLogs = emailLogsMap.get(merged.id) || [];
+      const memorySegs = segmentsMemoryStore.get(merged.id) || [];
+
+      let finalSegs = bSegments.length > 0 ? bSegments : (memorySegs.length > 0 ? memorySegs : []);
+      if (finalSegs.length === 0 && bFlights.length > 0) {
+        let outSeq = 1;
+        let retSeq = 1;
+        finalSegs = bFlights.map(f => {
+          const dir = (f.leg === 'return' || f.leg === 'inbound') ? 'return' : 'outbound';
+          const seq = dir === 'return' ? retSeq++ : outSeq++;
+          return {
+            id: f.id,
+            booking_id: f.booking_id,
+            journey_direction: dir,
+            direction: dir,
+            segment_sequence: seq,
+            carrier_name: f.airline_name || f.carrier_name || '',
+            carrier_code: f.carrier_code || f.marketing_carrier_code || '',
+            marketing_carrier_code: f.carrier_code || f.marketing_carrier_code || '',
+            airline_name: f.airline_name || '',
+            flight_number: f.flight_number || '',
+            origin_airport: f.departure_airport || f.origin_airport || '',
+            destination_airport: f.arrival_airport || f.destination_airport || '',
+            departure_date: f.departure_date || '',
+            departure_time: f.departure_time_str || f.departure_time || '',
+            arrival_date: f.arrival_date || '',
+            arrival_time: f.arrival_time_str || f.arrival_time || '',
+            cabin: f.cabin_class || f.cabin || 'Economy',
+            stop_count: parseInt(f.stops || 0, 10)
+          };
+        });
+      }
+
+      const rels = {
+        travellers: bTravellers,
+        contacts: bContacts,
+        flights: bFlights,
+        payments: bPayments,
+        itinerarySegments: finalSegs,
+        emailLogs: bEmailLogs,
+        paymentSplits: splitsMemoryStore.get(merged.id) || splitsMemoryStore.get(merged.confirmation_code) || []
+      };
+
       return bookingRepository.enrichBookingRecord(merged, rels);
-    }));
+    });
 
     return enrichedList;
   },
