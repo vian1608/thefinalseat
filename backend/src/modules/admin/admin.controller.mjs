@@ -250,8 +250,11 @@ export const adminController = {
       if (req.body.ticket_number !== undefined) updatePayload.ticket_number = req.body.ticket_number;
       if (req.body.ticket_issue_date !== undefined) updatePayload.ticket_issue_date = req.body.ticket_issue_date;
 
+      let savedSplits = [];
       if (Array.isArray(req.body.payment_splits)) {
-        await bookingRepository.savePaymentSplits(id, req.body.payment_splits);
+        savedSplits = await bookingRepository.savePaymentSplits(id, req.body.payment_splits);
+      } else {
+        savedSplits = await bookingRepository.getPaymentSplits(id);
       }
 
       const updated = await bookingRepository.updateStatus(id, updatePayload);
@@ -269,10 +272,18 @@ export const adminController = {
       }
 
       const completeBooking = await bookingRepository.getCompleteBookingById(id);
+      const authorizedAmount = parseFloat(completeBooking.authorized_amount || completeBooking.customer_price || completeBooking.total_amount || 0);
 
       res.json({
         success: true,
-        message: 'Booking status updated successfully.',
+        message: Array.isArray(req.body.payment_splits)
+          ? 'Payment splits saved and available for authorization emails.'
+          : 'Booking status updated successfully.',
+        paymentAuthorization: {
+          authorizedAmount,
+          splits: savedSplits,
+          persisted: true
+        },
         data: completeBooking,
         booking: completeBooking
       });

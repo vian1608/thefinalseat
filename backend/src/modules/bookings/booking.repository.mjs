@@ -1556,46 +1556,91 @@ export const bookingRepository = {
     }
   },
 
-  savePaymentSplits: async (bookingId, splits = []) => {
-
+  savePaymentSplits: async (bookingIdInput, splits = []) => {
     try {
-      const formatted = (splits || []).map((s) => ({
-        booking_id: bookingId,
+      const booking = await bookingRepository.getById(bookingIdInput);
+      const realId = booking ? booking.id : bookingIdInput;
+      const refCode = booking ? (booking.confirmation_code || booking.bookingReference || realId) : bookingIdInput;
+
+      const formatted = (splits || []).map((s, index) => ({
+        booking_id: realId,
         merchant_name: s.merchant_name || s.merchantName || 'Merchant',
         amount: parseFloat(s.amount || 0),
-        currency: (s.currency || 'USD').toUpperCase()
+        currency: (s.currency || booking?.currency || 'USD').toUpperCase(),
+        display_order: index + 1
       }));
 
-      splitsMemoryStore.set(bookingId, formatted);
+      // Cache in memory store under BOTH keys (UUID and Confirmation Code)
+      splitsMemoryStore.set(realId, formatted);
+      if (refCode && refCode !== realId) {
+        splitsMemoryStore.set(refCode, formatted);
+      }
 
-      await supabase.from('payment_authorization_splits').delete().eq('booking_id', bookingId);
+      // Delete existing split rows for both UUID and Reference Code to ensure clean overwrite
+      await supabase.from('payment_authorization_splits').delete().eq('booking_id', realId);
+      if (refCode && refCode !== realId) {
+        await supabase.from('payment_authorization_splits').delete().eq('booking_id', refCode);
+      }
+
       if (formatted.length > 0) {
         const { error } = await supabase.from('payment_authorization_splits').insert(formatted);
         if (error) logger.warn(`savePaymentSplits notice: ${error.message}`);
       }
+
+      const splitSum = formatted.reduce((acc, curr) => acc + curr.amount, 0);
+
+      if (realId && splitSum > 0) {
+        await bookingRepository.updateBookingStatus(realId, {
+          authorized_amount: splitSum,
+          customer_price: splitSum
+        });
+      }
+
+      return formatted;
     } catch (e) {
       logger.warn(`savePaymentSplits notice: ${e.message}`);
+      return [];
     }
   },
 
-  getPaymentSplits: async (bookingId) => {
+  getPaymentSplits: async (bookingIdInput) => {
     try {
-      const inMem = splitsMemoryStore.get(bookingId);
-      if (inMem && inMem.length > 0) return inMem;
+      if (!bookingIdInput) return [];
+
+      let realId = bookingIdInput;
+      let refCode = bookingIdInput;
+
+      const booking = await bookingRepository.getById(bookingIdInput);
+      if (booking) {
+        realId = booking.id;
+        refCode = booking.confirmation_code || booking.bookingReference || realId;
+      }
+
+      const inMemReal = splitsMemoryStore.get(realId);
+      if (inMemReal && inMemReal.length > 0) return inMemReal;
+
+      const inMemRef = splitsMemoryStore.get(refCode);
+      if (inMemRef && inMemRef.length > 0) return inMemRef;
 
       const { data } = await supabase
         .from('payment_authorization_splits')
         .select('*')
-        .eq('booking_id', bookingId);
+        .or(`booking_id.eq.${realId},booking_id.eq.${refCode}`)
+        .order('id', { ascending: true });
 
       if (data && data.length > 0) {
-        splitsMemoryStore.set(bookingId, data);
+        splitsMemoryStore.set(realId, data);
+        if (refCode && refCode !== realId) {
+          splitsMemoryStore.set(refCode, data);
+        }
         return data;
       }
     } catch (e) {
       /* non-blocking fallback */
     }
-    return splitsMemoryStore.get(bookingId) || [];
+
+    const fallbackReal = splitsMemoryStore.get(bookingIdInput);
+    return fallbackReal || [];
   },
 
   getFlightsCount: async (bookingId) => {

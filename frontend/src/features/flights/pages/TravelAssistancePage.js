@@ -62,7 +62,12 @@ function TravelAssistancePage() {
       });
 
       // Fire Google Ads Lead Conversion tracking event ONLY on successful backend response
-      trackLeadConversion('travel_assistance_inquiry');
+      trackLeadConversion({
+        source: 'travel_assistance_inquiry',
+        leadId: result?.leadId || result?.messageId || result?.id,
+        value: 1.0,
+        currency: 'USD',
+      });
     } catch (error) {
       setSubmitStatus('error');
       setSubmitMessage(

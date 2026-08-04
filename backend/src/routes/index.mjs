@@ -42,6 +42,8 @@ router.use('/authorization', noStore, authorizationRouter);
 router.use('/admin', noStore, adminRouter);
 
 router.post('/webhooks/paypal', paypalController.handleWebhook);
+router.use('/inquiries', enquiryRouter);
+router.use('/enquiries', enquiryRouter);
 router.use('/', whopRouter);
 
 // Public Flight & Lookup Routes

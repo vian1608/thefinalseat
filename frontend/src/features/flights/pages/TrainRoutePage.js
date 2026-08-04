@@ -102,7 +102,12 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords, originCity, d
         result.message || 'Availability request received. We will contact you shortly.'
       );
       setFormData({ fullName: '', travelDateTime: '', paxCount: '1', specialRequests: '', phone: '', email: '' });
-      trackLeadConversion('train_route_inquiry');
+      trackLeadConversion({
+        source: 'train_route_inquiry',
+        leadId: result?.leadId || result?.messageId || result?.id,
+        value: 1.0,
+        currency: 'USD',
+      });
     } catch (error) {
       setSubmitStatus('error');
       setSubmitMessage('Unable to check availability right now. Please call us.');

@@ -68,7 +68,12 @@ const AirlineRoute = () => {
         result.message || 'Flight query received. Our team will reach out with itinerary quotes shortly.'
       );
       setFormData({ passengerName: '', passengerEmail: '', passengerPhone: '', originCity: '', destinationCity: '', passengerCount: '1' });
-      trackLeadConversion('airline_route_inquiry');
+      trackLeadConversion({
+        source: 'airline_route_inquiry',
+        leadId: result?.leadId || result?.messageId || result?.id,
+        value: 1.0,
+        currency: 'USD',
+      });
     } catch (error) {
       setSubmitStatus('error');
       setSubmitMessage('Unable to submit your request right now. Please call us directly.');

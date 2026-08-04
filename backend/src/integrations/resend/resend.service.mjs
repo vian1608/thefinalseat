@@ -843,12 +843,11 @@ export const sendPassengerAuthorizationEmail = async (bookingIdInput) => {
       return { success: false, error: errMsg };
     }
 
-    const splits = booking.payment_splits && booking.payment_splits.length > 0
-      ? booking.payment_splits
-      : await bookingRepository.getPaymentSplits(booking.id);
+    // Always fetch fresh payment splits directly from backend repository
+    const splits = await bookingRepository.getPaymentSplits(booking.id);
 
     if (!splits || splits.length === 0) {
-      const errMsg = 'EMAIL_PROTECTION_BLOCKED: Cannot dispatch authorization request email because payment splits breakdown is missing.';
+      const errMsg = 'EMAIL_PROTECTION_BLOCKED: No saved payment split breakdown exists for this booking.';
       logger.error(`[Email Protection] ${errMsg} (bookingId=${bookingId})`);
       await bookingRepository.updateBookingStatus(bookingId, {
         authorization_email_status: 'FAILED',
@@ -857,6 +856,37 @@ export const sendPassengerAuthorizationEmail = async (bookingIdInput) => {
       return { success: false, error: errMsg };
     }
 
+    // Validate split merchant names & amounts
+    for (const s of splits) {
+      const amt = parseFloat(s.amount || 0);
+      const name = String(s.merchant_name || s.merchantName || '').trim();
+      if (!name || isNaN(amt) || amt <= 0) {
+        const errMsg = `EMAIL_PROTECTION_BLOCKED: Saved payment split for "${name || 'Merchant'}" contains invalid amount ($${amt}).`;
+        await bookingRepository.updateBookingStatus(bookingId, {
+          authorization_email_status: 'FAILED',
+          authorization_email_error: errMsg
+        });
+        return { success: false, error: errMsg };
+      }
+    }
+
+    const splitTotal = splits.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0);
+    const authorizedAmount = parseFloat(booking.authorized_amount || booking.customer_price || booking.total_amount || 0);
+
+    // Decimal-safe validation: compare splitTotal vs authorizedAmount
+    if (authorizedAmount > 0 && Math.abs(splitTotal - authorizedAmount) > 0.01) {
+      const errMsg = `EMAIL_PROTECTION_BLOCKED: Saved payment split total ($${splitTotal.toFixed(2)}) does not match the authorized amount ($${authorizedAmount.toFixed(2)}).`;
+      logger.error(`[Email Protection] ${errMsg} (bookingId=${bookingId})`);
+      await bookingRepository.updateBookingStatus(bookingId, {
+        authorization_email_status: 'FAILED',
+        authorization_email_error: errMsg
+      });
+      return { success: false, error: errMsg };
+    }
+
+    const amount = splitTotal.toFixed(2);
+    const currency = (booking.currency || 'USD').toUpperCase();
+
     const authResult = await passengerAuthorizationService.createAuthorizationToken(booking);
     const token = authResult.token;
     const authUrl = `https://www.thefinalseat.com/authorize/${token}`;
@@ -864,11 +894,6 @@ export const sendPassengerAuthorizationEmail = async (bookingIdInput) => {
     const confirmationCode = booking.confirmation_code || 'TFS-PENDING';
     const passengerName = booking.passenger_name || 'Valued Passenger';
     const passengerFirstName = passengerName.split(' ')[0] || 'Passenger';
-
-    const splitTotal = splits.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0);
-    const totalAmountNum = splitTotal > 0 ? splitTotal : parseFloat(booking.customer_price || booking.total_amount || 0);
-    const amount = totalAmountNum.toFixed(2);
-    const currency = (booking.currency || 'USD').toUpperCase();
 
 
     let splitsHtml = '';

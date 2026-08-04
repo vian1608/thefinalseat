@@ -27,67 +27,75 @@ export const trackEvent = (eventName, payload = {}) => {
 };
 
 /**
- * Fires the Google Ads Lead Conversion action tag.
- * Guaranteed safety & retry handling for window.gtag.
- * Deduplicates calls to prevent multiple conversion events from single form submissions.
+ * Fires the Google Ads Lead Conversion action tag (AW-18364862445/mIOvCMHyndocEO2fhrVE).
+ * Accepts either an options object ({ value, currency, leadId, source, eventCallback }) or positional parameters.
+ * Guaranteed safety: gracefully handles missing gtag, ad blockers, and deduplicates lead IDs.
  */
-export const trackLeadConversion = (source = 'lead_form', dedupeId = null) => {
-  if (typeof window === 'undefined') return;
-
-  // Generate deduplication key if not explicitly passed
-  const dedupeKey = dedupeId || `${source}_${Date.now()}`;
-  
-  // Deduplication check: ignore if this exact dedupe key was processed within 5 seconds
-  if (firedConversions.has(dedupeKey)) {
-    console.log(`[Google Ads Conversion Skipped]: Duplicate conversion suppressed (${dedupeKey})`);
-    return;
+export const trackLeadConversion = (params = {}, secondaryArg = null) => {
+  if (typeof window === 'undefined') {
+    return false;
   }
+
+  let value = 1.0;
+  let currency = 'USD';
+  let leadId = null;
+  let source = 'lead_form';
+  let eventCallback;
+
+  if (typeof params === 'string') {
+    source = params;
+    if (secondaryArg) leadId = secondaryArg;
+  } else if (typeof params === 'object' && params !== null) {
+    value = params.value !== undefined ? params.value : 1.0;
+    currency = params.currency || 'USD';
+    leadId = params.leadId || params.dedupeId || null;
+    source = params.source || 'lead_form';
+    eventCallback = params.eventCallback;
+  }
+
+  const dedupeKey = leadId ? `lead_${leadId}` : `${source}_${Date.now()}`;
+  if (leadId && firedConversions.has(dedupeKey)) {
+    console.log(`[Google Ads Conversion Skipped]: Duplicate conversion suppressed for leadId: ${leadId}`);
+    return false;
+  }
+
+  if (firedConversions.has(dedupeKey)) {
+    return false;
+  }
+
   firedConversions.add(dedupeKey);
-  setTimeout(() => firedConversions.delete(dedupeKey), 5000);
+  if (!leadId) {
+    setTimeout(() => firedConversions.delete(dedupeKey), 5000);
+  }
 
-  // Logging requirement #5: Before conversion
-  console.log("Google Ads conversion triggered");
-
-  const sendConversionEvent = () => {
-    // Ensure dataLayer is initialized
-    window.dataLayer = window.dataLayer || [];
-
-    // Ensure window.gtag exists and delegates to dataLayer
-    if (typeof window.gtag !== 'function') {
-      window.gtag = function () {
-        window.dataLayer.push(arguments);
-      };
-    }
-
-    // Fire exact event snippet payload as specified by Google Ads
-    window.gtag("event", "conversion", {
-      send_to: "AW-18364862445/mIOvCMHyndocEO2fhrVE",
-      value: 1.0,
-      currency: "USD"
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Google Ads Lead Conversion Triggered]', {
+      event: 'conversion',
+      send_to: 'AW-18364862445/mIOvCMHyndocEO2fhrVE',
+      value,
+      currency,
+      leadIdPresent: !!leadId,
+      source,
     });
+  }
 
-    // Logging requirement #5: After firing
-    console.log("Google Ads conversion sent: AW-18364862445/mIOvCMHyndocEO2fhrVE");
-  };
+  if (typeof window.gtag !== 'function') {
+    console.warn('[Google Ads] Lead conversion was not sent because gtag is unavailable.');
+    return false;
+  }
 
-  // Requirement #3: Check that window.gtag exists or retry loading/checking for a short period
-  if (typeof window.gtag === 'function') {
-    sendConversionEvent();
-  } else {
-    // Retry polling loop: check every 100ms up to 2 seconds
-    let attempts = 0;
-    const maxAttempts = 20;
-    const intervalId = setInterval(() => {
-      attempts++;
-      if (typeof window.gtag === 'function') {
-        clearInterval(intervalId);
-        sendConversionEvent();
-      } else if (attempts >= maxAttempts) {
-        clearInterval(intervalId);
-        // Fallback execution after timeout
-        sendConversionEvent();
-      }
-    }, 100);
+  try {
+    window.gtag('event', 'conversion', {
+      send_to: 'AW-18364862445/mIOvCMHyndocEO2fhrVE',
+      value,
+      currency,
+      event_callback: typeof eventCallback === 'function' ? eventCallback : undefined,
+    });
+    console.log('Google Ads conversion sent: AW-18364862445/mIOvCMHyndocEO2fhrVE');
+    return true;
+  } catch (err) {
+    console.warn('[Google Ads] Conversion event failed safely:', err.message);
+    return false;
   }
 };
 

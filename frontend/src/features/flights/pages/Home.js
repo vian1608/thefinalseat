@@ -248,7 +248,12 @@ function Home() {
       setFormData(initialFormData);
 
       // Fire Google Ads Lead Conversion tracking event
-      trackLeadConversion('home_inquiry');
+      trackLeadConversion({
+        source: 'home_inquiry',
+        leadId: result?.leadId || result?.messageId || result?.id,
+        value: 1.0,
+        currency: 'USD',
+      });
     } catch (error) {
       setSubmitStatus('error');
       if (error.response?.data?.error) {

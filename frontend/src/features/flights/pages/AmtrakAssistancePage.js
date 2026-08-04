@@ -55,7 +55,12 @@ function AmtrakAssistance() {
       setFormData(initialFormData);
 
       // Fire Google Ads Lead Conversion tracking event
-      trackLeadConversion('amtrak_inquiry');
+      trackLeadConversion({
+        source: 'amtrak_inquiry',
+        leadId: result?.leadId || result?.messageId || result?.id,
+        value: 1.0,
+        currency: 'USD',
+      });
     } catch (error) {
       setSubmitStatus('error');
       if (error.response?.data?.error) {
