@@ -262,6 +262,8 @@ export const sendConsultingInquiry = async (inquiry) => {
 
   const errors = [];
 
+  const leadId = `lead_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
   if (env.resendApiKey?.trim()) {
     try {
       const result = await sendViaResend(payload);
@@ -270,6 +272,7 @@ export const sendConsultingInquiry = async (inquiry) => {
         return {
           success: true,
           emailed: true,
+          leadId,
           provider: 'resend',
           messageId: result.messageId,
           sentTo: result.sentTo,
@@ -286,7 +289,7 @@ export const sendConsultingInquiry = async (inquiry) => {
       const result = await sendViaSmtp(payload);
       if (result) {
         logger.info('Consulting inquiry emailed via SMTP →', recipients.join(', '));
-        return { success: true, emailed: true, provider: 'smtp', messageId: result.messageId };
+        return { success: true, emailed: true, leadId, provider: 'smtp', messageId: result.messageId };
       }
     } catch (err) {
       errors.push(`SMTP: ${err.message}`);
@@ -300,6 +303,7 @@ export const sendConsultingInquiry = async (inquiry) => {
   return {
     success: true,
     emailed: false,
+    leadId,
     message: 'Inquiry received. Configure RESEND_API_KEY or SMTP variables to enable email delivery.',
     errors,
   };

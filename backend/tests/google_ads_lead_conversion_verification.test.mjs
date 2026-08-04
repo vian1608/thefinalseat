@@ -69,8 +69,8 @@ async function runTests() {
   assert.strictEqual(dataLayer.length, 1, 'dataLayer must NOT record a second conversion event');
   console.log('✓ TEST 3 PASSED: Duplicate lead ID conversion suppressed cleanly.\n');
 
-  // TEST 4: Missing gtag / Ad-blocker Graceful Handling
-  console.log('--- TEST 4: Missing gtag / Ad-blocker Graceful Failure ---');
+  // TEST 4: Missing gtag / Async script loading fallback to dataLayer
+  console.log('--- TEST 4: Missing gtag / Async script loading fallback ---');
   delete global.window.gtag;
 
   let exceptionThrown = false;
@@ -82,8 +82,8 @@ async function runTests() {
   }
 
   assert.strictEqual(exceptionThrown, false, 'Missing gtag must NOT throw an exception');
-  assert.strictEqual(result, false, 'Missing gtag must safely return false');
-  console.log('✓ TEST 4 PASSED: Missing window.gtag handled safely without crashing app.\n');
+  assert.strictEqual(result, true, 'Missing gtag must safely fallback and return true after queuing to dataLayer');
+  console.log('✓ TEST 4 PASSED: Missing window.gtag queued safely to dataLayer without crashing app.\n');
 
   // TEST 5: No PII Payload Audit
   console.log('--- TEST 5: PII Audit ---');
@@ -129,5 +129,5 @@ async function runTests() {
 
 runTests().catch((err) => {
   console.error('❌ Test Suite Failed:', err);
-  process.exit(1);
+  process.exitCode = 1;
 });

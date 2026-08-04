@@ -47,20 +47,23 @@ function AmtrakAssistance() {
         serviceType: 'rail',
         ...formData,
       });
-      setSubmitStatus('success');
-      setSubmitMessage(
-        result.message ||
-          'Thank you. Your inquiry was submitted and our team will contact you shortly.'
-      );
-      setFormData(initialFormData);
+      if (result?.success || result?.emailed || result?.leadId || result?.messageId) {
+        setSubmitStatus('success');
+        setSubmitMessage(
+          result.message ||
+            'Thank you. Your inquiry was submitted and our team will contact you shortly.'
+        );
+        setFormData(initialFormData);
 
-      // Fire Google Ads Lead Conversion tracking event
-      trackLeadConversion({
-        source: 'amtrak_inquiry',
-        leadId: result?.leadId || result?.messageId || result?.id,
-        value: 1.0,
-        currency: 'USD',
-      });
+        // Fire Google Ads Lead Conversion tracking event
+        trackLeadConversion({
+          leadId: result?.leadId || result?.messageId || result?.id,
+          value: 1.0,
+          currency: 'USD',
+        });
+      } else {
+        throw new Error(result?.message || 'Inquiry submission failed');
+      }
     } catch (error) {
       setSubmitStatus('error');
       if (error.response?.data?.error) {

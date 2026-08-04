@@ -46,28 +46,31 @@ function TravelAssistancePage() {
         serviceType: 'flights',
         ...formData,
       });
-      setSubmitStatus('success');
-      setSubmitMessage(
-        result.message || 'Thank you! Your travel assistance request was received. Our team will contact you shortly.'
-      );
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        origin: '',
-        destination: '',
-        travelDate: '',
-        passengers: '1',
-        notes: '',
-      });
+      if (result?.success || result?.emailed || result?.leadId || result?.messageId) {
+        setSubmitStatus('success');
+        setSubmitMessage(
+          result.message || 'Thank you! Your travel assistance request was received. Our team will contact you shortly.'
+        );
+        setFormData({
+          name: '',
+          email: '',
+          phone: '',
+          origin: '',
+          destination: '',
+          travelDate: '',
+          passengers: '1',
+          notes: '',
+        });
 
-      // Fire Google Ads Lead Conversion tracking event ONLY on successful backend response
-      trackLeadConversion({
-        source: 'travel_assistance_inquiry',
-        leadId: result?.leadId || result?.messageId || result?.id,
-        value: 1.0,
-        currency: 'USD',
-      });
+        // Fire Google Ads Lead Conversion tracking event ONLY on successful backend response
+        trackLeadConversion({
+          leadId: result?.leadId || result?.messageId || result?.id,
+          value: 1.0,
+          currency: 'USD',
+        });
+      } else {
+        throw new Error(result?.message || 'Inquiry submission failed');
+      }
     } catch (error) {
       setSubmitStatus('error');
       setSubmitMessage(

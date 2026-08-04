@@ -1,10 +1,11 @@
+// eslint-disable-next-line import/first
+import { trackGoogleAdsLeadConversion } from '../../utils/googleAds.js';
+
 /**
  * Safe Analytics utility for SEO landing pages and flight search tracking.
  * Strictly avoids transmitting any PII (names, emails, phone numbers, passport numbers, card/billing data).
  */
 
-// Memory set to prevent duplicate conversions in single page app session
-const firedConversions = new Set();
 
 export const trackEvent = (eventName, payload = {}) => {
   const safeData = {
@@ -26,77 +27,22 @@ export const trackEvent = (eventName, payload = {}) => {
   }
 };
 
+export { trackGoogleAdsLeadConversion };
+
 /**
  * Fires the Google Ads Lead Conversion action tag (AW-18364862445/mIOvCMHyndocEO2fhrVE).
  * Accepts either an options object ({ value, currency, leadId, source, eventCallback }) or positional parameters.
  * Guaranteed safety: gracefully handles missing gtag, ad blockers, and deduplicates lead IDs.
  */
 export const trackLeadConversion = (params = {}, secondaryArg = null) => {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
-  let value = 1.0;
-  let currency = 'USD';
-  let leadId = null;
-  let source = 'lead_form';
-  let eventCallback;
-
   if (typeof params === 'string') {
-    source = params;
-    if (secondaryArg) leadId = secondaryArg;
-  } else if (typeof params === 'object' && params !== null) {
-    value = params.value !== undefined ? params.value : 1.0;
-    currency = params.currency || 'USD';
-    leadId = params.leadId || params.dedupeId || null;
-    source = params.source || 'lead_form';
-    eventCallback = params.eventCallback;
-  }
-
-  const dedupeKey = leadId ? `lead_${leadId}` : `${source}_${Date.now()}`;
-  if (leadId && firedConversions.has(dedupeKey)) {
-    console.log(`[Google Ads Conversion Skipped]: Duplicate conversion suppressed for leadId: ${leadId}`);
-    return false;
-  }
-
-  if (firedConversions.has(dedupeKey)) {
-    return false;
-  }
-
-  firedConversions.add(dedupeKey);
-  if (!leadId) {
-    setTimeout(() => firedConversions.delete(dedupeKey), 5000);
-  }
-
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[Google Ads Lead Conversion Triggered]', {
-      event: 'conversion',
-      send_to: 'AW-18364862445/mIOvCMHyndocEO2fhrVE',
-      value,
-      currency,
-      leadIdPresent: !!leadId,
-      source,
+    return trackGoogleAdsLeadConversion({
+      leadId: secondaryArg || null,
+      value: 1.0,
+      currency: 'USD',
     });
   }
-
-  if (typeof window.gtag !== 'function') {
-    console.warn('[Google Ads] Lead conversion was not sent because gtag is unavailable.');
-    return false;
-  }
-
-  try {
-    window.gtag('event', 'conversion', {
-      send_to: 'AW-18364862445/mIOvCMHyndocEO2fhrVE',
-      value,
-      currency,
-      event_callback: typeof eventCallback === 'function' ? eventCallback : undefined,
-    });
-    console.log('Google Ads conversion sent: AW-18364862445/mIOvCMHyndocEO2fhrVE');
-    return true;
-  } catch (err) {
-    console.warn('[Google Ads] Conversion event failed safely:', err.message);
-    return false;
-  }
+  return trackGoogleAdsLeadConversion(params);
 };
 
 export const analytics = {

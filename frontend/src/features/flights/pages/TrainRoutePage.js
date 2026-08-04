@@ -97,17 +97,20 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords, originCity, d
 
       const result = await inquiryAPI.submitConsulting(payload, 'rail');
       
-      setSubmitStatus('success');
-      setSubmitMessage(
-        result.message || 'Availability request received. We will contact you shortly.'
-      );
-      setFormData({ fullName: '', travelDateTime: '', paxCount: '1', specialRequests: '', phone: '', email: '' });
-      trackLeadConversion({
-        source: 'train_route_inquiry',
-        leadId: result?.leadId || result?.messageId || result?.id,
-        value: 1.0,
-        currency: 'USD',
-      });
+      if (result?.success || result?.emailed || result?.leadId || result?.messageId) {
+        setSubmitStatus('success');
+        setSubmitMessage(
+          result.message || 'Availability request received. We will contact you shortly.'
+        );
+        setFormData({ fullName: '', travelDateTime: '', paxCount: '1', specialRequests: '', phone: '', email: '' });
+        trackLeadConversion({
+          leadId: result?.leadId || result?.messageId || result?.id,
+          value: 1.0,
+          currency: 'USD',
+        });
+      } else {
+        throw new Error(result?.message || 'Inquiry submission failed');
+      }
     } catch (error) {
       setSubmitStatus('error');
       setSubmitMessage('Unable to check availability right now. Please call us.');

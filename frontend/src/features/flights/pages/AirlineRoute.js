@@ -63,17 +63,20 @@ const AirlineRoute = () => {
 
       const result = await inquiryAPI.submitConsulting(payload, 'flights');
       
-      setSubmitStatus('success');
-      setSubmitMessage(
-        result.message || 'Flight query received. Our team will reach out with itinerary quotes shortly.'
-      );
-      setFormData({ passengerName: '', passengerEmail: '', passengerPhone: '', originCity: '', destinationCity: '', passengerCount: '1' });
-      trackLeadConversion({
-        source: 'airline_route_inquiry',
-        leadId: result?.leadId || result?.messageId || result?.id,
-        value: 1.0,
-        currency: 'USD',
-      });
+      if (result?.success || result?.emailed || result?.leadId || result?.messageId) {
+        setSubmitStatus('success');
+        setSubmitMessage(
+          result.message || 'Flight query received. Our team will reach out with itinerary quotes shortly.'
+        );
+        setFormData({ passengerName: '', passengerEmail: '', passengerPhone: '', originCity: '', destinationCity: '', passengerCount: '1' });
+        trackLeadConversion({
+          leadId: result?.leadId || result?.messageId || result?.id,
+          value: 1.0,
+          currency: 'USD',
+        });
+      } else {
+        throw new Error(result?.message || 'Inquiry submission failed');
+      }
     } catch (error) {
       setSubmitStatus('error');
       setSubmitMessage('Unable to submit your request right now. Please call us directly.');
