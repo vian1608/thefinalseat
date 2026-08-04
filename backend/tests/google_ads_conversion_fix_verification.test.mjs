@@ -25,7 +25,8 @@ async function runTests() {
   // TEST 1: Single Google Base Tag & Global window.gtag Assignment
   console.log('--- TEST 1: Google Base Tag & Global window.gtag Assignment ---');
   assert.ok(indexHtml.includes('AW-18364862445'), 'index.html must include base tag AW-18364862445');
-  assert.ok(indexHtml.includes('window.gtag = gtag'), 'index.html must set window.gtag = gtag globally');
+  assert.ok(indexHtml.includes('window.gtag = function'), 'index.html must set window.gtag = function globally');
+  assert.ok(!indexHtml.includes('AW-18166581434'), 'index.html must not contain legacy AW-18166581434 tag');
   const tagMatches = indexHtml.match(/googletagmanager\.com\/gtag\/js\?id=AW-18364862445/g);
   assert.strictEqual(tagMatches.length, 1, 'Exactly one AW-18364862445 script tag must exist in index.html');
   console.log('✓ TEST 1 PASSED: Exactly 1 base tag installed and window.gtag explicitly assigned.\n');

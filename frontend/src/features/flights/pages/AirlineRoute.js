@@ -61,9 +61,12 @@ const AirlineRoute = () => {
         notes: `Airline: ${airline.name} Booking Request`,
       };
 
-      const result = await inquiryAPI.submitConsulting(payload, 'flights');
+      console.info('[Lead] Submitting');
+      const rawResponse = await inquiryAPI.submitConsulting(payload, 'flights');
+      const result = rawResponse?.data ?? rawResponse;
       
       if (result?.success || result?.emailed || result?.leadId || result?.messageId) {
+        console.info('[Lead] Backend save confirmed', { leadId: result?.leadId || result?.messageId || result?.id });
         setSubmitStatus('success');
         setSubmitMessage(
           result.message || 'Flight query received. Our team will reach out with itinerary quotes shortly.'

@@ -41,12 +41,16 @@ function TravelAssistancePage() {
     setSubmitStatus('submitting');
     setSubmitMessage('');
 
+    console.info('[Lead] Submitting');
     try {
-      const result = await inquiryAPI.submitConsulting({
+      const rawResponse = await inquiryAPI.submitConsulting({
         serviceType: 'flights',
         ...formData,
       });
+      const result = rawResponse?.data ?? rawResponse;
+
       if (result?.success || result?.emailed || result?.leadId || result?.messageId) {
+        console.info('[Lead] Backend save confirmed', { leadId: result?.leadId || result?.messageId || result?.id });
         setSubmitStatus('success');
         setSubmitMessage(
           result.message || 'Thank you! Your travel assistance request was received. Our team will contact you shortly.'

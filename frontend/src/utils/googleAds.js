@@ -16,6 +16,15 @@ export function trackGoogleAdsLeadConversion({
     return false;
   }
 
+  // Ensure window.dataLayer exists
+  window.dataLayer = window.dataLayer || [];
+
+  if (typeof window.gtag !== 'function') {
+    window.gtag = function () {
+      window.dataLayer.push(arguments);
+    };
+  }
+
   // Deduplication guard: ensure single conversion event per lead submission
   const dedupeKey = leadId ? `lead_${leadId}` : `lead_session_${Date.now()}`;
   if (leadId && trackedLeadIds.has(dedupeKey)) {
@@ -32,15 +41,11 @@ export function trackGoogleAdsLeadConversion({
     setTimeout(() => trackedLeadIds.delete(dedupeKey), 5000);
   }
 
-  // Ensure window.dataLayer exists
-  window.dataLayer = window.dataLayer || [];
-
-  // Fallback: If window.gtag is not yet initialized by the async tag script, define a delegate function that pushes to dataLayer
-  if (typeof window.gtag !== 'function') {
-    window.gtag = function () {
-      window.dataLayer.push(arguments);
-    };
-  }
+  console.info('[Google Ads] Dispatching conversion', {
+    sendTo: GOOGLE_ADS_LEAD_DESTINATION,
+    value: 1.0,
+    currency: 'USD',
+  });
 
   try {
     window.gtag('event', 'conversion', {
@@ -49,11 +54,9 @@ export function trackGoogleAdsLeadConversion({
       currency: currency || 'USD',
     });
 
-    console.info('[Google Ads] Lead conversion dispatched', {
+    console.info('[Google Ads] Conversion dispatched', {
       destination: GOOGLE_ADS_LEAD_DESTINATION,
       leadIdPresent: Boolean(leadId),
-      value: typeof value === 'number' ? value : 1.0,
-      currency: currency || 'USD',
     });
 
     return true;

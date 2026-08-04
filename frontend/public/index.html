@@ -6,21 +6,14 @@
   <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18364862445"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
-    function gtag() { window.dataLayer.push(arguments); }
-    window.gtag = gtag;
 
-    gtag('js', new Date());
-    gtag('config', 'AW-18364862445');
-  </script>
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-4H5D5B9FB0"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag() { dataLayer.push(arguments); }
-    window.gtag = window.gtag || gtag;
-    gtag('js', new Date());
+    window.gtag = function () {
+      window.dataLayer.push(arguments);
+    };
 
-    gtag('config', 'G-4H5D5B9FB0');
-    gtag('config', 'AW-18166581434');
+    window.gtag('js', new Date());
+    window.gtag('config', 'AW-18364862445');
+    window.gtag('config', 'G-4H5D5B9FB0');
   </script>
 
   <script>

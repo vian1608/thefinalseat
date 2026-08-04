@@ -95,9 +95,12 @@ const TrainRoute = ({ title, metaTitle, metaDescription, keywords, originCity, d
         notes: `${formData.specialRequests ? formData.specialRequests + '. ' : ''}SEO Context Keywords: ${activeKeywords.slice(0, 3).join(', ')}`,
       };
 
-      const result = await inquiryAPI.submitConsulting(payload, 'rail');
+      console.info('[Lead] Submitting');
+      const rawResponse = await inquiryAPI.submitConsulting(payload, 'rail');
+      const result = rawResponse?.data ?? rawResponse;
       
       if (result?.success || result?.emailed || result?.leadId || result?.messageId) {
+        console.info('[Lead] Backend save confirmed', { leadId: result?.leadId || result?.messageId || result?.id });
         setSubmitStatus('success');
         setSubmitMessage(
           result.message || 'Availability request received. We will contact you shortly.'
