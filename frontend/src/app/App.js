@@ -18,7 +18,6 @@ import ContactInfo from '../shared/pages/ContactInfoPage';
 import './App.css';
 import PrivacyPolicy from '../shared/pages/PrivacyPolicyPage';
 import RefundPolicy from '../shared/pages/RefundPolicyPage';
-import AmtrakAssistance from '../features/flights/pages/AmtrakAssistancePage';
 import TrainRoute from '../features/flights/pages/TrainRoutePage';
 import FlightRoute from '../features/flights/pages/FlightRoutePage';
 import AirlineActionPage from '../features/flights/pages/AirlineActionPage';

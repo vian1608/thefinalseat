@@ -13,7 +13,6 @@ const DEPOT_TYPES = ['In terminal', 'Car rental centre', 'Outside terminal', 'Sh
 
 function CarSearchResultsPage() {
   const location = useLocation();
-  const navigate = useNavigate();
 
   const [searchParams, setSearchParams] = useState(null);
   const [loading, setLoading] = useState(true);
