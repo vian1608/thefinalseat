@@ -6,6 +6,7 @@ import { paymentRouter } from '../modules/payments/payment.routes.mjs';
 import { flightRouter, airportRouter } from '../modules/flights/flight.routes.mjs';
 import { enquiryRouter } from '../modules/enquiries/enquiry.routes.mjs';
 import { adminRouter } from '../modules/admin/admin.routes.mjs';
+import { stableCrmRouter } from '../modules/admin/stable-crm.routes.mjs';
 import passengerAuthorizationController from '../modules/authorizations/passenger-authorization.controller.mjs';
 import whopRouter from '../modules/payments/whop.routes.mjs';
 import paypalController from '../modules/payments/paypal.controller.mjs';
@@ -39,6 +40,9 @@ router.use('/payments', noStore, paymentRouter);
 router.use('/paypal', noStore, paypalRouter);
 router.use('/authorizations', noStore, authorizationRouter);
 router.use('/authorization', noStore, authorizationRouter);
+
+// Database-first CRM routes are isolated from the legacy dashboard API.
+router.use('/admin/stable', noStore, stableCrmRouter);
 router.use('/admin', noStore, adminRouter);
 
 router.post('/webhooks/paypal', paypalController.handleWebhook);

@@ -10,6 +10,7 @@ import SignIn from '../features/customers/pages/SignInPage';
 import SignUp from '../features/customers/pages/SignUpPage';
 import AdminLogin from '../features/admin/pages/AdminLoginPage';
 import AdminDashboard from '../features/admin/pages/AdminDashboardPage';
+import StableAdminCRM from '../features/admin/pages/StableAdminCRMPage';
 import OneWayConfirmation from '../features/bookings/pages/OneWayConfirmationPage';
 import RoundTripConfirmation from '../features/bookings/pages/RoundTripConfirmationPage';
 import ReturnFlightSelection from '../features/flights/pages/ReturnFlightSelectionPage';
@@ -67,8 +68,10 @@ function App() {
                 {/* Admin Routes */}
                 <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
                 <Route path="/admin/login" element={<AdminLogin />} />
-                <Route path="/admin/dashboard" element={<AdminDashboard />} />
-                <Route path="/admin/bookings/:code" element={<AdminDashboard />} />
+                <Route path="/admin/dashboard" element={<StableAdminCRM />} />
+                <Route path="/admin/crm" element={<StableAdminCRM />} />
+                <Route path="/admin/bookings/:code" element={<StableAdminCRM />} />
+                <Route path="/admin/legacy-dashboard" element={<AdminDashboard />} />
 
                 {/* Train Routes */}
                 <Route path="/train-nyc-to-dc" element={

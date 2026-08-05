@@ -1,0 +1,67 @@
+name: CRM Stability Checks
+
+on:
+  push:
+    branches:
+      - fix/crm-stability
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  backend-syntax:
+    name: Backend syntax
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Check stable CRM modules
+        run: |
+          node --check src/modules/admin/stable-crm.service.mjs
+          node --check src/modules/admin/stable-crm.routes.mjs
+          node --check src/routes/index.mjs
+
+  frontend-build:
+    name: Frontend production build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        # The repository lockfile already predates several transitive peer
+        # dependencies. Use npm install here so CI can validate the source
+        # without modifying the committed lockfile.
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Build frontend
+        env:
+          CI: 'false'
+        run: npm run build
