@@ -70,7 +70,19 @@ export const env = {
   get supportPhoneDisplay() { return process.env.BUSINESS_SUPPORT_PHONE_DISPLAY || '(888) 780-8855'; },
   get supportPhoneInternational() { return process.env.BUSINESS_SUPPORT_PHONE_INTL || '+1 (888) 780-8855'; },
   get supportPhoneHref() { return process.env.BUSINESS_SUPPORT_PHONE_HREF || 'tel:+18887808855'; },
-  get supportPhoneSchema() { return process.env.BUSINESS_SUPPORT_PHONE_SCHEMA || '+1-888-780-8855'; }
+  get supportPhoneSchema() { return process.env.BUSINESS_SUPPORT_PHONE_SCHEMA || '+1-888-780-8855'; },
+
+  // Booking.com Demand API v3.1
+  get bookingDemandApiBaseUrl() { 
+    return process.env.BOOKING_DEMAND_API_BASE_URL || 
+      (process.env.BOOKING_DEMAND_API_ENVIRONMENT === 'production' 
+        ? 'https://demandapi.booking.com/3.1' 
+        : 'https://demandapi-sandbox.booking.com/3.1'); 
+  },
+  get bookingDemandApiToken() { return process.env.BOOKING_DEMAND_API_TOKEN || ''; },
+  get bookingAffiliateId() { return process.env.BOOKING_AFFILIATE_ID || ''; },
+  get bookingDemandApiEnv() { return process.env.BOOKING_DEMAND_API_ENVIRONMENT || 'sandbox'; },
+  get carRentalsApiEnabled() { return process.env.CAR_RENTALS_API_ENABLED !== 'false'; }
 };
 
 

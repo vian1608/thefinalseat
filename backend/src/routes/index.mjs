@@ -49,6 +49,8 @@ router.use('/', whopRouter);
 // Public Flight & Lookup Routes
 router.use('/flights', flightRouter);
 router.use('/airports', publicLookupCache(300, 86400, 3600), airportRouter);
+import { carRouter } from '../modules/cars/car.routes.mjs';
+router.use('/cars', carRouter);
 import addressAutocompleteController from '../modules/flights/address-autocomplete.controller.mjs';
 
 router.get('/address-autocomplete', publicLookupCache(300, 86400, 3600), addressAutocompleteController.getAddressAutocomplete);

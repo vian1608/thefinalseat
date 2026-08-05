@@ -174,6 +174,42 @@ export const inquiryAPI = {
   },
 };
 
+// Car Rental API (Booking.com Demand API v3.1)
+export const carAPI = {
+  search: async (searchParams) => {
+    const response = await api.post('/cars/search', searchParams);
+    return response.data;
+  },
+  getDetails: async (payload) => {
+    const response = await api.post('/cars/details', payload);
+    return response.data;
+  },
+  getDepots: async (payload) => {
+    const response = await api.post('/cars/depots', payload);
+    return response.data;
+  },
+  getSuppliers: async (payload) => {
+    const response = await api.post('/cars/suppliers', payload);
+    return response.data;
+  },
+  getDepotScores: async (payload) => {
+    const response = await api.post('/cars/depot-scores', payload);
+    return response.data;
+  },
+  getConstants: async (payload) => {
+    const response = await api.post('/cars/constants', payload);
+    return response.data;
+  },
+  autocompleteLocations: async (query) => {
+    const response = await api.get('/cars/locations/autocomplete', { params: { q: query } });
+    return response.data;
+  },
+  recordClick: async (clickData) => {
+    const response = await api.post('/cars/click', clickData);
+    return response.data;
+  }
+};
+
 // Admin API
 export const adminAPI = {
   login: async (credentials) => {

@@ -1,0 +1,166 @@
+.car-rentals-home-page {
+  background: #ffffff;
+}
+
+.car-search-hero-section {
+  padding: 2.5rem 0 3.5rem 0;
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+}
+
+.car-search-container-box {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.car-search-heading {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: #ffffff;
+  text-align: center;
+  margin: 0 0 0.5rem 0;
+}
+
+.car-search-subheading {
+  font-size: 1.05rem;
+  color: #94a3b8;
+  text-align: center;
+  margin: 0 0 2rem 0;
+}
+
+.popular-airports-section {
+  padding: 4rem 0;
+  background: #f8fafc;
+}
+
+.section-title {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #0f172a;
+  text-align: center;
+  margin: 0 0 0.5rem 0;
+}
+
+.section-subtitle {
+  font-size: 1rem;
+  color: #64748b;
+  text-align: center;
+  margin: 0 0 2.5rem 0;
+}
+
+.popular-airports-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.airport-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.airport-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  border-color: #cbd5e1;
+}
+
+.airport-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.airport-card-header i {
+  color: #8b1538;
+}
+
+.airport-code {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #8b1538;
+  background: #fdf2f8;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.airport-card h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.airport-sub {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin: 0 0 0.75rem 0;
+}
+
+.airport-search-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #8b1538;
+  text-decoration: none;
+  margin-top: auto;
+}
+
+.airport-search-link:hover {
+  text-decoration: underline;
+}
+
+.car-features-section {
+  padding: 4rem 0;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2rem;
+}
+
+.feature-card {
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.feature-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #fdf2f8;
+  color: #8b1538;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  margin: 0 auto 1.25rem auto;
+}
+
+.feature-card h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.5rem 0;
+}
+
+.feature-card p {
+  font-size: 0.92rem;
+  color: #64748b;
+  line-height: 1.5;
+
+}
+
+@media (max-width: 768px) {
+  .car-search-heading {
+    font-size: 1.75rem;
+  }
+}

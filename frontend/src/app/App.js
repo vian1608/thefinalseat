@@ -33,6 +33,9 @@ import BookingForParents from '../features/flights/pages/BookingForParentsPage';
 import UrgentTravel from '../features/flights/pages/UrgentTravelPage';
 import AppErrorBoundary from '../shared/components/AppErrorBoundary';
 
+import CarRentalsHomePage from '../features/cars/pages/CarRentalsHomePage';
+import CarSearchResultsPage from '../features/cars/pages/CarSearchResultsPage';
+
 
 function LegacyAirlineRedirect() {
   const { airlineSlug } = useParams();
@@ -50,8 +53,15 @@ function App() {
             <PageTransition>
               <Routes>
                 <Route path="/" element={<Home />} />
-                <Route path="/amtrak" element={<AmtrakAssistance />} />
-                <Route path="/amtrak-assistance" element={<Navigate to="/amtrak" replace />} />
+                
+                {/* Car Rentals Routes (Booking.com Demand API v3.1) */}
+                <Route path="/car-rentals" element={<CarRentalsHomePage />} />
+                <Route path="/car-rentals/search" element={<CarSearchResultsPage />} />
+                <Route path="/car-rentals/results" element={<CarSearchResultsPage />} />
+
+                {/* Legacy Amtrak Route Redirect */}
+                <Route path="/amtrak" element={<Navigate to="/car-rentals" replace />} />
+                <Route path="/amtrak-assistance" element={<Navigate to="/car-rentals" replace />} />
                 
                 {/* Admin Routes */}
                 <Route path="/admin" element={<Navigate to="/admin/login" replace />} />

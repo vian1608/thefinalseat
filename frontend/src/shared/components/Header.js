@@ -41,19 +41,19 @@ function Header() {
   const closeMenu = () => setMenuOpen(false);
 
   const isFlightsActive = location.pathname === '/';
-  const isRailActive = location.pathname.startsWith('/amtrak');
+  const isCarsActive = location.pathname.startsWith('/car-rentals');
   const isContactActive = location.pathname === '/contact';
-  const isRailTheme = isRailActive;
+  const isCarsTheme = isCarsActive;
 
   return (
     <header
-      className={`header ${isRailTheme ? 'header--rail' : 'header--flights'} ${scrolled ? 'header--scrolled' : ''}`}
+      className={`header ${isCarsTheme ? 'header--cars' : 'header--flights'} ${scrolled ? 'header--scrolled' : ''}`}
     >
       <div className="container header-inner">
         <div className="logo">
           <i
-            key={isRailTheme ? 'rail-icon' : 'flight-icon'}
-            className={`fas logo-icon ${isRailTheme ? 'fa-train' : 'fa-plane-departure'}`}
+            key={isCarsTheme ? 'car-icon' : 'flight-icon'}
+            className={`fas logo-icon ${isCarsTheme ? 'fa-car' : 'fa-plane-departure'}`}
             aria-hidden="true"
           />
           <Link to="/" className="logo-link" onClick={closeMenu}>
@@ -89,10 +89,10 @@ function Header() {
               Flights
             </Link>
             <Link
-              to="/amtrak"
-              className={`header-nav-link ${isRailActive ? 'header-nav-link--active' : ''}`}
+              to="/car-rentals"
+              className={`header-nav-link ${isCarsActive ? 'header-nav-link--active' : ''}`}
             >
-              Rail (Amtrak)
+              Car Rentals
             </Link>
             <Link
               to="/my-bookings"

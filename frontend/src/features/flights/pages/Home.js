@@ -17,6 +17,7 @@ import { SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
 import EmailInput from '../../../shared/components/EmailInput';
 import InternationalPhoneInput from '../../../shared/components/InternationalPhoneInput';
 import { trackLeadConversion } from '../../../shared/utils/analytics';
+import CarSearchForm from '../../cars/components/CarSearchForm';
 import './Home.css';
 
 const initialFormData = {
@@ -330,7 +331,14 @@ function Home() {
                     className={`tab-btn ${activeTab === 'search' ? 'active' : ''}`}
                     onClick={() => setActiveTab('search')}
                   >
-                    <i className="fas fa-search"></i> Book Flights
+                    <i className="fas fa-plane"></i> Book Flights
+                  </button>
+                  <button 
+                    type="button" 
+                    className={`tab-btn ${activeTab === 'cars' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('cars')}
+                  >
+                    <i className="fas fa-car"></i> Car Rentals
                   </button>
                   <button 
                     type="button" 
@@ -340,6 +348,16 @@ function Home() {
                     <i className="fas fa-paper-plane"></i> Custom Inquiry
                   </button>
                 </div>
+
+                {activeTab === 'cars' && (
+                  <div className="home-car-search-wrapper" style={{ marginTop: '1rem' }}>
+                    <h2 style={{ marginBottom: '0.5rem', color: '#1e293b', fontSize: '1.75rem' }}>Search Rental Cars</h2>
+                    <p className="flights-inquiry__intro" style={{ marginBottom: '1.25rem' }}>
+                      Compare car rental options, airport locations, and transparent policies from top global suppliers.
+                    </p>
+                    <CarSearchForm compact />
+                  </div>
+                )}
 
                 {activeTab === 'search' ? (
                   <>
