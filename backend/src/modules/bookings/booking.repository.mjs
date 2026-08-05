@@ -327,22 +327,40 @@ export const bookingRepository = {
   },
 
 
-  findBookingByCode: async (code) => {
-    const memOverridden = bookingsMemoryStore.get(code);
+  findBaseBookingRecord: async (idOrCode) => {
+    if (!idOrCode || typeof idOrCode !== 'string') return null;
+    const ref = idOrCode.trim();
+    if (!ref) return null;
+
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref);
+
+    const memOverridden = bookingsMemoryStore.get(ref);
     if (memOverridden && memOverridden._deleted) return null;
 
-    const { data } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('confirmation_code', code)
-      .maybeSingle();
+    let data = null;
+    try {
+      if (isUUID) {
+        const res = await supabase.from('bookings').select('*').eq('id', ref).maybeSingle();
+        data = res?.data || null;
+      } else {
+        const res = await supabase.from('bookings').select('*').eq('confirmation_code', ref).maybeSingle();
+        data = res?.data || null;
+      }
+    } catch (err) {
+      logger.warn(`[findBaseBookingRecord] Query warning for '${ref}':`, err.message);
+    }
 
-    // If no Supabase record AND no memory record → not found
     if (!data && !memOverridden) return null;
-    const baseData = { ...(data || {}), ...(memOverridden || {}) };
-    if (!baseData.id) return null;
-    const relations = await bookingRepository.getRelations(baseData.id);
-    return bookingRepository.enrichBookingRecord(baseData, relations);
+    const base = { ...(data || {}), ...(memOverridden || {}) };
+    if (!base.id) return null;
+    return base;
+  },
+
+  findBookingByCode: async (code) => {
+    const base = await bookingRepository.findBaseBookingRecord(code);
+    if (!base) return null;
+    const relations = await bookingRepository.getRelations(base.id);
+    return bookingRepository.enrichBookingRecord(base, relations);
   },
 
   getByReference: async (code) => {
@@ -350,61 +368,158 @@ export const bookingRepository = {
   },
 
   findBookingById: async (id) => {
-    const memOverridden = bookingsMemoryStore.get(id);
-    if (memOverridden && memOverridden._deleted) return null;
-
-    const { data } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
-
-    // If no Supabase record AND no memory record → not found
-    if (!data && !memOverridden) return null;
-
-    // Merge: Supabase base + memory overrides (memory wins for transient fields)
-    const baseData = { ...(data || {}), ...(memOverridden || {}) };
-
-    if (!baseData.id) return null;
-    const relations = await bookingRepository.getRelations(baseData.id);
-    return bookingRepository.enrichBookingRecord(baseData, relations);
+    const base = await bookingRepository.findBaseBookingRecord(id);
+    if (!base) return null;
+    const relations = await bookingRepository.getRelations(base.id);
+    return bookingRepository.enrichBookingRecord(base, relations);
   },
 
   getById: async (idOrCode) => {
     if (!idOrCode) return null;
-    let b = await bookingRepository.findBookingById(idOrCode);
-    if (!b) {
-      b = await bookingRepository.findBookingByCode(idOrCode);
-    }
-    return b;
+    const base = await bookingRepository.findBaseBookingRecord(idOrCode);
+    if (!base) return null;
+    const relations = await bookingRepository.getRelations(base.id);
+    return bookingRepository.enrichBookingRecord(base, relations);
   },
 
   getCompleteBookingById: async (idOrCode) => {
+    const startTime = Date.now();
+    logger.info(`BOOKING_DETAILS_START [idOrCode=${idOrCode}]`);
+
     if (!idOrCode) return null;
-    let baseBooking = await bookingRepository.findBookingById(idOrCode);
-    if (!baseBooking) {
-      baseBooking = await bookingRepository.findBookingByCode(idOrCode);
-    }
+
+    const baseBooking = await bookingRepository.findBaseBookingRecord(idOrCode);
+    logger.info(`BASE_BOOKING_FETCH_COMPLETE [elapsedMs=${Date.now() - startTime}]`);
+
     if (!baseBooking || baseBooking._deleted) return null;
 
     const realId = baseBooking.id;
-    const relations = await bookingRepository.getRelations(realId);
+    const refCode = baseBooking.confirmation_code || idOrCode;
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(refCode);
+
+    const fetchWithTimeout = async (promise, sectionName, fallback) => {
+      let timeoutId;
+      const timeoutPromise = new Promise((resolve) => {
+        timeoutId = setTimeout(() => {
+          logger.warn(`[getCompleteBookingById] Section '${sectionName}' timed out after 3000ms`);
+          resolve({ error: 'SECTION_TIMEOUT', data: fallback });
+        }, 3000);
+      });
+      try {
+        const res = await Promise.race([promise, timeoutPromise]);
+        clearTimeout(timeoutId);
+        return res || { data: fallback };
+      } catch (err) {
+        clearTimeout(timeoutId);
+        logger.warn(`[getCompleteBookingById] Section '${sectionName}' error: ${err.message}`);
+        return { error: err.message, data: fallback };
+      }
+    };
+
+    const [
+      travellersRes,
+      contactsRes,
+      flightsRes,
+      paymentsRes,
+      segmentsRes,
+      emailLogsRes,
+      paymentSplitsRes,
+      paymentMethodRes,
+      auditRes
+    ] = await Promise.all([
+      fetchWithTimeout(supabase.from('travellers').select('*').eq('booking_id', realId), 'travellers', []),
+      fetchWithTimeout(supabase.from('contacts').select('*').eq('booking_id', realId), 'contacts', []),
+      fetchWithTimeout(supabase.from('flights').select('*').eq('booking_id', realId), 'flights', []),
+      fetchWithTimeout(supabase.from('payments').select('*').eq('booking_id', realId), 'payments', []),
+      fetchWithTimeout(supabase.from('booking_itinerary_segments').select('*').eq('booking_id', realId).order('segment_sequence', { ascending: true }), 'itinerarySegments', []),
+      fetchWithTimeout(
+        isUUID
+          ? supabase.from('email_logs').select('*').eq('booking_id', realId).order('created_at', { ascending: false }).limit(25)
+          : supabase.from('email_logs').select('*').eq('booking_reference', refCode).order('created_at', { ascending: false }).limit(25),
+        'emailLogs',
+        []
+      ),
+      fetchWithTimeout(supabase.from('payment_splits').select('*').eq('booking_id', realId), 'paymentSplits', []),
+      fetchWithTimeout(supabase.from('payment_methods').select('*').eq('booking_id', realId).maybeSingle(), 'paymentMethod', null),
+      fetchWithTimeout(supabase.from('audit_events').select('*').eq('booking_id', realId).order('created_at', { ascending: false }).limit(50), 'auditEvents', [])
+    ]);
+
+    logger.info(`PASSENGERS_FETCH_COMPLETE [elapsedMs=${Date.now() - startTime}]`);
+    logger.info(`ITINERARY_FETCH_COMPLETE [elapsedMs=${Date.now() - startTime}]`);
+    logger.info(`PAYMENT_FETCH_COMPLETE [elapsedMs=${Date.now() - startTime}]`);
+    logger.info(`BILLING_FETCH_COMPLETE [elapsedMs=${Date.now() - startTime}]`);
+    logger.info(`AUTHORIZATION_FETCH_COMPLETE [elapsedMs=${Date.now() - startTime}]`);
+    logger.info(`EMAIL_ACTIVITY_FETCH_COMPLETE [elapsedMs=${Date.now() - startTime}]`);
+    logger.info(`AUDIT_FETCH_COMPLETE [elapsedMs=${Date.now() - startTime}]`);
+
+    const travellersData = travellersRes.data || [];
+    const contactsData   = contactsRes.data || [];
+    const flightsData    = flightsRes.data || [];
+    const paymentsData   = paymentsRes.data || [];
+    const segmentsData   = segmentsRes.data || [];
+    const emailLogsData  = emailLogsRes.data || [];
+    const splitsData     = paymentSplitsRes.data || splitsMemoryStore.get(realId) || splitsMemoryStore.get(refCode) || [];
+    const pmData         = paymentMethodRes.data || null;
+    const auditData      = auditRes.data || [];
+
+    const memorySegs = segmentsMemoryStore.get(realId) || [];
+    let finalSegs = segmentsData.length > 0 ? segmentsData : (memorySegs.length > 0 ? memorySegs : []);
+    if (finalSegs.length === 0 && flightsData.length > 0) {
+      let outSeq = 1;
+      let retSeq = 1;
+      finalSegs = flightsData.map((f) => {
+        const dir = (f.leg === 'return' || f.leg === 'inbound') ? 'return' : 'outbound';
+        const seq = dir === 'return' ? retSeq++ : outSeq++;
+        return {
+          id: f.id,
+          booking_id: f.booking_id,
+          journey_direction: dir,
+          direction: dir,
+          segment_sequence: seq,
+          carrier_name: f.airline_name || f.carrier_name || '',
+          carrier_code: f.carrier_code || f.marketing_carrier_code || '',
+          marketing_carrier_code: f.carrier_code || f.marketing_carrier_code || '',
+          airline_name: f.airline_name || '',
+          flight_number: f.flight_number || '',
+          origin_airport: f.departure_airport || f.origin_airport || '',
+          destination_airport: f.arrival_airport || f.destination_airport || '',
+          origin_city: f.departure_airport || '',
+          destination_city: f.arrival_airport || '',
+          departure_date: f.departure_date || '',
+          departure_time: f.departure_time_str || f.departure_time || '',
+          arrival_date: f.arrival_date || '',
+          arrival_time: f.arrival_time_str || f.arrival_time || '',
+          cabin: f.cabin_class || f.cabin || 'Economy',
+          stop_count: parseInt(f.stops || 0, 10),
+          _source: 'flights_table'
+        };
+      });
+    }
+
+    const relations = {
+      travellers: travellersData,
+      contacts: contactsData,
+      flights: flightsData,
+      payments: paymentsData,
+      itinerarySegments: finalSegs,
+      emailLogs: emailLogsData,
+      paymentSplits: splitsData,
+      paymentMethod: pmData,
+      auditEvents: auditData
+    };
+
     const enriched = bookingRepository.enrichBookingRecord(baseBooking, relations);
     const itinerary = buildCanonicalItinerary(enriched);
     const tripSummary = calculateTripSummary(enriched);
 
-    // Fetch payment method record (billing details) — always try DB first
-    const paymentMethod = await bookingRepository.getPaymentMethodByBookingId(realId);
-
     const canonical = bookingMapper.toCanonicalModel(
       baseBooking,
-      relations.travellers || [],
-      relations.contacts || [],
-      relations.flights || [],
-      relations.payments || [],
-      paymentMethod || null
+      relations.travellers,
+      relations.contacts,
+      relations.flights,
+      relations.payments,
+      relations.paymentMethod
     ) || {};
-
 
     const ticketDetails = {
       airlineCode: enriched.airline_code || enriched.airlineCode || null,
@@ -418,7 +533,6 @@ export const bookingRepository = {
     };
 
     const rawLogs = relations.emailLogs || [];
-
     const resolveActivity = (typeKeyword, columnPrefix) => {
       const log = rawLogs.find(l => (l.template_type || '').toUpperCase().includes(typeKeyword));
       if (log) {
@@ -478,10 +592,24 @@ export const bookingRepository = {
 
     const authStatus = (enriched.authorization_status || (enriched.status === 'AUTHORIZED' ? 'AUTHORIZED' : (enriched.authorization_token ? 'PENDING' : 'NOT_CREATED'))).toUpperCase();
 
+    const warnings = [];
+    if (travellersRes.error) warnings.push({ section: 'travellers', code: travellersRes.error });
+    if (contactsRes.error) warnings.push({ section: 'contacts', code: contactsRes.error });
+    if (flightsRes.error) warnings.push({ section: 'flights', code: flightsRes.error });
+    if (paymentsRes.error) warnings.push({ section: 'payments', code: paymentsRes.error });
+    if (segmentsRes.error) warnings.push({ section: 'itinerarySegments', code: segmentsRes.error });
+    if (emailLogsRes.error) warnings.push({ section: 'emailLogs', code: emailLogsRes.error });
+    if (paymentSplitsRes.error) warnings.push({ section: 'paymentSplits', code: paymentSplitsRes.error });
+    if (paymentMethodRes.error) warnings.push({ section: 'paymentMethod', code: paymentMethodRes.error });
+    if (auditRes.error) warnings.push({ section: 'auditEvents', code: auditRes.error });
+
+    logger.info(`BOOKING_DETAILS_RESPONSE_SENT [elapsedMs=${Date.now() - startTime}]`);
+
     return {
       ...enriched,
       ...canonical,
       bookingId: enriched.confirmation_code || enriched.bookingReference || realId,
+      confirmationCode: enriched.confirmation_code || refCode,
       notes: enriched.internal_notes || enriched.internalNotes || '',
       itinerary,
       outbound_segments: itinerary.outbound,
@@ -502,11 +630,14 @@ export const bookingRepository = {
       authorization_email_recipient: authActivity.recipient,
       authorization_expires_at: authActivity.expiresAt,
       payment: canonical.payment || enriched.payment || {},
-      paymentSplits: relations.paymentSplits || enriched.payment_splits || [],
-      paymentMethod: relations.paymentMethod || enriched.paymentMethod || null,
+      paymentSplits: relations.paymentSplits,
+      paymentMethod: relations.paymentMethod,
       emailActivity,
+      auditEvents: auditData,
       trip_summary: tripSummary,
-      tripSummary: tripSummary
+      tripSummary: tripSummary,
+      warnings,
+      durationMs: Date.now() - startTime
     };
   },
 

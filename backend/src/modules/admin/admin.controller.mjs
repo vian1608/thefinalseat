@@ -201,20 +201,27 @@ export const adminController = {
   },
 
   getBookingDetail: async (req, res, next) => {
+    const startTime = Date.now();
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     try {
       const targetId = req.params.id || req.params.bookingId;
       if (!targetId || targetId === 'undefined' || targetId === '[object Object]') {
         return res.status(400).json({
           success: false,
-          error: { code: 'INVALID_BOOKING_ID', message: 'Valid booking ID or confirmation reference required.' }
+          error: { code: 'INVALID_BOOKING_ID', message: 'Valid booking ID or confirmation reference required.' },
+          requestId
         });
       }
 
+      logger.info(`[getBookingDetail] START ${requestId} targetId=${targetId}`);
       const booking = await adminService.getBookingDetails(targetId);
+
       if (!booking) {
+        logger.info(`[getBookingDetail] NOT_FOUND ${requestId} durationMs=${Date.now() - startTime}`);
         return res.status(404).json({
           success: false,
-          error: { code: 'BOOKING_NOT_FOUND', message: `Booking '${targetId}' not found.` }
+          error: { code: 'BOOKING_NOT_FOUND', message: `Booking '${targetId}' not found.` },
+          requestId
         });
       }
 
@@ -229,16 +236,25 @@ export const adminController = {
         audit: booking.audit || booking.auditEvents || []
       };
 
+      const durationMs = Date.now() - startTime;
+      logger.info(`[getBookingDetail] COMPLETE ${requestId} durationMs=${durationMs}`);
+
       res.json({
         success: true,
         booking: safeBooking,
-        data: safeBooking
+        data: safeBooking,
+        warnings: booking.warnings || [],
+        requestId,
+        durationMs
       });
     } catch (error) {
-      logger.error(`[AdminController] Error fetching details for '${req.params.id}': ${error.message}`, error);
+      const durationMs = Date.now() - startTime;
+      logger.error(`[getBookingDetail] ERROR ${requestId} durationMs=${durationMs}: ${error.message}`, error);
       res.status(500).json({
         success: false,
-        error: { code: 'BOOKING_DETAILS_FETCH_FAILED', message: error.message }
+        error: { code: 'BOOKING_DETAILS_FETCH_FAILED', message: error.message },
+        requestId,
+        durationMs
       });
     }
   },
