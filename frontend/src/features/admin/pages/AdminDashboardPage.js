@@ -487,15 +487,28 @@ function AdminDashboard() {
       const res = await adminAPI.getBookingDetails(lookupId, { signal: controller.signal });
       clearTimeout(timeoutId);
 
-      const payload = res?.data ?? res;
-      const booking = payload?.booking ?? null;
+      console.log('BOOKING_DETAILS_RAW_RESPONSE', res);
+
+      const payload =
+        res && typeof res === 'object' && Object.prototype.hasOwnProperty.call(res, 'success')
+          ? res
+          : (res?.data ?? res);
+
+      const booking =
+        payload?.booking ??
+        payload?.data?.booking ??
+        payload?.data ??
+        null;
 
       console.log('BASE_BOOKING_FOUND', { found: !!booking, id: booking?.id, code: booking?.confirmationCode || booking?.confirmation_code });
 
-      if (!payload?.success || !booking) {
-        throw new Error(
-          (typeof payload?.error === 'object' ? payload.error?.message : payload?.error) || 'BOOKING_DETAILS_FETCH_FAILED'
-        );
+      if (payload?.success === false || !booking) {
+        const errorMessage =
+          typeof payload?.error === 'object'
+            ? payload.error?.message
+            : payload?.error;
+
+        throw new Error(errorMessage || 'BOOKING_DETAILS_FETCH_FAILED');
       }
 
       const safeId = booking.id || booking.confirmationCode || booking.confirmation_code || lookupId;

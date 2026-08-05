@@ -15,20 +15,6 @@ const auditLogsMemoryStore = new Map();
 const paymentMethodsMemoryStore = new Map();
 const emailDeliveriesMemoryStore = new Map();
 
-// Seed fallback sample booking for test/offline execution
-const sampleBooking8EXIPS = {
-  id: '8exips00-0000-4000-8000-000000000000',
-  confirmation_code: 'TFS-2026-8EXIPS',
-  passenger_name: 'John Doe',
-  email: 'john.doe@example.com',
-  status: 'DONE',
-  amount: 589.50,
-  currency: 'USD',
-  created_at: new Date().toISOString()
-};
-bookingsMemoryStore.set(sampleBooking8EXIPS.id, sampleBooking8EXIPS);
-bookingsMemoryStore.set(sampleBooking8EXIPS.confirmation_code, sampleBooking8EXIPS);
-
 
 export const bookingRepository = {
 
