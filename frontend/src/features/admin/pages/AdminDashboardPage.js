@@ -80,6 +80,20 @@ const truncateText = (value, length = 12) => {
   return value.length > length ? `${value.slice(0, length)}…` : value;
 };
 
+const normalizeDateOnlyToISO = (dateVal) => {
+  if (!dateVal) return '';
+  const str = String(dateVal).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if (str.includes('T')) return str.split('T')[0];
+  const parts = str.split(/[-/]/);
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    }
+  }
+  return str.slice(0, 10);
+};
+
 // Null-safe substring — logs exact fieldName when value is missing so crashes are diagnosable
 const safeSubstring = (value, start = 0, end, fieldName) => {
   if (value === null || value === undefined || value === '') {
@@ -353,22 +367,87 @@ function AdminDashboard() {
   const [finalTicketEmailSending, setFinalTicketEmailSending] = useState(false);
   const [finalTicketEmailResult, setFinalTicketEmailResult] = useState({ status: 'idle', message: '', error: '' });
 
-  // Derived Dirty Sections Memo & Unsaved Changes Boolean
+  // Form & Section State Declarations
+  const [ticketForm, setTicketForm] = useState({
+    airlineCode: '', airlineName: '', airlineLogoUrl: '', airlineConfirmationNumber: '', airlinePnr: '', ticketNumber: '', ticketIssuedAt: '', ticketNotes: '', supplierConfirmation: ''
+  });
+  const [savedTicketForm, setSavedTicketForm] = useState({
+    airlineCode: '', airlineName: '', airlineLogoUrl: '', airlineConfirmationNumber: '', airlinePnr: '', ticketNumber: '', ticketIssuedAt: '', ticketNotes: '', supplierConfirmation: ''
+  });
+  const [ticketSaving, setTicketSaving] = useState(false);
+  const [ticketSaveStatus, setTicketSaveStatus] = useState('idle');
+  const [ticketDetailsError, setTicketDetailsError] = useState('');
+  const [ticketDetailsSuccess, setTicketDetailsSuccess] = useState('');
+
+  const [savedStatusForm, setSavedStatusForm] = useState({ newStatus: 'PENDING', internalNotes: '' });
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusSaveStatus, setStatusSaveStatus] = useState('idle');
+  const [statusSaveError, setStatusSaveError] = useState('');
+  const [statusSaveSuccess, setStatusSaveSuccess] = useState('');
+
+  const [outboundSegments, setOutboundSegments] = useState([]);
+  const [returnSegments, setReturnSegments] = useState([]);
+  const [savedItineraryForm, setSavedItineraryForm] = useState({ outbound: [], return: [] });
+  const [itinerarySaving, setItinerarySaving] = useState(false);
+  const [itinerarySaveStatus, setItinerarySaveStatus] = useState('idle');
+  const [itinerarySaveError, setItinerarySaveError] = useState('');
+  const [itinerarySaveSuccess, setItinerarySaveSuccess] = useState('');
+
+  const [authSettingsForm, setAuthSettingsForm] = useState({ authorizedAmount: 0, currency: 'USD' });
+  const [savedAuthSettingsForm, setSavedAuthSettingsForm] = useState({ authorizedAmount: 0, currency: 'USD' });
+  const [authSettingsSaving, setAuthSettingsSaving] = useState(false);
+  const [authSettingsSaveStatus, setAuthSettingsSaveStatus] = useState('idle');
+  const [authSettingsSaveError, setAuthSettingsSaveError] = useState('');
+  const [authSettingsSaveSuccess, setAuthSettingsSaveSuccess] = useState('');
+
+  // Derived Section Dirty State Booleans
+  const isTicketDirty = React.useMemo(() => {
+    return (
+      (ticketForm.airlineConfirmationNumber || '') !== (savedTicketForm.airlineConfirmationNumber || '') ||
+      (ticketForm.airlineName || '') !== (savedTicketForm.airlineName || '') ||
+      (ticketForm.ticketNumber || '') !== (savedTicketForm.ticketNumber || '') ||
+      (ticketForm.ticketIssuedAt || '') !== (savedTicketForm.ticketIssuedAt || '')
+    );
+  }, [ticketForm, savedTicketForm]);
+
+  const isStatusDirty = React.useMemo(() => {
+    return (
+      newStatus !== savedStatusForm.newStatus ||
+      internalNotes !== savedStatusForm.internalNotes
+    );
+  }, [newStatus, internalNotes, savedStatusForm]);
+
+  const isItineraryDirty = React.useMemo(() => {
+    return JSON.stringify({ outbound: outboundSegments, return: returnSegments }) !== JSON.stringify(savedItineraryForm);
+  }, [outboundSegments, returnSegments, savedItineraryForm]);
+
+  const isAuthSettingsDirty = React.useMemo(() => {
+    return JSON.stringify(authSettingsForm) !== JSON.stringify(savedAuthSettingsForm);
+  }, [authSettingsForm, savedAuthSettingsForm]);
+
   const dirtySections = React.useMemo(() => ({
+    statusNotes: isStatusDirty,
+    itinerary: isItineraryDirty,
+    ticketDetails: isTicketDirty,
+    authorization: isAuthSettingsDirty,
     pricing: !!pricingDirty,
     payment: !!paymentDirty,
     billing: !!billingDirty
-  }), [pricingDirty, paymentDirty, billingDirty]);
+  }), [isStatusDirty, isItineraryDirty, isTicketDirty, isAuthSettingsDirty, pricingDirty, paymentDirty, billingDirty]);
 
   const unsavedSectionNames = React.useMemo(() => {
     const names = [];
+    if (isStatusDirty) names.push('Status & Notes');
+    if (isItineraryDirty) names.push('Itinerary');
+    if (isTicketDirty) names.push('Airline Ticket Details');
+    if (isAuthSettingsDirty) names.push('Passenger Authorization');
     if (pricingDirty) names.push('Pricing');
     if (paymentDirty) names.push('Payment authorization');
     if (billingDirty) names.push('Billing details');
     return names;
-  }, [pricingDirty, paymentDirty, billingDirty]);
+  }, [isStatusDirty, isItineraryDirty, isTicketDirty, isAuthSettingsDirty, pricingDirty, paymentDirty, billingDirty]);
 
-  const hasUnsavedChanges = Object.values(dirtySections).some(Boolean) || hasUnsavedEdits;
+  const hasUnsavedChanges = Object.values(dirtySections).some(Boolean);
 
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
@@ -759,7 +838,7 @@ function AdminDashboard() {
     setBillingSaveSuccessMsg('');
 
     const savedPnr = booking.airline_confirmation_number || booking.airlineConfirmationNumber || booking.airline_pnr || booking.pnr || '';
-    setTicketForm({
+    const initialTicketObj = {
       airlineCode: booking.airline_code || booking.airlineCode || '',
       airlineName: booking.airline_name || booking.airlineName || booking.carrier || '',
       airlineLogoUrl: booking.airline_logo_url || booking.airlineLogoUrl || '',
@@ -769,15 +848,25 @@ function AdminDashboard() {
       ticketNumber: booking.ticket_number || booking.ticketNumber || '',
       ticketIssuedAt: booking.ticket_issued_at ? String(booking.ticket_issued_at).slice(0, 10) : (booking.ticketIssuedAt ? String(booking.ticketIssuedAt).slice(0, 10) : ''),
       ticketNotes: booking.ticket_notes || booking.ticketNotes || ''
+    };
+    setTicketForm(initialTicketObj);
+    setSavedTicketForm(initialTicketObj);
+    setSavedStatusForm({
+      newStatus: booking.status || booking.bookingStatus || 'PENDING',
+      internalNotes: booking.internal_notes || booking.internalNotes || ''
     });
+    setSavedItineraryForm({ outbound: mappedOutbound, return: mappedReturn });
+    setSavedAuthSettingsForm({ authorizedAmount: authAmount, currency: booking.currency || 'USD' });
     setEditingTicketField(null);
     setTicketDetailsError('');
     setTicketDetailsSuccess('');
+    setTicketSaveStatus('idle');
+    setStatusSaveStatus('idle');
+    setItinerarySaveStatus('idle');
+    setAuthSettingsSaveStatus('idle');
   }, []);
 
   // Itinerary Editor State (Journey Grouped)
-  const [outboundSegments, setOutboundSegments] = useState([]);
-  const [returnSegments, setReturnSegments] = useState([]);
   const [hasReturnJourney, setHasReturnJourney] = useState(false);
   const [openOutboundGroup, setOpenOutboundGroup] = useState(true);
   const [openReturnGroup, setOpenReturnGroup] = useState(true);
@@ -1071,20 +1160,6 @@ function AdminDashboard() {
   const [paymentSplits, setPaymentSplits] = useState([]);
 
 
-  // Airline Ticket Details State
-  const [ticketForm, setTicketForm] = useState({
-    airlineCode: '',
-    airlineName: '',
-    airlineLogoUrl: '',
-    airlineConfirmationNumber: '',
-    airlinePnr: '',
-    ticketNumber: '',
-    ticketIssuedAt: '',
-    ticketNotes: '',
-    supplierConfirmation: ''
-  });
-  const [ticketDetailsError, setTicketDetailsError] = useState('');
-  const [ticketDetailsSuccess, setTicketDetailsSuccess] = useState('');
   const [editingTicketField, setEditingTicketField] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [showThreeDotMenu, setShowThreeDotMenu] = useState(false);
@@ -1136,101 +1211,140 @@ function AdminDashboard() {
     setTimeframe(days);
   };
 
-  const handleSaveAllChanges = async (e) => {
+  useEffect(() => {
+    const hasAnyDirty = isStatusDirty || isItineraryDirty || isTicketDirty || isAuthSettingsDirty || pricingDirty || paymentDirty || billingDirty;
+    const handleBeforeUnload = (e) => {
+      if (hasAnyDirty) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes in one or more sections. Discard them and leave?';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isStatusDirty, isItineraryDirty, isTicketDirty, isAuthSettingsDirty, pricingDirty, paymentDirty, billingDirty]);
+
+  const handleCancelEditing = () => {
+    const dirtySectionNames = [];
+    if (isStatusDirty) dirtySectionNames.push('Status & Notes');
+    if (isItineraryDirty) dirtySectionNames.push('Itinerary');
+    if (isTicketDirty) dirtySectionNames.push('Airline Ticket Details');
+    if (isAuthSettingsDirty) dirtySectionNames.push('Passenger Authorization');
+    if (pricingDirty) dirtySectionNames.push('Pricing');
+    if (paymentDirty) dirtySectionNames.push('Payment authorization');
+    if (billingDirty) dirtySectionNames.push('Billing details');
+
+    if (dirtySectionNames.length > 0) {
+      const confirmed = window.confirm(
+        `You have unsaved changes in: ${dirtySectionNames.join(', ')}. Discard changes and exit editing?`
+      );
+      if (!confirmed) return;
+    }
+    setIsEditMode(false);
+  };
+
+  const handleSaveAirlineDetails = async (e) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
 
-    console.log('GLOBAL_SAVE_CLICK', {
-      globalSaving,
-      updatingRecord,
-      paymentSaving,
-      pricingSaving,
-      billingSaving,
-      hasUnsavedChanges,
-      dirtySections,
-      selectedBookingId: selectedBooking?.id
-    });
-
-    if (!selectedBooking) return { success: false, error: 'No booking selected' };
-    if (globalSavePromiseRef.current) return globalSavePromiseRef.current;
-
-    const sectionsToSave = Object.entries(dirtySections).filter(([, dirty]) => dirty).map(([section]) => section);
-
-    if (sectionsToSave.length === 0) {
-      setGlobalSaveStatus('success');
-      setGlobalSaveMessage('All changes are already saved.');
-      return { success: true, message: 'All changes are already saved.' };
+    if (!selectedBooking?.id) {
+      setTicketDetailsError('Unable to save: database booking ID is missing.');
+      setTicketSaveStatus('failure');
+      return { success: false, error: 'Unable to save: database booking ID is missing.' };
     }
 
-    const savePromise = (async () => {
-      setGlobalSaving(true);
-      setUpdatingRecord(true);
-      setGlobalSaveStatus('saving');
-      setGlobalSaveError('');
-      setGlobalSaveMessage('Saving booking changes…');
+    setTicketDetailsError('');
+    setTicketDetailsSuccess('');
 
-      const globalController = new AbortController();
-      const globalTimeoutId = window.setTimeout(() => globalController.abort(), 20000);
+    // Normalize input fields
+    const rawPnr = (ticketForm.airlineConfirmationNumber || ticketForm.airlinePnr || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const pnr = rawPnr.slice(0, 6);
+    if (rawPnr && !/^[A-Z0-9]{1,6}$/.test(rawPnr)) {
+      setTicketDetailsError('PNR must contain no more than 6 letters or numbers.');
+      setTicketSaveStatus('failure');
+      return { success: false, error: 'PNR must contain no more than 6 letters or numbers.' };
+    }
 
-      const savedSections = [];
-      const failedSections = [];
+    const tkt = (ticketForm.ticketNumber || '').trim().replace(/\D/g, '').slice(0, 13);
+    if (ticketForm.ticketNumber && String(ticketForm.ticketNumber).trim() !== '' && !/^\d{1,13}$/.test(tkt)) {
+      setTicketDetailsError('Ticket number must contain no more than 13 digits.');
+      setTicketSaveStatus('failure');
+      return { success: false, error: 'Ticket number must contain no more than 13 digits.' };
+    }
 
-      try {
-        for (const section of sectionsToSave) {
-          let result = null;
-          if (section === 'pricing') {
-            result = await handleSavePricingRevisions();
-          } else if (section === 'payment') {
-            result = await handleSavePaymentSplits();
-          } else if (section === 'billing') {
-            result = await handleSaveBillingDetails();
-          }
+    const issueDateStr = normalizeDateOnlyToISO(ticketForm.ticketIssuedAt);
+    if (ticketForm.ticketIssuedAt && issueDateStr && !/^\d{4}-\d{2}-\d{2}$/.test(issueDateStr)) {
+      setTicketDetailsError('Ticket issue date is invalid.');
+      setTicketSaveStatus('failure');
+      return { success: false, error: 'Ticket issue date is invalid.' };
+    }
 
-          if (result && (result.success || result.verified)) {
-            savedSections.push(section);
-          } else {
-            failedSections.push({ section, error: result?.error || 'Save failed' });
-          }
-        }
+    const airlineName = (ticketForm.airlineName || '').trim();
 
-        window.clearTimeout(globalTimeoutId);
+    const adminToken = localStorage.getItem('token');
+    try {
+      setTicketSaving(true);
+      setTicketSaveStatus('saving');
 
-        isHydratingRef.current = true;
-        try {
-          await handleRefreshCurrentBooking();
-        } finally {
-          isHydratingRef.current = false;
-        }
+      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/airline-details`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          airlineConfirmationNumber: pnr,
+          airlineName: airlineName,
+          airlineCode: ticketForm.airlineCode || '',
+          airlineLogoUrl: ticketForm.airlineLogoUrl || '',
+          ticketNumber: tkt,
+          ticketIssueDate: issueDateStr
+        })
+      });
 
-        if (failedSections.length === 0) {
-          setGlobalSaveStatus('success');
-          setGlobalSaveMessage('All booking changes were saved and verified.');
-          setHasUnsavedEdits(false);
-          return { success: true, savedSections };
-        } else {
-          setGlobalSaveStatus('failure');
-          setGlobalSaveError(`Some changes could not be saved. Saved: ${savedSections.join(', ') || 'none'}. Failed: ${failedSections.map(f => f.section).join(', ')}.`);
-          return { success: false, savedSections, failedSections };
-        }
-      } catch (err) {
-        window.clearTimeout(globalTimeoutId);
-        const isTimeout = err.name === 'AbortError' || err.message?.includes('20 seconds');
-        setGlobalSaveStatus('failure');
-        setGlobalSaveError(isTimeout ? 'Global save timed out after 20 seconds. Refresh the booking and retry.' : (err.message || 'Failed to save all changes.'));
-        return { success: false, error: err.message };
-      } finally {
-        setGlobalSaving(false);
-        setUpdatingRecord(false);
-        paymentSaveInFlightRef.current = false;
-        pricingSaveInFlightRef.current = false;
-        globalSavePromiseRef.current = null;
+      const contentType = res.headers.get('content-type') || '';
+      const rawText = await res.text();
+      let payload = null;
+      if (rawText && contentType.includes('application/json')) {
+        try { payload = JSON.parse(rawText); } catch { payload = null; }
       }
-    })();
 
-    globalSavePromiseRef.current = savePromise;
-    return savePromise;
+      if (!res.ok || !payload?.success) {
+        const errMsg = payload?.error?.message || payload?.error || payload?.message || `The server returned an invalid response (${res.status}).`;
+        throw new Error(errMsg);
+      }
+
+      const updated = payload.booking || payload.data;
+      if (updated) {
+        setSelectedBooking(prev => ({ ...prev, ...updated }));
+        setBookings(prevList => prevList.map(b => b.id === updated.id ? { ...b, ...updated } : b));
+
+        const confirmedState = {
+          airlineCode: updated.airline_code || updated.airlineCode || '',
+          airlineName: updated.airline_name || updated.airlineName || '',
+          airlineLogoUrl: updated.airline_logo_url || updated.airlineLogoUrl || '',
+          airlineConfirmationNumber: updated.airline_confirmation_number || updated.airlineConfirmationNumber || '',
+          airlinePnr: updated.airline_confirmation_number || updated.airlineConfirmationNumber || '',
+          ticketNumber: updated.ticket_number || updated.ticketNumber || '',
+          ticketIssuedAt: updated.ticket_issued_at ? String(updated.ticket_issued_at).slice(0, 10) : ''
+        };
+
+        setSavedTicketForm(confirmedState);
+        setTicketForm(confirmedState);
+      }
+
+      setTicketSaveStatus('success');
+      setTicketDetailsSuccess('Airline ticket details saved successfully.');
+      return { success: true, booking: updated };
+    } catch (err) {
+      setTicketSaveStatus('failure');
+      setTicketDetailsError(err.message || 'Unable to save airline ticket details.');
+      return { success: false, error: err.message };
+    } finally {
+      setTicketSaving(false);
+    }
   };
 
   const sendAdminBookingEmail = async ({ emailType, actionName }) => {
@@ -2400,19 +2514,11 @@ function AdminDashboard() {
             <>
               <button
                 type="button"
-                onClick={handleSaveAllChanges}
-                className="admin-primary-btn"
-                style={{ padding: '6px 14px', fontSize: '0.78rem', fontWeight: 700, background: '#10b981' }}
-              >
-                <i className="fas fa-save" style={{ marginRight: '6px' }}></i> Save Changes
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsEditMode(false)}
+                onClick={handleCancelEditing}
                 className="admin-secondary-btn"
                 style={{ padding: '6px 12px', fontSize: '0.78rem', fontWeight: 600 }}
               >
-                Cancel Editing
+                <i className="fas fa-times" style={{ marginRight: '4px' }}></i> Cancel Editing
               </button>
             </>
           ) : (
@@ -3946,10 +4052,15 @@ function AdminDashboard() {
                         <span className="accordion-title-left">
                           <i className={`fas ${openAccordion === 'ticket_details' ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
                           Airline Ticket Details
+                          {isTicketDirty && (
+                            <span className="unsaved-badge" style={{ marginLeft: '10px', fontSize: '0.72rem', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: '12px' }}>
+                              ● Unsaved changes
+                            </span>
+                          )}
                         </span>
                         <span className="accordion-summary-right">
-                          {/^[A-Z0-9]{6}$/.test((ticketForm.airlineConfirmationNumber || ticketForm.airlinePnr || selectedBooking?.airline_confirmation_number || selectedBooking?.airlineConfirmationNumber || '').trim().toUpperCase())
-                            ? `PNR: ${(ticketForm.airlineConfirmationNumber || ticketForm.airlinePnr || selectedBooking?.airline_confirmation_number || selectedBooking?.airlineConfirmationNumber || '').trim().toUpperCase()}`
+                          {savedTicketForm.airlineConfirmationNumber
+                            ? `PNR: ${savedTicketForm.airlineConfirmationNumber}`
                             : 'Pending Ticket Issue'}
                         </span>
                       </button>
@@ -3963,239 +4074,116 @@ function AdminDashboard() {
                             </div>
                           )}
 
-                          {ticketDetailsSuccess && (
+                          {ticketDetailsSuccess && !isTicketDirty && (
                             <div style={{ color: '#166534', background: '#f0fdf4', border: '1px solid #86efac', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', marginBottom: '12px' }}>
                               <i className="fas fa-check-circle" style={{ marginRight: '6px' }}></i>
                               {ticketDetailsSuccess}
                             </div>
                           )}
 
-                          {!(selectedBooking?.airline_confirmation_number || selectedBooking?.airlineConfirmationNumber || selectedBooking?.ticket_number) ? (
-                            /* INITIAL UNSAVED STATE FORM */
-                            <div>
-                              <div className="drawer-grid-2col">
-                                <div className="drawer-form-field">
-                                  <label>Airline Confirmation Number / PNR *</label>
-                                  <input
-                                    type="text"
-                                    maxLength={6}
-                                    placeholder="6-char PNR (e.g. AB12CD)"
-                                    value={ticketForm.airlineConfirmationNumber || ticketForm.airlinePnr || ''}
-                                    onChange={(e) => {
-                                      const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
-                                      setTicketForm({ ...ticketForm, airlineConfirmationNumber: val, airlinePnr: val });
-                                      setHasUnsavedEdits(true);
-                                      setTicketDetailsError('');
-                                    }}
-                                  />
-                                </div>
-                                <div className="drawer-form-field">
-                                  <label>Airline Name</label>
-                                  <AirlineCombobox
-                                    valueName={ticketForm.airlineName}
-                                    valueCode={ticketForm.airlineCode}
-                                    valueLogoUrl={ticketForm.airlineLogoUrl}
-                                    onChange={(selected) => {
-                                      setTicketForm({
-                                        ...ticketForm,
-                                        airlineName: selected.airlineName,
-                                        airlineCode: selected.airlineCode,
-                                        airlineLogoUrl: selected.airlineLogoUrl
-                                      });
-                                      setHasUnsavedEdits(true);
-                                      setTicketDetailsError('');
-                                    }}
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="drawer-grid-2col">
-                                <div className="drawer-form-field">
-                                  <label>Ticket Number</label>
-                                  <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    maxLength={13}
-                                    placeholder="e.g. 0162490182741"
-                                    value={ticketForm.ticketNumber || ''}
-                                    onChange={(e) => {
-                                      const val = e.target.value.replace(/\D/g, '').slice(0, 13);
-                                      setTicketForm({ ...ticketForm, ticketNumber: val });
-                                      setHasUnsavedEdits(true);
-                                      setTicketDetailsError('');
-                                    }}
-                                  />
-                                </div>
-                                <div className="drawer-form-field">
-                                  <label>Ticket Issue Date</label>
-                                  <input
-                                    type="date"
-                                    value={ticketForm.ticketIssuedAt || ''}
-                                    onChange={(e) => {
-                                      setTicketForm({ ...ticketForm, ticketIssuedAt: e.target.value });
-                                      setHasUnsavedEdits(true);
-                                      setTicketDetailsError('');
-                                    }}
-                                  />
-                                </div>
-                              </div>
+                          <div className="drawer-grid-2col">
+                            <div className="drawer-form-field">
+                              <label>Airline Confirmation Number / PNR *</label>
+                              <input
+                                type="text"
+                                maxLength={6}
+                                placeholder="6-char PNR (e.g. 654XDS)"
+                                value={ticketForm.airlineConfirmationNumber || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+                                  setTicketForm({ ...ticketForm, airlineConfirmationNumber: val, airlinePnr: val });
+                                  setTicketDetailsError('');
+                                  setTicketDetailsSuccess('');
+                                }}
+                              />
                             </div>
-                          ) : (
-                            /* POST-SAVE READ-ONLY SUMMARY WITH INDIVIDUAL EDIT BUTTONS */
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-
-                              {/* 1. Airline Confirmation / PNR */}
-                              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ flex: 1, marginRight: '12px' }}>
-                                  <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>
-                                    Airline Confirmation / PNR
-                                  </div>
-                                  {editingTicketField === 'pnr' ? (
-                                    <input
-                                      type="text"
-                                      maxLength={6}
-                                      placeholder="6-char PNR (e.g. AB12CD)"
-                                      value={ticketForm.airlineConfirmationNumber || ''}
-                                      onChange={(e) => {
-                                        const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
-                                        setTicketForm({ ...ticketForm, airlineConfirmationNumber: val });
-                                        setTicketDetailsError('');
-                                      }}
-                                      style={{ width: '100%', padding: '4px 8px', fontSize: '0.88rem', fontWeight: 600 }}
-                                    />
-                                  ) : (
-                                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', letterSpacing: '0.5px' }}>
-                                      {ticketForm.airlineConfirmationNumber || selectedBooking.airline_confirmation_number || 'Not Set'}
-                                    </div>
-                                  )}
-                                </div>
-                                <div>
-                                  {editingTicketField === 'pnr' ? (
-                                    <div style={{ display: 'flex', gap: '6px' }}>
-                                      <button type="button" onClick={() => handleSaveSingleField('pnr')} className="admin-primary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }} disabled={updatingRecord}>Save</button>
-                                      <button type="button" onClick={() => setEditingTicketField(null)} className="admin-secondary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }}>Cancel</button>
-                                    </div>
-                                  ) : (
-                                    <button type="button" onClick={() => setEditingTicketField('pnr')} className="admin-secondary-btn" style={{ padding: '3px 10px', fontSize: '0.75rem', height: '26px' }}>Edit</button>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* 2. Airline */}
-                              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ flex: 1, marginRight: '12px' }}>
-                                  <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>
-                                    Airline
-                                  </div>
-                                  {editingTicketField === 'airline' ? (
-                                    <AirlineCombobox
-                                      valueName={ticketForm.airlineName}
-                                      valueCode={ticketForm.airlineCode}
-                                      valueLogoUrl={ticketForm.airlineLogoUrl}
-                                      onChange={(selected) => {
-                                        setTicketForm({
-                                          ...ticketForm,
-                                          airlineName: selected.airlineName,
-                                          airlineCode: selected.airlineCode,
-                                          airlineLogoUrl: selected.airlineLogoUrl
-                                        });
-                                        setTicketDetailsError('');
-                                      }}
-                                    />
-                                  ) : (
-                                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#1e293b' }}>
-                                      {ticketForm.airlineName ? (ticketForm.airlineCode ? `${ticketForm.airlineName} — ${ticketForm.airlineCode}` : ticketForm.airlineName) : (selectedBooking.airline_name ? `${selectedBooking.airline_name}${selectedBooking.airline_code ? ` — ${selectedBooking.airline_code}` : ''}` : 'Not Set')}
-                                    </div>
-                                  )}
-                                </div>
-                                <div>
-                                  {editingTicketField === 'airline' ? (
-                                    <div style={{ display: 'flex', gap: '6px' }}>
-                                      <button type="button" onClick={() => handleSaveSingleField('airline')} className="admin-primary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }} disabled={updatingRecord}>Save</button>
-                                      <button type="button" onClick={() => setEditingTicketField(null)} className="admin-secondary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }}>Cancel</button>
-                                    </div>
-                                  ) : (
-                                    <button type="button" onClick={() => setEditingTicketField('airline')} className="admin-secondary-btn" style={{ padding: '3px 10px', fontSize: '0.75rem', height: '26px' }}>Edit</button>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* 3. Ticket Number */}
-                              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ flex: 1, marginRight: '12px' }}>
-                                  <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>
-                                    Ticket Number
-                                  </div>
-                                  {editingTicketField === 'ticketNumber' ? (
-                                    <input
-                                      type="text"
-                                      inputMode="numeric"
-                                      maxLength={13}
-                                      placeholder="e.g. 0162490182741"
-                                      value={ticketForm.ticketNumber || ''}
-                                      onChange={(e) => {
-                                        const val = e.target.value.replace(/\D/g, '').slice(0, 13);
-                                        setTicketForm({ ...ticketForm, ticketNumber: val });
-                                        setTicketDetailsError('');
-                                      }}
-                                      style={{ width: '100%', padding: '4px 8px', fontSize: '0.88rem', fontWeight: 600 }}
-                                    />
-                                  ) : (
-                                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#1e293b' }}>
-                                      {ticketForm.ticketNumber || selectedBooking.ticket_number || 'Not Set'}
-                                    </div>
-                                  )}
-                                </div>
-                                <div>
-                                  {editingTicketField === 'ticketNumber' ? (
-                                    <div style={{ display: 'flex', gap: '6px' }}>
-                                      <button type="button" onClick={() => handleSaveSingleField('ticketNumber')} className="admin-primary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }} disabled={updatingRecord}>Save</button>
-                                      <button type="button" onClick={() => setEditingTicketField(null)} className="admin-secondary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }}>Cancel</button>
-                                    </div>
-                                  ) : (
-                                    <button type="button" onClick={() => setEditingTicketField('ticketNumber')} className="admin-secondary-btn" style={{ padding: '3px 10px', fontSize: '0.75rem', height: '26px' }}>Edit</button>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* 4. Ticket Issue Date */}
-                              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ flex: 1, marginRight: '12px' }}>
-                                  <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>
-                                    Ticket Issue Date
-                                  </div>
-                                  {editingTicketField === 'ticketIssuedAt' ? (
-                                    <input
-                                      type="date"
-                                      value={ticketForm.ticketIssuedAt || ''}
-                                      onChange={(e) => {
-                                        setTicketForm({ ...ticketForm, ticketIssuedAt: e.target.value });
-                                        setTicketDetailsError('');
-                                      }}
-                                      style={{ width: '100%', padding: '4px 8px', fontSize: '0.85rem' }}
-                                    />
-                                  ) : (
-                                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#1e293b' }}>
-                                      {ticketForm.ticketIssuedAt
-                                        ? new Date(ticketForm.ticketIssuedAt + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-                                        : (selectedBooking.ticket_issued_at ? new Date(String(selectedBooking.ticket_issued_at).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Not Set')}
-                                    </div>
-                                  )}
-                                </div>
-                                <div>
-                                  {editingTicketField === 'ticketIssuedAt' ? (
-                                    <div style={{ display: 'flex', gap: '6px' }}>
-                                      <button type="button" onClick={() => handleSaveSingleField('ticketIssuedAt')} className="admin-primary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }} disabled={updatingRecord}>Save</button>
-                                      <button type="button" onClick={() => setEditingTicketField(null)} className="admin-secondary-btn" style={{ padding: '4px 10px', fontSize: '0.75rem', height: '28px' }}>Cancel</button>
-                                    </div>
-                                  ) : (
-                                    <button type="button" onClick={() => setEditingTicketField('ticketIssuedAt')} className="admin-secondary-btn" style={{ padding: '3px 10px', fontSize: '0.75rem', height: '26px' }}>Edit</button>
-                                  )}
-                                </div>
-                              </div>
-
+                            <div className="drawer-form-field">
+                              <label>Airline Name</label>
+                              <AirlineCombobox
+                                valueName={ticketForm.airlineName}
+                                valueCode={ticketForm.airlineCode}
+                                valueLogoUrl={ticketForm.airlineLogoUrl}
+                                onChange={(selected) => {
+                                  setTicketForm({
+                                    ...ticketForm,
+                                    airlineName: selected.airlineName,
+                                    airlineCode: selected.airlineCode,
+                                    airlineLogoUrl: selected.airlineLogoUrl
+                                  });
+                                  setTicketDetailsError('');
+                                  setTicketDetailsSuccess('');
+                                }}
+                              />
                             </div>
-                          )}
+                          </div>
+
+                          <div className="drawer-grid-2col" style={{ marginTop: '10px' }}>
+                            <div className="drawer-form-field">
+                              <label>Ticket Number</label>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                maxLength={13}
+                                placeholder="e.g. 6554434232123"
+                                value={ticketForm.ticketNumber || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/\D/g, '').slice(0, 13);
+                                  setTicketForm({ ...ticketForm, ticketNumber: val });
+                                  setTicketDetailsError('');
+                                  setTicketDetailsSuccess('');
+                                }}
+                              />
+                            </div>
+                            <div className="drawer-form-field">
+                              <label>Ticket Issue Date</label>
+                              <input
+                                type="date"
+                                value={ticketForm.ticketIssuedAt || ''}
+                                onChange={(e) => {
+                                  setTicketForm({ ...ticketForm, ticketIssuedAt: e.target.value });
+                                  setTicketDetailsError('');
+                                  setTicketDetailsSuccess('');
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+                            <button
+                              type="button"
+                              onClick={handleSaveAirlineDetails}
+                              disabled={!isTicketDirty || ticketSaving}
+                              className="admin-primary-btn"
+                              style={{
+                                background: ticketSaving ? '#cbd5e1' : (!isTicketDirty ? '#cbd5e1' : '#8b1236'),
+                                color: ticketSaving ? '#64748b' : (!isTicketDirty ? '#64748b' : '#ffffff'),
+                                cursor: (!isTicketDirty || ticketSaving) ? 'not-allowed' : 'pointer',
+                                fontSize: '0.82rem',
+                                padding: '8px 18px',
+                                fontWeight: 700,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                              }}
+                            >
+                              {ticketSaving ? (
+                                <>
+                                  <i className="fas fa-spinner fa-spin"></i>
+                                  Saving…
+                                </>
+                              ) : ticketSaveStatus === 'success' && !isTicketDirty ? (
+                                <>
+                                  <i className="fas fa-check-circle"></i>
+                                  Saved successfully
+                                </>
+                              ) : (
+                                <>
+                                  <i className="fas fa-save"></i>
+                                  Save Airline Details
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -5091,21 +5079,6 @@ function AdminDashboard() {
                     </div>
                       {/* STICKY EDIT MODE FOOTER */}
                       <div className="sticky-drawer-footer" style={{ position: 'relative', zIndex: 20, pointerEvents: 'auto' }}>
-                        {/* Row 1: Unsaved status badge */}
-                        <div className="drawer-footer-status-row">
-                          {hasUnsavedChanges ? (
-                            <span className="unsaved-badge">
-                              ● Unsaved Changes: {unsavedSectionNames.join(', ')}
-                            </span>
-                          ) : globalSaveStatus === 'failure' ? (
-                            <span className="unsaved-badge" style={{ background: '#fef2f2', color: '#dc2626' }}>
-                              ⚠ {globalSaveError || 'Some changes were not saved'}
-                            </span>
-                          ) : (
-                            <span className="drawer-footer-synced">✓ Synced</span>
-                          )}
-                        </div>
-                        {/* Row 2: Actions */}
                         <div className="drawer-footer-actions-row">
                           {/* Destructive – left-isolated */}
                           <button
@@ -5120,23 +5093,13 @@ function AdminDashboard() {
                             <i className="fas fa-trash-alt" style={{ marginRight: '5px' }}></i> Delete Booking
                           </button>
 
-                          {/* Spacer pushes cancel+save to the right */}
+                          {/* Spacer pushes cancel to the right */}
                           <span className="drawer-footer-spacer" />
 
-                          {/* Cancel + Save grouped */}
+                          {/* Cancel Editing */}
                           <div className="drawer-footer-primary-group">
-                            <button type="button" onClick={() => setIsEditMode(false)} className="drawer-footer-cancel-btn">
+                            <button type="button" onClick={handleCancelEditing} className="drawer-footer-cancel-btn">
                               Cancel Editing
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleSaveAllChanges}
-                              className="drawer-footer-save-btn"
-                              disabled={globalSaving || !hasUnsavedChanges}
-                              style={{ pointerEvents: 'auto' }}
-                            >
-                              <i className={`fas ${globalSaving ? 'fa-spinner fa-spin' : 'fa-check'}`} style={{ marginRight: '4px' }}></i>
-                              {globalSaving ? 'Saving…' : (globalSaveStatus === 'failure' ? 'Retry Save' : (hasUnsavedChanges ? 'Save Changes' : '✓ All Changes Saved'))}
                             </button>
                           </div>
                         </div>

@@ -172,9 +172,10 @@ describe('TEST 19 — Reconciliation success', () => {
   });
 });
 
-describe('TEST 20 — Global save with no dirty sections', () => {
-  it('returns immediately with All changes are already saved message when no section is dirty', () => {
-    expect(adminDashboardSrc).toContain("All changes are already saved.");
+describe('TEST 20 — Section-level save architecture', () => {
+  it('uses individual section save handlers instead of a global save', () => {
+    expect(adminDashboardSrc).toContain("handleSaveAirlineDetails");
+    expect(adminDashboardSrc).toContain("Save Airline Details");
   });
 });
 
@@ -194,10 +195,10 @@ describe('TEST 22 — Child handler in-flight guard result', () => {
   });
 });
 
-describe('TEST 23 — Partial section failure handling', () => {
-  it('resets global loading state and reports failed sections on partial failure', () => {
-    expect(adminDashboardSrc).toContain("setGlobalSaveStatus('failure')");
-    expect(adminDashboardSrc).toContain("Some changes could not be saved");
+describe('TEST 23 — Independent section failure handling', () => {
+  it('maintains draft values on failure and displays error inline inside section', () => {
+    expect(adminDashboardSrc).toContain("setTicketSaveStatus('failure')");
+    expect(adminDashboardSrc).toContain("Unable to save airline ticket details.");
   });
 });
 
@@ -216,17 +217,16 @@ describe('TEST 25 — Refresh hydration guard', () => {
   });
 });
 
-describe('TEST 26 — Global save timeout', () => {
-  it('enforces 20-second AbortController timeout on global save', () => {
-    expect(adminDashboardSrc).toContain("20000");
-    expect(adminDashboardSrc).toContain("Global save timed out after 20 seconds");
+describe('TEST 26 — Section save isolation', () => {
+  it('saves airline details via dedicated PATCH endpoint', () => {
+    expect(adminDashboardSrc).toContain("/api/admin/bookings/");
+    expect(adminDashboardSrc).toContain("/airline-details");
   });
 });
 
-describe('TEST 27 — Mandatory finally block cleanup', () => {
-  it('resets globalSaving, updatingRecord, and in-flight flags inside a mandatory finally block', () => {
-    expect(adminDashboardSrc).toContain("setGlobalSaving(false)");
-    expect(adminDashboardSrc).toContain("setUpdatingRecord(false)");
-    expect(adminDashboardSrc).toContain("paymentSaveInFlightRef.current = false");
+describe('TEST 27 — Navigation dirty warning protection', () => {
+  it('warns user before unloading page when any section is dirty', () => {
+    expect(adminDashboardSrc).toContain("addEventListener('beforeunload'");
+    expect(adminDashboardSrc).toContain("You have unsaved changes in one or more sections.");
   });
 });

@@ -771,20 +771,24 @@ export const bookingRepository = {
 
     let cleanPnr = booking.airline_confirmation_number || null;
     if (airlineConfirmationNumber !== undefined && airlineConfirmationNumber !== null && String(airlineConfirmationNumber).trim() !== '') {
-      const rawPnr = String(airlineConfirmationNumber).trim().toUpperCase();
-      if (!/^[A-Z0-9]{6}$/.test(rawPnr)) {
-        throw new Error('Airline confirmation number must contain exactly 6 letters or numbers.');
+      const rawPnr = String(airlineConfirmationNumber).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!/^[A-Z0-9]{1,6}$/.test(rawPnr)) {
+        throw new Error('PNR must contain no more than 6 letters or numbers.');
       }
       cleanPnr = rawPnr;
+    } else if (airlineConfirmationNumber === '' || airlineConfirmationNumber === null) {
+      cleanPnr = null;
     }
 
     let cleanTkt = booking.ticket_number || null;
     if (ticketNumber !== undefined && ticketNumber !== null && String(ticketNumber).trim() !== '') {
-      const rawTkt = String(ticketNumber).trim();
+      const rawTkt = String(ticketNumber).replace(/\D/g, '');
       if (!/^\d{1,13}$/.test(rawTkt)) {
-        throw new Error('Ticket number must contain digits only and cannot exceed 13 digits.');
+        throw new Error('Ticket number must contain no more than 13 digits.');
       }
       cleanTkt = rawTkt;
+    } else if (ticketNumber === '' || ticketNumber === null) {
+      cleanTkt = null;
     }
 
     const cleanCode = airlineCode !== undefined ? (airlineCode ? String(airlineCode).trim().toUpperCase() : null) : (booking.airline_code || null);
@@ -792,7 +796,18 @@ export const bookingRepository = {
     const cleanLogo = airlineLogoUrl !== undefined ? (airlineLogoUrl ? String(airlineLogoUrl).trim() : null) : (booking.airline_logo_url || null);
     const cleanSupp = supplierConfirmation !== undefined ? (supplierConfirmation ? String(supplierConfirmation).trim() : null) : (booking.supplier_confirmation || null);
     const cleanNotes = ticketNotes !== undefined ? (ticketNotes ? String(ticketNotes).trim() : null) : (booking.ticket_notes || null);
-    const cleanIssuedAt = ticketIssuedAt !== undefined ? (ticketIssuedAt ? String(ticketIssuedAt).slice(0, 10) : null) : (booking.ticket_issued_at ? String(booking.ticket_issued_at).slice(0, 10) : null);
+
+    const rawDate = ticketIssueDate || ticketIssuedAt;
+    let cleanIssuedAt = booking.ticket_issued_at ? String(booking.ticket_issued_at).slice(0, 10) : null;
+    if (rawDate !== undefined && rawDate !== null && String(rawDate).trim() !== '') {
+      const dateStr = String(rawDate).trim().slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        throw new Error('Ticket issue date is invalid.');
+      }
+      cleanIssuedAt = dateStr;
+    } else if (rawDate === '' || rawDate === null) {
+      cleanIssuedAt = null;
+    }
 
     const updatePayload = {
       updated_at: new Date().toISOString()
