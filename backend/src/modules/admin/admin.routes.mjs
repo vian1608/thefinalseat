@@ -33,6 +33,7 @@ router.delete('/bookings/:id', authenticate, authorize(['admin']), adminControll
 // Field-Isolated PATCH Endpoints
 router.patch('/bookings/:id/status', authenticate, authorize(['admin']), bookingController.updateStatus);
 router.patch('/bookings/:id/payment', authenticate, authorize(['admin']), bookingController.updatePayment);
+router.patch('/bookings/:identifier/payment', authenticate, authorize(['admin']), bookingController.updatePayment);
 router.patch('/bookings/:id/itinerary', authenticate, authorize(['admin']), bookingController.updateItinerary);
 router.post('/bookings/:id/import-itinerary', authenticate, authorize(['admin']), bookingController.importItineraryText);
 router.patch('/bookings/:id/ticket', authenticate, authorize(['admin']), bookingController.updateTicket);

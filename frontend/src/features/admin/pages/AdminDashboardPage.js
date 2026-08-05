@@ -273,8 +273,10 @@ function AdminDashboard() {
   const [paymentDirty, setPaymentDirty] = useState(false);
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentSaveStatus, setPaymentSaveStatus] = useState('default');
+  const [paymentSavePhase, setPaymentSavePhase] = useState('idle'); // 'idle' | 'validating' | 'saving' | 'verifying' | 'success' | 'failed' | 'uncertain'
   const [paymentSaveError, setPaymentSaveError] = useState('');
   const [paymentSaveSuccessMsg, setPaymentSaveSuccessMsg] = useState('');
+  const paymentSaveInFlightRef = useRef(false);
 
   // Billing & Card Reference section state
   const [billingForm, setBillingForm] = useState({
@@ -1603,12 +1605,24 @@ function AdminDashboard() {
     });
   };
 
-  const handleSavePaymentSplits = async () => {
+  const handleSavePaymentSplits = async ({ isRetry = false } = {}) => {
     if (!selectedBooking) return;
+    if (paymentSaveInFlightRef.current) return;
+
+    const targetId = selectedBooking?.databaseBookingId || selectedBooking?.id || selectedBooking?.booking_id;
+    if (!targetId || targetId === selectedBooking?.confirmation_code) {
+      setPaymentSaveStatus('failure');
+      setPaymentSavePhase('failed');
+      setPaymentSaveError('Invalid booking identifier. Please refresh the booking before saving payment.');
+      return;
+    }
+
     setPaymentSaveError('');
     setPaymentSaveSuccessMsg('');
     setPaymentSaveStatus('saving');
+    setPaymentSavePhase(isRetry ? 'saving' : 'validating');
     setPaymentSaving(true);
+    paymentSaveInFlightRef.current = true;
 
     // Front-end Validation
     try {
@@ -1617,9 +1631,7 @@ function AdminDashboard() {
       }
       paymentSplits.forEach((s, idx) => {
         const mName = (s.merchant_name || '').trim();
-        if (!mName) {
-          throw new Error(`Split #${idx + 1}: Merchant name is required.`);
-        }
+        if (!mName) throw new Error(`Split #${idx + 1}: Merchant name is required.`);
         const val = Number(s.amount);
         if (isNaN(val) || val <= 0 || !isFinite(val)) {
           throw new Error(`Split #${idx + 1} (${mName}): Amount must be a positive number.`);
@@ -1627,28 +1639,32 @@ function AdminDashboard() {
       });
     } catch (valErr) {
       setPaymentSaveStatus('failure');
+      setPaymentSavePhase('failed');
       setPaymentSaveError(valErr.message);
       setPaymentSaving(false);
+      paymentSaveInFlightRef.current = false;
       return;
     }
 
+    setPaymentSavePhase('saving');
     const adminToken = localStorage.getItem('token');
-    
-    if (paymentForm.paymentStatus === 'PAID') {
-      console.log('[PAYMENT_SAVE_DIAGNOSTIC]', {
-        paymentState: paymentForm.paymentStatus,
-        paidAmount: paymentForm.paidAmount || selectedBooking.total_amount || 0,
-        hasTransactionReference: !!paymentForm.referenceId,
-        transactionReferenceLength: (paymentForm.referenceId || '').length
-      });
-    }
+    const clientRequestId = window.crypto?.randomUUID ? window.crypto.randomUUID() : `req_${Date.now()}_${Math.random()}`;
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      controller.abort();
+    }, 15000);
 
     try {
-      // Send only the payment payload to the dedicated endpoint
-      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/payment`, {
+      const res = await fetch(`/api/admin/bookings/${targetId}/payment`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`,
+          'Idempotency-Key': clientRequestId
+        },
         body: JSON.stringify({
+          clientRequestId,
           bookingVersion: selectedBooking.updated_at,
           paymentState: paymentForm.paymentStatus,
           paidAmount: paymentForm.paidAmount,
@@ -1657,18 +1673,53 @@ function AdminDashboard() {
             merchantName: s.merchant_name,
             amount: parseFloat(s.amount)
           }))
-        })
+        }),
+        signal: controller.signal
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error?.message || data.message || 'Failed to update payment.');
+      window.clearTimeout(timeoutId);
+
+      const contentType = res.headers.get('content-type') || '';
+      const rawBody = await res.text();
+      let payload = null;
+
+      if (rawBody && contentType.includes('application/json')) {
+        try {
+          payload = JSON.parse(rawBody);
+        } catch {
+          payload = null;
+        }
       }
 
-      // Force-refetch booking from server to guarantee authoritative state
-      let freshBooking = data.booking || data.data;
+      if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error(payload?.error?.message || payload?.message || 'The selected booking record was not found. Please click Refresh Booking.');
+        }
+
+        const isHtml = rawBody.trim().startsWith('<!DOCTYPE') || rawBody.trim().startsWith('<html');
+        const safeServerText = !isHtml && rawBody ? rawBody.trim().slice(0, 250) : null;
+
+        const reqRef = payload?.requestId || `PAY-ERR-${res.status}`;
+        throw new Error(
+          payload?.error?.message ||
+          payload?.message ||
+          safeServerText ||
+          `Payment was not confirmed because the server returned an invalid response (HTTP ${res.status}). Reference: ${reqRef}`
+        );
+      }
+
+      if (!payload || payload.success !== true) {
+        throw new Error(
+          payload?.error?.message ||
+          payload?.message ||
+          'The payment server returned an invalid response structure.'
+        );
+      }
+
+      // SUCCESS PATH
+      let freshBooking = payload.booking ? { ...selectedBooking, ...payload.booking } : null;
       try {
-        const refetchRes = await fetch(`/api/admin/bookings/${selectedBooking.id}`, {
+        const refetchRes = await fetch(`/api/admin/bookings/${targetId}`, {
           headers: { Authorization: `Bearer ${adminToken}` }
         });
         if (refetchRes.ok) {
@@ -1678,21 +1729,19 @@ function AdminDashboard() {
           }
         }
       } catch (refetchErr) {
-        console.warn('[PaymentAuth] Refetch failed, using response body:', refetchErr.message);
+        console.warn('[PaymentSave] Refetch booking warning:', refetchErr.message);
       }
 
       if (freshBooking) {
-        // Load selected booking panel with all fresh data
         setSelectedBooking(freshBooking);
         setInternalNotes(freshBooking.internal_notes || freshBooking.internalNotes || '');
         setNewStatus(freshBooking.status || freshBooking.bookingStatus || 'PENDING');
 
-        // Canonical new total from server
         const newTotal = parseFloat(
           freshBooking.authorized_amount ??
           freshBooking.customer_price ??
           freshBooking.total_amount ??
-          data.payment?.authorizedAmount ??
+          payload.payment?.authorizedAmount ??
           0
         );
 
@@ -1711,7 +1760,6 @@ function AdminDashboard() {
           referenceId: freshBooking.transactionReference || freshBooking.payment?.transactionReference || freshBooking.transaction_id || freshBooking.payment_intent_id || ''
         }));
 
-        // Refresh splits in state from the server's response
         const updatedSplits = freshBooking.payment_splits || freshBooking.paymentSplits || [];
         setPaymentSplits(updatedSplits.map((s, idx) => ({
           id: s.id || `split_${idx}_${Date.now()}`,
@@ -1720,23 +1768,63 @@ function AdminDashboard() {
           currency: s.currency || freshBooking.currency || 'USD'
         })));
 
-        // Update booking in the list table
         setBookings(prevList => prevList.map(b =>
           b.id === freshBooking.id ? { ...b, ...freshBooking } : b
         ));
 
         setPaymentDirty(false);
         setPaymentSaveStatus('success');
-        setPaymentSaveSuccessMsg(`Payment splits and booking amount updated to $${newTotal.toFixed(2)}.`);
-      } else {
-        setPaymentDirty(false);
-        setPaymentSaveStatus('success');
-        setPaymentSaveSuccessMsg('Payment splits updated successfully.');
+        setPaymentSavePhase('success');
+        setPaymentSaveSuccessMsg(`Payment saved successfully. Authorized amount: $${newTotal.toFixed(2)}, Split total: $${newTotal.toFixed(2)}, Transaction reference: ${freshBooking.transaction_id || paymentForm.referenceId || 'N/A'}.`);
       }
+
     } catch (err) {
-      setPaymentSaveStatus('failure');
-      setPaymentSaveError(err.message);
+      window.clearTimeout(timeoutId);
+
+      const isTimeout = err.name === 'AbortError' || err.message?.includes('15 seconds');
+      const isNotFound = err.message?.includes('not found') || err.message?.includes('404');
+      const isNonJson = err.message?.includes('invalid response') || err.message?.includes('HTTP');
+
+      if (isTimeout || isNonJson) {
+        // Perform Read-Only Reconciliation Phase
+        setPaymentSavePhase('verifying');
+        setPaymentSaveError('Payment save response was interrupted. Verifying saved state on server…');
+        try {
+          const reconRes = await fetch(`/api/admin/bookings/${targetId}`, {
+            headers: { Authorization: `Bearer ${adminToken}` }
+          });
+          if (reconRes.ok) {
+            const reconData = await reconRes.json();
+            const latest = reconData.booking || reconData.data;
+            if (latest) {
+              const attemptedTotal = paymentSplits.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0);
+              const latestTotal = parseFloat(latest.authorized_amount || latest.total_amount || 0);
+
+              if (Math.abs(attemptedTotal - latestTotal) < 0.01) {
+                setSelectedBooking(latest);
+                setPaymentDirty(false);
+                setPaymentSaveStatus('success');
+                setPaymentSavePhase('success');
+                setPaymentSaveSuccessMsg('Payment was saved successfully, although the original response was interrupted.');
+                return;
+              }
+            }
+          }
+        } catch (reconErr) {
+          console.warn('[Reconciliation] Check failed:', reconErr.message);
+        }
+
+        setPaymentSaveStatus('failure');
+        setPaymentSavePhase('uncertain');
+        setPaymentSaveError(isTimeout ? 'Payment save timed out after 15 seconds. Check Save Status or Refresh Booking.' : err.message);
+      } else {
+        setPaymentSaveStatus('failure');
+        setPaymentSavePhase('failed');
+        setPaymentSaveError(err.message);
+      }
     } finally {
+      window.clearTimeout(timeoutId);
+      paymentSaveInFlightRef.current = false;
       setPaymentSaving(false);
     }
   };
@@ -3801,39 +3889,66 @@ function AdminDashboard() {
                                 {paymentSaveSuccessMsg}
                               </div>
                             )}
-                            {paymentSaveStatus === 'failure' && paymentSaveError && (
-                              <div style={{ color: '#b91c1c', background: '#fee2e2', border: '1px solid #fecaca', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600' }}>
-                                <i className="fas fa-exclamation-triangle" style={{ marginRight: '6px' }}></i>
-                                Payment save error: {paymentSaveError}
+                            {paymentSavePhase === 'verifying' && (
+                              <div style={{ color: '#0369a1', background: '#e0f2fe', border: '1px solid #bae6fd', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600' }}>
+                                <i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i>
+                                Verifying saved payment state on server…
                               </div>
                             )}
+
+                            {paymentSaveStatus === 'failure' && paymentSaveError && (
+                              <div style={{ color: '#b91c1c', background: '#fee2e2', border: '1px solid #fecaca', padding: '10px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                                  <i className="fas fa-exclamation-triangle"></i>
+                                  <span>{paymentSaveError}</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                                  <button
+                                    type="button"
+                                    onClick={handleRefreshCurrentBooking}
+                                    style={{ background: '#ffffff', color: '#b91c1c', border: '1px solid #fca5a5', padding: '4px 10px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer' }}
+                                  >
+                                    <i className="fas fa-sync-alt" style={{ marginRight: '4px' }}></i> Refresh Booking
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSavePaymentSplits({ isRetry: true })}
+                                    style={{ background: '#b91c1c', color: '#ffffff', border: 'none', padding: '4px 10px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer' }}
+                                  >
+                                    <i className="fas fa-search" style={{ marginRight: '4px' }}></i> Check Save Status
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
                             {paymentDirty && (
                               <div style={{ color: '#b45309', background: '#fffbeb', border: '1px solid #fef3c7', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600' }}>
                                 <i className="fas fa-info-circle" style={{ marginRight: '6px' }}></i>
                                 Unsaved payment changes
                               </div>
                             )}
-                            {!paymentDirty && paymentSaveStatus === 'success' && (
+
+                            {!paymentDirty && paymentSaveStatus === 'success' && paymentSaveSuccessMsg && (
                               <div style={{ color: '#15803d', background: '#dcfce7', border: '1px solid #bbf7d0', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600' }}>
                                 <i className="fas fa-check" style={{ marginRight: '6px' }}></i>
-                                Payment changes saved
+                                {paymentSaveSuccessMsg}
                               </div>
                             )}
 
                             <button
                               type="button"
-                              onClick={handleSavePaymentSplits}
-                              disabled={paymentSaving || isPaymentInvalid() || !paymentDirty}
+                              onClick={() => handleSavePaymentSplits({ isRetry: paymentSaveStatus === 'failure' })}
+                              disabled={paymentSaving || isPaymentInvalid() || (!paymentDirty && paymentSaveStatus !== 'failure')}
                               style={{
                                 width: '100%',
-                                background: paymentSaving ? '#cbd5e1' : (isPaymentInvalid() || !paymentDirty ? '#e2e8f0' : '#8b1236'),
-                                color: paymentSaving ? '#64748b' : (isPaymentInvalid() || !paymentDirty ? '#94a3b8' : '#ffffff'),
+                                background: paymentSaving ? '#cbd5e1' : (isPaymentInvalid() || (!paymentDirty && paymentSaveStatus !== 'failure') ? '#e2e8f0' : '#8b1236'),
+                                color: paymentSaving ? '#64748b' : (isPaymentInvalid() || (!paymentDirty && paymentSaveStatus !== 'failure') ? '#94a3b8' : '#ffffff'),
                                 border: 'none',
                                 padding: '10px 16px',
                                 borderRadius: '6px',
                                 fontSize: '0.82rem',
                                 fontWeight: '700',
-                                cursor: paymentSaving || isPaymentInvalid() || !paymentDirty ? 'not-allowed' : 'pointer',
+                                cursor: paymentSaving || isPaymentInvalid() || (!paymentDirty && paymentSaveStatus !== 'failure') ? 'not-allowed' : 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -3844,12 +3959,12 @@ function AdminDashboard() {
                               {paymentSaving ? (
                                 <>
                                   <i className="fas fa-spinner fa-spin"></i>
-                                  Saving Payment…
+                                  {paymentSavePhase === 'verifying' ? 'Verifying Save Status…' : 'Saving Payment…'}
                                 </>
                               ) : paymentSaveStatus === 'success' && !paymentDirty ? (
                                 <>
                                   <i className="fas fa-check-double"></i>
-                                  Payment Updated
+                                  Payment Saved & Verified
                                 </>
                               ) : paymentSaveStatus === 'failure' ? (
                                 <>
@@ -3859,7 +3974,7 @@ function AdminDashboard() {
                               ) : (
                                 <>
                                   <i className="fas fa-save"></i>
-                                  Save Payment & Update Booking
+                                  Save Payment Authorization
                                 </>
                               )}
                             </button>

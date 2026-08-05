@@ -345,7 +345,7 @@ export const bookingRepository = {
         : supabase.from('bookings').select('*').eq('confirmation_code', ref).maybeSingle();
 
       const isPlaceholderSupabase = !env.supabaseUrl || env.supabaseUrl.includes('placeholder');
-      const baseTimeoutMs = isPlaceholderSupabase ? 200 : 1000;
+      const baseTimeoutMs = isPlaceholderSupabase ? 200 : 10000;
       const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), baseTimeoutMs));
       const res = await Promise.race([queryPromise, timeoutPromise]);
       data = res?.data || null;
@@ -356,6 +356,35 @@ export const bookingRepository = {
     if (!data && !memOverridden) return null;
     const base = { ...(data || {}), ...(memOverridden || {}) };
     if (!base.id) return null;
+    return base;
+  },
+
+  resolveBooking: async (identifier) => {
+    const value = String(identifier || '').trim();
+    if (!value) {
+      const err = new Error('A booking identifier is required.');
+      err.code = 'BOOKING_IDENTIFIER_REQUIRED';
+      err.status = 400;
+      throw err;
+    }
+
+    let base = null;
+    try {
+      base = await bookingRepository.findBaseBookingRecord(value);
+    } catch (err) {
+      const errorObj = new Error('Unable to look up the booking.');
+      errorObj.code = 'BOOKING_LOOKUP_FAILED';
+      errorObj.status = 500;
+      throw errorObj;
+    }
+
+    if (!base) {
+      const errorObj = new Error(`The selected booking record '${value}' was not found.`);
+      errorObj.code = 'BOOKING_NOT_FOUND';
+      errorObj.status = 404;
+      throw errorObj;
+    }
+
     return base;
   },
 

@@ -231,31 +231,65 @@ export const bookingController = {
   },
 
   updatePayment: async (req, res, next) => {
+    const startTime = Date.now();
+    const requestId = `PAY-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const identifier = req.params.identifier || req.params.id;
+    const clientRequestId = req.headers['idempotency-key'] || req.body?.clientRequestId || null;
+
+    logger.info(`[PAYMENT_SAVE_START] requestId=${requestId} identifier=${identifier} clientRequestId=${clientRequestId}`);
+
     try {
-      const { id } = req.params;
       const adminId = req.user?.email || 'admin';
-      const updated = await bookingService.updatePayment(id, { ...req.body, adminId });
-      
+      const updated = await bookingService.updatePayment(identifier, {
+        ...req.body,
+        adminId,
+        clientRequestId
+      });
+
+      const elapsedMs = Date.now() - startTime;
+      logger.info(`[PAYMENT_RESPONSE_SENT] requestId=${requestId} confirmationCode=${updated.confirmation_code || updated.confirmationCode} elapsedMs=${elapsedMs}`);
+
       const splitsList = (updated.paymentSplits || updated.payment_splits || []).map(s => ({
-        merchantName: s.merchant_name || s.merchantName || s.name,
+        merchantName: s.merchant_name || s.merchantName || s.name || 'Merchant',
         amount: parseFloat(s.amount || 0)
       }));
 
+      const totalAmt = parseFloat(
+        updated.authorized_amount ??
+        updated.customer_price ??
+        updated.total_amount ??
+        updated.authorization?.authorizedAmount ??
+        0
+      );
+
       res.json({
         success: true,
+        requestId,
+        booking: {
+          id: updated.id,
+          confirmationCode: updated.confirmation_code || updated.confirmationCode || 'N/A',
+          paymentStatus: (updated.payment_status || updated.paymentStatus || 'PENDING').toUpperCase(),
+          totalAmount: totalAmt,
+          updatedAt: updated.updated_at || new Date().toISOString()
+        },
         payment: {
-          status: (updated.paymentStatus || updated.payment_status || 'PENDING').toUpperCase(),
-          paidAmount: parseFloat(updated.payment?.paidAmount || updated.paid_amount || 0),
-          transactionReference: updated.transactionReference || updated.payment?.transactionReference || '',
-          authorizedAmount: parseFloat(updated.authorization?.authorizedAmount || updated.authorized_amount || 0),
+          authorizedAmount: totalAmt,
+          transactionReference: updated.transaction_reference || updated.transactionReference || updated.payment?.transactionReference || '',
           splits: splitsList
         }
       });
     } catch (error) {
-      const statusCode = error.status || 400;
+      const statusCode = error.status || (error.code === 'BOOKING_NOT_FOUND' ? 404 : 400);
+      const elapsedMs = Date.now() - startTime;
+      logger.error(`[PAYMENT_SAVE_FAILED] requestId=${requestId} statusCode=${statusCode} elapsedMs=${elapsedMs} error=${error.message}`);
+
       res.status(statusCode).json({
         success: false,
-        error: { code: error.code || 'PAYMENT_UPDATE_FAILED', message: error.message }
+        requestId,
+        error: {
+          code: error.code || 'PAYMENT_UPDATE_FAILED',
+          message: error.message
+        }
       });
     }
   },

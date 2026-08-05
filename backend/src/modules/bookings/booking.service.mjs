@@ -18,6 +18,7 @@ function generateConfirmationCode() {
 }
 
 const idempotencyStore = new Map();
+const idempotencyCache = new Map();
 
 export const bookingService = {
   create: async (payload) => {
@@ -345,7 +346,12 @@ export const bookingService = {
    * Field-Isolated Update 2: Payment
    */
   updatePayment: async (id, paymentData = {}) => {
-    const { paymentState, paymentStatus, paidAmount, refundedAmount, paymentProvider, adminId = 'system', reason, bookingVersion, splits, transactionReference } = paymentData;
+    const { paymentState, paymentStatus, paidAmount, refundedAmount, paymentProvider, adminId = 'system', reason, bookingVersion, splits, transactionReference, clientRequestId } = paymentData;
+
+    if (clientRequestId && idempotencyCache.has(clientRequestId)) {
+      logger.info(`[Idempotency] Returning cached response for clientRequestId=${clientRequestId}`);
+      return idempotencyCache.get(clientRequestId);
+    }
 
     // 1. Strict Forbidden Domain Keys Guard
     const FORBIDDEN_KEYS = [
@@ -365,14 +371,9 @@ export const bookingService = {
       throw err;
     }
 
-    const ALLOWED_PAY_STATUS = ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'AUTHORIZED'];
-    const booking = await bookingRepository.getById(id);
-    if (!booking) {
-      const err = new Error(`Booking '${id}' not found.`);
-      err.code = 'BOOKING_NOT_FOUND';
-      err.status = 404;
-      throw err;
-    }
+    const ALLOWED_PAY_STATUS = ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'AUTHORIZED', 'PROCESSING'];
+    const booking = await bookingRepository.resolveBooking(id);
+    const realId = booking.id;
 
     const targetStatus = (paymentState || paymentStatus || booking.payment_status || 'pending').toUpperCase();
     if (!ALLOWED_PAY_STATUS.includes(targetStatus)) {
@@ -403,7 +404,7 @@ export const bookingService = {
       }
     }
 
-    const currentSplits = await bookingRepository.getPaymentSplits(id);
+    const currentSplits = await bookingRepository.getPaymentSplits(realId);
     const targetSplits = splits || paymentData.paymentSplits || currentSplits || [];
 
     const paymentMetadata = {
@@ -416,7 +417,7 @@ export const bookingService = {
 
     // Execute atomic update
     const updatedBooking = await bookingRepository.updatePaymentSplitsAndTotal(
-      id,
+      realId,
       targetSplits,
       adminId,
       reason || 'Payment status updated to ' + targetStatus,
@@ -424,6 +425,10 @@ export const bookingService = {
       targetStatus,
       paymentMetadata
     );
+
+    if (clientRequestId) {
+      idempotencyCache.set(clientRequestId, updatedBooking);
+    }
 
     return updatedBooking;
   },
