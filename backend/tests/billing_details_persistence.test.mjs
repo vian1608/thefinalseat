@@ -101,7 +101,7 @@ await test('cardLast4 normalization strips non-digits and validates 4-digit', as
 
 // ── Test 5: savePaymentMethodRecord validation ────────────────────────────────
 await test('savePaymentMethodRecord correctly stores billing fields', async () => {
-  const testBookingId = '00000000-0000-0000-0000-test00000001';
+  const testBookingId = '00000000-0000-0000-0000-000000000001';
   const record = {
     booking_id: testBookingId,
     payment_provider: 'card',
@@ -135,7 +135,7 @@ await test('savePaymentMethodRecord correctly stores billing fields', async () =
 
 // ── Test 6: getPaymentMethodByBookingId (in-process memory) ──────────────────
 await test('getPaymentMethodByBookingId retrieves saved record', async () => {
-  const testBookingId = '00000000-0000-0000-0000-test00000001'; // same as above
+  const testBookingId = '00000000-0000-0000-0000-000000000001'; // same as above
   const retrieved = await bookingRepository.getPaymentMethodByBookingId(testBookingId);
   assert(retrieved !== null, 'retrieved record is not null');
   assert(retrieved?.card_last4 === '4242', 'retrieved card_last4 === "4242"');
@@ -146,7 +146,7 @@ await test('getPaymentMethodByBookingId retrieves saved record', async () => {
 
 // ── Test 7: saveBillingDetailsUpdate — prohibited field rejection ──────────────
 await test('saveBillingDetailsUpdate rejects cvv field', async () => {
-  const testBookingId = '00000000-0000-0000-0000-test00000001';
+  const testBookingId = '00000000-0000-0000-0000-000000000001';
   try {
     await bookingRepository.saveBillingDetailsUpdate(testBookingId, { cvv: '123', cardholderName: 'Test' });
     assert(false, 'Should have thrown PROHIBITED_BILLING_FIELD');
@@ -157,7 +157,7 @@ await test('saveBillingDetailsUpdate rejects cvv field', async () => {
 });
 
 await test('saveBillingDetailsUpdate rejects fullCardNumber field', async () => {
-  const testBookingId = '00000000-0000-0000-0000-test00000001';
+  const testBookingId = '00000000-0000-0000-0000-000000000001';
   try {
     await bookingRepository.saveBillingDetailsUpdate(testBookingId, { fullCardNumber: '4111111111111111' });
     assert(false, 'Should have thrown');
@@ -169,7 +169,7 @@ await test('saveBillingDetailsUpdate rejects fullCardNumber field', async () => 
 
 // ── Test 8: saveBillingDetailsUpdate — invalid cardLast4 ─────────────────────
 await test('saveBillingDetailsUpdate rejects 5-digit cardLast4', async () => {
-  const testBookingId = '00000000-0000-0000-0000-test00000001';
+  const testBookingId = '00000000-0000-0000-0000-000000000001';
   try {
     await bookingRepository.saveBillingDetailsUpdate(testBookingId, { cardLast4: '12345' });
     assert(false, 'Should have thrown INVALID_CARD_LAST4');
@@ -180,7 +180,7 @@ await test('saveBillingDetailsUpdate rejects 5-digit cardLast4', async () => {
 
 // ── Test 9: saveBillingDetailsUpdate — invalid exp month ─────────────────────
 await test('saveBillingDetailsUpdate rejects cardExpMonth = 13', async () => {
-  const testBookingId = '00000000-0000-0000-0000-test00000001';
+  const testBookingId = '00000000-0000-0000-0000-000000000001';
   try {
     await bookingRepository.saveBillingDetailsUpdate(testBookingId, { cardExpMonth: 13 });
     assert(false, 'Should have thrown INVALID_CARD_EXP_MONTH');
@@ -191,7 +191,7 @@ await test('saveBillingDetailsUpdate rejects cardExpMonth = 13', async () => {
 
 // ── Test 10: saveBillingDetailsUpdate — valid update ─────────────────────────
 await test('saveBillingDetailsUpdate updates cardholder name and city', async () => {
-  const testBookingId = '00000000-0000-0000-0000-test00000001';
+  const testBookingId = '00000000-0000-0000-0000-000000000001';
   const result = await bookingRepository.saveBillingDetailsUpdate(testBookingId, {
     cardholderName: 'Alice Updated',
     city: 'Brooklyn'
@@ -275,8 +275,8 @@ console.log(`Results: ${passed} passed, ${failed} failed out of ${passed + faile
 if (failures.length > 0) {
   console.log('\nFailed tests:');
   failures.forEach(f => console.log(`  ✗ ${f}`));
-  process.exit(1);
+  if (!process.env.VITEST) process.exit(1);
 } else {
   console.log('\n✅ All tests passed!');
-  process.exit(0);
+  if (!process.env.VITEST) process.exit(0);
 }

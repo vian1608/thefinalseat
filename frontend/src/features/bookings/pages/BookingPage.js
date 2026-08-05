@@ -333,7 +333,6 @@ function Booking() {
   };
 
   const [samePhone, setSamePhone] = useState(false);
-  const [sameAddress, setSameAddress] = useState(false);
   const [isBillingExpanded, setIsBillingExpanded] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
@@ -353,21 +352,7 @@ function Booking() {
     }
   };
 
-  const handleSameAddressChange = (e) => {
-    const checked = e.target.checked;
-    setSameAddress(checked);
-    if (checked) {
-      const p1 = passengersList[0] || {};
-      setCardForm(prev => ({
-        ...prev,
-        billingAddress: prev.billingAddress || '123 Main Street',
-        billingCity: prev.billingCity || 'New York',
-        billingState: prev.billingState || 'NY',
-        billingZip: prev.billingZip || '10001',
-        billingCountry: p1.nationality || 'United States',
-      }));
-    }
-  };
+
 
   const createPendingBookingRecord = async () => {
     if (pendingBookingId.current) {
@@ -1147,18 +1132,6 @@ function Booking() {
 
                       {/* Synced Checkboxes */}
                       <div style={{ marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <input
-                            type="checkbox"
-                            id="sameAddress"
-                            checked={sameAddress}
-                            onChange={handleSameAddressChange}
-                          />
-                          <label htmlFor="sameAddress" style={{ fontSize: '0.88rem', color: '#475569', cursor: 'pointer' }}>
-                            Billing address is the same as passenger address
-                          </label>
-                        </div>
-
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <input
                             type="checkbox"

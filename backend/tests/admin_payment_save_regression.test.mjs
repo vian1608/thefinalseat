@@ -58,7 +58,7 @@ describe('TEST 4 — Confirmation-code lookup', () => {
 
 describe('TEST 5 — Plain-text error response handling', () => {
   it('checks content-type before parsing JSON to prevent Unexpected token errors', () => {
-    const saveFnCode = adminDashboardSrc.split('const handleSavePaymentSplits =')[1]?.split('};')[0] || '';
+    const saveFnCode = adminDashboardSrc.split('const handleSavePaymentSplits =')[1]?.slice(0, 8000) || '';
     expect(saveFnCode).toContain("contentType.includes('application/json')");
     expect(saveFnCode).not.toContain("await res.json()");
   });

@@ -130,7 +130,21 @@ export function calculateBookingTotal({ outboundFlight, returnFlight = null, pas
   };
 }
 
+export const moneyToCents = (value) => {
+  if (value === null || value === undefined) return null;
+  const normalized = String(value).replace(/[$,\s]/g, '');
+  const number = Number(normalized);
+  if (!Number.isFinite(number)) return null;
+  return Math.round(number * 100);
+};
+
+export const centsToMoney = (cents) => {
+  return (Number(cents || 0) / 100).toFixed(2);
+};
+
 export default {
   calculateFlightDiscount,
   calculateBookingTotal,
+  moneyToCents,
+  centsToMoney,
 };

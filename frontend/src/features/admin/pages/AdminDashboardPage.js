@@ -26,8 +26,34 @@ const AIRLINE_DIRECTORY = [
   { name: 'Qatar Airways', iataCode: 'QR', icaoCode: 'QTR', logoUrl: '/airlines/qr.png' },
   { name: 'Turkish Airlines', iataCode: 'TK', icaoCode: 'THY', logoUrl: '/airlines/tk.png' },
   { name: 'Singapore Airlines', iataCode: 'SQ', icaoCode: 'SIA', logoUrl: '/airlines/sq.png' },
-  { name: 'Cathay Pacific', iataCode: 'CX', icaoCode: 'CPA', logoUrl: '/airlines/cx.png' },
+  { name: 'Cathay Pacific', iataCode: 'CX', icaoCode: 'CPA', logoUrl: '/airlines/cx.png' }
 ];
+
+const sanitizeCurrencyInput = (val) => {
+  if (val === undefined || val === null) return '';
+  const str = String(val).replace(/[^0-9.]/g, '');
+  const parts = str.split('.');
+  if (parts.length > 2) {
+    return parts[0] + '.' + parts.slice(1).join('');
+  }
+  if (parts.length === 2 && parts[1].length > 2) {
+    return parts[0] + '.' + parts[1].slice(0, 2);
+  }
+  return str;
+};
+
+const moneyToCents = (val) => {
+  if (val === undefined || val === null || val === '') return null;
+  const cleaned = String(val).replace(/[$,\s]/g, '');
+  const num = Number(cleaned);
+  if (isNaN(num) || !isFinite(num)) return null;
+  return Math.round(num * 100);
+};
+
+const centsToMoney = (cents) => {
+  if (cents === undefined || cents === null || isNaN(Number(cents))) return '0.00';
+  return (Number(cents) / 100).toFixed(2);
+};
 
 const formatMoney = (value, currency = 'USD') => {
   const amount = Number(value);
@@ -300,6 +326,13 @@ function AdminDashboard() {
   const [billingSaveStatus, setBillingSaveStatus] = useState('default');
   const [billingSaveError, setBillingSaveError] = useState('');
   const [billingSaveSuccessMsg, setBillingSaveSuccessMsg] = useState('');
+
+  // Global Save & Orchestration state
+  const [globalSaving, setGlobalSaving] = useState(false);
+  const [globalSaveStatus, setGlobalSaveStatus] = useState('idle');
+  const [globalSaveError, setGlobalSaveError] = useState('');
+  const [globalSaveMessage, setGlobalSaveMessage] = useState('');
+  const isHydratingRef = useRef(false);
 
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
@@ -1069,84 +1102,79 @@ function AdminDashboard() {
 
   const handleSaveAllChanges = async (e) => {
     if (e) e.preventDefault();
-    if (!selectedBooking) return;
+    if (!selectedBooking) return { success: false, error: 'No booking selected' };
+    if (globalSaving) return { success: false, error: 'Save already in progress' };
 
-    if (paymentDirty) {
-      setDrawerError('Save the Payment section before completing other booking changes.');
-      return;
+    setGlobalSaveError('');
+    setGlobalSaveMessage('');
+    setGlobalSaveStatus('idle');
+
+    // 1. Identify Dirty Sections
+    const dirtySections = [];
+    if (pricingDirty) dirtySections.push('pricing');
+    if (paymentDirty) dirtySections.push('payment');
+    if (billingDirty) dirtySections.push('billing');
+
+    if (dirtySections.length === 0) {
+      setGlobalSaveStatus('success');
+      setGlobalSaveMessage('All changes are already saved.');
+      return { success: true, message: 'All changes are already saved.' };
     }
 
-    setDrawerError('');
-
-    setDrawerSuccess('');
+    setGlobalSaving(true);
     setUpdatingRecord(true);
+    setGlobalSaveStatus('saving');
 
-    const adminToken = localStorage.getItem('token');
+    const globalController = new AbortController();
+    const globalTimeoutId = window.setTimeout(() => {
+      globalController.abort();
+    }, 20000);
 
-    const outboundSegs = Array.isArray(outboundSegments) ? outboundSegments : [];
-    const returnSegs = (hasReturnJourney && Array.isArray(returnSegments)) ? returnSegments : [];
-    const allSegments = [...outboundSegs, ...returnSegs];
-
-    // Only send itinerarySegments if valid segments are populated by admin
-    const validSegments = allSegments.filter(s =>
-      (s.origin_airport && s.origin_airport.trim() !== '') ||
-      (s.destination_airport && s.destination_airport.trim() !== '') ||
-      (s.flight_number && s.flight_number.trim() !== '') ||
-      (s.carrier_name && s.carrier_name.trim() !== '')
-    );
-
-    const payload = {
-      bookingStatus: newStatus,
-      internalNotes: internalNotes,
-      airlineCode: ticketForm.airlineCode,
-      airlineName: ticketForm.airlineName,
-      airlineLogoUrl: ticketForm.airlineLogoUrl,
-      airlineConfirmationNumber: ticketForm.airlineConfirmationNumber || ticketForm.airlinePnr,
-      ticketNumber: ticketForm.ticketNumber,
-      ticketIssuedAt: ticketForm.ticketIssuedAt,
-      ticketNotes: ticketForm.ticketNotes,
-      supplierConfirmation: ticketForm.supplierConfirmation,
-      paymentStatus: paymentForm.paymentStatus,
-      authorizedAmount: paymentForm.authorizedAmount,
-      customerTotal: pricingForm.customerTotal,
-      supplierCost: pricingForm.supplierFare,
-      discount: pricingForm.discount,
-      paymentSplits: paymentSplits,
-      ...(validSegments.length > 0 ? { itinerarySegments: validSegments } : {})
-    };
+    const savedSections = [];
+    const failedSections = [];
 
     try {
-      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/save-all`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${adminToken}`
-        },
-        body: JSON.stringify(payload)
-      });
+      for (const section of dirtySections) {
+        let result = null;
+        if (section === 'pricing') {
+          result = await handleSavePricingRevisions();
+        } else if (section === 'payment') {
+          result = await handleSavePaymentSplits();
+        } else if (section === 'billing') {
+          result = await handleSaveBillingDetails();
+        }
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        const errorMsg = data.message || data.error?.message || 'Changes were not saved.';
-        throw new Error(errorMsg);
+        if (result && result.success) {
+          savedSections.push(section);
+        } else {
+          failedSections.push({ section, error: result?.error || 'Save failed' });
+        }
       }
 
-      const updatedBooking = data.booking || data.data;
-      if (updatedBooking) {
-        // Fully re-hydrate all form state (segments, pricing, payment, ticket) from fresh server response
-        handleSelectBooking(updatedBooking);
-        setBookings(prevList => prevList.map(b => b.id === updatedBooking.id ? { ...b, ...updatedBooking } : b));
-      }
+      window.clearTimeout(globalTimeoutId);
+      await handleRefreshCurrentBooking();
 
-      setHasUnsavedEdits(false);
-      setDrawerSuccess(data.message || 'All booking changes saved cleanly.');
-      setIsEditMode(false);
-      setTimeout(() => setDrawerSuccess(''), 4000);
+      if (failedSections.length === 0) {
+        setGlobalSaveStatus('success');
+        setGlobalSaveMessage('All booking changes saved and verified.');
+        return { success: true, savedSections };
+      } else {
+        const firstErr = failedSections[0].error;
+        setGlobalSaveStatus('failure');
+        setGlobalSaveError(`Some changes could not be saved. Saved: ${savedSections.join(', ') || 'none'}. Failed: ${failedSections.map(f => f.section).join(', ')} (${firstErr}).`);
+        return { success: false, savedSections, failedSections };
+      }
     } catch (err) {
-      setHasUnsavedEdits(true);
-      setDrawerError(`Changes were not saved: ${err.message}`);
+      window.clearTimeout(globalTimeoutId);
+      const isTimeout = err.name === 'AbortError' || err.message?.includes('20 seconds');
+      setGlobalSaveStatus('failure');
+      setGlobalSaveError(isTimeout ? 'Global save timed out after 20 seconds. Refresh the booking and retry.' : (err.message || 'Failed to save all changes.'));
+      return { success: false, error: err.message };
     } finally {
+      setGlobalSaving(false);
       setUpdatingRecord(false);
+      paymentSaveInFlightRef.current = false;
+      pricingSaveInFlightRef.current = false;
     }
   };
 
@@ -1796,8 +1824,8 @@ function AdminDashboard() {
   };
 
   const handleSavePaymentSplits = async ({ isRetry = false } = {}) => {
-    if (!selectedBooking) return;
-    if (paymentSaveInFlightRef.current) return;
+    if (!selectedBooking) return { success: false, section: 'payment', error: 'No booking selected' };
+    if (paymentSaveInFlightRef.current) return { success: false, section: 'payment', error: 'A payment save is already in progress.' };
 
     const targetId = selectedBooking?.databaseBookingId || selectedBooking?.id || selectedBooking?.booking_id;
     if (!targetId || targetId === selectedBooking?.confirmation_code) {
@@ -1827,6 +1855,14 @@ function AdminDashboard() {
           throw new Error(`Split #${idx + 1} (${mName}): Amount must be a positive number.`);
         }
       });
+
+      // Cents-based split mismatch check
+      const bCents = moneyToCents(pricingForm.customerTotal || selectedBooking?.customer_price || selectedBooking?.total_amount || 0);
+      const sCents = paymentSplits.reduce((sum, s) => sum + (moneyToCents(s.amountText !== undefined ? s.amountText : s.amount) ?? 0), 0);
+      if (paymentSplits.length > 0 && Math.abs(sCents - bCents) !== 0) {
+        const diffCents = Math.abs(sCents - bCents);
+        throw new Error(`Payment authorization amounts do not match. Booking total: $${centsToMoney(bCents)}, Split total: $${centsToMoney(sCents)}, Difference: $${centsToMoney(diffCents)}.`);
+      }
     } catch (valErr) {
       setPaymentSaveStatus('failure');
       setPaymentSavePhase('failed');
@@ -2968,7 +3004,7 @@ function AdminDashboard() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
                           <div><span style={{ color: '#64748b' }}>Status:</span> <br/><strong>{selectedBooking.authorization?.status || (selectedBooking.authorization_status === 'ACCEPTED' ? 'Authorized' : 'Awaiting Authorization')}</strong></div>
                           <div><span style={{ color: '#64748b' }}>Authorized Amount:</span> <br/><strong>{formatMoney(selectedBooking.authorization?.authorizedAmount ?? paymentForm.authorizedAmount, selectedBooking.currency || 'USD')}</strong></div>
-                          <div><span style={{ color: '#64748b' }}>Card Vault:</span> <br/><strong>{selectedBooking.paymentMethod?.card_brand ? `${selectedBooking.paymentMethod.card_brand} ending in ${selectedBooking.paymentMethod.card_last4 || ''}` : (selectedBooking.paymentMethod?.card_last4 ? `Card ending in ${selectedBooking.paymentMethod.card_last4}` : 'Card ending unavailable')}</strong></div>
+                          <div><span style={{ color: '#64748b' }}>Card Vault:</span> <br/><strong>{selectedBooking.paymentMethod?.card_brand ? `${selectedBooking.paymentMethod.card_brand} ending in ${selectedBooking.paymentMethod.card_last4 || ''}` : (selectedBooking.paymentMethod?.card_last4 ? `Card ending in ${selectedBooking.paymentMethod.card_last4}` : (selectedBooking.billingDetails?.maskedCard || 'Not captured during checkout'))}</strong></div>
                           <div><span style={{ color: '#64748b' }}>Email Sent:</span> <br/><strong>{selectedBooking.authorization_email_sent_at ? new Date(selectedBooking.authorization_email_sent_at).toLocaleDateString() : 'Not Sent'}</strong></div>
                         </div>
                       </div>
@@ -3531,28 +3567,44 @@ function AdminDashboard() {
                             <div className="drawer-form-field">
                               <label style={{ fontWeight: '600', fontSize: '0.8rem' }}>Supplier Fare ($)</label>
                               <input
-                                type="number"
-                                step="0.01"
+                                type="text"
+                                inputMode="decimal"
                                 value={pricingForm.supplierFare}
                                 onChange={(e) => {
-                                  const v = parseFloat(e.target.value || 0);
-                                  setPricingForm({ ...pricingForm, supplierFare: v });
+                                  if (isHydratingRef.current) return;
+                                  const sanitized = sanitizeCurrencyInput(e.target.value);
+                                  setPricingForm({ ...pricingForm, supplierFare: sanitized });
                                   setPricingDirty(true);
                                 }}
+                                onBlur={(e) => {
+                                  const cents = moneyToCents(e.target.value);
+                                  const formatted = centsToMoney(cents ?? 0);
+                                  setPricingForm(prev => ({ ...prev, supplierFare: formatted }));
+                                }}
+                                onWheel={(e) => e.currentTarget.blur()}
+                                onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
                                 style={{ width: '100%', padding: '6px 8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
                               />
                             </div>
                             <div className="drawer-form-field">
                               <label style={{ fontWeight: '600', fontSize: '0.8rem' }}>Taxes &amp; Fees ($)</label>
                               <input
-                                type="number"
-                                step="0.01"
+                                type="text"
+                                inputMode="decimal"
                                 value={pricingForm.taxes}
                                 onChange={(e) => {
-                                  const v = parseFloat(e.target.value || 0);
-                                  setPricingForm({ ...pricingForm, taxes: v });
+                                  if (isHydratingRef.current) return;
+                                  const sanitized = sanitizeCurrencyInput(e.target.value);
+                                  setPricingForm({ ...pricingForm, taxes: sanitized });
                                   setPricingDirty(true);
                                 }}
+                                onBlur={(e) => {
+                                  const cents = moneyToCents(e.target.value);
+                                  const formatted = centsToMoney(cents ?? 0);
+                                  setPricingForm(prev => ({ ...prev, taxes: formatted }));
+                                }}
+                                onWheel={(e) => e.currentTarget.blur()}
+                                onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
                                 style={{ width: '100%', padding: '6px 8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
                               />
                             </div>
@@ -3561,14 +3613,22 @@ function AdminDashboard() {
                           <div className="drawer-form-field" style={{ marginTop: '10px' }}>
                             <label style={{ fontWeight: '600', fontSize: '0.8rem' }}>Customer Total ($)</label>
                             <input
-                              type="number"
-                              step="0.01"
+                              type="text"
+                              inputMode="decimal"
                               value={pricingForm.customerTotal}
                               onChange={(e) => {
-                                const v = parseFloat(e.target.value || 0);
-                                setPricingForm({ ...pricingForm, customerTotal: v });
+                                if (isHydratingRef.current) return;
+                                const sanitized = sanitizeCurrencyInput(e.target.value);
+                                setPricingForm({ ...pricingForm, customerTotal: sanitized });
                                 setPricingDirty(true);
                               }}
+                              onBlur={(e) => {
+                                const cents = moneyToCents(e.target.value);
+                                const formatted = centsToMoney(cents ?? 0);
+                                setPricingForm(prev => ({ ...prev, customerTotal: formatted }));
+                              }}
+                              onWheel={(e) => e.currentTarget.blur()}
+                              onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
                               style={{ width: '100%', padding: '6px 8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
                             />
                           </div>
@@ -3984,21 +4044,40 @@ function AdminDashboard() {
 
                       {openAccordion === 'authorization' && (
                         <div className="admin-accordion-body">
-                          <div className="drawer-grid-2col">
-                            <div className="drawer-form-field">
-                              <label>Authorization Status</label>
-                              <input type="text" readOnly value={selectedBooking.status || 'PENDING'} />
-                            </div>
-                            <div className="drawer-form-field">
-                              <label>Authorized Amount ($)</label>
-                              <input type="text" readOnly value={`${formatMoney(paymentForm.authorizedAmount, pricingForm.currency)}`} />
-                            </div>
-                          </div>
+                          {(() => {
+                            const bCents = moneyToCents(pricingForm.customerTotal || selectedBooking?.customer_price || selectedBooking?.total_amount || 0);
+                            const sCents = (paymentSplits && paymentSplits.length > 0)
+                              ? paymentSplits.reduce((sum, s) => sum + (moneyToCents(s.amountText !== undefined ? s.amountText : s.amount) ?? 0), 0)
+                              : 0;
+                            const draftAuthorizationAmountCents = (paymentSplits && paymentSplits.length > 0 && sCents > 0) ? sCents : bCents;
+                            const draftAuthorizationAmount = centsToMoney(draftAuthorizationAmountCents);
+                            const previousSentAmount = selectedBooking.authorization?.sentAmount ? centsToMoney(moneyToCents(selectedBooking.authorization.sentAmount)) : null;
 
-                          <div className="drawer-grid-2col">
+                            return (
+                              <>
+                                <div className="drawer-grid-2col">
+                                  <div className="drawer-form-field">
+                                    <label>Authorization Status</label>
+                                    <input type="text" readOnly value={selectedBooking.authorization?.status || selectedBooking.status || 'PENDING'} />
+                                  </div>
+                                  <div className="drawer-form-field">
+                                    <label>Current Amount to Authorize ($)</label>
+                                    <input type="text" readOnly value={`$${draftAuthorizationAmount}`} />
+                                  </div>
+                                </div>
+                                {previousSentAmount && previousSentAmount !== draftAuthorizationAmount && (
+                                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '6px 10px', borderRadius: '4px', fontSize: '0.78rem', color: '#64748b', marginBottom: '8px' }}>
+                                    <span>Previously sent amount: <strong>${previousSentAmount}</strong></span>
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
+
+                          <div className="drawer-grid-2col" style={{ marginTop: '8px' }}>
                             <div className="drawer-form-field">
                               <label>Masked Payment Card</label>
-                              <input type="text" readOnly value={paymentForm.last4 ? `${paymentForm.brand || 'Card'} •••• ${paymentForm.last4}` : 'Card ending unavailable'} />
+                              <input type="text" readOnly value={paymentForm.last4 ? `${paymentForm.brand || 'Card'} •••• ${paymentForm.last4}` : (selectedBooking?.billingDetails?.maskedCard || 'Not captured during checkout')} />
                             </div>
                             <div className="drawer-form-field">
                               <label>Passenger IP</label>
@@ -4072,20 +4151,31 @@ function AdminDashboard() {
                                 <div style={{ flex: '1' }}>
                                   <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '2px', fontWeight: '600' }}>Amount ($)</label>
                                   <input
-                                    type="number"
-                                    step="0.01"
+                                    type="text"
+                                    inputMode="decimal"
                                     placeholder="0.00"
-                                    value={split.amount}
+                                    value={split.amountText !== undefined ? split.amountText : split.amount}
                                     disabled={paymentSaving}
                                     onChange={(e) => {
+                                      if (isHydratingRef.current) return;
+                                      const sanitized = sanitizeCurrencyInput(e.target.value);
                                       const next = [...paymentSplits];
-                                      next[idx].amount = parseFloat(e.target.value || 0);
+                                      next[idx].amountText = sanitized;
+                                      next[idx].amount = sanitized;
                                       setPaymentSplits(next);
-                                      const totalSplits = next.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0);
-                                      setPaymentForm({ ...paymentForm, authorizedAmount: totalSplits });
                                       setHasUnsavedEdits(true);
                                       markPaymentDirty();
                                     }}
+                                    onBlur={(e) => {
+                                      const cents = moneyToCents(e.target.value);
+                                      const formatted = centsToMoney(cents ?? 0);
+                                      const next = [...paymentSplits];
+                                      next[idx].amountText = formatted;
+                                      next[idx].amount = formatted;
+                                      setPaymentSplits(next);
+                                    }}
+                                    onWheel={(e) => e.currentTarget.blur()}
+                                    onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
                                     style={{ width: '100%', padding: '6px 10px', fontSize: '0.8rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: paymentSaving ? '#f1f5f9' : '#ffffff' }}
                                   />
                                 </div>
@@ -4096,8 +4186,6 @@ function AdminDashboard() {
                                     onClick={() => {
                                       const next = paymentSplits.filter((_, i) => i !== idx);
                                       setPaymentSplits(next);
-                                      const totalSplits = next.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0);
-                                      setPaymentForm({ ...paymentForm, authorizedAmount: totalSplits });
                                       setHasUnsavedEdits(true);
                                       markPaymentDirty();
                                     }}
@@ -4117,7 +4205,7 @@ function AdminDashboard() {
                                 onClick={() => {
                                   setPaymentSplits([
                                     ...paymentSplits,
-                                    { id: `split_${Date.now()}`, merchant_name: 'The Final Seat LLC', amount: 0, currency: 'USD' }
+                                    { id: `split_${Date.now()}`, merchant_name: 'The Final Seat LLC', amount: '0.00', amountText: '0.00', currency: 'USD' }
                                   ]);
                                   setHasUnsavedEdits(true);
                                   markPaymentDirty();
@@ -4144,7 +4232,7 @@ function AdminDashboard() {
                             </div>
                             <div className="drawer-form-field">
                               <label>Masked Card</label>
-                              <input type="text" readOnly value={paymentForm.last4 ? `${paymentForm.brand || 'Card'} •••• ${paymentForm.last4}` : 'Card ending unavailable'} />
+                              <input type="text" readOnly value={paymentForm.last4 ? `${paymentForm.brand || 'Card'} •••• ${paymentForm.last4}` : (selectedBooking?.billingDetails?.maskedCard || 'Not captured during checkout')} />
                             </div>
                           </div>
 
@@ -4153,11 +4241,23 @@ function AdminDashboard() {
                               <div className="drawer-form-field">
                                 <label>Authorized Amount ($) {paymentSplits.length > 0 ? '(derived from splits)' : ''}</label>
                                 <input
-                                  type="number"
-                                  step="0.01"
-                                  value={paymentSplits.length > 0 ? paymentSplits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0) : paymentForm.authorizedAmount}
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={paymentSplits.length > 0 ? centsToMoney(paymentSplits.reduce((sum, s) => sum + (moneyToCents(s.amountText !== undefined ? s.amountText : s.amount) ?? 0), 0)) : (typeof paymentForm.authorizedAmount === 'number' ? paymentForm.authorizedAmount.toFixed(2) : paymentForm.authorizedAmount)}
                                   readOnly={paymentSplits.length > 0 || paymentSaving}
-                                  onChange={(e) => { setPaymentForm({ ...paymentForm, authorizedAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); markPaymentDirty(); }}
+                                  onChange={(e) => {
+                                    if (isHydratingRef.current) return;
+                                    const sanitized = sanitizeCurrencyInput(e.target.value);
+                                    setPaymentForm({ ...paymentForm, authorizedAmount: sanitized });
+                                    setHasUnsavedEdits(true);
+                                    markPaymentDirty();
+                                  }}
+                                  onBlur={(e) => {
+                                    const cents = moneyToCents(e.target.value);
+                                    setPaymentForm(prev => ({ ...prev, authorizedAmount: centsToMoney(cents ?? 0) }));
+                                  }}
+                                  onWheel={(e) => e.currentTarget.blur()}
+                                  onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
                                 />
                               </div>
                               <div className="drawer-form-field">
@@ -4175,7 +4275,7 @@ function AdminDashboard() {
                               </div>
                               <div className="drawer-form-field">
                                 <label>Authorized Amount ($)</label>
-                                <input type="number" step="0.01" value={paymentForm.authorizedAmount} readOnly />
+                                <input type="text" inputMode="decimal" value={typeof paymentForm.authorizedAmount === 'number' ? paymentForm.authorizedAmount.toFixed(2) : paymentForm.authorizedAmount} readOnly />
                               </div>
                             </div>
                           )}
@@ -4185,7 +4285,25 @@ function AdminDashboard() {
                               <div className="drawer-grid-2col">
                                 <div className="drawer-form-field">
                                   <label>Paid Amount ($)</label>
-                                  <input type="number" step="0.01" value={paymentForm.paidAmount || selectedBooking.total_amount || 0} disabled={paymentSaving} onChange={(e) => { setPaymentForm({ ...paymentForm, paidAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); markPaymentDirty(); }} />
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={paymentForm.paidAmount !== undefined ? paymentForm.paidAmount : (selectedBooking.total_amount || '0.00')}
+                                    disabled={paymentSaving}
+                                    onChange={(e) => {
+                                      if (isHydratingRef.current) return;
+                                      const sanitized = sanitizeCurrencyInput(e.target.value);
+                                      setPaymentForm({ ...paymentForm, paidAmount: sanitized });
+                                      setHasUnsavedEdits(true);
+                                      markPaymentDirty();
+                                    }}
+                                    onBlur={(e) => {
+                                      const cents = moneyToCents(e.target.value);
+                                      setPaymentForm(prev => ({ ...prev, paidAmount: centsToMoney(cents ?? 0) }));
+                                    }}
+                                    onWheel={(e) => e.currentTarget.blur()}
+                                    onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
+                                  />
                                 </div>
                                 <div className="drawer-form-field">
                                   <label>Transaction / Ref ID *</label>
@@ -4217,7 +4335,25 @@ function AdminDashboard() {
                               <div className="drawer-grid-2col">
                                 <div className="drawer-form-field">
                                   <label>Refunded Amount ($) *</label>
-                                  <input type="number" step="0.01" value={paymentForm.refundAmount || selectedBooking.total_amount || 0} disabled={paymentSaving} onChange={(e) => { setPaymentForm({ ...paymentForm, refundAmount: parseFloat(e.target.value || 0) }); setHasUnsavedEdits(true); markPaymentDirty(); }} />
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={paymentForm.refundAmount !== undefined ? paymentForm.refundAmount : (selectedBooking.total_amount || '0.00')}
+                                    disabled={paymentSaving}
+                                    onChange={(e) => {
+                                      if (isHydratingRef.current) return;
+                                      const sanitized = sanitizeCurrencyInput(e.target.value);
+                                      setPaymentForm({ ...paymentForm, refundAmount: sanitized });
+                                      setHasUnsavedEdits(true);
+                                      markPaymentDirty();
+                                    }}
+                                    onBlur={(e) => {
+                                      const cents = moneyToCents(e.target.value);
+                                      setPaymentForm(prev => ({ ...prev, refundAmount: centsToMoney(cents ?? 0) }));
+                                    }}
+                                    onWheel={(e) => e.currentTarget.blur()}
+                                    onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
+                                  />
                                 </div>
                                 <div className="drawer-form-field">
                                   <label>Refund Reference ID *</label>

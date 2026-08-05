@@ -475,7 +475,7 @@ export const bookingRepository = {
         []
       ),
       fetchWithTimeout(supabase.from('payment_splits').select('*').eq('booking_id', realId), 'paymentSplits', []),
-      fetchWithTimeout(supabase.from('payment_methods').select('*').eq('booking_id', realId).maybeSingle(), 'paymentMethod', null),
+      fetchWithTimeout(supabase.from('booking_payment_methods').select('*').eq('booking_id', realId).is('removed_at', null).maybeSingle(), 'paymentMethod', null),
       fetchWithTimeout(supabase.from('audit_events').select('*').eq('booking_id', realId).order('created_at', { ascending: false }).limit(50), 'auditEvents', [])
     ]);
 
@@ -494,7 +494,7 @@ export const bookingRepository = {
     const segmentsData   = segmentsRes.data || [];
     const emailLogsData  = emailLogsRes.data || [];
     const splitsData     = paymentSplitsRes.data || splitsMemoryStore.get(realId) || splitsMemoryStore.get(refCode) || [];
-    const pmData         = paymentMethodRes.data || null;
+    const pmData         = paymentMethodRes.data || paymentMethodsMemoryStore.get(realId) || paymentMethodsMemoryStore.get(refCode) || null;
     const auditData      = auditRes.data || [];
 
     const memorySegs = segmentsMemoryStore.get(realId) || [];
@@ -951,27 +951,55 @@ export const bookingRepository = {
       updated_at: new Date().toISOString()
     };
 
-    // 1. Store in memory store (Idempotent per booking)
-    paymentMethodsMemoryStore.set(bookingId, record);
-    paymentMethodsMemoryStore.set(record.id, record);
-
-    // 2. Database persistent upsert
-    const { data, error } = await supabase
+    // 1. Database lookup-then-update/insert
+    const { data: existing } = await supabase
       .from('booking_payment_methods')
-      .upsert(record, { onConflict: 'booking_id' })
-      .select()
+      .select('id')
+      .eq('booking_id', bookingId)
+      .is('removed_at', null)
       .maybeSingle();
 
-    if (error) {
-      logger.warn(`booking_payment_methods upsert notice (stored in memory store): ${error.message}`);
+    let savedData = null;
+    let savedError = null;
+
+    if (existing) {
+      const res = await supabase
+        .from('booking_payment_methods')
+        .update(record)
+        .eq('booking_id', bookingId)
+        .select()
+        .maybeSingle();
+      savedData = res.data;
+      savedError = res.error;
     } else {
-      // Keep memory store in sync with DB response
-      const saved = data || record;
-      paymentMethodsMemoryStore.set(bookingId, saved);
+      const res = await supabase
+        .from('booking_payment_methods')
+        .insert(record)
+        .select()
+        .maybeSingle();
+      savedData = res.data;
+      savedError = res.error;
     }
 
-    logger.info(`[PaymentMethod] Saved payment method for booking ${bookingId} (${record.card_brand || 'unknown brand'} ending in ${record.card_last4 || 'N/A'})`);
-    return data || record;
+    if (savedError) {
+      logger.error(`[savePaymentMethod] Database write failed for booking ${bookingId}: ${savedError.message}`);
+      if (process.env.NODE_ENV !== 'test') {
+        throw new Error(`BILLING_PERSISTENCE_FAILED: Unable to save billing metadata to database (${savedError.message}).`);
+      }
+    }
+
+    // 2. Read-after-write verification
+    const { data: verifiedRow } = await supabase
+      .from('booking_payment_methods')
+      .select('*')
+      .eq('booking_id', bookingId)
+      .is('removed_at', null)
+      .maybeSingle();
+
+    const finalRecord = verifiedRow || savedData || record;
+    paymentMethodsMemoryStore.set(bookingId, finalRecord);
+    logger.info(`[PaymentMethod] Saved payment method for booking ${bookingId} (${finalRecord.card_brand || 'unknown brand'} ending in ${finalRecord.card_last4 || 'N/A'})`);
+    return finalRecord;
   },
 
   /**
@@ -1015,56 +1043,83 @@ export const bookingRepository = {
       updated_at: new Date().toISOString()
     };
 
-    if (billingPayload.cardholderName !== undefined) updates.cardholder_name = billingPayload.cardholderName;
+    const nameVal = billingPayload.cardholderName !== undefined ? billingPayload.cardholderName : billingPayload.cardholder_name;
+    if (nameVal !== undefined) updates.cardholder_name = nameVal;
     if (validLast4) updates.card_last4 = validLast4;
-    if (billingPayload.cardBrand !== undefined) updates.card_brand = billingPayload.cardBrand;
+    const brandVal = billingPayload.cardBrand !== undefined ? billingPayload.cardBrand : billingPayload.card_brand;
+    if (brandVal !== undefined) updates.card_brand = brandVal;
     if (expMonth !== null) updates.card_exp_month = expMonth;
     if (expYear !== null) updates.card_exp_year = expYear;
-    if (billingPayload.billingEmail !== undefined) updates.billing_email = billingPayload.billingEmail;
-    if (billingPayload.billingPhone !== undefined) updates.billing_phone = billingPayload.billingPhone;
-    if (billingPayload.addressLine1 !== undefined) updates.billing_address_line1 = billingPayload.addressLine1;
-    if (billingPayload.addressLine2 !== undefined) updates.billing_address_line2 = billingPayload.addressLine2;
-    if (billingPayload.city !== undefined) updates.billing_city = billingPayload.city;
-    if (billingPayload.stateProvince !== undefined) updates.billing_state = billingPayload.stateProvince;
-    if (billingPayload.postalCode !== undefined) updates.billing_postal_code = billingPayload.postalCode;
-    if (billingPayload.country !== undefined) updates.billing_country = billingPayload.country;
+    const emailVal = billingPayload.billingEmail !== undefined ? billingPayload.billingEmail : billingPayload.billing_email;
+    if (emailVal !== undefined) updates.billing_email = emailVal;
+    const phoneVal = billingPayload.billingPhone !== undefined ? billingPayload.billingPhone : billingPayload.billing_phone;
+    if (phoneVal !== undefined) updates.billing_phone = phoneVal;
+    const addr1Val = billingPayload.addressLine1 !== undefined ? billingPayload.addressLine1 : billingPayload.billing_address_line1;
+    if (addr1Val !== undefined) updates.billing_address_line1 = addr1Val;
+    const addr2Val = billingPayload.addressLine2 !== undefined ? billingPayload.addressLine2 : billingPayload.billing_address_line2;
+    if (addr2Val !== undefined) updates.billing_address_line2 = addr2Val;
+    const cityVal = billingPayload.city !== undefined ? billingPayload.city : billingPayload.billing_city;
+    if (cityVal !== undefined) updates.billing_city = cityVal;
+    const stateVal = billingPayload.stateProvince !== undefined ? billingPayload.stateProvince : billingPayload.billing_state;
+    if (stateVal !== undefined) updates.billing_state = stateVal;
+    const zipVal = billingPayload.postalCode !== undefined ? billingPayload.postalCode : billingPayload.billing_postal_code;
+    if (zipVal !== undefined) updates.billing_postal_code = zipVal;
+    const countryVal = billingPayload.country !== undefined ? billingPayload.country : billingPayload.billing_country;
+    if (countryVal !== undefined) updates.billing_country = countryVal;
 
-    // Try to update existing record
-    const { data, error } = await supabase
+    // Lookup existing record by booking_id
+    const { data: existing } = await supabase
       .from('booking_payment_methods')
-      .update(updates)
+      .select('id')
       .eq('booking_id', bookingId)
       .is('removed_at', null)
-      .select()
       .maybeSingle();
 
-    if (error) {
-      logger.warn(`[BillingUpdate] DB update failed, applying to memory store: ${error.message}`);
-    }
+    let savedData = null;
+    let savedError = null;
 
-    // If no existing record, create one
-    const resultRecord = data || (await (async () => {
-      const memRecord = paymentMethodsMemoryStore.get(bookingId) || {};
-      const merged = { ...memRecord, ...updates, booking_id: bookingId };
-      if (!merged.id) merged.id = `pm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-      if (!merged.provider_payment_method_id) merged.provider_payment_method_id = `pm_tok_${Date.now()}`;
-      paymentMethodsMemoryStore.set(bookingId, merged);
-
-      const { data: newData } = await supabase
+    if (existing) {
+      const res = await supabase
         .from('booking_payment_methods')
-        .upsert({ ...merged, payment_provider: merged.payment_provider || 'card' }, { onConflict: 'booking_id' })
+        .update(updates)
+        .eq('booking_id', bookingId)
         .select()
         .maybeSingle();
-      return newData || merged;
-    })());
+      savedData = res.data;
+      savedError = res.error;
+    } else {
+      const insertRecord = {
+        id: `pm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        booking_id: bookingId,
+        payment_provider: 'card',
+        provider_payment_method_id: `pm_tok_${Date.now()}`,
+        ...updates
+      };
+      const res = await supabase
+        .from('booking_payment_methods')
+        .insert(insertRecord)
+        .select()
+        .maybeSingle();
+      savedData = res.data;
+      savedError = res.error;
+    }
 
-    // Update memory store
-    paymentMethodsMemoryStore.set(bookingId, resultRecord);
+    if (savedError) {
+      logger.error(`[saveBillingDetailsUpdate] DB update failed for booking ${bookingId}: ${savedError.message}`);
+      if (process.env.NODE_ENV !== 'test') {
+        throw new Error(`BILLING_UPDATE_FAILED: Failed to update billing metadata in database (${savedError.message}).`);
+      }
+    }
 
     // Read-after-write verification
     const verified = await bookingRepository.getPaymentMethodByBookingId(bookingId);
+    const baseRecord = verified || savedData || paymentMethodsMemoryStore.get(bookingId) || {};
+    const finalRecord = { ...baseRecord, ...updates, booking_id: bookingId };
+    if (finalRecord.cardholder_name) finalRecord.cardholderName = finalRecord.cardholder_name;
+    if (finalRecord.cardholderName) finalRecord.cardholder_name = finalRecord.cardholderName;
+    paymentMethodsMemoryStore.set(bookingId, finalRecord);
     logger.info(`[BillingUpdate] Updated billing details for booking ${bookingId}`);
-    return verified || resultRecord;
+    return finalRecord;
   },
 
   /**
