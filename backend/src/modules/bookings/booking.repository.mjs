@@ -1,4 +1,5 @@
 import supabase from '../../integrations/supabase/supabase.client.mjs';
+import env from '../../config/env.mjs';
 import logger from '../../config/logger.mjs';
 import { buildCanonicalItinerary, calculateTripSummary } from '../../shared/utils/airline-lookup.mjs';
 import bookingMapper from './booking.mapper.mjs';
