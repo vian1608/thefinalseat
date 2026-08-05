@@ -3,7 +3,14 @@
 
 create extension if not exists pgcrypto;
 
+-- Ensure both canonical and legacy compatibility columns exist before data reconciliation.
 alter table if exists public.bookings
+  add column if not exists customer_price numeric(12,2),
+  add column if not exists total_amount numeric(12,2),
+  add column if not exists original_api_price numeric(12,2),
+  add column if not exists supplier_price numeric(12,2),
+  add column if not exists taxes numeric(12,2),
+  add column if not exists service_fee numeric(12,2),
   add column if not exists supplier_fare numeric(12,2),
   add column if not exists taxes_and_fees numeric(12,2),
   add column if not exists agency_markup numeric(12,2),
@@ -12,8 +19,8 @@ alter table if exists public.bookings
   add column if not exists transaction_reference text;
 
 update public.bookings
-set customer_price = coalesce(customer_price, total_amount),
-    total_amount = coalesce(customer_price, total_amount),
+set customer_price = coalesce(customer_price, total_amount, 0),
+    total_amount = coalesce(customer_price, total_amount, 0),
     supplier_fare = coalesce(supplier_fare, supplier_price, original_api_price, 0),
     taxes_and_fees = coalesce(taxes_and_fees, taxes, 0),
     agency_markup = coalesce(
@@ -23,7 +30,7 @@ set customer_price = coalesce(customer_price, total_amount),
         - coalesce(supplier_fare, supplier_price, original_api_price, 0)
         - coalesce(taxes_and_fees, taxes, 0)
     ),
-    authorized_amount = coalesce(authorized_amount, customer_price, total_amount)
+    authorized_amount = coalesce(authorized_amount, customer_price, total_amount, 0)
 where customer_price is null
    or total_amount is null
    or supplier_fare is null
