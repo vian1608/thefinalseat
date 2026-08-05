@@ -3581,11 +3581,11 @@ function AdminDashboard() {
                           )}
 
                           {/* Card Reference */}
-                          <div style={{ marginBottom: '14px' }}>
-                            <div style={{ fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid #f1f5f9' }}>
+                          <div className="billing-field-group">
+                            <div className="billing-group-label">
                               Card Reference
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <div className="billing-grid-2col">
                               <div className="drawer-form-field">
                                 <label>Cardholder Name</label>
                                 <input
@@ -3656,11 +3656,11 @@ function AdminDashboard() {
                           </div>
 
                           {/* Billing Contact */}
-                          <div style={{ marginBottom: '14px' }}>
-                            <div style={{ fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid #f1f5f9' }}>
+                          <div className="billing-field-group">
+                            <div className="billing-group-label">
                               Billing Contact
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <div className="billing-grid-2col">
                               <div className="drawer-form-field">
                                 <label>Billing Email</label>
                                 <input type="email" value={billingForm.billingEmail} placeholder="customer@email.com" disabled={billingSaving} onChange={e => { setBillingForm(f => ({ ...f, billingEmail: e.target.value })); markBillingDirty(); }} />
@@ -3673,11 +3673,11 @@ function AdminDashboard() {
                           </div>
 
                           {/* Billing Address */}
-                          <div style={{ marginBottom: '14px' }}>
-                            <div style={{ fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid #f1f5f9' }}>
+                          <div className="billing-field-group">
+                            <div className="billing-group-label">
                               Billing Address
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
+                            <div className="billing-grid-full">
                               <div className="drawer-form-field">
                                 <label>Address Line 1</label>
                                 <input type="text" value={billingForm.addressLine1} placeholder="123 Main Street" disabled={billingSaving} onChange={e => { setBillingForm(f => ({ ...f, addressLine1: e.target.value })); markBillingDirty(); }} />
@@ -3686,7 +3686,7 @@ function AdminDashboard() {
                                 <label>Address Line 2 (Optional)</label>
                                 <input type="text" value={billingForm.addressLine2} placeholder="Apt 4B, Suite 100" disabled={billingSaving} onChange={e => { setBillingForm(f => ({ ...f, addressLine2: e.target.value })); markBillingDirty(); }} />
                               </div>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                              <div className="billing-grid-3col">
                                 <div className="drawer-form-field">
                                   <label>City</label>
                                   <input type="text" value={billingForm.city} placeholder="New York" disabled={billingSaving} onChange={e => { setBillingForm(f => ({ ...f, city: e.target.value })); markBillingDirty(); }} />
@@ -3708,8 +3708,8 @@ function AdminDashboard() {
                           </div>
 
                           {/* Transaction Reference */}
-                          <div style={{ marginBottom: '14px' }}>
-                            <div style={{ fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid #f1f5f9' }}>
+                          <div className="billing-field-group">
+                            <div className="billing-group-label">
                               Transaction Reference
                             </div>
                             <div className="drawer-form-field">
@@ -3719,33 +3719,18 @@ function AdminDashboard() {
                           </div>
 
                           {/* Save button */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div className="billing-save-row">
                             {billingDirty && (
-                              <div style={{ color: '#b45309', background: '#fffbeb', border: '1px solid #fef3c7', padding: '7px 10px', borderRadius: '5px', fontSize: '0.78rem', fontWeight: '600' }}>
+                              <span className="billing-unsaved-notice">
                                 <i className="fas fa-info-circle" style={{ marginRight: '5px' }}></i>Unsaved billing changes
-                              </div>
+                              </span>
                             )}
                             <button
                               type="button"
                               id="billing-details-save-btn"
+                              className={`billing-save-btn${billingSaving ? ' saving' : ''}${!billingDirty ? ' disabled' : ''}`}
                               onClick={handleSaveBillingDetails}
                               disabled={billingSaving || !billingDirty}
-                              style={{
-                                width: '100%',
-                                background: billingSaving ? '#cbd5e1' : (!billingDirty ? '#e2e8f0' : '#1e3a5f'),
-                                color: billingSaving || !billingDirty ? '#94a3b8' : '#ffffff',
-                                border: 'none',
-                                padding: '10px 16px',
-                                borderRadius: '6px',
-                                fontSize: '0.82rem',
-                                fontWeight: '700',
-                                cursor: billingSaving || !billingDirty ? 'not-allowed' : 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '8px',
-                                transition: 'all 0.15s ease'
-                              }}
                             >
                               {billingSaving ? (
                                 <><i className="fas fa-spinner fa-spin"></i> Saving Billing Details…</>
@@ -3790,14 +3775,14 @@ function AdminDashboard() {
                       {openAccordion === 'email_activity' && (
                         <div className="admin-accordion-body" style={{ padding: '12px' }}>
                           {/* 1. Booking Request Email Card */}
-                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '10px', fontSize: '0.8rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                              <strong style={{ color: '#1e293b', fontSize: '0.85rem' }}>Booking Request Email</strong>
+                          <div className="email-activity-card">
+                            <div className="email-card-header">
+                              <strong className="email-card-title">Booking Request Email</strong>
                               <span className={`status-badge status-badge--${(selectedBooking.emailActivity?.bookingRequest?.status || selectedBooking.booking_request_email_status || 'NOT_SENT') === 'SENT' ? 'done' : (((selectedBooking.emailActivity?.bookingRequest?.status || selectedBooking.booking_request_email_status || 'NOT_SENT') === 'FAILED') ? 'failed' : 'pending')}`}>
                                 {selectedBooking.emailActivity?.bookingRequest?.status || selectedBooking.booking_request_email_status || 'NOT_SENT'}
                               </span>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', color: '#64748b', fontSize: '0.75rem', marginBottom: '10px' }}>
+                            <div className="email-card-meta">
                               <div><strong>Recipient:</strong> {selectedBooking.emailActivity?.bookingRequest?.recipient || selectedBooking.booking_request_email_recipient || selectedBooking.email || 'N/A'}</div>
                               <div><strong>Sent:</strong> {selectedBooking.emailActivity?.bookingRequest?.sentAt || selectedBooking.booking_request_email_sent_at ? new Date(selectedBooking.emailActivity?.bookingRequest?.sentAt || selectedBooking.booking_request_email_sent_at).toLocaleString() : 'N/A'}</div>
                               <div style={{ gridColumn: '1 / -1' }}><strong>Provider ID:</strong> {selectedBooking.emailActivity?.bookingRequest?.providerMessageId || selectedBooking.booking_request_email_id || 'N/A'}</div>
@@ -3830,14 +3815,14 @@ function AdminDashboard() {
                             const isAuthCompleted = ['AUTHORIZED', 'READY_FOR_TICKETING', 'TICKETED', 'DONE'].includes((selectedBooking.authorization_status || selectedBooking.status || '').toUpperCase());
 
                             return (
-                              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '10px', fontSize: '0.8rem' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                  <strong style={{ color: '#1e293b', fontSize: '0.85rem' }}>Authorization Email</strong>
+                              <div className="email-activity-card">
+                                <div className="email-card-header">
+                                  <strong className="email-card-title">Authorization Email</strong>
                                   <span className={`status-badge status-badge--${['SENT', 'ACCEPTED', 'DELIVERED'].includes(computedStatus) ? 'done' : (computedStatus === 'FAILED' ? 'failed' : 'pending')}`}>
                                     {computedStatus}
                                   </span>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', color: '#64748b', fontSize: '0.75rem', marginBottom: '10px' }}>
+                                <div className="email-card-meta">
                                   <div><strong>Recipient:</strong> {recipient}</div>
                                   <div><strong>Sent:</strong> {sentAt ? new Date(sentAt).toLocaleString() : 'N/A'}</div>
                                   <div><strong>Expires:</strong> {expiresAt ? new Date(expiresAt).toLocaleString() : 'N/A'}</div>
@@ -3913,14 +3898,14 @@ function AdminDashboard() {
                             const canSendFinalEmail = isPnrValid && hasItinerary && recipientEmail.includes('@');
 
                             return (
-                              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', fontSize: '0.8rem' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                  <strong style={{ color: '#1e293b', fontSize: '0.85rem' }}>Final Ticket Email</strong>
+                              <div className="email-activity-card">
+                                <div className="email-card-header">
+                                  <strong className="email-card-title">Final Ticket Email</strong>
                                   <span className={`status-badge status-badge--${(selectedBooking.final_confirmation_email_status || 'NOT_SENT') === 'SENT' ? 'done' : ((selectedBooking.final_confirmation_email_status || 'NOT_SENT') === 'FAILED' ? 'failed' : 'pending')}`}>
                                     {selectedBooking.final_confirmation_email_status || 'NOT_SENT'}
                                   </span>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', color: '#64748b', fontSize: '0.75rem', marginBottom: '10px' }}>
+                                <div className="email-card-meta">
                                   <div><strong>Recipient:</strong> {selectedBooking.final_confirmation_email_recipient || recipientEmail || 'N/A'}</div>
                                   <div><strong>Sent:</strong> {selectedBooking.final_confirmation_email_sent_at ? new Date(selectedBooking.final_confirmation_email_sent_at).toLocaleString() : 'N/A'}</div>
                                   <div style={{ gridColumn: '1 / -1' }}><strong>Message ID:</strong> {selectedBooking.final_confirmation_email_id || 'N/A'}</div>
