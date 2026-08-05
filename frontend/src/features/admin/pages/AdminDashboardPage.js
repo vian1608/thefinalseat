@@ -205,6 +205,41 @@ class ItineraryErrorBoundary extends React.Component {
   }
 }
 
+export function getPaginationItems(currentPage, totalPages, siblingCount = 1) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  const items = new Set([
+    1,
+    totalPages,
+    currentPage,
+    currentPage - 1,
+    currentPage + 1
+  ]);
+
+  if (siblingCount >= 2) {
+    items.add(currentPage - 2);
+    items.add(currentPage + 2);
+  }
+
+  const pages = [...items]
+    .filter(page => page >= 1 && page <= totalPages)
+    .sort((a, b) => a - b);
+
+  const result = [];
+
+  pages.forEach((page, index) => {
+    const previous = pages[index - 1];
+    if (index > 0 && page - previous > 1) {
+      result.push('ellipsis-' + previous);
+    }
+    result.push(page);
+  });
+
+  return result;
+}
+
 function AdminDashboard() {
 
   const navigate = useNavigate();
@@ -237,7 +272,7 @@ function AdminDashboard() {
   const [hasUnsavedEdits, setHasUnsavedEdits] = useState(false);
   const [paymentDirty, setPaymentDirty] = useState(false);
   const [paymentSaving, setPaymentSaving] = useState(false);
-  const [paymentSaveStatus, setPaymentSaveStatus] = useState('default'); // 'default', 'saving', 'success', 'failure'
+  const [paymentSaveStatus, setPaymentSaveStatus] = useState('default');
   const [paymentSaveError, setPaymentSaveError] = useState('');
   const [paymentSaveSuccessMsg, setPaymentSaveSuccessMsg] = useState('');
 
@@ -263,8 +298,6 @@ function AdminDashboard() {
   const [deleteError, setDeleteError] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
-
-
   // Expandable Row & Lazy Loading State
   const [expandedBookingId, setExpandedBookingId] = useState(null);
   const [selectedBookingIds, setSelectedBookingIds] = useState([]);
@@ -274,83 +307,208 @@ function AdminDashboard() {
   const [detailsErrorRefCode, setDetailsErrorRefCode] = useState(null);
   const abortControllerRef = useRef(null);
 
-  // Server-Side & Client-Side Pagination State (10 Bookings Per Page)
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  // Server-Side Pagination & URL Sync State
+  const getInitialPage = () => {
+    if (typeof window === 'undefined') return 1;
+    const params = new URLSearchParams(window.location.search);
+    const p = parseInt(params.get('page'), 10);
+    return Number.isFinite(p) && p > 0 ? p : 1;
+  };
+
+  const getInitialPageSize = () => {
+    if (typeof window === 'undefined') return 10;
+    const params = new URLSearchParams(window.location.search);
+    const s = parseInt(params.get('pageSize'), 10);
+    return [10, 25, 50, 100].includes(s) ? s : 10;
+  };
+
+  const [currentPage, setCurrentPage] = useState(getInitialPage);
+  const [pageSize, setPageSize] = useState(getInitialPageSize);
   const [totalRecords, setTotalRecords] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [tableLoading, setTableLoading] = useState(false);
+  const [goToPageInput, setGoToPageInput] = useState('');
+  const [goToPageError, setGoToPageError] = useState('');
 
-  const loadAllDashboardData = useCallback(async (activeFilters = filters, days = timeframe, page = currentPage, size = pageSize) => {
+  const bookingsTableRef = useRef(null);
+  const bookingsRequestIdRef = useRef(0);
+
+  // URL State Sync (Part 18)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    let changed = false;
+    if (currentPage > 1) {
+      url.searchParams.set('page', String(currentPage));
+      changed = true;
+    } else if (url.searchParams.has('page')) {
+      url.searchParams.delete('page');
+      changed = true;
+    }
+    if (pageSize !== 10) {
+      url.searchParams.set('pageSize', String(pageSize));
+      changed = true;
+    } else if (url.searchParams.has('pageSize')) {
+      url.searchParams.delete('pageSize');
+      changed = true;
+    }
+    if (changed) {
+      window.history.replaceState(null, '', url.toString());
+    }
+  }, [currentPage, pageSize]);
+
+  // Loaders (Part 4 & Part 5)
+  const loadBookingsPage = useCallback(async ({ page, pageSize: size, filters: activeFilters, signal }) => {
+    const requestId = ++bookingsRequestIdRef.current;
     try {
       setTableLoading(true);
-      setLoading(true);
       setError('');
-      
+
       const queryFilters = { page, pageSize: size };
-      Object.keys(activeFilters).forEach(key => {
-        if (activeFilters[key]) {
-          queryFilters[key] = activeFilters[key];
-        }
-      });
+      if (activeFilters.reference) queryFilters.reference = activeFilters.reference;
+      if (activeFilters.name) queryFilters.name = activeFilters.name;
+      if (activeFilters.email) queryFilters.email = activeFilters.email;
+      if (activeFilters.date) queryFilters.date = activeFilters.date;
+      if (activeFilters.status) queryFilters.status = activeFilters.status;
 
-      const [bookingsRes, statsRes, analyticsRes, abandonedRes] = await Promise.allSettled([
-        adminAPI.getBookings(queryFilters),
-        adminAPI.getStats(),
-        adminAPI.getAnalytics(days),
-        adminAPI.getAbandonedBookings()
-      ]);
+      const res = await adminAPI.getBookings(queryFilters, { signal });
 
-      if (bookingsRes.status === 'fulfilled' && bookingsRes.value?.success) {
-        const val = bookingsRes.value;
-        const list = val.bookings || val.data || [];
-        setBookings(list);
-        if (val.pagination) {
-          setCurrentPage(val.pagination.page || page);
-          setTotalRecords(val.pagination.totalRecords ?? list.length);
-          setTotalPages(val.pagination.totalPages || 1);
-        } else {
-          setTotalRecords(list.length);
-          setTotalPages(1);
-        }
+      if (requestId !== bookingsRequestIdRef.current) {
+        return; // Stale request guard
+      }
+
+      if (res && res.success) {
+        const list = res.bookings || res.data || [];
+        setBookings(Array.isArray(list) ? list : []);
+
+        const serverTotalRecords = Number(res.pagination?.totalRecords);
+        const serverTotalPages = Number(res.pagination?.totalPages);
+
+        const totalRecs = Number.isFinite(serverTotalRecords) ? serverTotalRecords : list.length;
+        const totalPgs = Number.isFinite(serverTotalPages) && serverTotalPages > 0
+          ? serverTotalPages
+          : Math.max(1, Math.ceil(totalRecs / size));
+
+        setTotalRecords(totalRecs);
+        setTotalPages(totalPgs);
       } else {
-        const errorMsg = bookingsRes.status === 'rejected' ? bookingsRes.reason?.message : (bookingsRes.value?.error || 'Failed to fetch bookings');
+        const errorMsg = typeof res?.error === 'object' ? res.error?.message : (res?.error || 'Failed to fetch bookings');
         console.error('Bookings API failed:', errorMsg);
         setError(`Unable to load bookings: ${errorMsg}`);
       }
-      if (statsRes.status === 'fulfilled' && statsRes.value?.success) {
-        setStats(statsRes.value.data || null);
-      }
-      if (analyticsRes.status === 'fulfilled' && analyticsRes.value?.success) {
-        setAnalytics(analyticsRes.value.data || null);
-      }
-      if (abandonedRes.status === 'fulfilled' && abandonedRes.value?.success) {
-        setAbandonedBookings(abandonedRes.value.data || []);
-      }
-
     } catch (err) {
-      console.error('Failed to load admin dashboard data:', err);
-      setError('Unable to reach server. Please verify database and backend connectivity.');
+      if (err?.name === 'AbortError' || err === 'CANCELED' || err?.message?.includes('aborted')) {
+        return;
+      }
+      if (requestId === bookingsRequestIdRef.current) {
+        console.error('Failed to load bookings page:', err);
+        setError('Unable to reach server. Please verify database and backend connectivity.');
+      }
     } finally {
-      setTableLoading(false);
-      setLoading(false);
+      if (requestId === bookingsRequestIdRef.current) {
+        setTableLoading(false);
+        setLoading(false);
+      }
     }
-  }, [filters, timeframe, currentPage, pageSize]);
+  }, []);
 
+  const loadDashboardStats = useCallback(async () => {
+    try {
+      const res = await adminAPI.getStats();
+      if (res?.success) setStats(res.data || null);
+    } catch (err) {
+      console.error('Failed to load stats:', err);
+    }
+  }, []);
+
+  const loadAnalytics = useCallback(async (days = timeframe) => {
+    try {
+      const res = await adminAPI.getAnalytics(days);
+      if (res?.success) setAnalytics(res.data || null);
+    } catch (err) {
+      console.error('Failed to load analytics:', err);
+    }
+  }, [timeframe]);
+
+  const loadAbandonedBookings = useCallback(async () => {
+    try {
+      const res = await adminAPI.getAbandonedBookings();
+      if (res?.success) setAbandonedBookings(res.data || []);
+    } catch (err) {
+      console.error('Failed to load abandoned bookings:', err);
+    }
+  }, []);
+
+  const handleRefreshAllData = useCallback(() => {
+    loadBookingsPage({ page: currentPage, pageSize, filters });
+    loadDashboardStats();
+    loadAnalytics(timeframe);
+    loadAbandonedBookings();
+  }, [currentPage, pageSize, filters, timeframe, loadBookingsPage, loadDashboardStats, loadAnalytics, loadAbandonedBookings]);
+
+  // Controlled Effect 1: Bookings Page Load (Part 2)
+  useEffect(() => {
+    const controller = new AbortController();
+    const token = localStorage.getItem('token');
+    const adminSession = sessionStorage.getItem('adminSession');
+    if (!token || !adminSession) return;
+
+    loadBookingsPage({
+      page: currentPage,
+      pageSize,
+      filters,
+      signal: controller.signal
+    });
+
+    return () => {
+      controller.abort();
+    };
+  }, [
+    currentPage,
+    pageSize,
+    filters,
+    loadBookingsPage
+  ]);
+
+  // Controlled Effect 2: Dashboard Stats, Analytics, & Abandoned Checkouts (Part 4)
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const adminSession = sessionStorage.getItem('adminSession');
+    if (!token || !adminSession) return;
+
+    loadDashboardStats();
+    loadAnalytics(timeframe);
+    loadAbandonedBookings();
+  }, [timeframe, loadDashboardStats, loadAnalytics, loadAbandonedBookings]);
+
+  // Handler: Change Page (State-only update, triggers Controlled Effect 1 - Part 3)
   const handlePageChange = useCallback((newPage) => {
-    if (newPage < 1 || newPage > totalPages) return;
+    const safePage = Math.min(
+      Math.max(Number(newPage) || 1, 1),
+      totalPages
+    );
+
+    if (safePage === currentPage) return;
+
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+
     setExpandedBookingId(null);
     setSelectedBooking(null);
     setDetailsLoading(false);
+    setDetailsError(null);
 
-    setCurrentPage(newPage);
-    loadAllDashboardData(filters, timeframe, newPage, pageSize);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [totalPages, filters, timeframe, pageSize, loadAllDashboardData]);
+    setCurrentPage(safePage);
+
+    if (bookingsTableRef.current) {
+      bookingsTableRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }
+  }, [currentPage, totalPages]);
 
   const handleSelectBooking = useCallback((booking) => {
     setSelectedBooking(booking);
@@ -770,16 +928,23 @@ function AdminDashboard() {
         return next;
       });
       // Refresh data
-      const newTotal = totalRecords - (result.summary?.deleted || 0);
+      const deletedCount = result.summary?.deleted || 0;
+      const newTotal = Math.max(0, totalRecords - deletedCount);
       const newTotalPages = Math.max(1, Math.ceil(newTotal / pageSize));
-      const safePage = currentPage > newTotalPages ? newTotalPages : currentPage;
-      loadAllDashboardData(filters, timeframe, safePage, pageSize);
+      const safePage = Math.min(currentPage, newTotalPages);
+
+      if (safePage !== currentPage) {
+        setCurrentPage(safePage);
+      } else {
+        loadBookingsPage({ page: currentPage, pageSize, filters });
+      }
+      loadDashboardStats();
     } catch (err) {
       setBulkDeleteError(err.response?.data?.error?.message || err.message || 'Bulk deletion failed.');
     } finally {
       setBulkDeleteLoading(false);
     }
-  }, [selectedBookingIds, bulkDeletePassword, bulkDeleteConfirmText, bookings, expandedBookingId, totalRecords, pageSize, currentPage, filters, timeframe, loadAllDashboardData]);
+  }, [selectedBookingIds, bulkDeletePassword, bulkDeleteConfirmText, bookings, expandedBookingId, totalRecords, pageSize, currentPage, filters, loadBookingsPage, loadDashboardStats]);
 
   const handleCloseBulkDeleteModal = useCallback(() => {
     setIsBulkDeleteModalOpen(false);
@@ -792,8 +957,10 @@ function AdminDashboard() {
 
   const handleBackupImportComplete = useCallback((result) => {
     // Refresh booking table after import
-    loadAllDashboardData(filters, timeframe, 1, pageSize);
-  }, [filters, timeframe, pageSize, loadAllDashboardData]);
+    setCurrentPage(1);
+    loadBookingsPage({ page: 1, pageSize, filters });
+    loadDashboardStats();
+  }, [pageSize, filters, loadBookingsPage, loadDashboardStats]);
 
   const handleItineraryImported = useCallback((updatedBooking) => {
     if (updatedBooking) {
@@ -863,34 +1030,29 @@ function AdminDashboard() {
   });
 
 
-  // Authenticate Admin Session on Mount
+  // Authenticate Admin Session on Mount (Auth Guard ONLY - Part 1)
   useEffect(() => {
     const token = localStorage.getItem('token');
     const adminSession = sessionStorage.getItem('adminSession');
     if (!token || !adminSession) {
       navigate('/admin/login');
-      return;
     }
-    loadAllDashboardData(filters, timeframe, 1, 10);
-  }, [navigate, loadAllDashboardData, filters, timeframe]);
+  }, [navigate]);
 
   const handleFilterChange = (field, value) => {
     const updatedFilters = { ...filters, [field]: value };
     setFilters(updatedFilters);
     setCurrentPage(1);
-    loadAllDashboardData(updatedFilters, timeframe, 1, pageSize);
   };
 
   const handleClearFilters = () => {
     const cleared = { reference: '', name: '', email: '', date: '', status: '' };
     setFilters(cleared);
     setCurrentPage(1);
-    loadAllDashboardData(cleared, timeframe, 1, pageSize);
   };
 
   const handleTimeframeChange = (days) => {
     setTimeframe(days);
-    loadAllDashboardData(filters, days);
   };
 
   const handleSaveAllChanges = async (e) => {
@@ -1011,7 +1173,7 @@ function AdminDashboard() {
       setDeletePasswordInput('');
       setDrawerSuccess(`Booking ${selectedBooking.confirmation_code || selectedBooking.confirmationCode || targetId} deleted permanently.`);
       setBookings(prevList => prevList.filter(b => b.id !== targetId && b.confirmation_code !== targetId && b.confirmationCode !== targetId));
-      loadAllDashboardData();
+      handleRefreshAllData();
     } catch (err) {
       setDeleteError(err.message);
     } finally {
@@ -1193,7 +1355,7 @@ function AdminDashboard() {
       }
 
       setFinalTicketEmailSuccess('Final E-Ticket email sent successfully.');
-      loadAllDashboardData();
+      handleRefreshAllData();
     } catch (err) {
       setFinalTicketEmailError(err.message);
     } finally {
@@ -1677,7 +1839,7 @@ function AdminDashboard() {
       }
 
       alert(`Booking ${data.confirmationCode} successfully charged and ticketed! Airline PNR: ${data.airlinePnr}`);
-      loadAllDashboardData();
+      handleRefreshAllData();
     } catch (err) {
       alert(`Process error: ${err.message}`);
     } finally {
@@ -1852,7 +2014,7 @@ function AdminDashboard() {
               <span>{analytics?.realtimeActiveUsers || 1} Active Now</span>
             </div>
 
-            <button onClick={() => loadAllDashboardData()} className="admin-icon-btn" title="Refresh Dashboard Data">
+            <button onClick={handleRefreshAllData} className="admin-icon-btn" title="Refresh Dashboard Data">
               <i className="fas fa-sync-alt"></i>
             </button>
 
@@ -2081,7 +2243,27 @@ function AdminDashboard() {
                   })}
                 </div>
 
-                <div className="admin-table-wrapper">
+                <div className="admin-table-wrapper" ref={bookingsTableRef} style={{ position: 'relative' }}>
+                  {tableLoading && (
+                    <div className="table-loading-overlay" style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      background: 'rgba(255, 255, 255, 0.65)',
+                      zIndex: 10,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backdropFilter: 'blur(1px)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                        <i className="fas fa-spinner fa-spin" style={{ color: '#1e3a5f' }}></i>
+                        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e3a5f' }}>Loading page {currentPage}…</span>
+                      </div>
+                    </div>
+                  )}
                   {bookings.length === 0 ? (
                     <div className="empty-table-view">
                       <i className="fas fa-inbox"></i>
@@ -4303,33 +4485,186 @@ function AdminDashboard() {
                   )}
                 </div>
 
-                {/* PAGINATION CONTROL BAR (10 BOOKINGS PER PAGE) */}
-                <div className="admin-pagination-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', padding: '12px 16px', background: '#ffffff', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                {/* SCALABLE WINDOWED PAGINATION CONTROL BAR */}
+                <div
+                  className="admin-pagination-container"
+                  style={{
+                    display: 'flex',
+                    justify: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '12px',
+                    marginTop: '16px',
+                    padding: '12px 16px',
+                    background: '#ffffff',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                  }}
+                >
+                  {/* Left: Record Range Description */}
                   <div className="pagination-info" style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>
-                    Showing {totalRecords === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalRecords)} of {totalRecords} bookings
+                    Showing {totalRecords === 0 ? 0 : ((currentPage - 1) * pageSize + 1).toLocaleString()}–{Math.min(currentPage * pageSize, totalRecords).toLocaleString()} of {totalRecords.toLocaleString()} bookings
                   </div>
-                  <div className="pagination-controls" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+
+                  {/* Center: Windowed Numeric Buttons + Nav Controls */}
+                  <div className="pagination-controls" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                    {/* First Page button */}
+                    <button
+                      type="button"
+                      onClick={() => handlePageChange(1)}
+                      disabled={currentPage <= 1 || tableLoading}
+                      className="admin-secondary-btn"
+                      style={{ padding: '4px 8px', fontSize: '0.78rem', fontWeight: 700, opacity: (currentPage <= 1 || tableLoading) ? 0.4 : 1, cursor: (currentPage <= 1 || tableLoading) ? 'not-allowed' : 'pointer' }}
+                      title="First Page"
+                    >
+                      <i className="fas fa-angles-left"></i>
+                    </button>
+
+                    {/* Previous button */}
                     <button
                       type="button"
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage <= 1 || tableLoading}
                       className="admin-secondary-btn"
-                      style={{ padding: '6px 14px', fontSize: '0.8rem', fontWeight: 600, opacity: (currentPage <= 1 || tableLoading) ? 0.5 : 1, cursor: (currentPage <= 1 || tableLoading) ? 'not-allowed' : 'pointer' }}
+                      style={{ padding: '4px 10px', fontSize: '0.8rem', fontWeight: 600, opacity: (currentPage <= 1 || tableLoading) ? 0.4 : 1, cursor: (currentPage <= 1 || tableLoading) ? 'not-allowed' : 'pointer' }}
                     >
                       <i className="fas fa-chevron-left" style={{ marginRight: '4px' }}></i> Previous
                     </button>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e3a5f', padding: '0 8px' }}>
-                      Page {currentPage} of {totalPages}
-                    </span>
+
+                    {/* Windowed Page Number Buttons */}
+                    {getPaginationItems(currentPage, totalPages).map((item) => {
+                      if (typeof item === 'string' && item.startsWith('ellipsis')) {
+                        return (
+                          <span key={item} style={{ padding: '0 6px', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 700, userSelect: 'none' }}>
+                            …
+                          </span>
+                        );
+                      }
+
+                      const pageNum = Number(item);
+                      const isActive = pageNum === currentPage;
+
+                      return (
+                        <button
+                          key={`page-${pageNum}`}
+                          type="button"
+                          onClick={() => handlePageChange(pageNum)}
+                          disabled={tableLoading}
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: '0.82rem',
+                            fontWeight: isActive ? 800 : 600,
+                            borderRadius: '6px',
+                            border: isActive ? '1.5px solid #1e3a5f' : '1px solid #cbd5e1',
+                            background: isActive ? '#1e3a5f' : '#ffffff',
+                            color: isActive ? '#ffffff' : '#334155',
+                            cursor: tableLoading ? 'not-allowed' : 'pointer',
+                            opacity: tableLoading ? 0.6 : 1,
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+
+                    {/* Next button */}
                     <button
                       type="button"
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage >= totalPages || tableLoading}
                       className="admin-secondary-btn"
-                      style={{ padding: '6px 14px', fontSize: '0.8rem', fontWeight: 600, opacity: (currentPage >= totalPages || tableLoading) ? 0.5 : 1, cursor: (currentPage >= totalPages || tableLoading) ? 'not-allowed' : 'pointer' }}
+                      style={{ padding: '4px 10px', fontSize: '0.8rem', fontWeight: 600, opacity: (currentPage >= totalPages || tableLoading) ? 0.4 : 1, cursor: (currentPage >= totalPages || tableLoading) ? 'not-allowed' : 'pointer' }}
                     >
                       Next <i className="fas fa-chevron-right" style={{ marginLeft: '4px' }}></i>
                     </button>
+
+                    {/* Last Page button */}
+                    <button
+                      type="button"
+                      onClick={() => handlePageChange(totalPages)}
+                      disabled={currentPage >= totalPages || tableLoading}
+                      className="admin-secondary-btn"
+                      style={{ padding: '4px 8px', fontSize: '0.78rem', fontWeight: 700, opacity: (currentPage >= totalPages || tableLoading) ? 0.4 : 1, cursor: (currentPage >= totalPages || tableLoading) ? 'not-allowed' : 'pointer' }}
+                      title="Last Page"
+                    >
+                      <i className="fas fa-angles-right"></i>
+                    </button>
+                  </div>
+
+                  {/* Right: Page Size & Go to Page Input */}
+                  <div className="pagination-extra" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    {/* Page Size Selector */}
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        const newSize = parseInt(e.target.value, 10) || 10;
+                        setPageSize(newSize);
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        borderRadius: '6px',
+                        border: '1px solid #cbd5e1',
+                        background: '#ffffff',
+                        color: '#334155',
+                        cursor: 'pointer'
+                      }}
+                      aria-label="Select page size"
+                    >
+                      <option value={10}>10 / page</option>
+                      <option value={25}>25 / page</option>
+                      <option value={50}>50 / page</option>
+                      <option value={100}>100 / page</option>
+                    </select>
+
+                    {/* Go to Page Form */}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const parsed = parseInt(goToPageInput, 10);
+                        if (!Number.isFinite(parsed) || parsed < 1 || parsed > totalPages) {
+                          setGoToPageError(`1–${totalPages}`);
+                          return;
+                        }
+                        setGoToPageError('');
+                        handlePageChange(parsed);
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <span style={{ fontSize: '0.8rem', color: '#475569', fontWeight: 600 }}>Go to:</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={totalPages}
+                        value={goToPageInput}
+                        onChange={(e) => {
+                          setGoToPageInput(e.target.value);
+                          setGoToPageError('');
+                        }}
+                        placeholder="Page"
+                        style={{
+                          width: '60px',
+                          padding: '4px 6px',
+                          fontSize: '0.8rem',
+                          borderRadius: '4px',
+                          border: goToPageError ? '1.5px solid #dc2626' : '1px solid #cbd5e1'
+                        }}
+                      />
+                      <button
+                        type="submit"
+                        className="admin-secondary-btn"
+                        style={{ padding: '4px 8px', fontSize: '0.78rem', fontWeight: 700 }}
+                      >
+                        Go
+                      </button>
+                      {goToPageError && (
+                        <span style={{ color: '#dc2626', fontSize: '0.72rem', fontWeight: 700 }}>{goToPageError}</span>
+                      )}
+                    </form>
                   </div>
                 </div>
               </div>

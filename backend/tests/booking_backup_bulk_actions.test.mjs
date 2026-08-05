@@ -334,8 +334,8 @@ describe('TEST 15 — Empty page after deletion', () => {
   it('pagination moves safely to a valid page', () => {
     // After bulk delete, calculates safe page
     expect(frontendDashboard).toContain('Math.ceil(newTotal / pageSize)');
-    expect(frontendDashboard).toContain('currentPage > newTotalPages ? newTotalPages : currentPage');
-    expect(frontendDashboard).toContain('loadAllDashboardData(filters, timeframe, safePage, pageSize)');
+    expect(frontendDashboard).toContain('Math.min(currentPage, newTotalPages)');
+    expect(frontendDashboard).toContain('loadBookingsPage');
   });
 });
 

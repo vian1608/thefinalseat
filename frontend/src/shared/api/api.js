@@ -216,8 +216,8 @@ export const adminAPI = {
     const response = await api.post('/admin/login', credentials);
     return response.data;
   },
-  getBookings: async (filters = {}) => {
-    const response = await api.get('/admin/bookings', { params: filters });
+  getBookings: async (filters = {}, options = {}) => {
+    const response = await api.get('/admin/bookings', { params: filters, ...options });
     return response.data;
   },
   getStats: async () => {

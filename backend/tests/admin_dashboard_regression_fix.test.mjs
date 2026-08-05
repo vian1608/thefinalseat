@@ -53,7 +53,7 @@ describe('TEST 2 — Initial dashboard render null safety', () => {
 
 describe('TEST 3 — Dashboard refresh / session validation', () => {
   it('triggers data loading when session is valid', () => {
-    expect(adminDashboardSrc).toContain("loadAllDashboardData(filters, timeframe, 1, 10)");
+    expect(adminDashboardSrc).toContain("loadBookingsPage({");
   });
 });
 
@@ -65,12 +65,11 @@ describe('TEST 4 — No bookings returned', () => {
 });
 
 describe('TEST 5 & 6 — Resilience to partial API failures', () => {
-  it('uses Promise.allSettled so stats or analytics failure does not crash dashboard', () => {
-    expect(adminDashboardSrc).toContain('Promise.allSettled');
-    expect(adminDashboardSrc).toContain('bookingsRes.status === \'fulfilled\'');
-    expect(adminDashboardSrc).toContain('statsRes.status === \'fulfilled\'');
-    expect(adminDashboardSrc).toContain('analyticsRes.status === \'fulfilled\'');
-    expect(adminDashboardSrc).toContain('abandonedRes.status === \'fulfilled\'');
+  it('uses separate loaders so stats or analytics failure does not crash bookings', () => {
+    expect(adminDashboardSrc).toContain('loadBookingsPage');
+    expect(adminDashboardSrc).toContain('loadDashboardStats');
+    expect(adminDashboardSrc).toContain('loadAnalytics');
+    expect(adminDashboardSrc).toContain('loadAbandonedBookings');
   });
 });
 
@@ -94,18 +93,18 @@ describe('TEST 10 — Malformed itinerary safety', () => {
 });
 
 describe('TEST 11 — Hook initialization order (No TDZ / ReferenceError)', () => {
-  it('loadAllDashboardData is declared BEFORE any callback references it in dependency arrays', () => {
-    const loadAllIndex = adminDashboardSrc.indexOf('const loadAllDashboardData = useCallback');
+  it('loadBookingsPage is declared BEFORE any callback references it in dependency arrays', () => {
+    const loadBookingsIndex = adminDashboardSrc.indexOf('const loadBookingsPage = useCallback');
     const bulkDeleteIndex = adminDashboardSrc.indexOf('const handleBulkDeleteConfirm = useCallback');
     const importCompleteIndex = adminDashboardSrc.indexOf('const handleBackupImportComplete = useCallback');
 
-    expect(loadAllIndex).toBeGreaterThan(0);
+    expect(loadBookingsIndex).toBeGreaterThan(0);
     expect(bulkDeleteIndex).toBeGreaterThan(0);
     expect(importCompleteIndex).toBeGreaterThan(0);
 
-    // loadAllDashboardData MUST be declared BEFORE handleBulkDeleteConfirm and handleBackupImportComplete
-    expect(loadAllIndex).toBeLessThan(bulkDeleteIndex);
-    expect(loadAllIndex).toBeLessThan(importCompleteIndex);
+    // loadBookingsPage MUST be declared BEFORE handleBulkDeleteConfirm and handleBackupImportComplete
+    expect(loadBookingsIndex).toBeLessThan(bulkDeleteIndex);
+    expect(loadBookingsIndex).toBeLessThan(importCompleteIndex);
   });
 });
 
