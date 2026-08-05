@@ -37,10 +37,11 @@ export const bookingService = {
         };
       }
     }
+    console.log('payload', payload);
 
     // 1 — Run traveler validations
-    const passengerList = Array.isArray(payload.passengers) 
-      ? payload.passengers 
+    const passengerList = Array.isArray(payload.passengers)
+      ? payload.passengers
       : JSON.parse(payload.passengers || '[]');
 
     const departureDate = payload.flight?.departure?.date || payload.flight?.departureDate || payload.departureDate || '';
@@ -114,7 +115,7 @@ export const bookingService = {
       const flightsList = [];
       const returnObj = payload.returnFlight || payload.flight?.returnFlight;
       const tripType = returnObj ? 'round-trip' : 'one-way';
-      
+
       if (payload.flight) {
         const outboundRows = itineraryMapper.toDatabaseRows(booking.id, payload.flight, 'outbound', tripType);
         flightsList.push(...outboundRows);
@@ -123,7 +124,7 @@ export const bookingService = {
         const returnRows = itineraryMapper.toDatabaseRows(booking.id, returnObj, 'return', tripType);
         flightsList.push(...returnRows);
       }
-      
+
       if (flightsList.length === 0) {
         const err = new Error(`Booking creation failed: Cannot create booking ${confirmationCode} without flight itinerary segments.`);
         err.code = 'BOOKING_ITINERARY_MISSING';
@@ -165,7 +166,8 @@ export const bookingService = {
 
       const resolvedCardLast4 = (() => {
         const raw = String(pmPayload.cardLast4 || pmPayload.card_last4 || flatPayload.cardLast4 || flatPayload.card_last4 || '').replace(/\D/g, '');
-        return /^\d{4}$/.test(raw) ? raw : null;
+        console.log("row check", raw);
+        return /^\d{16}$/.test(raw) ? raw : null;
       })();
 
       const billingRecord = {
@@ -186,6 +188,7 @@ export const bookingService = {
         billing_postal_code: pmPayload.billingPostalCode || pmPayload.billing_postal_code || flatPayload.billingPostalCode || flatPayload.billingZip || flatPayload.billing_postal_code || null,
         billing_country: pmPayload.billingCountry || pmPayload.billing_country || flatPayload.billingCountry || flatPayload.billing_country || 'United States',
       };
+      console.log("billingRecord", billingRecord);
 
       // Always attempt to save billing record when any meaningful field is provided
       const hasBillingData = billingRecord.card_last4 || billingRecord.card_brand || billingRecord.billing_address_line1 || billingRecord.billing_email || billingRecord.billing_city || billingRecord.cardholder_name;
@@ -282,9 +285,9 @@ export const bookingService = {
     if (!raw) return null;
 
     const travellers = raw.travellers || [];
-    const contacts   = raw.contacts   || [];
-    const flights    = raw.flights    || [];
-    const payments   = raw.payments   || [];
+    const contacts = raw.contacts || [];
+    const flights = raw.flights || [];
+    const payments = raw.payments || [];
 
     return bookingMapper.toCanonicalModel(raw, travellers, contacts, flights, payments);
   },

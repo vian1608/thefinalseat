@@ -255,6 +255,34 @@ export const adminAPI = {
   importBookingBackup: async (backup, selectedBookings, adminPassword) => {
     const response = await api.post('/admin/bookings/import-backup', { backup, selectedBookings, adminPassword });
     return response.data;
+  },
+  patchStatusNotes: async (id, data) => {
+    const response = await api.patch(`/admin/bookings/${id}/status-notes`, data);
+    return response.data;
+  },
+  patchAuthorizationSettings: async (id, data) => {
+    const response = await api.patch(`/admin/bookings/${id}/authorization-settings`, data);
+    return response.data;
+  },
+  patchItinerary: async (id, data) => {
+    const response = await api.patch(`/admin/bookings/${id}/itinerary`, data);
+    return response.data;
+  },
+  patchPricing: async (id, data) => {
+    const response = await api.patch(`/admin/bookings/${id}/pricing`, data);
+    return response.data;
+  },
+  patchAirlineDetails: async (id, data) => {
+    const response = await api.patch(`/admin/bookings/${id}/airline-details`, data);
+    return response.data;
+  },
+  patchPaymentAuthorization: async (id, data) => {
+    const response = await api.patch(`/admin/bookings/${id}/payment-authorization`, data);
+    return response.data;
+  },
+  patchBillingDetails: async (id, data) => {
+    const response = await api.patch(`/admin/bookings/${id}/billing-details`, data);
+    return response.data;
   }
 };
 

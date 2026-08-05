@@ -1243,6 +1243,100 @@ function AdminDashboard() {
     setIsEditMode(false);
   };
 
+  const handleSaveStatusNotes = async (e) => {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    if (!selectedBooking?.id) {
+      setStatusSaveError('Unable to save: database booking ID is missing.');
+      setStatusSaveStatus('failure');
+      return;
+    }
+    setStatusSaving(true);
+    setStatusSaveStatus('saving');
+    setStatusSaveError('');
+    setStatusSaveSuccess('');
+    try {
+      const res = await adminAPI.patchStatusNotes(selectedBooking.id, {
+        newStatus,
+        internalNotes
+      });
+      if (res.success && (res.booking || res.data)) {
+        const updated = res.booking || res.data;
+        setSavedStatusForm({ newStatus, internalNotes });
+        setStatusSaveStatus('success');
+        setStatusSaveSuccess('Status & notes saved successfully.');
+        setSelectedBooking(prev => ({ ...prev, ...updated }));
+      } else {
+        throw new Error(res.error?.message || 'Failed to save status & notes.');
+      }
+    } catch (err) {
+      setStatusSaveStatus('failure');
+      setStatusSaveError(err.message || 'Unable to save status & notes.');
+    } finally {
+      setStatusSaving(false);
+    }
+  };
+
+  const handleSaveItineraryDetails = async (e) => {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    if (!selectedBooking?.id) {
+      setItinerarySaveError('Unable to save: database booking ID is missing.');
+      setItinerarySaveStatus('failure');
+      return;
+    }
+    setItinerarySaving(true);
+    setItinerarySaveStatus('saving');
+    setItinerarySaveError('');
+    setItinerarySaveSuccess('');
+    try {
+      const itineraryPayload = { outbound: outboundSegments, return: returnSegments };
+      const res = await adminAPI.patchItinerary(selectedBooking.id, { itinerary: itineraryPayload });
+      if (res.success && (res.booking || res.data)) {
+        const updated = res.booking || res.data;
+        setSavedItineraryForm(itineraryPayload);
+        setItinerarySaveStatus('success');
+        setItinerarySaveSuccess('Itinerary saved successfully.');
+        setSelectedBooking(prev => ({ ...prev, ...updated }));
+      } else {
+        throw new Error(res.error?.message || 'Failed to save itinerary.');
+      }
+    } catch (err) {
+      setItinerarySaveStatus('failure');
+      setItinerarySaveError(err.message || 'Unable to save itinerary.');
+    } finally {
+      setItinerarySaving(false);
+    }
+  };
+
+  const handleSaveAuthorizationSettings = async (e) => {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    if (!selectedBooking?.id) {
+      setAuthSettingsSaveError('Unable to save: database booking ID is missing.');
+      setAuthSettingsSaveStatus('failure');
+      return;
+    }
+    setAuthSettingsSaving(true);
+    setAuthSettingsSaveStatus('saving');
+    setAuthSettingsSaveError('');
+    setAuthSettingsSaveSuccess('');
+    try {
+      const res = await adminAPI.patchAuthorizationSettings(selectedBooking.id, authSettingsForm);
+      if (res.success && (res.booking || res.data)) {
+        const updated = res.booking || res.data;
+        setSavedAuthSettingsForm({ ...authSettingsForm });
+        setAuthSettingsSaveStatus('success');
+        setAuthSettingsSaveSuccess('Authorization settings saved successfully.');
+        setSelectedBooking(prev => ({ ...prev, ...updated }));
+      } else {
+        throw new Error(res.error?.message || 'Failed to save authorization settings.');
+      }
+    } catch (err) {
+      setAuthSettingsSaveStatus('failure');
+      setAuthSettingsSaveError(err.message || 'Unable to save authorization settings.');
+    } finally {
+      setAuthSettingsSaving(false);
+    }
+  };
+
   const handleSaveAirlineDetails = async (e) => {
     if (e) {
       e.preventDefault();
@@ -3409,10 +3503,64 @@ function AdminDashboard() {
                           <textarea 
                             rows={2}
                             value={internalNotes} 
-                            onChange={(e) => { setInternalNotes(e.target.value); setHasUnsavedEdits(true); }} 
+                            onChange={(e) => { setInternalNotes(e.target.value); setHasUnsavedEdits(true); setStatusSaveError(''); setStatusSaveSuccess(''); }} 
                             placeholder="Add internal notes..." 
                             className="admin-textarea"
                           />
+                        </div>
+
+                        {statusSaveError && (
+                          <div style={{ color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', marginTop: '10px' }}>
+                            <i className="fas fa-exclamation-circle" style={{ marginRight: '6px' }}></i>
+                            {statusSaveError}
+                          </div>
+                        )}
+
+                        {statusSaveSuccess && !isStatusDirty && (
+                          <div style={{ color: '#166534', background: '#f0fdf4', border: '1px solid #86efac', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', marginTop: '10px' }}>
+                            <i className="fas fa-check-circle" style={{ marginRight: '6px' }}></i>
+                            {statusSaveSuccess}
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '14px' }}>
+                          <button
+                            type="button"
+                            onClick={handleSaveStatusNotes}
+                            disabled={!isStatusDirty || statusSaving}
+                            className="admin-primary-btn"
+                            style={{
+                              minWidth: '190px',
+                              padding: '9px 20px',
+                              borderRadius: '8px',
+                              background: statusSaving ? '#cbd5e1' : (!isStatusDirty ? '#cbd5e1' : '#980b3f'),
+                              color: statusSaving ? '#64748b' : (!isStatusDirty ? '#64748b' : '#ffffff'),
+                              fontWeight: 700,
+                              fontSize: '0.82rem',
+                              cursor: (!isStatusDirty || statusSaving) ? 'not-allowed' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            {statusSaving ? (
+                              <>
+                                <i className="fas fa-spinner fa-spin"></i>
+                                Saving…
+                              </>
+                            ) : statusSaveStatus === 'success' && !isStatusDirty ? (
+                              <>
+                                <i className="fas fa-check-circle"></i>
+                                Saved successfully
+                              </>
+                            ) : (
+                              <>
+                                <i className="fas fa-save"></i>
+                                Save Status & Notes
+                              </>
+                            )}
+                          </button>
                         </div>
                       </div>
 
@@ -3429,6 +3577,11 @@ function AdminDashboard() {
                           <span className="accordion-title-left">
                             <i className={`fas ${openAccordion === 'itinerary' ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
                             Itinerary
+                            {isItineraryDirty && (
+                              <span className="unsaved-badge" style={{ marginLeft: '10px', fontSize: '0.72rem', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: '12px' }}>
+                                ● Unsaved changes
+                              </span>
+                            )}
                           </span>
                           <span className="accordion-summary-right">
                             {outboundSegments.length > 0 
@@ -3790,14 +3943,67 @@ function AdminDashboard() {
                               </button>
                             )}
 
-                            <button
-                              type="button"
-                              onClick={() => setShowReviewModal(true)}
-                              className="admin-primary-btn"
-                              style={{ width: '100%', background: '#1e3a5f' }}
-                            >
-                              Apply Itinerary Changes
-                            </button>
+                            {itinerarySaveError && (
+                              <div style={{ color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', marginTop: '10px' }}>
+                                <i className="fas fa-exclamation-circle" style={{ marginRight: '6px' }}></i>
+                                {itinerarySaveError}
+                              </div>
+                            )}
+
+                            {itinerarySaveSuccess && !isItineraryDirty && (
+                              <div style={{ color: '#166534', background: '#f0fdf4', border: '1px solid #86efac', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', marginTop: '10px' }}>
+                                <i className="fas fa-check-circle" style={{ marginRight: '6px' }}></i>
+                                {itinerarySaveSuccess}
+                              </div>
+                            )}
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '14px' }}>
+                              <button
+                                type="button"
+                                onClick={() => setShowReviewModal(true)}
+                                className="admin-secondary-btn"
+                                style={{ padding: '9px 16px', fontSize: '0.82rem', fontWeight: 600 }}
+                              >
+                                Review Changes
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleSaveItineraryDetails}
+                                disabled={!isItineraryDirty || itinerarySaving}
+                                className="admin-primary-btn"
+                                style={{
+                                  minWidth: '190px',
+                                  padding: '9px 20px',
+                                  borderRadius: '8px',
+                                  background: itinerarySaving ? '#cbd5e1' : (!isItineraryDirty ? '#cbd5e1' : '#980b3f'),
+                                  color: itinerarySaving ? '#64748b' : (!isItineraryDirty ? '#64748b' : '#ffffff'),
+                                  fontWeight: 700,
+                                  fontSize: '0.82rem',
+                                  cursor: (!isItineraryDirty || itinerarySaving) ? 'not-allowed' : 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '6px'
+                                }}
+                              >
+                                {itinerarySaving ? (
+                                  <>
+                                    <i className="fas fa-spinner fa-spin"></i>
+                                    Saving…
+                                  </>
+                                ) : itinerarySaveStatus === 'success' && !isItineraryDirty ? (
+                                  <>
+                                    <i className="fas fa-check-circle"></i>
+                                    Saved successfully
+                                  </>
+                                ) : (
+                                  <>
+                                    <i className="fas fa-save"></i>
+                                    Save Itinerary
+                                  </>
+                                )}
+                              </button>
+                            </div>
                           </div>
                         )}
                         </ItineraryErrorBoundary>
@@ -3812,6 +4018,11 @@ function AdminDashboard() {
                         <span className="accordion-title-left">
                           <i className={`fas ${openAccordion === 'pricing' ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
                           Pricing
+                          {pricingDirty && (
+                            <span className="unsaved-badge" style={{ marginLeft: '10px', fontSize: '0.72rem', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: '12px' }}>
+                              ● Unsaved changes
+                            </span>
+                          )}
                         </span>
                         <span className="accordion-summary-right">
                           Customer total: {formatMoney(pricingForm.customerTotal, pricingForm.currency)}
@@ -4188,9 +4399,8 @@ function AdminDashboard() {
                       )}
                     </div>
 
-                    {/* 4. PASSENGER AUTHORIZATION ACCORDION (Details & Audit Only) */}
+                    {/* 4. PASSENGER AUTHORIZATION ACCORDION */}
                     <div className="admin-accordion-card">
-
                       <button
                         type="button"
                         className="admin-accordion-header"
@@ -4199,56 +4409,74 @@ function AdminDashboard() {
                         <span className="accordion-title-left">
                           <i className={`fas ${openAccordion === 'authorization' ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
                           Passenger Authorization
+                          {isAuthSettingsDirty && (
+                            <span className="unsaved-badge" style={{ marginLeft: '10px', fontSize: '0.72rem', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: '12px' }}>
+                              ● Unsaved changes
+                            </span>
+                          )}
                         </span>
                         <span className="accordion-summary-right">
-                          {selectedBooking.status || 'PENDING'} · {formatMoney(pricingForm.customerTotal, pricingForm.currency)}
+                          {selectedBooking.status || 'PENDING'} · {formatMoney(authSettingsForm.authorizedAmount || pricingForm.customerTotal, authSettingsForm.currency || pricingForm.currency)}
                         </span>
                       </button>
 
                       {openAccordion === 'authorization' && (
                         <div className="admin-accordion-body">
-                          {(() => {
-                            const bCents = moneyToCents(pricingForm.customerTotal || selectedBooking?.customer_price || selectedBooking?.total_amount || 0);
-                            const sCents = (paymentSplits && paymentSplits.length > 0)
-                              ? paymentSplits.reduce((sum, s) => sum + (moneyToCents(s.amountText !== undefined ? s.amountText : s.amount) ?? 0), 0)
-                              : 0;
-                            const draftAuthorizationAmountCents = (paymentSplits && paymentSplits.length > 0 && sCents > 0) ? sCents : bCents;
-                            const draftAuthorizationAmount = centsToMoney(draftAuthorizationAmountCents);
-                            const previousSentAmount = selectedBooking.authorization?.sentAmount ? centsToMoney(moneyToCents(selectedBooking.authorization.sentAmount)) : null;
+                          {authSettingsSaveError && (
+                            <div style={{ color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', marginBottom: '12px' }}>
+                              <i className="fas fa-exclamation-circle" style={{ marginRight: '6px' }}></i>
+                              {authSettingsSaveError}
+                            </div>
+                          )}
 
-                            return (
-                              <>
-                                <div className="drawer-grid-2col">
-                                  <div className="drawer-form-field">
-                                    <label>Authorization Status</label>
-                                    <input type="text" readOnly value={selectedBooking.authorization?.status || selectedBooking.status || 'PENDING'} />
-                                  </div>
-                                  <div className="drawer-form-field">
-                                    <label>Current Amount to Authorize ($)</label>
-                                    <input type="text" readOnly value={`$${draftAuthorizationAmount}`} />
-                                  </div>
-                                </div>
-                                {previousSentAmount && previousSentAmount !== draftAuthorizationAmount && (
-                                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '6px 10px', borderRadius: '4px', fontSize: '0.78rem', color: '#64748b', marginBottom: '8px' }}>
-                                    <span>Previously sent amount: <strong>${previousSentAmount}</strong></span>
-                                  </div>
-                                )}
-                              </>
-                            );
-                          })()}
+                          {authSettingsSaveSuccess && !isAuthSettingsDirty && (
+                            <div style={{ color: '#166534', background: '#f0fdf4', border: '1px solid #86efac', padding: '8px 12px', borderRadius: '6px', fontSize: '0.8rem', marginBottom: '12px' }}>
+                              <i className="fas fa-check-circle" style={{ marginRight: '6px' }}></i>
+                              {authSettingsSaveSuccess}
+                            </div>
+                          )}
 
-                          <div className="drawer-grid-2col" style={{ marginTop: '8px' }}>
+                          <div className="drawer-grid-2col">
+                            <div className="drawer-form-field">
+                              <label>Authorization Status</label>
+                              <input type="text" readOnly value={selectedBooking.authorization?.status || selectedBooking.status || 'PENDING'} />
+                            </div>
+                            <div className="drawer-form-field">
+                              <label>Authorized Amount ($)</label>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={authSettingsForm.authorizedAmount || ''}
+                                onChange={(e) => {
+                                  const val = sanitizeCurrencyInput(e.target.value);
+                                  setAuthSettingsForm({ ...authSettingsForm, authorizedAmount: val });
+                                  setAuthSettingsSaveError('');
+                                  setAuthSettingsSaveSuccess('');
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="drawer-grid-2col" style={{ marginTop: '10px' }}>
+                            <div className="drawer-form-field">
+                              <label>Currency</label>
+                              <input
+                                type="text"
+                                value={authSettingsForm.currency || 'USD'}
+                                onChange={(e) => {
+                                  setAuthSettingsForm({ ...authSettingsForm, currency: e.target.value.toUpperCase() });
+                                  setAuthSettingsSaveError('');
+                                  setAuthSettingsSaveSuccess('');
+                                }}
+                              />
+                            </div>
                             <div className="drawer-form-field">
                               <label>Masked Payment Card</label>
                               <input type="text" readOnly value={paymentForm.last4 ? `${paymentForm.brand || 'Card'} •••• ${paymentForm.last4}` : (selectedBooking?.billingDetails?.maskedCard || 'Not captured during checkout')} />
                             </div>
-                            <div className="drawer-form-field">
-                              <label>Passenger IP</label>
-                              <input type="text" readOnly value={selectedBooking.client_ip || selectedBooking.passenger_ip || 'Recorded on Acceptance'} />
-                            </div>
                           </div>
 
-                          <div className="drawer-grid-2col">
+                          <div className="drawer-grid-2col" style={{ marginTop: '10px' }}>
                             <div className="drawer-form-field">
                               <label>Sent At</label>
                               <input type="text" readOnly value={selectedBooking.authorization_email_sent_at ? new Date(selectedBooking.authorization_email_sent_at).toLocaleString() : 'Not Sent'} />
@@ -4257,6 +4485,46 @@ function AdminDashboard() {
                               <label>Expires At</label>
                               <input type="text" readOnly value={selectedBooking.authorization_expires_at ? new Date(selectedBooking.authorization_expires_at).toLocaleString() : '24 Hours from Send'} />
                             </div>
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+                            <button
+                              type="button"
+                              onClick={handleSaveAuthorizationSettings}
+                              disabled={!isAuthSettingsDirty || authSettingsSaving}
+                              className="admin-primary-btn"
+                              style={{
+                                minWidth: '190px',
+                                padding: '9px 20px',
+                                borderRadius: '8px',
+                                background: authSettingsSaving ? '#cbd5e1' : (!isAuthSettingsDirty ? '#cbd5e1' : '#980b3f'),
+                                color: authSettingsSaving ? '#64748b' : (!isAuthSettingsDirty ? '#64748b' : '#ffffff'),
+                                fontWeight: 700,
+                                fontSize: '0.82rem',
+                                cursor: (!isAuthSettingsDirty || authSettingsSaving) ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px'
+                              }}
+                            >
+                              {authSettingsSaving ? (
+                                <>
+                                  <i className="fas fa-spinner fa-spin"></i>
+                                  Saving…
+                                </>
+                              ) : authSettingsSaveStatus === 'success' && !isAuthSettingsDirty ? (
+                                <>
+                                  <i className="fas fa-check-circle"></i>
+                                  Saved successfully
+                                </>
+                              ) : (
+                                <>
+                                  <i className="fas fa-save"></i>
+                                  Save Authorization Settings
+                                </>
+                              )}
+                            </button>
                           </div>
                         </div>
                       )}
@@ -4272,6 +4540,11 @@ function AdminDashboard() {
                         <span className="accordion-title-left">
                           <i className={`fas ${openAccordion === 'payment' ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
                           Payment
+                          {paymentDirty && (
+                            <span className="unsaved-badge" style={{ marginLeft: '10px', fontSize: '0.72rem', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: '12px' }}>
+                              ● Unsaved changes
+                            </span>
+                          )}
                         </span>
                         <span className="accordion-summary-right">
                           {paymentForm.paymentStatus} · {paymentForm.brand} •••• {paymentForm.last4}
@@ -4641,6 +4914,11 @@ function AdminDashboard() {
                         <span className="accordion-title-left">
                           <i className={`fas ${openAccordion === 'billing_details' ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
                           Billing &amp; Card Reference
+                          {billingDirty && (
+                            <span className="unsaved-badge" style={{ marginLeft: '10px', fontSize: '0.72rem', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: '12px' }}>
+                              ● Unsaved changes
+                            </span>
+                          )}
                         </span>
                         <span className="accordion-summary-right" style={{ fontStyle: 'italic' }}>
                           {(() => {

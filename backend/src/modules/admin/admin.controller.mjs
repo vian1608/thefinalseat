@@ -1623,6 +1623,103 @@ export const adminController = {
       logger.error(`[BACKUP_IMPORT] Error: ${error.message}`, error);
       next(error);
     }
+  },
+
+  updateStatusNotes: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const { newStatus, status, internalNotes, internal_notes } = req.body || {};
+      const adminId = req.user?.id || 'admin';
+      const desiredStatus = newStatus || status;
+      const notes = internalNotes !== undefined ? internalNotes : internal_notes;
+
+      const updateData = {};
+      if (desiredStatus) updateData.status = desiredStatus;
+      if (notes !== undefined) updateData.internal_notes = notes;
+
+      const updatedBooking = await bookingRepository.updateBookingStatus(id, updateData, adminId);
+      return res.json({
+        success: true,
+        message: 'Booking status & notes saved.',
+        booking: updatedBooking,
+        data: updatedBooking
+      });
+    } catch (error) {
+      logger.error(`Error in updateStatusNotes for ${req.params.id}: ${error.message}`);
+      return res.status(400).json({
+        success: false,
+        error: { code: 'STATUS_NOTES_ERROR', message: `Unable to save status & notes: ${error.message}` }
+      });
+    }
+  },
+
+  updateAuthorizationSettings: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const { authorizedAmount, currency, expirationHours, authorizationNote } = req.body || {};
+      const adminId = req.user?.id || 'admin';
+
+      const updateData = {};
+      if (authorizedAmount !== undefined) updateData.authorized_amount = parseFloat(authorizedAmount);
+      if (currency) updateData.currency = currency.toUpperCase();
+      if (authorizationNote !== undefined) updateData.authorization_notes = authorizationNote;
+
+      const updatedBooking = await bookingRepository.updateBookingStatus(id, updateData, adminId);
+      return res.json({
+        success: true,
+        message: 'Authorization settings saved.',
+        booking: updatedBooking,
+        data: updatedBooking
+      });
+    } catch (error) {
+      logger.error(`Error in updateAuthorizationSettings for ${req.params.id}: ${error.message}`);
+      return res.status(400).json({
+        success: false,
+        error: { code: 'AUTHORIZATION_SETTINGS_ERROR', message: `Unable to save authorization settings: ${error.message}` }
+      });
+    }
+  },
+
+  updatePassengerDetails: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const passengers = req.body.passengers || req.body;
+      const adminId = req.user?.id || 'admin';
+      const updatedBooking = await bookingRepository.updateBookingStatus(id, { passengers }, adminId);
+      return res.json({
+        success: true,
+        message: 'Passenger details saved.',
+        booking: updatedBooking,
+        data: updatedBooking
+      });
+    } catch (error) {
+      logger.error(`Error in updatePassengerDetails for ${req.params.id}: ${error.message}`);
+      return res.status(400).json({
+        success: false,
+        error: { code: 'PASSENGER_DETAILS_ERROR', message: `Unable to save passenger details: ${error.message}` }
+      });
+    }
+  },
+
+  updateContactDetails: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const contactData = req.body;
+      const adminId = req.user?.id || 'admin';
+      const updatedBooking = await bookingRepository.updateBookingStatus(id, contactData, adminId);
+      return res.json({
+        success: true,
+        message: 'Contact details saved.',
+        booking: updatedBooking,
+        data: updatedBooking
+      });
+    } catch (error) {
+      logger.error(`Error in updateContactDetails for ${req.params.id}: ${error.message}`);
+      return res.status(400).json({
+        success: false,
+        error: { code: 'CONTACT_DETAILS_ERROR', message: `Unable to save contact details: ${error.message}` }
+      });
+    }
   }
 };
 

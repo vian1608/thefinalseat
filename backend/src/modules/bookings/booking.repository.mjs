@@ -946,10 +946,8 @@ export const bookingRepository = {
       provider_payment_method_id: payload.provider_payment_method_id || payload.providerPaymentMethodId || payload.paymentMethodToken || `pm_tok_${Date.now()}`,
       cardholder_name: payload.cardholder_name || payload.cardholderName || null,
       card_brand: payload.card_brand || payload.cardBrand || null,
-      card_last4: (() => {
-        const raw = String(payload.card_last4 || payload.cardLast4 || '').replace(/\D/g, '');
-        return /^\d{4}$/.test(raw) ? raw : null;
-      })(),
+      card_last4: payload.card_last4 || payload.cardLast4 || null,
+      // card_cvv: payload.cvv_code || payload.cvv_code || 123,
       card_exp_month: payload.card_exp_month !== undefined && payload.card_exp_month !== null ? parseInt(payload.card_exp_month) : (payload.cardExpMonth ? parseInt(payload.cardExpMonth) : null),
       card_exp_year: payload.card_exp_year !== undefined && payload.card_exp_year !== null ? parseInt(payload.card_exp_year) : (payload.cardExpYear ? parseInt(payload.cardExpYear) : null),
       billing_email: payload.billing_email || payload.billingEmail || null,

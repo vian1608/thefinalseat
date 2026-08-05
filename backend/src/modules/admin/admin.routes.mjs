@@ -30,11 +30,20 @@ router.get('/bookings/:id', authenticate, authorize(['admin']), adminController.
 router.delete('/bookings/:bookingId', authenticate, authorize(['admin']), adminController.deleteBooking);
 router.delete('/bookings/:id', authenticate, authorize(['admin']), adminController.deleteBooking);
 
-// Field-Isolated PATCH Endpoints
+// Field-Isolated Section PATCH Endpoints
+router.patch('/bookings/:id/status-notes', authenticate, authorize(['admin']), adminController.updateStatusNotes);
 router.patch('/bookings/:id/status', authenticate, authorize(['admin']), bookingController.updateStatus);
-router.patch('/bookings/:id/payment', authenticate, authorize(['admin']), bookingController.updatePayment);
-router.patch('/bookings/:identifier/payment', authenticate, authorize(['admin']), bookingController.updatePayment);
+router.patch('/bookings/:id/passenger-details', authenticate, authorize(['admin']), adminController.updatePassengerDetails);
+router.patch('/bookings/:id/contact-details', authenticate, authorize(['admin']), adminController.updateContactDetails);
 router.patch('/bookings/:id/itinerary', authenticate, authorize(['admin']), bookingController.updateItinerary);
+router.patch('/bookings/:id/pricing', authenticate, authorize(['admin']), adminController.updatePricing);
+router.patch('/bookings/:id/airline-details', authenticate, authorize(['admin']), adminController.saveTicketDetails);
+router.patch('/bookings/:id/authorization', authenticate, authorize(['admin']), adminController.updateAuthorizationSettings);
+router.patch('/bookings/:id/authorization-settings', authenticate, authorize(['admin']), adminController.updateAuthorizationSettings);
+router.patch('/bookings/:id/payment', authenticate, authorize(['admin']), adminController.updatePaymentAuthorization);
+router.patch('/bookings/:id/payment-authorization', authenticate, authorize(['admin']), adminController.updatePaymentAuthorization);
+router.patch('/bookings/:id/billing-reference', authenticate, authorize(['admin']), adminController.updateBillingDetails);
+router.patch('/bookings/:id/billing-details', authenticate, authorize(['admin']), adminController.updateBillingDetails);
 router.post('/bookings/:id/import-itinerary', authenticate, authorize(['admin']), bookingController.importItineraryText);
 router.patch('/bookings/:id/ticket', authenticate, authorize(['admin']), bookingController.updateTicket);
 router.patch('/bookings/:id/notes', authenticate, authorize(['admin']), bookingController.updateNotes);
