@@ -31,6 +31,7 @@ import TravelAssistance from '../features/flights/pages/TravelAssistancePage';
 import BookingForParents from '../features/flights/pages/BookingForParentsPage';
 import UrgentTravel from '../features/flights/pages/UrgentTravelPage';
 import AppErrorBoundary from '../shared/components/AppErrorBoundary';
+import { Analytics } from '@vercel/analytics/react';
 
 import CarRentalsHomePage from '../features/cars/pages/CarRentalsHomePage';
 import CarSearchResultsPage from '../features/cars/pages/CarSearchResultsPage';
@@ -45,6 +46,7 @@ function App() {
   return (
     <Router>
       <ScrollToTop />
+      <Analytics />
       <div className="App">
         <Header />
         <main className="main">
