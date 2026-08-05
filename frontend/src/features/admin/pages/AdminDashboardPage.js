@@ -240,13 +240,13 @@ function AdminDashboard() {
 
 
 
-  // Itinerary Editor State (Journey Grouped)
-  const [outboundSegments, setOutboundSegments] = useState([]);
-  const [returnSegments, setReturnSegments] = useState([]);
-  const [hasReturnJourney, setHasReturnJourney] = useState(false);
-  const [openOutboundGroup, setOpenOutboundGroup] = useState(true);
-  const [openReturnGroup, setOpenReturnGroup] = useState(true);
-  const [isImportItineraryModalOpen, setIsImportItineraryModalOpen] = useState(false);
+  // Expandable Row & Lazy Loading State
+  const [expandedBookingId, setExpandedBookingId] = useState(null);
+  const [selectedBookingIds, setSelectedBookingIds] = useState([]);
+  const [bookingDetailsCache, setBookingDetailsCache] = useState({});
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState(null);
+
   const handleSelectBooking = useCallback((booking) => {
     setSelectedBooking(booking);
     setIsEditMode(false);
@@ -268,6 +268,7 @@ function AdminDashboard() {
     setOpenAccordion(null);
     setFinalTicketEmailError('');
     setFinalTicketEmailSuccess('');
+
 
     // Initial itinerary segments setup (Journey Grouped)
     let rawOutbound = booking.outbound_segments || [];
@@ -430,6 +431,94 @@ function AdminDashboard() {
     setTicketDetailsSuccess('');
   }, []);
 
+  // Itinerary Editor State (Journey Grouped)
+  const [outboundSegments, setOutboundSegments] = useState([]);
+  const [returnSegments, setReturnSegments] = useState([]);
+  const [hasReturnJourney, setHasReturnJourney] = useState(false);
+  const [openOutboundGroup, setOpenOutboundGroup] = useState(true);
+  const [openReturnGroup, setOpenReturnGroup] = useState(true);
+  const [isImportItineraryModalOpen, setIsImportItineraryModalOpen] = useState(false);
+
+  const handleToggleExpandBooking = useCallback((booking) => {
+    if (!booking || !booking.id) return;
+    if (expandedBookingId === booking.id) {
+      setExpandedBookingId(null);
+      setSelectedBooking(null);
+      return;
+    }
+
+    setExpandedBookingId(booking.id);
+    setDetailsError(null);
+
+    // Check if full details are in session cache
+    if (bookingDetailsCache[booking.id]) {
+      handleSelectBooking(bookingDetailsCache[booking.id]);
+      setDetailsLoading(false);
+    } else {
+      setDetailsLoading(true);
+      adminAPI.getBookingById(booking.id)
+        .then(fresh => {
+          const fullBooking = fresh || booking;
+          setBookingDetailsCache(prev => ({ ...prev, [booking.id]: fullBooking }));
+          handleSelectBooking(fullBooking);
+          setDetailsLoading(false);
+        })
+        .catch(err => {
+          console.warn('[AdminDashboard] Lazy loading error:', err);
+          handleSelectBooking(booking);
+          setDetailsLoading(false);
+        });
+    }
+  }, [expandedBookingId, bookingDetailsCache, handleSelectBooking]);
+
+  const handleRefreshCurrentBooking = useCallback(() => {
+    if (!selectedBooking?.id) return;
+    setDetailsLoading(true);
+    setDetailsError(null);
+
+    adminAPI.getBookingById(selectedBooking.id)
+      .then(fresh => {
+        if (fresh) {
+          setBookingDetailsCache(prev => ({ ...prev, [selectedBooking.id]: fresh }));
+          handleSelectBooking(fresh);
+          setBookings(prevList => prevList.map(b => b.id === fresh.id ? { ...b, ...fresh } : b));
+        }
+        setDetailsLoading(false);
+      })
+      .catch(err => {
+        console.error('[AdminDashboard] Refresh error:', err);
+        setDetailsError(err.message || 'Failed to refetch booking details.');
+        setDetailsLoading(false);
+      });
+  }, [selectedBooking, handleSelectBooking]);
+
+  const handleToggleSelectAll = useCallback((e) => {
+    if (e.target.checked) {
+      setSelectedBookingIds(bookings.map(b => b.id));
+    } else {
+      setSelectedBookingIds([]);
+    }
+  }, [bookings]);
+
+  const handleToggleSelectOne = useCallback((id) => {
+    setSelectedBookingIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  }, []);
+
+  const handleExportSelectedBookings = useCallback(() => {
+    const selected = bookings.filter(b => selectedBookingIds.includes(b.id));
+    if (selected.length === 0) return;
+    const jsonStr = JSON.stringify(selected, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bookings_export_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [bookings, selectedBookingIds]);
+
   const handleItineraryImported = useCallback((updatedBooking) => {
     if (updatedBooking) {
       handleSelectBooking(updatedBooking);
@@ -439,6 +528,7 @@ function AdminDashboard() {
       }).catch(err => console.error(err));
     }
   }, [handleSelectBooking, selectedBooking]);
+
 
 
   // Pricing Editor State
@@ -1407,6 +1497,107 @@ function AdminDashboard() {
   const failedCount = bookings.filter(b => (b.status || '').toUpperCase() === 'FAILED' || (b.status || '').toUpperCase() === 'CANCELLED').length;
   const conversionRate = analytics?.totalVisitors ? ((bookings.length / analytics.totalVisitors) * 100).toFixed(1) : '2.4';
 
+  const renderBookingDetailsHeader = () => {
+    if (!selectedBooking) return null;
+    return (
+      <div className="expanded-panel-header">
+        <div className="expanded-header-left">
+          <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+            {isEditMode ? 'Edit Booking' : 'Booking Details'}
+          </h3>
+          <span className="ref-tag" style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 700 }}>
+            {selectedBooking.confirmation_code || selectedBooking.bookingReference || (selectedBooking.id ? truncateText(selectedBooking.id, 8) : 'N/A')}
+          </span>
+        </div>
+
+        <div className="expanded-header-actions">
+          {isEditMode ? (
+            <>
+              <button
+                type="button"
+                onClick={handleSaveAllChanges}
+                className="admin-primary-btn"
+                style={{ padding: '6px 14px', fontSize: '0.78rem', fontWeight: 700, background: '#10b981' }}
+              >
+                <i className="fas fa-save" style={{ marginRight: '6px' }}></i> Save Changes
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEditMode(false)}
+                className="admin-secondary-btn"
+                style={{ padding: '6px 12px', fontSize: '0.78rem', fontWeight: 600 }}
+              >
+                Cancel Editing
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={handleRefreshCurrentBooking}
+                className="admin-secondary-btn"
+                style={{ padding: '6px 10px', fontSize: '0.78rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}
+                title="Refetch latest booking details"
+              >
+                <i className="fas fa-sync-alt"></i> Refresh
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEditMode(true)}
+                className="admin-primary-btn"
+                style={{ padding: '6px 14px', fontSize: '0.78rem', fontWeight: 700, background: '#1e3a5f' }}
+              >
+                <i className="fas fa-edit" style={{ marginRight: '6px' }}></i> Edit Booking
+              </button>
+
+              {/* 3-DOT QUICK ACTIONS MENU */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowThreeDotMenu(!showThreeDotMenu)}
+                  style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  title="Quick Actions Menu"
+                >
+                  <i className="fas fa-ellipsis-v" style={{ color: '#475569' }}></i>
+                </button>
+
+                {showThreeDotMenu && (
+                  <div style={{ position: 'absolute', right: 0, top: '36px', width: '220px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', zIndex: 90, padding: '6px 0' }}>
+                    <button
+                      type="button"
+                      onClick={() => { setShowThreeDotMenu(false); handlePaymentActionSubmit('send_authorization'); }}
+                      style={{ width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: '0.8rem', color: '#1e293b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <i className="fas fa-paper-plane" style={{ color: '#2563eb' }}></i> Send Authorization
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowThreeDotMenu(false); handleSendFinalTicketEmail(); }}
+                      style={{ width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: '0.8rem', color: '#1e293b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <i className="fas fa-envelope-open-text" style={{ color: '#16a34a' }}></i> Send Final Ticket Email
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setExpandedBookingId(null)}
+                className="admin-secondary-btn"
+                style={{ padding: '6px 10px', fontSize: '0.78rem', fontWeight: 600 }}
+                title="Collapse Details"
+              >
+                <i className="fas fa-times"></i> Collapse
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+
   return (
     <div className="admin-dashboard-page">
       <Helmet>
@@ -1424,57 +1615,39 @@ function AdminDashboard() {
           <div className="admin-nav-actions">
             <div className="realtime-user-badge" title="Active users on website right now via GA4 Realtime API">
               <span className="pulse-dot"></span>
-              <strong>{analytics?.realtimeActiveUsers || 1} Active Now</strong>
+              <span>{analytics?.realtimeActiveUsers || 1} Active Now</span>
             </div>
 
             <button onClick={() => loadAllDashboardData()} className="admin-icon-btn" title="Refresh Dashboard Data">
-              <i className={`fas fa-sync-alt ${loading ? 'fa-spin' : ''}`}></i>
+              <i className="fas fa-sync-alt"></i>
             </button>
 
             <button onClick={handleLogout} className="admin-logout-btn">
-              <i className="fas fa-sign-out-alt"></i> Sign Out
+              <i className="fas fa-sign-out-alt"></i> Logout
             </button>
           </div>
         </div>
       </header>
 
-      <main className="admin-main-container">
-
-        {/* GA4 NOTICE BANNER IF APPLICABLE */}
-        {analytics?.notice && (
-          <div className="admin-info-banner">
-            <i className="fas fa-info-circle"></i>
-            <span>{analytics.notice}</span>
-          </div>
-        )}
-
-        {error && (
-          <div className="admin-error-banner">
-            <i className="fas fa-exclamation-triangle"></i>
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* NAVIGATION TABS & CONTROLS */}
-        <div className="dashboard-top-toolbar">
-          <div className="dashboard-tabs">
-            <button 
-              className={`dashboard-tab-btn ${activeTab === 'bookings' ? 'active' : ''}`}
+      <main className="admin-main-container" style={{ maxWidth: '1600px', margin: '0 auto', padding: '24px 20px' }}>
+        
+        {/* TIME RANGE & OVERFLOW ACTION TOOLBAR */}
+        <div className="admin-toolbar-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', background: '#ffffff', padding: '12px 20px', borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' }}>
+          <div className="tab-navigation-buttons" style={{ display: 'flex', gap: '8px' }}>
+            <button
               onClick={() => setActiveTab('bookings')}
+              className={`admin-secondary-btn ${activeTab === 'bookings' ? 'active-tab-btn' : ''}`}
+              style={{ background: activeTab === 'bookings' ? '#1e3a5f' : '#f1f5f9', color: activeTab === 'bookings' ? '#ffffff' : '#475569', fontWeight: 700 }}
             >
-              <i className="fas fa-ticket-alt"></i> Supabase Bookings ({bookings.length})
+              <i className="fas fa-list-alt"></i> Supabase Bookings ({bookings.length})
             </button>
-            <button 
-              className={`dashboard-tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
+
+            <button
               onClick={() => setActiveTab('analytics')}
+              className={`admin-secondary-btn ${activeTab === 'analytics' ? 'active-tab-btn' : ''}`}
+              style={{ background: activeTab === 'analytics' ? '#1e3a5f' : '#f1f5f9', color: activeTab === 'analytics' ? '#ffffff' : '#475569', fontWeight: 700 }}
             >
-              <i className="fas fa-chart-line"></i> GA4 Web Analytics
-            </button>
-            <button 
-              className={`dashboard-tab-btn ${activeTab === 'abandoned' ? 'active' : ''}`}
-              onClick={() => setActiveTab('abandoned')}
-            >
-              <i className="fas fa-user-clock"></i> Incomplete Checkouts ({abandonedBookings.length})
+              <i className="fas fa-chart-line"></i> GA4 Analytics &amp; Live Users
             </button>
           </div>
 
@@ -1573,6 +1746,15 @@ function AdminDashboard() {
                     <option value="FAILED">Failed / Cancelled</option>
                   </select>
                   <button onClick={handleClearFilters} className="admin-secondary-btn">Reset</button>
+                  <button
+                    type="button"
+                    onClick={() => setIsImportItineraryModalOpen(true)}
+                    className="admin-secondary-btn"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    title="Import itinerary or GDS text"
+                  >
+                    <i className="fas fa-file-import"></i> Import
+                  </button>
                 </div>
               </div>
 
@@ -1581,6 +1763,48 @@ function AdminDashboard() {
                 <div className="card-header-row">
                   <h2>Supabase Customer Bookings</h2>
                   <span>Showing {bookings.length} record(s)</span>
+                </div>
+
+                {/* MOBILE CARDS VIEW (<= 768px) */}
+                <div className="mobile-bookings-list">
+                  {bookings.map((booking) => {
+                    const isExpanded = expandedBookingId === booking.id;
+                    const isChecked = selectedBookingIds.includes(booking.id);
+                    const statusStr = (booking.status || 'PENDING').toUpperCase();
+                    const carrierName = booking.carrier || booking.airline || booking.flight_details?.airline || booking.flights?.[0]?.airline || null;
+                    const originCode = booking.origin_code || booking.flights?.[0]?.departure_airport || null;
+                    const destCode = booking.destination_code || booking.flights?.[0]?.arrival_airport || null;
+
+                    return (
+                      <div key={`mobile-${booking.id}`} className="mobile-booking-card">
+                        <div className="mobile-card-top">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input type="checkbox" checked={isChecked} onChange={() => handleToggleSelectOne(booking.id)} />
+                            <strong>{booking.confirmation_code || (booking.id ? truncateText(booking.id, 8) : 'N/A')}</strong>
+                          </div>
+                          <span className={`status-badge ${statusStr === 'DONE' || statusStr === 'CONFIRMED' ? 'status-badge--completed' : 'status-badge--pending'}`}>{statusStr}</span>
+                        </div>
+                        <div className="mobile-card-details">
+                          <div><strong>Customer:</strong> {booking.passenger_name || 'N/A'}</div>
+                          <div><strong>Route:</strong> {originCode && destCode ? `${originCode} → ${destCode}` : '—'}</div>
+                          <div><strong>Carrier:</strong> {carrierName || '—'}</div>
+                          <div><strong>Amount:</strong> {formatMoney(booking.customer_price ?? booking.total_amount ?? booking.pricing?.customerTotal, booking.currency || 'USD')}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleExpandBooking(booking)}
+                          className={`view-details-btn ${isExpanded ? 'view-details-btn--expanded' : ''}`}
+                          style={{ width: '100%', justifyContent: 'center' }}
+                          aria-expanded={isExpanded}
+                          aria-controls={`mobile-booking-details-${booking.id}`}
+                          aria-label={`Expand booking ${booking.confirmation_code || booking.id}`}
+                        >
+                          <span>{isExpanded ? 'Collapse' : 'View Details'}</span>
+                          <i className={`fas fa-chevron-down chevron-icon ${isExpanded ? 'chevron-icon--rotated' : ''}`} />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <div className="admin-table-wrapper">
@@ -1594,21 +1818,30 @@ function AdminDashboard() {
                     <table className="admin-data-table">
                       <thead>
                         <tr>
-                          <th>Reference #</th>
-                          <th>Customer</th>
-                          <th>Carrier</th>
-                          <th>Route</th>
-                          <th>Passengers</th>
-                          <th>Amount</th>
-                          <th>Booking Status</th>
-                          <th>Payment Status</th>
-                          <th>Date</th>
-                          <th>Action</th>
+                          <th className="col-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={bookings.length > 0 && selectedBookingIds.length === bookings.length}
+                              onChange={handleToggleSelectAll}
+                              title="Select all visible bookings"
+                            />
+                          </th>
+                          <th className="col-ref">Reference #</th>
+                          <th className="col-customer">Customer</th>
+                          <th className="col-carrier">Carrier</th>
+                          <th className="col-route">Route</th>
+                          <th className="col-passengers">Passengers</th>
+                          <th className="col-amount">Amount</th>
+                          <th className="col-bstatus">Booking Status</th>
+                          <th className="col-pstatus">Payment Status</th>
+                          <th className="col-date">Date</th>
+                          <th className="col-action">Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {bookings.map((booking) => {
-                          const isSelected = selectedBooking?.id === booking.id;
+                          const isExpanded = expandedBookingId === booking.id;
+                          const isChecked = selectedBookingIds.includes(booking.id);
                           const statusStr = (booking.status || 'PENDING').toUpperCase();
                           const badgeClass = statusStr === 'DONE' || statusStr === 'CONFIRMED' ? 'status-badge--completed' : (statusStr === 'PENDING' ? 'status-badge--pending' : 'status-badge--cancelled');
                           
@@ -1616,63 +1849,86 @@ function AdminDashboard() {
                           const payBadgeClass = payStatusStr === 'PAID' ? 'status-badge--completed' : (payStatusStr === 'FAILED' ? 'status-badge--cancelled' : 'status-badge--pending');
 
                           const carrierName = booking.carrier || booking.airline || booking.flight_details?.airline || booking.flights?.[0]?.airline || null;
-                          // INTEGRITY: Never fall back to fake airport codes. If data is missing, show null — rendered as '—' below.
                           const originCode = booking.origin_code || booking.flights?.[0]?.departure_airport || null;
                           const destCode = booking.destination_code || booking.flights?.[0]?.arrival_airport || null;
                           const hasRoute = !!(originCode && destCode);
 
                           return (
-                            <tr key={booking.id} className={isSelected ? 'active-row' : ''}>
-                              <td>
-                                <strong>{booking.confirmation_code || (booking.id ? truncateText(booking.id, 8) : 'N/A')}</strong>
-                              </td>
-                              <td>
-                                <div className="user-table-cell">
-                                  <span>{booking.passenger_name || 'N/A'}</span>
-                                  <small>{booking.email || 'N/A'}</small>
-                                </div>
-                              </td>
-                              <td>
-                                <strong>{carrierName || <span style={{ color: '#888', fontStyle: 'italic' }}>—</span>}</strong>
-                              </td>
-                              <td>
-                                {hasRoute
-                                  ? <>{originCode} <i className="fas fa-arrow-right"></i> {destCode}</>
-                                  : <span style={{ color: '#e05252', fontStyle: 'italic', fontSize: '12px' }}>— No Itinerary</span>
-                                }
-                              </td>
-                              <td>{booking.passengers_count || booking.travellers?.length || 1}</td>
-                              <td>{formatMoney(booking.customer_price ?? booking.total_amount ?? booking.pricing?.customerTotal, booking.currency || 'USD')}</td>
-                              <td>
-                                <span className={`status-badge ${badgeClass}`}>{statusStr}</span>
-                              </td>
-                              <td>
-                                <span className={`status-badge ${payBadgeClass}`}>
-                                  {payStatusStr === 'FAILED' ? 'PAYMENT FAILED' : payStatusStr}
-                                </span>
-                              </td>
-                              <td>
-                                {booking.created_at ? new Date(booking.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A'}
-                              </td>
-                              <td>
-                                <button onClick={() => handleSelectBooking(booking)} className="admin-action-btn">
-                                  View
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </div>
-            </div>
-            {/* DETAIL PANEL / DRAWER */}
-            <aside className="admin-detail-panel booking-details-panel booking-overview-panel" style={{ width: '500px', flex: '0 0 500px', maxHeight: 'calc(100vh - 24px)', overflowY: 'auto', position: 'sticky', top: '12px' }}>
+                            <React.Fragment key={booking.id}>
+                              <tr className={`booking-row ${isExpanded ? 'active-row' : ''}`}>
+                                <td className="col-checkbox">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => handleToggleSelectOne(booking.id)}
+                                  />
+                                </td>
+                                <td className="col-ref">
+                                  <strong>{booking.confirmation_code || (booking.id ? truncateText(booking.id, 8) : 'N/A')}</strong>
+                                </td>
+                                <td className="col-customer">
+                                  <div className="user-table-cell" title={`${booking.passenger_name || 'N/A'} <${booking.email || 'N/A'}>`}>
+                                    <span>{booking.passenger_name || 'N/A'}</span>
+                                    <small>{booking.email || 'N/A'}</small>
+                                  </div>
+                                </td>
+                                <td className="col-carrier">
+                                  <strong>{carrierName || <span style={{ color: '#888', fontStyle: 'italic' }}>—</span>}</strong>
+                                </td>
+                                <td className="col-route">
+                                  {hasRoute
+                                    ? <>{originCode} <i className="fas fa-arrow-right" style={{ margin: '0 2px', fontSize: '0.75rem' }}></i> {destCode}</>
+                                    : <span style={{ color: '#e05252', fontStyle: 'italic', fontSize: '12px' }}>— No Itinerary</span>
+                                  }
+                                </td>
+                                <td className="col-passengers">{booking.passengers_count || booking.travellers?.length || 1}</td>
+                                <td className="col-amount">{formatMoney(booking.customer_price ?? booking.total_amount ?? booking.pricing?.customerTotal, booking.currency || 'USD')}</td>
+                                <td className="col-bstatus">
+                                  <span className={`status-badge ${badgeClass}`}>{statusStr}</span>
+                                </td>
+                                <td className="col-pstatus">
+                                  <span className={`status-badge ${payBadgeClass}`}>
+                                    {payStatusStr === 'FAILED' ? 'PAYMENT FAILED' : payStatusStr}
+                                  </span>
+                                </td>
+                                <td className="col-date">
+                                  {booking.created_at ? new Date(booking.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A'}
+                                </td>
+                                <td className="col-action">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleExpandBooking(booking)}
+                                    className={`view-details-btn ${isExpanded ? 'view-details-btn--expanded' : ''}`}
+                                    aria-expanded={isExpanded}
+                                    aria-controls={`booking-details-${booking.id}`}
+                                    aria-label={`Expand booking ${booking.confirmation_code || booking.id}`}
+                                  >
+                                    <span>{isExpanded ? 'Collapse' : 'View Details'}</span>
+                                    <i className={`fas fa-chevron-down chevron-icon ${isExpanded ? 'chevron-icon--rotated' : ''}`} />
+                                  </button>
+                                </td>
+                              </tr>
 
-              {selectedBooking ? (
-                <div className="admin-detail-card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                              {isExpanded && (
+                                <tr className="booking-expanded-row">
+                                  <td colSpan={11} className="expanded-cell">
+                                    <div id={`booking-details-${booking.id}`} className="booking-expanded-panel">
+                                      {detailsLoading ? (
+                                        <div className="expanded-loading-skeleton">
+                                          <i className="fas fa-spinner fa-spin fa-2x" style={{ color: '#1e3a5f', marginBottom: '10px' }} />
+                                          <p style={{ margin: 0, fontWeight: 600, color: '#475569' }}>Loading complete booking details...</p>
+                                        </div>
+                                      ) : detailsError ? (
+                                        <div className="expanded-error-card">
+                                          <i className="fas fa-exclamation-circle fa-2x" style={{ color: '#dc2626', marginBottom: '10px' }} />
+                                          <p style={{ margin: '0 0 12px 0', fontWeight: 600, color: '#991b1b' }}>{detailsError}</p>
+                                          <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                                            <button type="button" onClick={() => handleToggleExpandBooking(booking)} className="admin-secondary-btn">Retry</button>
+                                            <button type="button" onClick={() => handleToggleExpandBooking(booking)} className="admin-secondary-btn">Collapse</button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="admin-detail-card" style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
 
                   {/* HEADER BAR */}
                   <div className="detail-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '12px' }}>
@@ -3754,9 +4010,6 @@ function AdminDashboard() {
                         </p>
                         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px', fontSize: '0.82rem', marginBottom: '14px' }}>
                           <div><strong>Outbound Journey:</strong> {outboundSegments[0]?.origin_airport || 'N/A'} &rarr; {outboundSegments.map(s => s.destination_airport || 'N/A').join(' &rarr; ')} ({outboundSegments.length} segment(s))</div>
-                          {hasReturnJourney && returnSegments.length > 0 && (
-                            <div style={{ marginTop: '4px' }}><strong>Return Journey:</strong> {returnSegments[0]?.origin_airport || 'N/A'} &rarr; {returnSegments.map(s => s.destination_airport || 'N/A').join(' &rarr; ')} ({returnSegments.length} segment(s))</div>
-                          )}
                         </div>
 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -3772,16 +4025,21 @@ function AdminDashboard() {
                   )}
 
                 </div>
-              ) : (
-                <div className="admin-detail-placeholder">
-                  <i className="fas fa-mouse-pointer"></i>
-                  <h3>Select a Booking</h3>
-                  <p>Click "View / Edit" on any row in the table to inspect full passenger information, flight itineraries, and update status.</p>
-                </div>
               )}
-            </aside>
+            </div>
+          </td>
+        </tr>
+      )}
+    </React.Fragment>
+  );
+})}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-
         )}
 
         {/* TAB 2: GOOGLE ANALYTICS 4 WEB METRICS */}
