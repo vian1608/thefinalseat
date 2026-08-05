@@ -181,6 +181,30 @@ function AirlineCombobox({ valueName, valueCode, valueLogoUrl, onChange }) {
   );
 }
 
+class ItineraryErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error('[ItineraryErrorBoundary Caught Exception]:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', color: '#991b1b', fontSize: '0.85rem' }}>
+          <i className="fas fa-exclamation-triangle" style={{ marginRight: '6px' }}></i>
+          Unable to render itinerary section for this booking. {this.state.error?.message || 'Invalid itinerary format.'}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function AdminDashboard() {
 
   const navigate = useNavigate();
@@ -256,6 +280,77 @@ function AdminDashboard() {
   const [totalRecords, setTotalRecords] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [tableLoading, setTableLoading] = useState(false);
+
+  const loadAllDashboardData = useCallback(async (activeFilters = filters, days = timeframe, page = currentPage, size = pageSize) => {
+    try {
+      setTableLoading(true);
+      setLoading(true);
+      setError('');
+      
+      const queryFilters = { page, pageSize: size };
+      Object.keys(activeFilters).forEach(key => {
+        if (activeFilters[key]) {
+          queryFilters[key] = activeFilters[key];
+        }
+      });
+
+      const [bookingsRes, statsRes, analyticsRes, abandonedRes] = await Promise.allSettled([
+        adminAPI.getBookings(queryFilters),
+        adminAPI.getStats(),
+        adminAPI.getAnalytics(days),
+        adminAPI.getAbandonedBookings()
+      ]);
+
+      if (bookingsRes.status === 'fulfilled' && bookingsRes.value?.success) {
+        const val = bookingsRes.value;
+        const list = val.bookings || val.data || [];
+        setBookings(list);
+        if (val.pagination) {
+          setCurrentPage(val.pagination.page || page);
+          setTotalRecords(val.pagination.totalRecords ?? list.length);
+          setTotalPages(val.pagination.totalPages || 1);
+        } else {
+          setTotalRecords(list.length);
+          setTotalPages(1);
+        }
+      } else {
+        const errorMsg = bookingsRes.status === 'rejected' ? bookingsRes.reason?.message : (bookingsRes.value?.error || 'Failed to fetch bookings');
+        console.error('Bookings API failed:', errorMsg);
+        setError(`Unable to load bookings: ${errorMsg}`);
+      }
+      if (statsRes.status === 'fulfilled' && statsRes.value?.success) {
+        setStats(statsRes.value.data || null);
+      }
+      if (analyticsRes.status === 'fulfilled' && analyticsRes.value?.success) {
+        setAnalytics(analyticsRes.value.data || null);
+      }
+      if (abandonedRes.status === 'fulfilled' && abandonedRes.value?.success) {
+        setAbandonedBookings(abandonedRes.value.data || []);
+      }
+
+    } catch (err) {
+      console.error('Failed to load admin dashboard data:', err);
+      setError('Unable to reach server. Please verify database and backend connectivity.');
+    } finally {
+      setTableLoading(false);
+      setLoading(false);
+    }
+  }, [filters, timeframe, currentPage, pageSize]);
+
+  const handlePageChange = useCallback((newPage) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setExpandedBookingId(null);
+    setSelectedBooking(null);
+    setDetailsLoading(false);
+
+    setCurrentPage(newPage);
+    loadAllDashboardData(filters, timeframe, newPage, pageSize);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [totalPages, filters, timeframe, pageSize, loadAllDashboardData]);
 
   const handleSelectBooking = useCallback((booking) => {
     setSelectedBooking(booking);
@@ -768,77 +863,6 @@ function AdminDashboard() {
   });
 
 
-  const loadAllDashboardData = useCallback(async (activeFilters = filters, days = timeframe, page = currentPage, size = pageSize) => {
-    try {
-      setTableLoading(true);
-      setLoading(true);
-      setError('');
-      
-      const queryFilters = { page, pageSize: size };
-      Object.keys(activeFilters).forEach(key => {
-        if (activeFilters[key]) {
-          queryFilters[key] = activeFilters[key];
-        }
-      });
-
-      const [bookingsRes, statsRes, analyticsRes, abandonedRes] = await Promise.allSettled([
-        adminAPI.getBookings(queryFilters),
-        adminAPI.getStats(),
-        adminAPI.getAnalytics(days),
-        adminAPI.getAbandonedBookings()
-      ]);
-
-      if (bookingsRes.status === 'fulfilled' && bookingsRes.value?.success) {
-        const val = bookingsRes.value;
-        const list = val.bookings || val.data || [];
-        setBookings(list);
-        if (val.pagination) {
-          setCurrentPage(val.pagination.page || page);
-          setTotalRecords(val.pagination.totalRecords ?? list.length);
-          setTotalPages(val.pagination.totalPages || 1);
-        } else {
-          setTotalRecords(list.length);
-          setTotalPages(1);
-        }
-      } else {
-        const errorMsg = bookingsRes.status === 'rejected' ? bookingsRes.reason?.message : (bookingsRes.value?.error || 'Failed to fetch bookings');
-        console.error('Bookings API failed:', errorMsg);
-        setError(`Unable to load bookings: ${errorMsg}`);
-      }
-      if (statsRes.status === 'fulfilled' && statsRes.value?.success) {
-        setStats(statsRes.value.data || null);
-      }
-      if (analyticsRes.status === 'fulfilled' && analyticsRes.value?.success) {
-        setAnalytics(analyticsRes.value.data || null);
-      }
-      if (abandonedRes.status === 'fulfilled' && abandonedRes.value?.success) {
-        setAbandonedBookings(abandonedRes.value.data || []);
-      }
-
-    } catch (err) {
-      console.error('Failed to load admin dashboard data:', err);
-      setError('Unable to reach server. Please verify database and backend connectivity.');
-    } finally {
-      setTableLoading(false);
-      setLoading(false);
-    }
-  }, [filters, timeframe, currentPage, pageSize]);
-
-  const handlePageChange = useCallback((newPage) => {
-    if (newPage < 1 || newPage > totalPages) return;
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setExpandedBookingId(null);
-    setSelectedBooking(null);
-    setDetailsLoading(false);
-
-    setCurrentPage(newPage);
-    loadAllDashboardData(filters, timeframe, newPage, pageSize);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [totalPages, filters, timeframe, pageSize, loadAllDashboardData]);
-
   // Authenticate Admin Session on Mount
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -848,7 +872,7 @@ function AdminDashboard() {
       return;
     }
     loadAllDashboardData(filters, timeframe, 1, 10);
-  }, [navigate, loadAllDashboardData]);
+  }, [navigate, loadAllDashboardData, filters, timeframe]);
 
   const handleFilterChange = (field, value) => {
     const updatedFilters = { ...filters, [field]: value };
@@ -2619,6 +2643,7 @@ function AdminDashboard() {
                   <div className="admin-accordion-container">
                                          {/* 1. ITINERARY ACCORDION */}
                       <div className="admin-accordion-card">
+                        <ItineraryErrorBoundary>
                         <button
                           type="button"
                           className="admin-accordion-header"
@@ -2630,7 +2655,7 @@ function AdminDashboard() {
                           </span>
                           <span className="accordion-summary-right">
                             {outboundSegments.length > 0 
-                              ? `${outboundSegments[0].origin_airport || 'N/A'} → ${outboundSegments[outboundSegments.length - 1].destination_airport || 'N/A'} (${outboundSegments.length > 1 ? `${outboundSegments.length - 1} stop(s)` : 'Nonstop'})`
+                              ? `${outboundSegments[0]?.origin_airport || 'N/A'} → ${outboundSegments[outboundSegments.length - 1]?.destination_airport || 'N/A'} (${outboundSegments.length > 1 ? `${outboundSegments.length - 1} stop(s)` : 'Nonstop'})`
                               : 'No itinerary'}
                             {hasReturnJourney && returnSegments.length > 0 && ` · Return: ${returnSegments[0]?.origin_airport || 'N/A'} → ${returnSegments[returnSegments.length - 1]?.destination_airport || 'N/A'}`}
                           </span>
@@ -2671,7 +2696,7 @@ function AdminDashboard() {
                               >
                                 <strong style={{ fontSize: '0.85rem', color: '#7f0d2f' }}>
                                   <i className={`fas ${openOutboundGroup ? 'fa-chevron-down' : 'fa-chevron-right'}`} style={{ marginRight: '6px' }}></i>
-                                  Outbound Journey — {outboundSegments.length > 0 ? `${outboundSegments[0].origin_airport} → ${outboundSegments.map(s => s.destination_airport).join(' → ')}` : 'Empty'}
+                                  Outbound Journey — {outboundSegments.length > 0 ? `${outboundSegments[0]?.origin_airport || 'N/A'} → ${outboundSegments.map(s => s?.destination_airport || 'N/A').join(' → ')}` : 'Empty'}
                                 </strong>
                                 <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{outboundSegments.length} segment(s)</span>
                               </div>
@@ -2998,6 +3023,7 @@ function AdminDashboard() {
                             </button>
                           </div>
                         )}
+                        </ItineraryErrorBoundary>
                       </div>
                     {/* 2. PRICING ACCORDION */}
                     <div className="admin-accordion-card">
@@ -4454,19 +4480,23 @@ function AdminDashboard() {
         )}
 
         {/* GDS ITINERARY IMPORT MODAL */}
-        <GdsItineraryImportModal
-          isOpen={isImportItineraryModalOpen}
-          onClose={() => setIsImportItineraryModalOpen(false)}
-          bookingId={selectedBooking?.id}
-          onItineraryImported={handleItineraryImported}
-        />
+        {isImportItineraryModalOpen && selectedBooking?.id && (
+          <GdsItineraryImportModal
+            isOpen={isImportItineraryModalOpen}
+            onClose={() => setIsImportItineraryModalOpen(false)}
+            bookingId={selectedBooking?.id}
+            onItineraryImported={handleItineraryImported}
+          />
+        )}
 
         {/* BOOKING BACKUP IMPORT MODAL */}
-        <BookingBackupImportModal
-          isOpen={isBackupImportModalOpen}
-          onClose={() => setIsBackupImportModalOpen(false)}
-          onImportComplete={handleBackupImportComplete}
-        />
+        {isBackupImportModalOpen && (
+          <BookingBackupImportModal
+            isOpen={isBackupImportModalOpen}
+            onClose={() => setIsBackupImportModalOpen(false)}
+            onImportComplete={handleBackupImportComplete}
+          />
+        )}
 
         {/* BULK DELETE CONFIRMATION MODAL */}
         {isBulkDeleteModalOpen && (

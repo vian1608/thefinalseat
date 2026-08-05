@@ -11,6 +11,18 @@ class AppErrorBoundary extends Component {
   }
 
   componentDidCatch(error, errorInfo) {
+    const correlationId = `ERR-ADM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    this.setState({ correlationId, errorInfo });
+
+    console.error('ADMIN_DASHBOARD_FATAL_ERROR', {
+      referenceId: correlationId,
+      errorName: error?.name,
+      errorMessage: error?.message || String(error),
+      stack: error?.stack,
+      componentStack: errorInfo?.componentStack,
+      pathname: typeof window !== 'undefined' ? window.location.pathname : '',
+      productionCommit: process.env.REACT_APP_VERCEL_GIT_COMMIT_SHA || 'unknown'
+    });
     console.error('[AppErrorBoundary Caught Fatal Exception]:', error, errorInfo);
   }
 
@@ -29,8 +41,7 @@ class AppErrorBoundary extends Component {
         ? (rawError?.message || JSON.stringify(rawError)) 
         : String(rawError || 'An unexpected rendering error occurred');
 
-      const correlationId = `ERR-ADM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      console.error(`[AppErrorBoundary Diagnostics] Correlation ID: ${correlationId}`, rawError);
+      const correlationId = this.state.correlationId || `ERR-ADM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
       const isDev = process.env.NODE_ENV === 'development';
       const isMinifiedJsError = rawMessage.includes('before initialization') || rawMessage.includes('Cannot access') || rawMessage.includes('ReferenceError') || rawMessage.includes('TypeError');

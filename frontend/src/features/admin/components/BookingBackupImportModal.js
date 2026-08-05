@@ -1,8 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { adminAPI } from '../../../shared/api/api';
 
-const PROTECTED_BOOKING_REF = 'TFS-2026-HQ39GA';
-
 export default function BookingBackupImportModal({ isOpen, onClose, onImportComplete }) {
   const [step, setStep] = useState('select'); // 'select' | 'review' | 'importing' | 'results'
   const [backupData, setBackupData] = useState(null);
