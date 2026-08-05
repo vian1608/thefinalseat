@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { adminAPI } from '../../../shared/api/api';
 import GdsItineraryImportModal from '../components/GdsItineraryImportModal';
+import BookingBackupImportModal from '../components/BookingBackupImportModal';
 import './AdminDashboardPage.css';
 
 const AIRLINE_DIRECTORY = [
@@ -447,6 +448,14 @@ function AdminDashboard() {
   const [openOutboundGroup, setOpenOutboundGroup] = useState(true);
   const [openReturnGroup, setOpenReturnGroup] = useState(true);
   const [isImportItineraryModalOpen, setIsImportItineraryModalOpen] = useState(false);
+  const [isBackupImportModalOpen, setIsBackupImportModalOpen] = useState(false);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [bulkDeletePassword, setBulkDeletePassword] = useState('');
+  const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
+  const [bulkDeleteError, setBulkDeleteError] = useState('');
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [bulkDeleteResults, setBulkDeleteResults] = useState(null);
+  const [bulkExportLoading, setBulkExportLoading] = useState(false);
 
   const loadBookingDetails = useCallback(async (targetBooking, forceRefetch = false) => {
     if (!targetBooking) return;
@@ -601,18 +610,95 @@ function AdminDashboard() {
     );
   }, []);
 
-  const handleExportSelectedBookings = useCallback(() => {
-    const selected = bookings.filter(b => selectedBookingIds.includes(b.id));
-    if (selected.length === 0) return;
-    const jsonStr = JSON.stringify(selected, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `bookings_export_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [bookings, selectedBookingIds]);
+  const handleExportSelectedBackups = useCallback(async () => {
+    if (selectedBookingIds.length === 0) return;
+    setBulkExportLoading(true);
+    try {
+      const backupDoc = await adminAPI.exportSelectedBackups(selectedBookingIds);
+      const jsonStr = JSON.stringify(backupDoc, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const dateStr = new Date().toISOString().split('T')[0];
+      if (selectedBookingIds.length === 1 && backupDoc.bookings?.[0]?.booking?.confirmation_code) {
+        a.download = `the-final-seat-booking-${backupDoc.bookings[0].booking.confirmation_code}.json`;
+      } else {
+        a.download = `the-final-seat-bookings-backup-${dateStr}.json`;
+      }
+      a.href = url;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed:', err);
+      alert('Failed to export bookings: ' + (err.response?.data?.error?.message || err.message));
+    } finally {
+      setBulkExportLoading(false);
+    }
+  }, [selectedBookingIds]);
+
+  const handleBulkDeleteConfirm = useCallback(async () => {
+    setBulkDeleteError('');
+    if (!bulkDeletePassword) {
+      setBulkDeleteError('Admin password is required.');
+      return;
+    }
+    if (bulkDeleteConfirmText !== 'DELETE') {
+      setBulkDeleteError('You must type DELETE to confirm.');
+      return;
+    }
+    setBulkDeleteLoading(true);
+    try {
+      const result = await adminAPI.bulkDeleteBookings(selectedBookingIds, bulkDeletePassword, bulkDeleteConfirmText);
+      setBulkDeleteResults(result);
+      // Remove deleted IDs from selection
+      const deletedIds = (result.results || []).filter(r => r.status === 'DELETED').map(r => r.confirmationCode);
+      const protectedRefs = (result.results || []).filter(r => r.status === 'PROTECTED').map(r => r.confirmationCode);
+      setSelectedBookingIds(prev => prev.filter(id => {
+        const b = bookings.find(bk => bk.id === id);
+        if (!b) return false;
+        const ref = b.confirmation_code || b.confirmationCode;
+        return !deletedIds.includes(ref) && !deletedIds.includes(id);
+      }));
+      // Collapse any expanded deleted booking
+      if (expandedBookingId) {
+        const expandedBooking = bookings.find(b => b.id === expandedBookingId);
+        const expandedRef = expandedBooking?.confirmation_code;
+        if (deletedIds.includes(expandedRef) || deletedIds.includes(expandedBookingId)) {
+          setExpandedBookingId(null);
+          setSelectedBooking(null);
+        }
+      }
+      // Clear cache for deleted bookings
+      setBookingDetailsCache(prev => {
+        const next = { ...prev };
+        selectedBookingIds.forEach(id => delete next[id]);
+        return next;
+      });
+      // Refresh data
+      const newTotal = totalRecords - (result.summary?.deleted || 0);
+      const newTotalPages = Math.max(1, Math.ceil(newTotal / pageSize));
+      const safePage = currentPage > newTotalPages ? newTotalPages : currentPage;
+      loadAllDashboardData(filters, timeframe, safePage, pageSize);
+    } catch (err) {
+      setBulkDeleteError(err.response?.data?.error?.message || err.message || 'Bulk deletion failed.');
+    } finally {
+      setBulkDeleteLoading(false);
+    }
+  }, [selectedBookingIds, bulkDeletePassword, bulkDeleteConfirmText, bookings, expandedBookingId, totalRecords, pageSize, currentPage, filters, timeframe, loadAllDashboardData]);
+
+  const handleCloseBulkDeleteModal = useCallback(() => {
+    setIsBulkDeleteModalOpen(false);
+    setBulkDeletePassword('');
+    setBulkDeleteConfirmText('');
+    setBulkDeleteError('');
+    setBulkDeleteResults(null);
+    setBulkDeleteLoading(false);
+  }, []);
+
+  const handleBackupImportComplete = useCallback((result) => {
+    // Refresh booking table after import
+    loadAllDashboardData(filters, timeframe, 1, pageSize);
+  }, [filters, timeframe, pageSize, loadAllDashboardData]);
 
   const handleItineraryImported = useCallback((updatedBooking) => {
     if (updatedBooking) {
@@ -1787,7 +1873,7 @@ function AdminDashboard() {
             </select>
 
             <button onClick={handleExportCSV} className="admin-secondary-btn export-btn">
-              <i className="fas fa-download"></i> Export CSV
+              <i className="fas fa-download"></i> Export CSV Report
             </button>
           </div>
         </div>
@@ -1871,15 +1957,56 @@ function AdminDashboard() {
                   <button onClick={handleClearFilters} className="admin-secondary-btn">Reset</button>
                   <button
                     type="button"
-                    onClick={() => setIsImportItineraryModalOpen(true)}
-                    className="admin-secondary-btn"
+                    onClick={() => setIsBackupImportModalOpen(true)}
+                    className="admin-backup-import-btn"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                    title="Import itinerary or GDS text"
+                    title="Import booking backup from a previously exported .json file"
                   >
-                    <i className="fas fa-file-import"></i> Import
+                    <i className="fas fa-box-archive"></i> Import Booking Backup
                   </button>
                 </div>
               </div>
+
+              {/* BULK ACTION TOOLBAR */}
+              {selectedBookingIds.length > 0 && (
+                <div className="bulk-action-toolbar">
+                  <div className="bulk-action-left">
+                    <i className="fas fa-check-square" style={{ marginRight: '6px', color: '#38bdf8' }}></i>
+                    <strong>{selectedBookingIds.length}</strong>&nbsp;booking{selectedBookingIds.length !== 1 ? 's' : ''} selected
+                    {selectedBookingIds.length === bookings.length && <span style={{ marginLeft: '8px', fontSize: '0.78rem', color: '#94a3b8' }}>(all on this page)</span>}
+                  </div>
+                  <div className="bulk-action-right">
+                    <button
+                      type="button"
+                      onClick={handleExportSelectedBackups}
+                      disabled={bulkExportLoading}
+                      className="admin-secondary-btn"
+                      style={{ fontSize: '0.8rem', padding: '5px 12px' }}
+                    >
+                      <i className={`fas ${bulkExportLoading ? 'fa-spinner fa-spin' : 'fa-download'}`} style={{ marginRight: '4px' }}></i>
+                      Export Selected Backups
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setBulkDeleteResults(null); setBulkDeleteError(''); setBulkDeletePassword(''); setBulkDeleteConfirmText(''); setIsBulkDeleteModalOpen(true); }}
+                      className="admin-destructive-btn"
+                      style={{ fontSize: '0.8rem', padding: '5px 12px' }}
+                    >
+                      <i className="fas fa-trash-alt" style={{ marginRight: '4px' }}></i>
+                      Delete Selected
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBookingIds([])}
+                      className="admin-secondary-btn"
+                      style={{ fontSize: '0.8rem', padding: '5px 12px' }}
+                    >
+                      <i className="fas fa-times" style={{ marginRight: '4px' }}></i>
+                      Clear Selection
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* BOOKINGS DATA TABLE CARD */}
               <div className="admin-table-card">
@@ -2532,7 +2659,7 @@ function AdminDashboard() {
                                   boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                 }}
                               >
-                                <i className="fas fa-file-import"></i> Import Itinerary Text
+                                <i className="fas fa-file-import"></i> Import Itinerary / GDS Text
                               </button>
                             </div>
                             
@@ -4333,6 +4460,155 @@ function AdminDashboard() {
           bookingId={selectedBooking?.id}
           onItineraryImported={handleItineraryImported}
         />
+
+        {/* BOOKING BACKUP IMPORT MODAL */}
+        <BookingBackupImportModal
+          isOpen={isBackupImportModalOpen}
+          onClose={() => setIsBackupImportModalOpen(false)}
+          onImportComplete={handleBackupImportComplete}
+        />
+
+        {/* BULK DELETE CONFIRMATION MODAL */}
+        {isBulkDeleteModalOpen && (
+          <div className="bulk-delete-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) handleCloseBulkDeleteModal(); }}>
+            <div className="bulk-delete-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="bulk-delete-modal-header">
+                <h2><i className="fas fa-exclamation-triangle" style={{ color: '#dc2626', marginRight: '8px' }}></i>Delete {selectedBookingIds.length} Selected Booking{selectedBookingIds.length !== 1 ? 's' : ''}?</h2>
+                <button type="button" onClick={handleCloseBulkDeleteModal} className="modal-close-btn" aria-label="Close"><i className="fas fa-times"></i></button>
+              </div>
+              <div className="bulk-delete-modal-body">
+                {!bulkDeleteResults ? (
+                  <>
+                    <div className="bulk-delete-warning">
+                      <i className="fas fa-exclamation-triangle" style={{ color: '#f59e0b', marginRight: '6px' }}></i>
+                      This permanently deletes the booking and its related records. This action cannot be undone unless a backup was previously exported.
+                    </div>
+
+                    {/* List bookings */}
+                    <div className="bulk-delete-booking-list">
+                      {selectedBookingIds.map(id => {
+                        const b = bookings.find(bk => bk.id === id);
+                        if (!b) return null;
+                        const ref = b.confirmation_code || b.confirmationCode || id;
+                        const isProtected = ref === 'TFS-2026-HQ39GA';
+                        return (
+                          <div key={id} className={`bulk-delete-booking-item ${isProtected ? 'protected' : ''}`}>
+                            <strong>{ref}</strong>
+                            <span>{b.passenger_name || b.customer_name || 'Unknown'}</span>
+                            {isProtected && <span className="protected-badge"><i className="fas fa-shield-alt" style={{ marginRight: '4px' }}></i>Protected</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Protected booking warning */}
+                    {selectedBookingIds.some(id => {
+                      const b = bookings.find(bk => bk.id === id);
+                      return b && (b.confirmation_code === 'TFS-2026-HQ39GA' || b.confirmationCode === 'TFS-2026-HQ39GA');
+                    }) && (
+                      <div className="bulk-delete-protected-warning">
+                        <i className="fas fa-shield-alt" style={{ color: '#3b82f6', marginRight: '6px' }}></i>
+                        <strong>TFS-2026-HQ39GA</strong> is protected and will not be deleted.
+                      </div>
+                    )}
+
+                    {/* Admin password */}
+                    <div style={{ marginTop: '16px' }}>
+                      <label style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '4px' }}>Admin Password</label>
+                      <input
+                        type="password"
+                        value={bulkDeletePassword}
+                        onChange={(e) => setBulkDeletePassword(e.target.value)}
+                        placeholder="Enter admin password"
+                        className="admin-input"
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+
+                    {/* Type DELETE */}
+                    <div style={{ marginTop: '12px' }}>
+                      <label style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '4px' }}>Type <strong style={{ color: '#dc2626' }}>DELETE</strong> to confirm</label>
+                      <input
+                        type="text"
+                        value={bulkDeleteConfirmText}
+                        onChange={(e) => setBulkDeleteConfirmText(e.target.value)}
+                        placeholder="Type DELETE"
+                        className="admin-input"
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+
+                    {bulkDeleteError && (
+                      <div className="bulk-delete-error">
+                        <i className="fas fa-exclamation-circle" style={{ marginRight: '6px' }}></i>
+                        {bulkDeleteError}
+                      </div>
+                    )}
+
+                    <div className="bulk-delete-actions">
+                      <button type="button" onClick={handleCloseBulkDeleteModal} className="admin-secondary-btn">Cancel</button>
+                      <button
+                        type="button"
+                        onClick={handleBulkDeleteConfirm}
+                        disabled={bulkDeleteLoading || bulkDeleteConfirmText !== 'DELETE' || !bulkDeletePassword}
+                        className="admin-destructive-btn"
+                        style={{ opacity: (bulkDeleteLoading || bulkDeleteConfirmText !== 'DELETE' || !bulkDeletePassword) ? 0.5 : 1 }}
+                      >
+                        <i className={`fas ${bulkDeleteLoading ? 'fa-spinner fa-spin' : 'fa-trash-alt'}`} style={{ marginRight: '4px' }}></i>
+                        {bulkDeleteLoading ? 'Deleting...' : `Delete ${selectedBookingIds.length} Booking${selectedBookingIds.length !== 1 ? 's' : ''}`}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Results */}
+                    <div className="bulk-delete-results-summary">
+                      <h3><i className="fas fa-check-circle" style={{ color: '#10b981', marginRight: '8px' }}></i>Bulk Delete Complete</h3>
+                      <div className="results-summary-grid" style={{ marginTop: '12px' }}>
+                        <div className="result-stat"><span className="result-stat-value">{bulkDeleteResults.summary?.requested || 0}</span><span className="result-stat-label">Requested</span></div>
+                        <div className="result-stat result-stat--success"><span className="result-stat-value">{bulkDeleteResults.summary?.deleted || 0}</span><span className="result-stat-label">Deleted</span></div>
+                        <div className="result-stat result-stat--warning"><span className="result-stat-value">{bulkDeleteResults.summary?.protected || 0}</span><span className="result-stat-label">Protected</span></div>
+                        <div className="result-stat result-stat--error"><span className="result-stat-value">{bulkDeleteResults.summary?.failed || 0}</span><span className="result-stat-label">Failed</span></div>
+                      </div>
+                    </div>
+                    <div className="bulk-delete-results-list">
+                      {(bulkDeleteResults.results || []).map((r, idx) => (
+                        <div key={idx} className={`result-item result-item--${(r.status || '').toLowerCase()}`}>
+                          <strong>{r.confirmationCode}</strong>
+                          <span className={`result-status-badge result-status--${(r.status || '').toLowerCase()}`}>{r.status}</span>
+                          {r.message && <span className="result-message">{r.message}</span>}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="bulk-delete-actions">
+                      <button type="button" onClick={handleCloseBulkDeleteModal} className="admin-primary-btn">
+                        <i className="fas fa-check" style={{ marginRight: '4px' }}></i> Done
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MOBILE STICKY BULK TOOLBAR */}
+        {selectedBookingIds.length > 0 && (
+          <div className="mobile-bulk-toolbar">
+            <span className="mobile-bulk-count">{selectedBookingIds.length} selected</span>
+            <div className="mobile-bulk-actions">
+              <button type="button" onClick={handleExportSelectedBackups} disabled={bulkExportLoading} className="admin-secondary-btn mobile-bulk-btn">
+                <i className={`fas ${bulkExportLoading ? 'fa-spinner fa-spin' : 'fa-download'}`}></i> Export
+              </button>
+              <button type="button" onClick={() => { setBulkDeleteResults(null); setBulkDeleteError(''); setBulkDeletePassword(''); setBulkDeleteConfirmText(''); setIsBulkDeleteModalOpen(true); }} className="admin-destructive-btn mobile-bulk-btn">
+                <i className="fas fa-trash-alt"></i> Delete
+              </button>
+              <button type="button" onClick={() => setSelectedBookingIds([])} className="admin-secondary-btn mobile-bulk-btn">
+                <i className="fas fa-times"></i> Clear
+              </button>
+            </div>
+          </div>
+        )}
 
       </main>
     </div>

@@ -243,6 +243,18 @@ export const adminAPI = {
   updateBooking: async (id, updateData) => {
     const response = await api.put(`/admin/bookings/${id}`, updateData);
     return response.data;
+  },
+  exportSelectedBackups: async (bookingIds) => {
+    const response = await api.post('/admin/bookings/export', { bookingIds }, { responseType: 'json' });
+    return response.data;
+  },
+  bulkDeleteBookings: async (bookingIds, adminPassword, confirmationText) => {
+    const response = await api.post('/admin/bookings/bulk-delete', { bookingIds, adminPassword, confirmationText });
+    return response.data;
+  },
+  importBookingBackup: async (backup, selectedBookings, adminPassword) => {
+    const response = await api.post('/admin/bookings/import-backup', { backup, selectedBookings, adminPassword });
+    return response.data;
   }
 };
 

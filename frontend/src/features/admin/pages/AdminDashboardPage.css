@@ -1804,3 +1804,612 @@
     padding: 14px 14px;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+   BULK ACTION TOOLBAR
+   ────────────────────────────────────────────────────────────────────── */
+.bulk-action-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #1e3a5f 0%, #1e4976 100%);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(30, 58, 95, 0.2);
+  animation: slideInToolbar 0.2s ease-out;
+}
+
+@keyframes slideInToolbar {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.bulk-action-left {
+  display: flex;
+  align-items: center;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.bulk-action-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Backup Import Button */
+.admin-backup-import-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: transparent;
+  color: #1e3a5f;
+  border: 1.5px solid #1e3a5f;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.admin-backup-import-btn:hover {
+  background: #1e3a5f;
+  color: #ffffff;
+}
+
+/* Destructive Button */
+.admin-destructive-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: #dc2626;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.admin-destructive-btn:hover {
+  background: #b91c1c;
+}
+
+.admin-destructive-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Primary Button */
+.admin-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 18px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: #1e3a5f;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.admin-primary-btn:hover {
+  background: #162d4a;
+}
+
+.admin-primary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   BULK DELETE MODAL
+   ────────────────────────────────────────────────────────────────────── */
+.bulk-delete-modal-overlay,
+.backup-import-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(2px);
+  animation: fadeInOverlay 0.15s ease-out;
+}
+
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.bulk-delete-modal,
+.backup-import-modal {
+  background: #ffffff;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 580px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  animation: slideInModal 0.2s ease-out;
+}
+
+@keyframes slideInModal {
+  from { opacity: 0; transform: translateY(-20px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.bulk-delete-modal-header,
+.backup-import-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.bulk-delete-modal-header h2,
+.backup-import-modal-header h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.modal-close-btn:hover {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.bulk-delete-modal-body,
+.backup-import-modal-body {
+  padding: 20px;
+}
+
+.bulk-delete-warning {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 0.85rem;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+.bulk-delete-booking-list,
+.backup-import-booking-list {
+  margin-top: 16px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.bulk-delete-booking-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.84rem;
+}
+
+.bulk-delete-booking-item:last-child {
+  border-bottom: none;
+}
+
+.bulk-delete-booking-item.protected {
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+}
+
+.protected-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #3b82f6;
+  background: #dbeafe;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.bulk-delete-protected-warning {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.84rem;
+  color: #1e40af;
+  margin-top: 12px;
+}
+
+.bulk-delete-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  color: #dc2626;
+  margin-top: 12px;
+}
+
+.bulk-delete-actions,
+.backup-import-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   BACKUP IMPORT MODAL
+   ────────────────────────────────────────────────────────────────────── */
+.backup-import-modal {
+  max-width: 640px;
+}
+
+.backup-import-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  background: #f8fafc;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.backup-import-dropzone:hover {
+  border-color: #1e3a5f;
+  background: #f1f5f9;
+}
+
+.backup-import-file-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 20px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  background: #1e3a5f;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.backup-import-file-btn:hover {
+  background: #162d4a;
+}
+
+.backup-import-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  color: #dc2626;
+  margin-top: 16px;
+}
+
+.backup-import-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.meta-item {
+  font-size: 0.82rem;
+  color: #475569;
+}
+
+.meta-item strong {
+  color: #1e293b;
+}
+
+.backup-import-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.84rem;
+}
+
+.backup-import-booking-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.84rem;
+  transition: background 0.15s ease;
+}
+
+.backup-import-booking-item:last-child {
+  border-bottom: none;
+}
+
+.backup-import-booking-item.selected {
+  background: #eff6ff;
+}
+
+.booking-item-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.booking-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.booking-item-name {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.booking-item-right {
+  flex-shrink: 0;
+}
+
+.strategy-select {
+  font-size: 0.78rem;
+  padding: 3px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #334155;
+}
+
+.backup-import-password-section {
+  margin-top: 16px;
+}
+
+.backup-import-warning {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.84rem;
+  color: #92400e;
+}
+
+.backup-status-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  display: inline-block;
+}
+
+.backup-status--done, .backup-status--confirmed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.backup-status--pending {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.backup-status--cancelled, .backup-status--failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Import spinner */
+.import-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #1e3a5f;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   RESULTS SUMMARY (shared between import & delete)
+   ────────────────────────────────────────────────────────────────────── */
+.backup-import-results-summary,
+.bulk-delete-results-summary {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.results-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.result-stat {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 8px;
+  text-align: center;
+}
+
+.result-stat--success { border-color: #86efac; background: #f0fdf4; }
+.result-stat--warning { border-color: #fde68a; background: #fffbeb; }
+.result-stat--error { border-color: #fecaca; background: #fef2f2; }
+
+.result-stat-value {
+  display: block;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.result-stat-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.backup-import-results-list,
+.bulk-delete-results-list {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.result-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.84rem;
+}
+
+.result-item:last-child { border-bottom: none; }
+
+.result-item--restored { background: #f0fdf4; }
+.result-item--deleted { background: #f0fdf4; }
+.result-item--skipped { background: #fffbeb; }
+.result-item--failed { background: #fef2f2; }
+.result-item--protected { background: #eff6ff; }
+
+.result-status-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+
+.result-status--restored, .result-status--deleted { background: #dcfce7; color: #166534; }
+.result-status--skipped { background: #fef9c3; color: #854d0e; }
+.result-status--failed { background: #fee2e2; color: #991b1b; }
+.result-status--protected { background: #dbeafe; color: #1e40af; }
+
+.result-message {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-left: auto;
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   MOBILE STICKY BULK TOOLBAR
+   ────────────────────────────────────────────────────────────────────── */
+.mobile-bulk-toolbar {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-bulk-toolbar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    background: linear-gradient(135deg, #1e3a5f 0%, #1e4976 100%);
+    color: #ffffff;
+    padding: 10px 16px;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+    animation: slideUpToolbar 0.2s ease-out;
+  }
+
+  @keyframes slideUpToolbar {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .mobile-bulk-count {
+    font-weight: 700;
+    font-size: 0.88rem;
+  }
+
+  .mobile-bulk-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  .mobile-bulk-btn {
+    font-size: 0.72rem !important;
+    padding: 5px 10px !important;
+  }
+
+  /* Hide desktop toolbar on mobile */
+  .bulk-action-toolbar {
+    display: none;
+  }
+
+  /* Modal responsive */
+  .bulk-delete-modal,
+  .backup-import-modal {
+    width: 95%;
+    max-height: 90vh;
+    margin: 10px;
+  }
+
+  .results-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .backup-import-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .bulk-delete-actions,
+  .backup-import-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .bulk-delete-actions button,
+  .backup-import-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+}

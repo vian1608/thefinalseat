@@ -3456,6 +3456,304 @@ export const bookingRepository = {
       bookingId: realId,
       restoredAt: new Date().toISOString()
     };
+  },
+
+  // ──────────────────────────────────────────────────────────────────────
+  //  BULK EXPORT — load complete booking data for multiple IDs
+  // ──────────────────────────────────────────────────────────────────────
+  exportBookingsBulk: async (bookingIds = []) => {
+    const results = [];
+    for (const id of bookingIds) {
+      try {
+        const data = await bookingRepository.exportBookingJson(id);
+        if (data) {
+          results.push(bookingRepository.sanitizeBookingForExport(data));
+        }
+      } catch (err) {
+        logger.warn(`[BULK_EXPORT] Failed to export booking ${id}: ${err.message}`);
+      }
+    }
+    return results;
+  },
+
+  // ──────────────────────────────────────────────────────────────────────
+  //  SANITIZE — remove sensitive fields from exported booking data
+  // ──────────────────────────────────────────────────────────────────────
+  sanitizeBookingForExport: (exportData) => {
+    if (!exportData) return exportData;
+
+    const sensitivePatterns = [
+      'cvv', 'cvc', 'pin', 'full_card_number', 'card_number', 'pan',
+      'api_key', 'secret_key', 'private_key', 'access_token', 'refresh_token',
+      'password', 'admin_password', 'webhook_secret', 'authorization_token'
+    ];
+
+    const redactObject = (obj, depth = 0) => {
+      if (!obj || typeof obj !== 'object' || depth > 10) return obj;
+      if (Array.isArray(obj)) return obj.map(item => redactObject(item, depth + 1));
+
+      const cleaned = {};
+      for (const [key, value] of Object.entries(obj)) {
+        const lowerKey = key.toLowerCase();
+
+        // Redact sensitive keys
+        if (sensitivePatterns.some(pattern => lowerKey.includes(pattern))) {
+          cleaned[key] = '[REDACTED]';
+          continue;
+        }
+
+        // Mask card numbers — keep only last 4
+        if ((lowerKey === 'card_last_four' || lowerKey === 'last_four' || lowerKey === 'lastfour') && value) {
+          cleaned[key] = value;
+          continue;
+        }
+
+        if (typeof value === 'string' && /^\d{13,19}$/.test(value.replace(/[\s-]/g, ''))) {
+          const digits = value.replace(/[\s-]/g, '');
+          if (digits.length >= 13) {
+            cleaned[key] = `****${digits.slice(-4)}`;
+            continue;
+          }
+        }
+
+        cleaned[key] = redactObject(value, depth + 1);
+      }
+      return cleaned;
+    };
+
+    return redactObject(exportData);
+  },
+
+  // ──────────────────────────────────────────────────────────────────────
+  //  FIND BY CONFIRMATION CODE — for duplicate detection
+  // ──────────────────────────────────────────────────────────────────────
+  findByConfirmationCode: async (confirmationCode) => {
+    if (!confirmationCode) return null;
+    try {
+      const existing = await bookingRepository.getById(confirmationCode);
+      return existing || null;
+    } catch (err) {
+      return null;
+    }
+  },
+
+  // ──────────────────────────────────────────────────────────────────────
+  //  RESTORE BOOKING FROM BACKUP — transactional per-booking restore
+  // ──────────────────────────────────────────────────────────────────────
+  restoreBookingFromBackup: async (bookingData, duplicateStrategy = 'SKIP', adminEmail = 'admin@thefinalseat.com', ipAddress = '127.0.0.1') => {
+    const booking = bookingData.booking || bookingData;
+    const confirmationCode = booking.confirmation_code || booking.confirmationCode || booking.booking_reference;
+
+    if (!confirmationCode && !booking.id) {
+      return { success: false, code: 'INVALID_BOOKING', message: 'Booking data missing confirmation code and ID.' };
+    }
+
+    // Check for duplicates
+    const existing = await bookingRepository.findByConfirmationCode(confirmationCode || booking.id);
+
+    if (existing && existing.id && !existing._deleted) {
+      if (duplicateStrategy === 'SKIP') {
+        return { success: true, status: 'SKIPPED', confirmationCode, message: `${confirmationCode} already exists — skipped.` };
+      }
+
+      if (duplicateStrategy === 'REPLACE') {
+        // Delete the existing booking first
+        const deleteResult = await bookingRepository.deleteBookingTransactional(existing.id, adminEmail, ipAddress);
+        if (!deleteResult.success) {
+          return { success: false, code: 'REPLACE_FAILED', confirmationCode, message: `Failed to remove existing ${confirmationCode}: ${deleteResult.message}` };
+        }
+        logger.info(`[BACKUP_RESTORE] Deleted existing booking ${confirmationCode} for replacement by ${adminEmail}.`);
+      }
+
+      // NEW_COPY — generate a new confirmation code
+      if (duplicateStrategy === 'NEW_COPY') {
+        const suffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const newCode = `${confirmationCode}-COPY-${suffix}`;
+        booking.confirmation_code = newCode;
+        booking.confirmationCode = newCode;
+        // Clear IDs so Supabase generates new ones
+        delete booking.id;
+      }
+    }
+
+    try {
+      // Step 1: Create the base booking record
+      const bookingRow = { ...booking };
+      // Remove nested/computed fields
+      delete bookingRow.travellers;
+      delete bookingRow.contacts;
+      delete bookingRow.flights;
+      delete bookingRow.payments;
+      delete bookingRow.itinerary_segments;
+      delete bookingRow.payment_splits;
+      delete bookingRow.authorization_snapshots;
+      delete bookingRow.ticket_snapshots;
+      delete bookingRow.audit_logs;
+      delete bookingRow.email_logs;
+      delete bookingRow._deleted;
+
+      // For REPLACE strategy, we already deleted. For NEW_COPY, ID was cleared.
+      // For initial import (no existing), just insert.
+      if (duplicateStrategy !== 'NEW_COPY') {
+        // Try to use the original ID if it existed
+      }
+
+      bookingRow.updated_at = new Date().toISOString();
+      if (!bookingRow.created_at) {
+        bookingRow.created_at = new Date().toISOString();
+      }
+
+      // Upsert: insert or handle existing
+      const { data: insertedBooking, error: insertErr } = await supabase
+        .from('bookings')
+        .upsert(bookingRow, { onConflict: 'id' })
+        .select()
+        .single();
+
+      if (insertErr) {
+        // Try without ID for new copy
+        delete bookingRow.id;
+        const { data: fallbackBooking, error: fallbackErr } = await supabase
+          .from('bookings')
+          .insert(bookingRow)
+          .select()
+          .single();
+
+        if (fallbackErr) {
+          throw new Error(`Booking insert failed: ${fallbackErr.message}`);
+        }
+        var restoredBookingId = fallbackBooking.id;
+        var restoredCode = fallbackBooking.confirmation_code || confirmationCode;
+      } else {
+        var restoredBookingId = insertedBooking.id;
+        var restoredCode = insertedBooking.confirmation_code || confirmationCode;
+      }
+
+      // Step 2: Restore travellers
+      const travellers = bookingData.travellers || [];
+      if (travellers.length > 0) {
+        for (const t of travellers) {
+          const row = { ...t, booking_id: restoredBookingId };
+          delete row.id; // Let Supabase assign new IDs
+          await supabase.from('travellers').insert(row);
+        }
+      }
+
+      // Step 3: Restore contacts
+      const contacts = bookingData.contacts || bookingData.contact ? [bookingData.contact].filter(Boolean) : [];
+      if (contacts.length > 0) {
+        for (const c of contacts) {
+          const row = { ...c, booking_id: restoredBookingId };
+          delete row.id;
+          await supabase.from('contacts').insert(row);
+        }
+      }
+
+      // Step 4: Restore itinerary segments
+      const segments = bookingData.itinerary_segments || bookingData.itinerarySegments || [];
+      if (segments.length > 0) {
+        await bookingRepository.saveItinerarySegments(restoredBookingId, segments);
+      }
+
+      // Step 5: Restore payments (metadata only, no active tokens)
+      const payments = bookingData.payments || [];
+      if (payments.length > 0) {
+        for (const p of payments) {
+          const row = { ...p, booking_id: restoredBookingId };
+          delete row.id;
+          // Sanitize — never restore active tokens
+          delete row.access_token;
+          delete row.refresh_token;
+          delete row.authorization_token;
+          await supabase.from('payments').insert(row);
+        }
+      }
+
+      // Step 6: Restore payment splits
+      const splits = bookingData.payment_splits || bookingData.paymentSplits || [];
+      if (splits.length > 0) {
+        for (const s of splits) {
+          const row = { ...s, booking_id: restoredBookingId };
+          delete row.id;
+          await supabase.from('payment_authorization_splits').insert(row);
+        }
+      }
+
+      // Step 7: Restore ticket details (snapshots)
+      const tickets = bookingData.ticket_snapshots || bookingData.ticketDetails || [];
+      if (tickets.length > 0) {
+        for (const t of tickets) {
+          const row = { ...t, booking_id: restoredBookingId };
+          delete row.id;
+          await supabase.from('ticket_details').insert(row);
+        }
+      }
+
+      // Step 8: Restore email activity metadata
+      const emailLogs = bookingData.emailActivity || bookingData.email_logs || [];
+      if (emailLogs.length > 0) {
+        for (const e of emailLogs) {
+          const row = { ...e, booking_id: restoredBookingId };
+          if (!row.id) row.id = `email_restored_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+          await supabase.from('email_logs').insert(row);
+        }
+      }
+
+      // Step 9: Record audit event for the restoration
+      await bookingRepository.recordAuditLog({
+        bookingId: restoredBookingId,
+        action: 'BOOKING_RESTORED_FROM_BACKUP',
+        oldValue: null,
+        newValue: { confirmationCode: restoredCode, duplicateStrategy, restoredAt: new Date().toISOString() },
+        actor: adminEmail,
+        ipAddress
+      });
+
+      await bookingRepository.logAdminActivity({
+        action: 'BOOKING_RESTORED_FROM_BACKUP',
+        bookingReference: restoredCode,
+        deletedBy: adminEmail,
+        ipAddress,
+        details: { duplicateStrategy, source: 'backup_import' }
+      });
+
+      // Refresh memory store
+      const freshBooking = await bookingRepository.getById(restoredBookingId);
+      if (freshBooking) {
+        bookingsMemoryStore.set(restoredBookingId, freshBooking);
+        if (restoredCode) bookingsMemoryStore.set(restoredCode, freshBooking);
+      }
+
+      logger.info(`[BACKUP_RESTORE] Booking ${restoredCode} (${restoredBookingId}) successfully restored from backup by ${adminEmail}. Strategy: ${duplicateStrategy}`);
+
+      return {
+        success: true,
+        status: 'RESTORED',
+        confirmationCode: restoredCode,
+        bookingId: restoredBookingId,
+        message: `${restoredCode} restored successfully.`
+      };
+    } catch (err) {
+      logger.error(`[BACKUP_RESTORE] Failed to restore ${confirmationCode}: ${err.message}`, err);
+
+      // Rollback: attempt to delete partially restored booking
+      if (typeof restoredBookingId !== 'undefined' && restoredBookingId) {
+        try {
+          await bookingRepository.deleteBookingTransactional(restoredBookingId, 'system-backup-rollback@thefinalseat.com', ipAddress);
+          logger.info(`[BACKUP_RESTORE] Rolled back partial restore of ${confirmationCode} (${restoredBookingId}).`);
+        } catch (rollbackErr) {
+          logger.error(`[BACKUP_RESTORE] Rollback failed for ${confirmationCode}: ${rollbackErr.message}`);
+        }
+      }
+
+      return {
+        success: false,
+        status: 'FAILED',
+        confirmationCode,
+        code: 'RESTORE_FAILED',
+        message: `Failed to restore ${confirmationCode}: ${err.message}`
+      };
+    }
   }
 };
 

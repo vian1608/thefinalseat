@@ -1231,12 +1231,308 @@ export const adminController = {
       logger.error(`[BillingDetails] Error updating billing for ${req.params.id}: ${error.message}`);
       next(error);
     }
+  },
+
+  // ──────────────────────────────────────────────────────────────────────
+  //  BULK EXPORT — POST /admin/bookings/export
+  // ──────────────────────────────────────────────────────────────────────
+  exportBookingsBulk: async (req, res, next) => {
+    try {
+      const { bookingIds } = req.body || {};
+
+      if (!Array.isArray(bookingIds) || bookingIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_IDS', message: 'bookingIds must be a non-empty array.' }
+        });
+      }
+
+      if (bookingIds.length > 100) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'TOO_MANY_IDS', message: 'Cannot export more than 100 bookings at once.' }
+        });
+      }
+
+      const bookings = await bookingRepository.exportBookingsBulk(bookingIds);
+
+      const backupDocument = {
+        format: 'THE_FINAL_SEAT_BOOKING_BACKUP',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        bookingCount: bookings.length,
+        bookings
+      };
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      let filename;
+      if (bookings.length === 1 && bookings[0]?.booking?.confirmation_code) {
+        filename = `the-final-seat-booking-${bookings[0].booking.confirmation_code}.json`;
+      } else {
+        filename = `the-final-seat-bookings-backup-${dateStr}.json`;
+      }
+
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+      return res.json(backupDocument);
+    } catch (error) {
+      logger.error(`[BULK_EXPORT] Error: ${error.message}`, error);
+      next(error);
+    }
+  },
+
+  // ──────────────────────────────────────────────────────────────────────
+  //  BULK DELETE — POST /admin/bookings/bulk-delete
+  // ──────────────────────────────────────────────────────────────────────
+  bulkDeleteBookings: async (req, res, next) => {
+    try {
+      const { bookingIds, adminPassword, confirmationText } = req.body || {};
+      const PROTECTED_BOOKING_REF = 'TFS-2026-HQ39GA';
+
+      // Validate inputs
+      if (!Array.isArray(bookingIds) || bookingIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_IDS', message: 'bookingIds must be a non-empty array.' }
+        });
+      }
+
+      if (!adminPassword) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'PASSWORD_REQUIRED', message: 'Admin password is required for bulk deletion.' }
+        });
+      }
+
+      if (confirmationText !== 'DELETE') {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'CONFIRMATION_REQUIRED', message: 'You must type DELETE to confirm bulk deletion.' }
+        });
+      }
+
+      // Verify admin password
+      let isValidPassword = false;
+      const adminEmail = req.user?.email || env.adminEmail || 'admin@thefinalseat.com';
+
+      if (req.user?.email) {
+        try {
+          const user = await authRepository.findUserByEmail(req.user.email);
+          if (user && user.password) {
+            isValidPassword = await bcrypt.compare(adminPassword, user.password);
+          }
+        } catch (e) {
+          // Ignore lookup error and proceed to fallback check
+        }
+      }
+
+      if (!isValidPassword) {
+        isValidPassword = (adminPassword === (env.adminPassword || 'admin123'));
+      }
+
+      if (!isValidPassword) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'INVALID_PASSWORD', message: 'Incorrect admin password. Bulk deletion cancelled.' }
+        });
+      }
+
+      const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
+      const results = [];
+      let deleted = 0;
+      let protectedCount = 0;
+      let failed = 0;
+
+      for (const id of bookingIds) {
+        try {
+          // Look up booking to check if protected
+          const booking = await bookingRepository.getById(id);
+          const refCode = booking?.confirmation_code || booking?.confirmationCode || '';
+
+          if (refCode === PROTECTED_BOOKING_REF) {
+            results.push({ confirmationCode: refCode, status: 'PROTECTED', message: `${PROTECTED_BOOKING_REF} is protected and was not deleted.` });
+            protectedCount++;
+            continue;
+          }
+
+          const deleteResult = await bookingRepository.deleteBookingTransactional(id, adminEmail, clientIp);
+
+          if (deleteResult.success) {
+            results.push({ confirmationCode: deleteResult.confirmationCode || refCode || id, status: 'DELETED' });
+            deleted++;
+          } else {
+            results.push({ confirmationCode: refCode || id, status: 'FAILED', message: deleteResult.message });
+            failed++;
+          }
+        } catch (err) {
+          results.push({ confirmationCode: id, status: 'FAILED', message: err.message });
+          failed++;
+        }
+      }
+
+      // Record bulk delete audit
+      await bookingRepository.logAdminActivity({
+        action: 'BULK_DELETE',
+        bookingReference: `${deleted} deleted, ${protectedCount} protected, ${failed} failed`,
+        deletedBy: adminEmail,
+        ipAddress: clientIp,
+        details: { bookingIds, results }
+      });
+
+      return res.json({
+        success: true,
+        summary: {
+          requested: bookingIds.length,
+          deleted,
+          protected: protectedCount,
+          failed
+        },
+        results
+      });
+    } catch (error) {
+      logger.error(`[BULK_DELETE] Error: ${error.message}`, error);
+      next(error);
+    }
+  },
+
+  // ──────────────────────────────────────────────────────────────────────
+  //  IMPORT BOOKING BACKUP — POST /admin/bookings/import-backup
+  // ──────────────────────────────────────────────────────────────────────
+  importBookingBackup: async (req, res, next) => {
+    try {
+      const { backup, selectedBookings, adminPassword } = req.body || {};
+
+      if (!backup || typeof backup !== 'object') {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_BACKUP', message: 'Backup data is required.' }
+        });
+      }
+
+      // Validate backup format
+      if (backup.format !== 'THE_FINAL_SEAT_BOOKING_BACKUP') {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_FORMAT', message: `Unrecognized backup format: ${backup.format || 'missing'}. Expected: THE_FINAL_SEAT_BOOKING_BACKUP` }
+        });
+      }
+
+      if (!backup.version || backup.version > 1) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'UNSUPPORTED_VERSION', message: `Unsupported backup version: ${backup.version}. Supported: 1` }
+        });
+      }
+
+      if (!Array.isArray(backup.bookings) || backup.bookings.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'EMPTY_BACKUP', message: 'Backup contains no bookings.' }
+        });
+      }
+
+      // Selected bookings with strategies
+      if (!Array.isArray(selectedBookings) || selectedBookings.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'NO_SELECTION', message: 'No bookings selected for import.' }
+        });
+      }
+
+      // If any booking uses REPLACE strategy, require admin password
+      const hasReplace = selectedBookings.some(s => s.strategy === 'REPLACE');
+      if (hasReplace) {
+        if (!adminPassword) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'PASSWORD_REQUIRED', message: 'Admin password is required for replacing existing bookings.' }
+          });
+        }
+
+        let isValidPassword = false;
+        if (req.user?.email) {
+          try {
+            const user = await authRepository.findUserByEmail(req.user.email);
+            if (user && user.password) {
+              isValidPassword = await bcrypt.compare(adminPassword, user.password);
+            }
+          } catch (e) { /* fallback */ }
+        }
+        if (!isValidPassword) {
+          isValidPassword = (adminPassword === (env.adminPassword || 'admin123'));
+        }
+        if (!isValidPassword) {
+          return res.status(401).json({
+            success: false,
+            error: { code: 'INVALID_PASSWORD', message: 'Incorrect admin password. Import with REPLACE cancelled.' }
+          });
+        }
+      }
+
+      const adminEmail = req.user?.email || env.adminEmail || 'admin@thefinalseat.com';
+      const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
+
+      const results = [];
+      let restored = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      for (const selection of selectedBookings) {
+        const idx = selection.index;
+        const strategy = selection.strategy || 'SKIP';
+        const bookingData = backup.bookings[idx];
+
+        if (!bookingData) {
+          results.push({ index: idx, status: 'FAILED', message: 'Invalid booking index in backup.' });
+          failed++;
+          continue;
+        }
+
+        const result = await bookingRepository.restoreBookingFromBackup(bookingData, strategy, adminEmail, clientIp);
+
+        if (result.status === 'RESTORED') {
+          restored++;
+        } else if (result.status === 'SKIPPED') {
+          skipped++;
+        } else {
+          failed++;
+        }
+
+        results.push({
+          confirmationCode: result.confirmationCode || `index-${idx}`,
+          status: result.status,
+          message: result.message,
+          bookingId: result.bookingId
+        });
+      }
+
+      // Audit log
+      await bookingRepository.logAdminActivity({
+        action: 'BOOKING_BACKUP_IMPORT',
+        bookingReference: `${restored} restored, ${skipped} skipped, ${failed} failed`,
+        deletedBy: adminEmail,
+        ipAddress: clientIp,
+        details: { backupFormat: backup.format, backupVersion: backup.version, exportedAt: backup.exportedAt }
+      });
+
+      return res.json({
+        success: true,
+        summary: {
+          requested: selectedBookings.length,
+          restored,
+          skipped,
+          failed
+        },
+        results
+      });
+    } catch (error) {
+      logger.error(`[BACKUP_IMPORT] Error: ${error.message}`, error);
+      next(error);
+    }
   }
 };
 
 export default adminController;
-
-
-
 
 

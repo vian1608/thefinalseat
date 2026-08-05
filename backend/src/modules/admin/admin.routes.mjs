@@ -20,6 +20,11 @@ import passengerAuthorizationController from '../authorizations/passenger-author
 import bookingController from '../bookings/booking.controller.mjs';
 
 // Protected admin endpoints
+// Bulk operations (must be before :id routes to avoid param capture)
+router.post('/bookings/export', authenticate, authorize(['admin']), adminController.exportBookingsBulk);
+router.post('/bookings/bulk-delete', authenticate, authorize(['admin']), adminController.bulkDeleteBookings);
+router.post('/bookings/import-backup', authenticate, authorize(['admin']), adminController.importBookingBackup);
+
 router.get('/bookings', authenticate, authorize(['admin']), adminController.getBookings);
 router.get('/bookings/:id', authenticate, authorize(['admin']), adminController.getBookingDetail);
 router.delete('/bookings/:bookingId', authenticate, authorize(['admin']), adminController.deleteBooking);
