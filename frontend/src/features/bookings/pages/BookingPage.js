@@ -451,16 +451,32 @@ function Booking() {
     };
 
     const res = await bookingAPI.create(bookingPayload);
-    if (res && res.success && (res.data?.id || res.data?.confirmation_code)) {
-      const bId = res.data.id;
-      const bCode = res.data.confirmation_code || res.data.confirmationCode;
-      pendingBookingId.current = bId;
-      pendingBookingCode.current = bCode;
-      return { id: bId, code: bCode };
-    } else {
-      throw new Error(res?.error?.message || res?.message || 'We could not complete your reservation. No confirmed booking was created. Please review your details and try again.');
+    if (res && res.success) {
+      // Extract booking ID and code from nested data or root-level (canonical model is spread at root)
+      const bId = res.data?.id || res.id;
+      const bCode = res.data?.confirmation_code || res.data?.confirmationCode ||
+                    res.confirmation_code || res.confirmationCode;
+
+      if (bId && bCode) {
+        pendingBookingId.current = bId;
+        pendingBookingCode.current = bCode;
+
+        if (res.idempotentReused) {
+          // Booking already existed from a previous attempt — navigate to confirmation
+          console.info('[Checkout] Idempotent reuse detected — booking already exists:', bCode);
+        }
+
+        return { id: bId, code: bCode };
+      }
     }
+
+    // Backend returned an error payload
+    throw new Error(
+      res?.error?.message || res?.message ||
+      'We could not complete your reservation. No confirmed booking was created. Please review your details and try again.'
+    );
   };
+
 
   const handleDirectCardPayment = async () => {
     setCardError('');
@@ -564,11 +580,47 @@ function Booking() {
       navigate(`/booking-confirmed/${encodeURIComponent(bCode)}?email=${encodeURIComponent(primaryContact.email)}`);
     } catch (err) {
       console.error('Card payment processing error:', err);
-      setCardError(err.response?.data?.error?.message || err.message || 'We could not securely process your reservation. Please review details and try again.');
+
+      const httpStatus = err?.response?.status;
+      const backendMessage = err?.response?.data?.error?.message || err?.response?.data?.message;
+      const referenceId = idempotencyKeyRef.current;
+
+      if (!err.response || err.code === 'ERR_NETWORK' || err.code === 'ECONNABORTED') {
+        // Network error or timeout — outcome unknown
+        setCardError(
+          `We couldn't confirm whether your reservation was created due to a network issue. ` +
+          `Please check your email or visit "My Bookings" before retrying to avoid a duplicate reservation. ` +
+          `Reference ID: ${referenceId}`
+        );
+      } else if (httpStatus === 504 || httpStatus === 503 || httpStatus === 502) {
+        // Server timeout — booking may or may not have been saved
+        setCardError(
+          `The server took too long to respond. Your reservation may or may not have been created. ` +
+          `Please check your email or "My Bookings" page before retrying. ` +
+          `Reference ID: ${referenceId}`
+        );
+      } else if (httpStatus === 500) {
+        // Known server error
+        setCardError(
+          backendMessage ||
+          `We couldn't complete your reservation. No confirmed booking was created. ` +
+          `Please review your details and try again. Reference ID: ${referenceId}`
+        );
+      } else if (backendMessage) {
+        // Backend returned a specific validation or business error
+        setCardError(backendMessage);
+      } else {
+        setCardError(
+          err.message ||
+          `We couldn't securely process your reservation. Please review your details and try again. ` +
+          `Reference ID: ${referenceId}`
+        );
+      }
     } finally {
       setCardProcessing(false);
     }
   };
+
 
   if (!flight) {
     return (

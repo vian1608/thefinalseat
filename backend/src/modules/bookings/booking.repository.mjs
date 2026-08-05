@@ -1031,13 +1031,52 @@ export const bookingRepository = {
       matchData = byName || [];
     }
 
-    const enrichedList = await Promise.all(matchData.map(async b => {
-      const rels = await bookingRepository.getRelations(b.id);
+    if (!matchData.length) return [];
+
+    const bookingIds = matchData.map(b => b.id).filter(Boolean);
+
+    // Batch-query all relations in 6 parallel queries (not N×8 like before)
+    const [travellersRes, contactsRes, flightsRes, paymentsRes, segmentsRes, emailLogsRes] = await Promise.all([
+      supabase.from('travellers').select('*').in('booking_id', bookingIds),
+      supabase.from('contacts').select('*').in('booking_id', bookingIds),
+      supabase.from('flights').select('*').in('booking_id', bookingIds),
+      supabase.from('payments').select('*').in('booking_id', bookingIds),
+      supabase.from('booking_itinerary_segments').select('*').in('booking_id', bookingIds).order('segment_sequence', { ascending: true }),
+      supabase.from('email_logs').select('*').in('booking_id', bookingIds).order('created_at', { ascending: false })
+    ]);
+
+    const travellersMap = new Map();
+    (travellersRes.data || []).forEach(row => { const list = travellersMap.get(row.booking_id) || []; list.push(row); travellersMap.set(row.booking_id, list); });
+
+    const contactsMap = new Map();
+    (contactsRes.data || []).forEach(row => { const list = contactsMap.get(row.booking_id) || []; list.push(row); contactsMap.set(row.booking_id, list); });
+
+    const flightsMap = new Map();
+    (flightsRes.data || []).forEach(row => { const list = flightsMap.get(row.booking_id) || []; list.push(row); flightsMap.set(row.booking_id, list); });
+
+    const paymentsMap = new Map();
+    (paymentsRes.data || []).forEach(row => { const list = paymentsMap.get(row.booking_id) || []; list.push(row); paymentsMap.set(row.booking_id, list); });
+
+    const segmentsMap = new Map();
+    (segmentsRes.data || []).forEach(row => { const list = segmentsMap.get(row.booking_id) || []; list.push(row); segmentsMap.set(row.booking_id, list); });
+
+    const enrichedList = matchData.map(b => {
+      const rels = {
+        travellers: travellersMap.get(b.id) || [],
+        contacts: contactsMap.get(b.id) || [],
+        flights: flightsMap.get(b.id) || [],
+        payments: paymentsMap.get(b.id) || [],
+        itinerarySegments: segmentsMap.get(b.id) || [],
+        paymentSplits: [],
+        paymentMethod: null,
+        emailLogs: []
+      };
       return bookingRepository.enrichBookingRecord(b, rels);
-    }));
+    });
 
     return enrichedList;
   },
+
 
   findAllBookings: async (filters = {}) => {
     let query = supabase.from('bookings').select('*');
