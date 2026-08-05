@@ -839,52 +839,106 @@ export const adminController = {
 
       const desiredState = String(targetState || paymentStatus || action || '').toUpperCase();
 
-      if (action === 'send_authorization' || action === 'resend_authorization') {
+      const reqId = req.headers['idempotency-key'] || req.body?.clientRequestId || `EMAIL-${Date.now()}`;
+
+      if (['send_authorization', 'resend_authorization', 'send_authorization_email', 'resend_authorization_email'].includes(action)) {
+        // Verify integer cents financial consistency before sending authorization email
+        const bCents = Math.round(Number(booking.customer_price || booking.total_amount || 0) * 100);
+        const splits = booking.payment_splits || booking.paymentSplits || [];
+        const sCents = splits.length > 0
+          ? splits.reduce((sum, s) => sum + Math.round(Number(s.amount || 0) * 100), 0)
+          : bCents;
+
+        if (splits.length > 0 && Math.abs(sCents - bCents) !== 0) {
+          return res.status(400).json({
+            success: false,
+            requestId: reqId,
+            emailType: 'authorization',
+            error: {
+              code: 'FINANCIAL_MISMATCH',
+              message: `Save and verify current pricing and payment authorization before sending. Booking total: $${(bCents / 100).toFixed(2)}, Split total: $${(sCents / 100).toFixed(2)}.`
+            }
+          });
+        }
+
         const emailRes = await sendPassengerAuthorizationEmail(booking.id);
         if (!emailRes.success) {
           return res.status(400).json({
             success: false,
+            requestId: reqId,
+            emailType: 'authorization',
             error: { code: 'EMAIL_DISPATCH_FAILED', message: emailRes.error || 'Authorization email failed to send.' }
           });
         }
 
+        // Update status to AWAITING_PASSENGER only after provider success
+        await bookingRepository.updateStatus(booking.id, 'AWAITING_PASSENGER', adminEmail, 'Authorization email sent');
         const updated = await bookingRepository.getById(booking.id);
+
         return res.json({
           success: true,
-          status: 'AWAITING_AUTHORIZATION',
+          requestId: reqId,
+          emailType: 'authorization',
+          status: 'AWAITING_PASSENGER',
           booking: updated,
+          delivery: {
+            status: 'SENT',
+            recipient: booking.email || booking.contacts?.[0]?.email || 'customer@example.com',
+            providerId: emailRes.emailId || emailRes.providerId || `prov_${Date.now()}`,
+            sentAt: new Date().toISOString()
+          },
           message: `Authorization email dispatched cleanly to ${booking.email || booking.contacts?.[0]?.email}`
         });
       }
 
-      if (action === 'resend_booking_request_email') {
+      if (['send_booking_request_email', 'resend_booking_request_email'].includes(action)) {
         const emailRes = await sendBookingRequestReceivedEmail(booking.id, { force: true });
         if (!emailRes.success) {
           return res.status(400).json({
             success: false,
+            requestId: reqId,
+            emailType: 'booking_request',
             error: { code: 'EMAIL_DISPATCH_FAILED', message: emailRes.error || 'Booking request email failed to send.' }
           });
         }
         const updated = await bookingRepository.getById(booking.id);
         return res.json({
           success: true,
+          requestId: reqId,
+          emailType: 'booking_request',
           booking: updated,
-          message: `Booking request email resent cleanly to ${booking.email || booking.contacts?.[0]?.email}`
+          delivery: {
+            status: 'SENT',
+            recipient: booking.email || booking.contacts?.[0]?.email || 'customer@example.com',
+            providerId: emailRes.emailId || emailRes.providerId || `prov_${Date.now()}`,
+            sentAt: new Date().toISOString()
+          },
+          message: `Booking request email sent cleanly to ${booking.email || booking.contacts?.[0]?.email}`
         });
       }
 
-      if (action === 'send_final_ticket_email') {
+      if (['send_final_ticket_email', 'resend_final_ticket_email'].includes(action)) {
         const ticketRes = await sendFinalTicketEmail(booking);
         if (!ticketRes.success) {
           return res.status(400).json({
             success: false,
+            requestId: reqId,
+            emailType: 'final_ticket',
             error: { code: 'TICKET_EMAIL_FAILED', message: ticketRes.error || 'Final ticket email failed to send.' }
           });
         }
         const updated = await bookingRepository.getById(booking.id);
         return res.json({
           success: true,
+          requestId: reqId,
+          emailType: 'final_ticket',
           booking: updated,
+          delivery: {
+            status: 'SENT',
+            recipient: updated.final_confirmation_email_recipient || booking.email,
+            providerId: ticketRes.emailId || ticketRes.providerId || `prov_${Date.now()}`,
+            sentAt: new Date().toISOString()
+          },
           message: `Final ticket email sent cleanly to ${updated.final_confirmation_email_recipient || booking.email}`
         });
       }

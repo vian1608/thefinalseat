@@ -5,10 +5,27 @@
  * 1-cent split mismatch save block ($878.01 vs $878.00), global save orchestration (dirty section filtering, 20s timeout,
  * mandatory finally cleanup block), single canonical success banner, and fake address removal.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it } from 'node:test';
+import assert from 'node:assert';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { moneyToCents, centsToMoney } from '../src/shared/utils/pricing.helper.mjs';
+
+const expect = (actual) => ({
+  toBe: (expected) => assert.strictEqual(actual, expected),
+  toEqual: (expected) => assert.deepStrictEqual(actual, expected),
+  toBeGreaterThan: (n) => assert.ok(actual > n),
+  toBeLessThan: (n) => assert.ok(actual < n),
+  toContain: (str) => assert.ok(actual.includes(str)),
+  toBeDefined: () => assert.notStrictEqual(actual, undefined),
+  toBeNull: () => assert.strictEqual(actual, null),
+  toBeTruthy: () => assert.ok(actual),
+  toBeFalsy: () => assert.ok(!actual),
+  not: {
+    toContain: (str) => assert.ok(!actual.includes(str)),
+    toBe: (expected) => assert.notStrictEqual(actual, expected)
+  }
+});
 
 const loadFile = (relativePath) => {
   try {
@@ -163,9 +180,10 @@ describe('TEST 20 — Global save with no dirty sections', () => {
 
 describe('TEST 21 — Global save with dirty sections', () => {
   it('inspects dirty sections and calls save handlers for dirty sections only', () => {
-    expect(adminDashboardSrc).toContain("const dirtySections = []");
-    expect(adminDashboardSrc).toContain("if (pricingDirty) dirtySections.push('pricing')");
-    expect(adminDashboardSrc).toContain("if (paymentDirty) dirtySections.push('payment')");
+    expect(adminDashboardSrc).toContain("const dirtySections = React.useMemo");
+    expect(adminDashboardSrc).toContain("pricing: !!pricingDirty");
+    expect(adminDashboardSrc).toContain("payment: !!paymentDirty");
+    expect(adminDashboardSrc).toContain("billing: !!billingDirty");
   });
 });
 

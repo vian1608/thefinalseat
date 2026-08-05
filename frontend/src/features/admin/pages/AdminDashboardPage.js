@@ -334,6 +334,42 @@ function AdminDashboard() {
   const [globalSaveMessage, setGlobalSaveMessage] = useState('');
   const isHydratingRef = useRef(false);
 
+  // Active Save Promise Refs (prevents duplicate concurrent save executions)
+  const globalSavePromiseRef = useRef(null);
+  const paymentSavePromiseRef = useRef(null);
+  const pricingSavePromiseRef = useRef(null);
+
+  // Independent Email Action States & Promise Refs
+  const bookingEmailPromiseRef = useRef(null);
+  const authorizationEmailPromiseRef = useRef(null);
+  const finalTicketEmailPromiseRef = useRef(null);
+
+  const [bookingEmailSending, setBookingEmailSending] = useState(false);
+  const [bookingEmailResult, setBookingEmailResult] = useState({ status: 'idle', message: '', error: '' });
+
+  const [authorizationEmailSending, setAuthorizationEmailSending] = useState(false);
+  const [authorizationEmailResult, setAuthorizationEmailResult] = useState({ status: 'idle', message: '', error: '' });
+
+  const [finalTicketEmailSending, setFinalTicketEmailSending] = useState(false);
+  const [finalTicketEmailResult, setFinalTicketEmailResult] = useState({ status: 'idle', message: '', error: '' });
+
+  // Derived Dirty Sections Memo & Unsaved Changes Boolean
+  const dirtySections = React.useMemo(() => ({
+    pricing: !!pricingDirty,
+    payment: !!paymentDirty,
+    billing: !!billingDirty
+  }), [pricingDirty, paymentDirty, billingDirty]);
+
+  const unsavedSectionNames = React.useMemo(() => {
+    const names = [];
+    if (pricingDirty) names.push('Pricing');
+    if (paymentDirty) names.push('Payment authorization');
+    if (billingDirty) names.push('Billing details');
+    return names;
+  }, [pricingDirty, paymentDirty, billingDirty]);
+
+  const hasUnsavedChanges = Object.values(dirtySections).some(Boolean) || hasUnsavedEdits;
+
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
 
@@ -1101,81 +1137,220 @@ function AdminDashboard() {
   };
 
   const handleSaveAllChanges = async (e) => {
-    if (e) e.preventDefault();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    console.log('GLOBAL_SAVE_CLICK', {
+      globalSaving,
+      updatingRecord,
+      paymentSaving,
+      pricingSaving,
+      billingSaving,
+      hasUnsavedChanges,
+      dirtySections,
+      selectedBookingId: selectedBooking?.id
+    });
+
     if (!selectedBooking) return { success: false, error: 'No booking selected' };
-    if (globalSaving) return { success: false, error: 'Save already in progress' };
+    if (globalSavePromiseRef.current) return globalSavePromiseRef.current;
 
-    setGlobalSaveError('');
-    setGlobalSaveMessage('');
-    setGlobalSaveStatus('idle');
+    const sectionsToSave = Object.entries(dirtySections).filter(([, dirty]) => dirty).map(([section]) => section);
 
-    // 1. Identify Dirty Sections
-    const dirtySections = [];
-    if (pricingDirty) dirtySections.push('pricing');
-    if (paymentDirty) dirtySections.push('payment');
-    if (billingDirty) dirtySections.push('billing');
-
-    if (dirtySections.length === 0) {
+    if (sectionsToSave.length === 0) {
       setGlobalSaveStatus('success');
       setGlobalSaveMessage('All changes are already saved.');
       return { success: true, message: 'All changes are already saved.' };
     }
 
-    setGlobalSaving(true);
-    setUpdatingRecord(true);
-    setGlobalSaveStatus('saving');
+    const savePromise = (async () => {
+      setGlobalSaving(true);
+      setUpdatingRecord(true);
+      setGlobalSaveStatus('saving');
+      setGlobalSaveError('');
+      setGlobalSaveMessage('Saving booking changes…');
 
-    const globalController = new AbortController();
-    const globalTimeoutId = window.setTimeout(() => {
-      globalController.abort();
-    }, 20000);
+      const globalController = new AbortController();
+      const globalTimeoutId = window.setTimeout(() => globalController.abort(), 20000);
 
-    const savedSections = [];
-    const failedSections = [];
+      const savedSections = [];
+      const failedSections = [];
 
-    try {
-      for (const section of dirtySections) {
-        let result = null;
-        if (section === 'pricing') {
-          result = await handleSavePricingRevisions();
-        } else if (section === 'payment') {
-          result = await handleSavePaymentSplits();
-        } else if (section === 'billing') {
-          result = await handleSaveBillingDetails();
+      try {
+        for (const section of sectionsToSave) {
+          let result = null;
+          if (section === 'pricing') {
+            result = await handleSavePricingRevisions();
+          } else if (section === 'payment') {
+            result = await handleSavePaymentSplits();
+          } else if (section === 'billing') {
+            result = await handleSaveBillingDetails();
+          }
+
+          if (result && (result.success || result.verified)) {
+            savedSections.push(section);
+          } else {
+            failedSections.push({ section, error: result?.error || 'Save failed' });
+          }
         }
 
-        if (result && result.success) {
-          savedSections.push(section);
+        window.clearTimeout(globalTimeoutId);
+
+        isHydratingRef.current = true;
+        try {
+          await handleRefreshCurrentBooking();
+        } finally {
+          isHydratingRef.current = false;
+        }
+
+        if (failedSections.length === 0) {
+          setGlobalSaveStatus('success');
+          setGlobalSaveMessage('All booking changes were saved and verified.');
+          setHasUnsavedEdits(false);
+          return { success: true, savedSections };
         } else {
-          failedSections.push({ section, error: result?.error || 'Save failed' });
+          setGlobalSaveStatus('failure');
+          setGlobalSaveError(`Some changes could not be saved. Saved: ${savedSections.join(', ') || 'none'}. Failed: ${failedSections.map(f => f.section).join(', ')}.`);
+          return { success: false, savedSections, failedSections };
+        }
+      } catch (err) {
+        window.clearTimeout(globalTimeoutId);
+        const isTimeout = err.name === 'AbortError' || err.message?.includes('20 seconds');
+        setGlobalSaveStatus('failure');
+        setGlobalSaveError(isTimeout ? 'Global save timed out after 20 seconds. Refresh the booking and retry.' : (err.message || 'Failed to save all changes.'));
+        return { success: false, error: err.message };
+      } finally {
+        setGlobalSaving(false);
+        setUpdatingRecord(false);
+        paymentSaveInFlightRef.current = false;
+        pricingSaveInFlightRef.current = false;
+        globalSavePromiseRef.current = null;
+      }
+    })();
+
+    globalSavePromiseRef.current = savePromise;
+    return savePromise;
+  };
+
+  const sendAdminBookingEmail = async ({ emailType, actionName }) => {
+    console.log('ADMIN_EMAIL_ACTION_CLICK', {
+      action: actionName,
+      bookingId: selectedBooking?.id,
+      confirmationCode: selectedBooking?.confirmation_code || selectedBooking?.confirmationCode,
+      emailType
+    });
+
+    const bookingIdentifier = selectedBooking?.id || selectedBooking?.confirmation_code || selectedBooking?.confirmationCode;
+    if (!bookingIdentifier) {
+      const errText = 'Unable to send this email because the booking record could not be resolved. Refresh the booking and try again.';
+      if (emailType === 'booking_request') setBookingEmailResult({ status: 'failure', error: errText });
+      else if (emailType === 'authorization') setAuthorizationEmailResult({ status: 'failure', error: errText });
+      else if (emailType === 'final_ticket') setFinalTicketEmailResult({ status: 'failure', error: errText });
+      return { success: false, error: errText };
+    }
+
+    if (emailType === 'booking_request') {
+      if (bookingEmailPromiseRef.current) return bookingEmailPromiseRef.current;
+      setBookingEmailSending(true);
+      setBookingEmailResult({ status: 'sending', message: 'Sending Booking Request Email...' });
+    } else if (emailType === 'authorization') {
+      if (authorizationEmailPromiseRef.current) return authorizationEmailPromiseRef.current;
+      setAuthorizationEmailSending(true);
+      setAuthorizationEmailResult({ status: 'sending', message: 'Sending Authorization Email...' });
+    } else if (emailType === 'final_ticket') {
+      if (finalTicketEmailPromiseRef.current) return finalTicketEmailPromiseRef.current;
+      setFinalTicketEmailSending(true);
+      setFinalTicketEmailResult({ status: 'sending', message: 'Sending Final Ticket Email...' });
+    }
+
+    const adminToken = localStorage.getItem('token');
+    const clientRequestId = window.crypto?.randomUUID ? window.crypto.randomUUID() : `email_${Date.now()}_${Math.random()}`;
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 20000);
+
+    const emailPromise = (async () => {
+      try {
+        const res = await fetch(`/api/admin/bookings/${bookingIdentifier}/payment-action`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`,
+            'Idempotency-Key': clientRequestId
+          },
+          body: JSON.stringify({
+            action: actionName,
+            clientRequestId
+          }),
+          signal: controller.signal
+        });
+
+        window.clearTimeout(timeoutId);
+
+        const contentType = res.headers.get('content-type') || '';
+        const rawBody = await res.text();
+        let payload = null;
+
+        if (rawBody && contentType.includes('application/json')) {
+          try { payload = JSON.parse(rawBody); } catch { payload = null; }
+        }
+
+        if (!res.ok || !payload?.success) {
+          const reqRef = payload?.requestId || `EMAIL-ERR-${res.status}`;
+          const isHtml = rawBody.trim().startsWith('<!DOCTYPE') || rawBody.trim().startsWith('<html');
+          const safeServerText = !isHtml && rawBody ? rawBody.trim().slice(0, 200) : null;
+
+          const errMsg = payload?.error?.message || payload?.message || safeServerText || `The email service returned an invalid response. Reference: ${reqRef}`;
+          throw new Error(errMsg);
+        }
+
+        const updatedBooking = payload.booking || payload.data;
+        if (updatedBooking) {
+          isHydratingRef.current = true;
+          try {
+            setBookings(prevList => prevList.map(b => b.id === updatedBooking.id ? { ...b, ...updatedBooking } : b));
+            setSelectedBooking(prev => ({ ...prev, ...updatedBooking }));
+          } finally {
+            isHydratingRef.current = false;
+          }
+        }
+
+        const successMsg = payload.message || 'Email sent cleanly.';
+        if (emailType === 'booking_request') setBookingEmailResult({ status: 'success', message: successMsg, verified: true });
+        else if (emailType === 'authorization') setAuthorizationEmailResult({ status: 'success', message: successMsg, verified: true });
+        else if (emailType === 'final_ticket') setFinalTicketEmailResult({ status: 'success', message: successMsg, verified: true });
+
+        return { success: true, message: successMsg, payload };
+      } catch (err) {
+        window.clearTimeout(timeoutId);
+        const isTimeout = err.name === 'AbortError' || err.message?.includes('20 seconds');
+        const errMsg = isTimeout ? 'The email request timed out. Checking delivery status...' : err.message;
+
+        if (emailType === 'booking_request') setBookingEmailResult({ status: 'failure', error: errMsg });
+        else if (emailType === 'authorization') setAuthorizationEmailResult({ status: 'failure', error: errMsg });
+        else if (emailType === 'final_ticket') setFinalTicketEmailResult({ status: 'failure', error: errMsg });
+
+        return { success: false, error: errMsg };
+      } finally {
+        if (emailType === 'booking_request') {
+          setBookingEmailSending(false);
+          bookingEmailPromiseRef.current = null;
+        } else if (emailType === 'authorization') {
+          setAuthorizationEmailSending(false);
+          authorizationEmailPromiseRef.current = null;
+        } else if (emailType === 'final_ticket') {
+          setFinalTicketEmailSending(false);
+          finalTicketEmailPromiseRef.current = null;
         }
       }
+    })();
 
-      window.clearTimeout(globalTimeoutId);
-      await handleRefreshCurrentBooking();
+    if (emailType === 'booking_request') bookingEmailPromiseRef.current = emailPromise;
+    else if (emailType === 'authorization') authorizationEmailPromiseRef.current = emailPromise;
+    else if (emailType === 'final_ticket') finalTicketEmailPromiseRef.current = emailPromise;
 
-      if (failedSections.length === 0) {
-        setGlobalSaveStatus('success');
-        setGlobalSaveMessage('All booking changes saved and verified.');
-        return { success: true, savedSections };
-      } else {
-        const firstErr = failedSections[0].error;
-        setGlobalSaveStatus('failure');
-        setGlobalSaveError(`Some changes could not be saved. Saved: ${savedSections.join(', ') || 'none'}. Failed: ${failedSections.map(f => f.section).join(', ')} (${firstErr}).`);
-        return { success: false, savedSections, failedSections };
-      }
-    } catch (err) {
-      window.clearTimeout(globalTimeoutId);
-      const isTimeout = err.name === 'AbortError' || err.message?.includes('20 seconds');
-      setGlobalSaveStatus('failure');
-      setGlobalSaveError(isTimeout ? 'Global save timed out after 20 seconds. Refresh the booking and retry.' : (err.message || 'Failed to save all changes.'));
-      return { success: false, error: err.message };
-    } finally {
-      setGlobalSaving(false);
-      setUpdatingRecord(false);
-      paymentSaveInFlightRef.current = false;
-      pricingSaveInFlightRef.current = false;
-    }
+    return emailPromise;
   };
 
   const handleConfirmDeleteBooking = async (e) => {
@@ -4856,23 +5031,30 @@ function AdminDashboard() {
                                   </div>
                                 )}
 
-                                <button
-                                  type="button"
-                                  onClick={handleSendFinalTicketEmail}
-                                  disabled={!canSendFinalEmail || updatingRecord}
-                                  className={selectedBooking.final_confirmation_email_status === 'SENT' ? "admin-secondary-btn" : "admin-primary-btn"}
-                                  style={{
-                                    width: '100%',
-                                    background: !canSendFinalEmail ? '#cbd5e1' : (selectedBooking.final_confirmation_email_status === 'SENT' ? '#f1f5f9' : '#047857'),
-                                    color: !canSendFinalEmail ? '#64748b' : undefined,
-                                    fontSize: '0.78rem',
-                                    height: '34px',
-                                    cursor: !canSendFinalEmail ? 'not-allowed' : 'pointer'
-                                  }}
-                                >
-                                  <i className={`fas ${selectedBooking.final_confirmation_email_status === 'SENT' ? 'fa-redo' : 'fa-ticket-alt'}`} style={{ marginRight: '4px' }}></i>
-                                  {selectedBooking.final_confirmation_email_status === 'SENT' ? 'Resend Final Ticket Email' : 'Send Final Ticket Email'}
-                                </button>
+                                {(() => {
+                                  const isSent = selectedBooking.final_confirmation_email_status === 'SENT';
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={() => sendAdminBookingEmail({ emailType: 'final_ticket', actionName: isSent ? 'resend_final_ticket_email' : 'send_final_ticket_email' })}
+                                      disabled={!canSendFinalEmail || finalTicketEmailSending}
+                                      aria-busy={finalTicketEmailSending}
+                                      className={isSent ? "admin-secondary-btn" : "admin-primary-btn"}
+                                      style={{
+                                        width: '100%',
+                                        background: !canSendFinalEmail ? '#cbd5e1' : (isSent ? '#f1f5f9' : '#047857'),
+                                        color: !canSendFinalEmail ? '#64748b' : undefined,
+                                        fontSize: '0.78rem',
+                                        height: '34px',
+                                        marginTop: '10px',
+                                        cursor: !canSendFinalEmail ? 'not-allowed' : 'pointer'
+                                      }}
+                                    >
+                                      <i className={`fas ${finalTicketEmailSending ? 'fa-spinner fa-spin' : (isSent ? 'fa-redo' : 'fa-ticket-alt')}`} style={{ marginRight: '4px' }}></i>
+                                      {finalTicketEmailSending ? 'Sending Final Ticket Email…' : (finalTicketEmailResult.status === 'failure' ? 'Retry Final Ticket Email' : (isSent ? 'Resend Final Ticket Email' : 'Send Final Ticket Email'))}
+                                    </button>
+                                  );
+                                })()}
 
                                 {/* Blocking reason hints */}
                                 {!isPnrValid && (
@@ -4908,11 +5090,17 @@ function AdminDashboard() {
                       )}
                     </div>
                       {/* STICKY EDIT MODE FOOTER */}
-                      <div className="sticky-drawer-footer">
+                      <div className="sticky-drawer-footer" style={{ position: 'relative', zIndex: 20, pointerEvents: 'auto' }}>
                         {/* Row 1: Unsaved status badge */}
                         <div className="drawer-footer-status-row">
-                          {hasUnsavedEdits ? (
-                            <span className="unsaved-badge">● Unsaved Changes</span>
+                          {hasUnsavedChanges ? (
+                            <span className="unsaved-badge">
+                              ● Unsaved Changes: {unsavedSectionNames.join(', ')}
+                            </span>
+                          ) : globalSaveStatus === 'failure' ? (
+                            <span className="unsaved-badge" style={{ background: '#fef2f2', color: '#dc2626' }}>
+                              ⚠ {globalSaveError || 'Some changes were not saved'}
+                            </span>
                           ) : (
                             <span className="drawer-footer-synced">✓ Synced</span>
                           )}
@@ -4944,9 +5132,11 @@ function AdminDashboard() {
                               type="button"
                               onClick={handleSaveAllChanges}
                               className="drawer-footer-save-btn"
-                              disabled={updatingRecord}
+                              disabled={globalSaving || !hasUnsavedChanges}
+                              style={{ pointerEvents: 'auto' }}
                             >
-                              <i className="fas fa-check" style={{ marginRight: '4px' }}></i>{updatingRecord ? 'Saving…' : 'Save Changes'}
+                              <i className={`fas ${globalSaving ? 'fa-spinner fa-spin' : 'fa-check'}`} style={{ marginRight: '4px' }}></i>
+                              {globalSaving ? 'Saving…' : (globalSaveStatus === 'failure' ? 'Retry Save' : (hasUnsavedChanges ? 'Save Changes' : '✓ All Changes Saved'))}
                             </button>
                           </div>
                         </div>

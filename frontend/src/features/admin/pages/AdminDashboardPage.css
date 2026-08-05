@@ -1722,9 +1722,13 @@
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  padding: 14px 16px;
-  margin-bottom: 10px;
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  height: auto;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .email-activity-card:last-child {
@@ -1734,13 +1738,13 @@
 .email-card-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   margin-bottom: 8px;
 }
 
 .email-card-title {
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: #1e293b;
   margin: 0;
@@ -1749,10 +1753,17 @@
 .email-card-meta {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px 14px;
-  font-size: 0.75rem;
+  gap: 6px 16px;
+  font-size: 0.78rem;
   color: #64748b;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 768px) {
+  .email-card-meta {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
 }
 
 .email-card-meta-full {
