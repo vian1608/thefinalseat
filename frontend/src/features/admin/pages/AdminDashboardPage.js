@@ -1752,8 +1752,7 @@ function AdminDashboard() {
           </div>
         </div>
       </header>
-
-      <main className="admin-main-container" style={{ maxWidth: '1600px', margin: '0 auto', padding: '24px 20px' }}>
+      <main className="admin-main-container">
         
         {/* TIME RANGE & OVERFLOW ACTION TOOLBAR */}
         <div className="admin-toolbar-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', background: '#ffffff', padding: '12px 20px', borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' }}>
