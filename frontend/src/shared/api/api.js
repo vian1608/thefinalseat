@@ -232,6 +232,14 @@ export const adminAPI = {
     const response = await api.get('/admin/abandoned-bookings');
     return response.data;
   },
+  getBookingById: async (id, options = {}) => {
+    const response = await api.get(`/admin/bookings/${id}`, options);
+    return response.data;
+  },
+  getBookingDetails: async (id, options = {}) => {
+    const response = await api.get(`/admin/bookings/${id}`, options);
+    return response.data;
+  },
   updateBooking: async (id, updateData) => {
     const response = await api.put(`/admin/bookings/${id}`, updateData);
     return response.data;

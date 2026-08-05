@@ -1079,7 +1079,10 @@ export const bookingRepository = {
 
 
   findAllBookings: async (filters = {}) => {
-    let query = supabase.from('bookings').select('*');
+    const page = parseInt(filters.page, 10) || 1;
+    const pageSize = parseInt(filters.pageSize, 10) || (filters.page ? 10 : 0);
+
+    let query = supabase.from('bookings').select('*', { count: 'exact' });
 
     if (filters.status) {
       let s = filters.status.toUpperCase();
@@ -1103,9 +1106,35 @@ export const bookingRepository = {
 
     query = query.order('created_at', { ascending: false });
 
-    const { data, error } = await query;
+    if (pageSize > 0) {
+      const from = (page - 1) * pageSize;
+      const to = page * pageSize - 1;
+      query = query.range(from, to);
+    }
+
+    const { data, count, error } = await query;
     if (error) throw new Error(error.message);
-    if (!data || data.length === 0) return [];
+
+    const totalRecords = count !== null && count !== undefined ? count : (data ? data.length : 0);
+    const effectivePageSize = pageSize > 0 ? pageSize : (totalRecords || 1);
+    const totalPages = Math.ceil(totalRecords / effectivePageSize) || 1;
+
+    if (!data || data.length === 0) {
+      if (pageSize > 0) {
+        return {
+          bookings: [],
+          pagination: {
+            page,
+            pageSize,
+            totalRecords: 0,
+            totalPages: 1,
+            hasPrevious: false,
+            hasNext: false
+          }
+        };
+      }
+      return [];
+    }
 
     const bookingIds = data.map(b => b.id).filter(Boolean);
 
@@ -1215,6 +1244,20 @@ export const bookingRepository = {
 
       return bookingRepository.enrichBookingRecord(merged, rels);
     });
+
+    if (pageSize > 0) {
+      return {
+        bookings: enrichedList,
+        pagination: {
+          page,
+          pageSize,
+          totalRecords,
+          totalPages,
+          hasPrevious: page > 1,
+          hasNext: page < totalPages
+        }
+      };
+    }
 
     return enrichedList;
   },

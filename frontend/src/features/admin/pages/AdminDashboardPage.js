@@ -246,6 +246,15 @@ function AdminDashboard() {
   const [bookingDetailsCache, setBookingDetailsCache] = useState({});
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState(null);
+  const [detailsErrorRefCode, setDetailsErrorRefCode] = useState(null);
+  const abortControllerRef = useRef(null);
+
+  // Server-Side & Client-Side Pagination State (10 Bookings Per Page)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [tableLoading, setTableLoading] = useState(false);
 
   const handleSelectBooking = useCallback((booking) => {
     setSelectedBooking(booking);
@@ -439,58 +448,110 @@ function AdminDashboard() {
   const [openReturnGroup, setOpenReturnGroup] = useState(true);
   const [isImportItineraryModalOpen, setIsImportItineraryModalOpen] = useState(false);
 
-  const handleToggleExpandBooking = useCallback((booking) => {
-    if (!booking || !booking.id) return;
-    if (expandedBookingId === booking.id) {
-      setExpandedBookingId(null);
-      setSelectedBooking(null);
+  const loadBookingDetails = useCallback(async (targetBooking, forceRefetch = false) => {
+    if (!targetBooking) return;
+    const bId = targetBooking.id || targetBooking.confirmation_code;
+    if (!bId) return;
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    setExpandedBookingId(bId);
+    setDetailsError(null);
+    setDetailsErrorRefCode(null);
+
+    // Check in-memory session cache if not forcing refetch
+    if (!forceRefetch && bookingDetailsCache[bId]) {
+      handleSelectBooking(bookingDetailsCache[bId]);
+      setDetailsLoading(false);
       return;
     }
 
-    setExpandedBookingId(booking.id);
-    setDetailsError(null);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
-    // Check if full details are in session cache
-    if (bookingDetailsCache[booking.id]) {
-      handleSelectBooking(bookingDetailsCache[booking.id]);
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort('TIMEOUT');
+    }, 15000);
+
+    setDetailsLoading(true);
+
+    try {
+      const lookupId = targetBooking.id || targetBooking.confirmation_code;
+      const res = await adminAPI.getBookingDetails(lookupId, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      const payload = res?.data ?? res;
+      const details = payload?.booking ?? payload?.data?.booking ?? payload?.data ?? null;
+
+      if (!details) {
+        throw new Error('BOOKING_DETAILS_EMPTY');
+      }
+
+      // Safe defaults for incomplete test bookings
+      const safeDetails = {
+        ...details,
+        travellers: details.travellers || details.passengers || [],
+        flights: details.flights || details.outbound_segments || [],
+        payments: details.payments || [],
+        payment_splits: details.payment_splits || details.splits || [],
+        billingDetails: details.billingDetails || details.cardReference || null,
+        email_history: details.email_history || details.emailLogs || [],
+        audit: details.audit || details.auditEvents || []
+      };
+
+      setBookingDetailsCache(prev => ({
+        ...prev,
+        [bId]: safeDetails,
+        ...(safeDetails.id ? { [safeDetails.id]: safeDetails } : {}),
+        ...(safeDetails.confirmation_code ? { [safeDetails.confirmation_code]: safeDetails } : {})
+      }));
+
+      handleSelectBooking(safeDetails);
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (timedOut || err === 'TIMEOUT' || err.name === 'AbortError' || err.message?.includes('aborted')) {
+        setDetailsError('Booking details request timed out after 15 seconds.');
+      } else {
+        console.error('[AdminDashboard] Fetch details error:', err);
+        setDetailsError(err.message || 'BOOKING_DETAILS_FETCH_FAILED');
+      }
+      setDetailsErrorRefCode(targetBooking.confirmation_code || targetBooking.id || 'N/A');
+      handleSelectBooking(targetBooking);
+    } finally {
       setDetailsLoading(false);
-    } else {
-      setDetailsLoading(true);
-      adminAPI.getBookingById(booking.id)
-        .then(fresh => {
-          const fullBooking = fresh || booking;
-          setBookingDetailsCache(prev => ({ ...prev, [booking.id]: fullBooking }));
-          handleSelectBooking(fullBooking);
-          setDetailsLoading(false);
-        })
-        .catch(err => {
-          console.warn('[AdminDashboard] Lazy loading error:', err);
-          handleSelectBooking(booking);
-          setDetailsLoading(false);
-        });
+      abortControllerRef.current = null;
     }
-  }, [expandedBookingId, bookingDetailsCache, handleSelectBooking]);
+  }, [bookingDetailsCache, handleSelectBooking]);
+
+  const handleToggleExpandBooking = useCallback((booking) => {
+    if (!booking) return;
+    const bId = booking.id || booking.confirmation_code;
+    if (expandedBookingId === bId) {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      setExpandedBookingId(null);
+      setSelectedBooking(null);
+      setDetailsLoading(false);
+      return;
+    }
+    loadBookingDetails(booking, false);
+  }, [expandedBookingId, loadBookingDetails]);
 
   const handleRefreshCurrentBooking = useCallback(() => {
-    if (!selectedBooking?.id) return;
-    setDetailsLoading(true);
-    setDetailsError(null);
+    if (!selectedBooking) return;
+    loadBookingDetails(selectedBooking, true);
+  }, [selectedBooking, loadBookingDetails]);
 
-    adminAPI.getBookingById(selectedBooking.id)
-      .then(fresh => {
-        if (fresh) {
-          setBookingDetailsCache(prev => ({ ...prev, [selectedBooking.id]: fresh }));
-          handleSelectBooking(fresh);
-          setBookings(prevList => prevList.map(b => b.id === fresh.id ? { ...b, ...fresh } : b));
-        }
-        setDetailsLoading(false);
-      })
-      .catch(err => {
-        console.error('[AdminDashboard] Refresh error:', err);
-        setDetailsError(err.message || 'Failed to refetch booking details.');
-        setDetailsLoading(false);
-      });
-  }, [selectedBooking, handleSelectBooking]);
+  const handleRetryBookingDetails = useCallback(() => {
+    if (!selectedBooking) return;
+    loadBookingDetails(selectedBooking, true);
+  }, [selectedBooking, loadBookingDetails]);
 
   const handleToggleSelectAll = useCallback((e) => {
     if (e.target.checked) {
@@ -587,12 +648,13 @@ function AdminDashboard() {
   });
 
 
-  const loadAllDashboardData = useCallback(async (activeFilters = filters, days = timeframe) => {
+  const loadAllDashboardData = useCallback(async (activeFilters = filters, days = timeframe, page = currentPage, size = pageSize) => {
     try {
+      setTableLoading(true);
       setLoading(true);
       setError('');
       
-      const queryFilters = {};
+      const queryFilters = { page, pageSize: size };
       Object.keys(activeFilters).forEach(key => {
         if (activeFilters[key]) {
           queryFilters[key] = activeFilters[key];
@@ -607,7 +669,17 @@ function AdminDashboard() {
       ]);
 
       if (bookingsRes.status === 'fulfilled' && bookingsRes.value?.success) {
-        setBookings(bookingsRes.value.data || []);
+        const val = bookingsRes.value;
+        const list = val.bookings || val.data || [];
+        setBookings(list);
+        if (val.pagination) {
+          setCurrentPage(val.pagination.page || page);
+          setTotalRecords(val.pagination.totalRecords ?? list.length);
+          setTotalPages(val.pagination.totalPages || 1);
+        } else {
+          setTotalRecords(list.length);
+          setTotalPages(1);
+        }
       } else {
         const errorMsg = bookingsRes.status === 'rejected' ? bookingsRes.reason?.message : (bookingsRes.value?.error || 'Failed to fetch bookings');
         console.error('Bookings API failed:', errorMsg);
@@ -627,9 +699,25 @@ function AdminDashboard() {
       console.error('Failed to load admin dashboard data:', err);
       setError('Unable to reach server. Please verify database and backend connectivity.');
     } finally {
+      setTableLoading(false);
       setLoading(false);
     }
-  }, [filters, timeframe]);
+  }, [filters, timeframe, currentPage, pageSize]);
+
+  const handlePageChange = useCallback((newPage) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setExpandedBookingId(null);
+    setSelectedBooking(null);
+    setDetailsLoading(false);
+
+    setCurrentPage(newPage);
+    loadAllDashboardData(filters, timeframe, newPage, pageSize);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [totalPages, filters, timeframe, pageSize, loadAllDashboardData]);
 
   // Authenticate Admin Session on Mount
   useEffect(() => {
@@ -639,19 +727,21 @@ function AdminDashboard() {
       navigate('/admin/login');
       return;
     }
-    loadAllDashboardData();
+    loadAllDashboardData(filters, timeframe, 1, 10);
   }, [navigate, loadAllDashboardData]);
 
   const handleFilterChange = (field, value) => {
     const updatedFilters = { ...filters, [field]: value };
     setFilters(updatedFilters);
-    loadAllDashboardData(updatedFilters, timeframe);
+    setCurrentPage(1);
+    loadAllDashboardData(updatedFilters, timeframe, 1, pageSize);
   };
 
   const handleClearFilters = () => {
     const cleared = { reference: '', name: '', email: '', date: '', status: '' };
     setFilters(cleared);
-    loadAllDashboardData(cleared, timeframe);
+    setCurrentPage(1);
+    loadAllDashboardData(cleared, timeframe, 1, pageSize);
   };
 
   const handleTimeframeChange = (days) => {
@@ -1919,12 +2009,22 @@ function AdminDashboard() {
                                           <p style={{ margin: 0, fontWeight: 600, color: '#475569' }}>Loading complete booking details...</p>
                                         </div>
                                       ) : detailsError ? (
-                                        <div className="expanded-error-card">
-                                          <i className="fas fa-exclamation-circle fa-2x" style={{ color: '#dc2626', marginBottom: '10px' }} />
-                                          <p style={{ margin: '0 0 12px 0', fontWeight: 600, color: '#991b1b' }}>{detailsError}</p>
-                                          <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                                            <button type="button" onClick={() => handleToggleExpandBooking(booking)} className="admin-secondary-btn">Retry</button>
-                                            <button type="button" onClick={() => handleToggleExpandBooking(booking)} className="admin-secondary-btn">Collapse</button>
+                                        <div className="expanded-error-card" style={{ padding: '24px', textAlign: 'center', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px' }}>
+                                          <i className="fas fa-exclamation-triangle fa-2x" style={{ color: '#dc2626', marginBottom: '10px' }} />
+                                          <h4 style={{ margin: '0 0 6px 0', color: '#991b1b', fontSize: '1rem', fontWeight: 700 }}>Booking details could not be loaded.</h4>
+                                          <p style={{ margin: '0 0 6px 0', fontSize: '0.85rem', color: '#7f1d1d' }}>
+                                            Reference: <strong>{detailsErrorRefCode || booking.confirmation_code || booking.id || 'N/A'}</strong>
+                                          </p>
+                                          <p style={{ margin: '0 0 16px 0', fontSize: '0.8rem', color: '#991b1b', fontFamily: 'monospace' }}>
+                                            Safe error: {detailsError}
+                                          </p>
+                                          <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+                                            <button type="button" onClick={handleRetryBookingDetails} className="admin-primary-btn" style={{ background: '#dc2626', padding: '6px 16px', fontSize: '0.8rem' }}>
+                                              <i className="fas fa-redo" style={{ marginRight: '6px' }} /> Retry
+                                            </button>
+                                            <button type="button" onClick={() => handleToggleExpandBooking(booking)} className="admin-secondary-btn" style={{ padding: '6px 16px', fontSize: '0.8rem' }}>
+                                              Collapse
+                                            </button>
                                           </div>
                                         </div>
                                       ) : (
@@ -1955,13 +2055,7 @@ function AdminDashboard() {
                         <>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (selectedBooking?.id) {
-                                adminAPI.getBookingById(selectedBooking.id).then(fresh => {
-                                  if (fresh) handleSelectBooking(fresh);
-                                }).catch(err => console.error(err));
-                              }
-                            }}
+                            onClick={handleRefreshCurrentBooking}
                             className="admin-secondary-btn"
                             style={{ padding: '6px 10px', fontSize: '0.78rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}
                             title="Refetch latest booking details"
@@ -4036,6 +4130,36 @@ function AdminDashboard() {
                       </tbody>
                     </table>
                   )}
+                </div>
+
+                {/* PAGINATION CONTROL BAR (10 BOOKINGS PER PAGE) */}
+                <div className="admin-pagination-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', padding: '12px 16px', background: '#ffffff', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                  <div className="pagination-info" style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>
+                    Showing {totalRecords === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalRecords)} of {totalRecords} bookings
+                  </div>
+                  <div className="pagination-controls" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage <= 1 || tableLoading}
+                      className="admin-secondary-btn"
+                      style={{ padding: '6px 14px', fontSize: '0.8rem', fontWeight: 600, opacity: (currentPage <= 1 || tableLoading) ? 0.5 : 1, cursor: (currentPage <= 1 || tableLoading) ? 'not-allowed' : 'pointer' }}
+                    >
+                      <i className="fas fa-chevron-left" style={{ marginRight: '4px' }}></i> Previous
+                    </button>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e3a5f', padding: '0 8px' }}>
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage >= totalPages || tableLoading}
+                      className="admin-secondary-btn"
+                      style={{ padding: '6px 14px', fontSize: '0.8rem', fontWeight: 600, opacity: (currentPage >= totalPages || tableLoading) ? 0.5 : 1, cursor: (currentPage >= totalPages || tableLoading) ? 'not-allowed' : 'pointer' }}
+                    >
+                      Next <i className="fas fa-chevron-right" style={{ marginLeft: '4px' }}></i>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

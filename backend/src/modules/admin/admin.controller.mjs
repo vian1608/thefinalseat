@@ -174,12 +174,26 @@ export const adminController = {
 
   getBookings: async (req, res, next) => {
     try {
-      const { reference, name, email, date, status } = req.query;
-      const bookings = await adminService.getAllBookings({ reference, name, email, date, status });
+      const { reference, name, email, date, status, page, pageSize } = req.query;
+      const result = await adminService.getAllBookings({ reference, name, email, date, status, page, pageSize });
+
+      const isPaginated = result && typeof result === 'object' && Array.isArray(result.bookings);
+      const bookingsList = isPaginated ? result.bookings : (Array.isArray(result) ? result : []);
+      const pagination = isPaginated ? result.pagination : {
+        page: parseInt(page, 10) || 1,
+        pageSize: parseInt(pageSize, 10) || bookingsList.length,
+        totalRecords: bookingsList.length,
+        totalPages: 1,
+        hasPrevious: false,
+        hasNext: false
+      };
+
       res.json({
         success: true,
-        data: bookings,
-        count: bookings.length
+        data: bookingsList,
+        bookings: bookingsList,
+        count: pagination.totalRecords,
+        pagination
       });
     } catch (error) {
       next(error);
@@ -188,19 +202,44 @@ export const adminController = {
 
   getBookingDetail: async (req, res, next) => {
     try {
-      const booking = await adminService.getBookingDetails(req.params.id);
+      const targetId = req.params.id || req.params.bookingId;
+      if (!targetId || targetId === 'undefined' || targetId === '[object Object]') {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_BOOKING_ID', message: 'Valid booking ID or confirmation reference required.' }
+        });
+      }
+
+      const booking = await adminService.getBookingDetails(targetId);
       if (!booking) {
         return res.status(404).json({
           success: false,
-          error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' }
+          error: { code: 'BOOKING_NOT_FOUND', message: `Booking '${targetId}' not found.` }
         });
       }
+
+      const safeBooking = {
+        ...booking,
+        travellers: booking.travellers || booking.passengers || [],
+        flights: booking.flights || booking.outbound_segments || [],
+        payments: booking.payments || [],
+        payment_splits: booking.payment_splits || booking.splits || [],
+        billingDetails: booking.billingDetails || booking.cardReference || null,
+        email_history: booking.email_history || booking.emailLogs || [],
+        audit: booking.audit || booking.auditEvents || []
+      };
+
       res.json({
         success: true,
-        data: booking
+        booking: safeBooking,
+        data: safeBooking
       });
     } catch (error) {
-      next(error);
+      logger.error(`[AdminController] Error fetching details for '${req.params.id}': ${error.message}`, error);
+      res.status(500).json({
+        success: false,
+        error: { code: 'BOOKING_DETAILS_FETCH_FAILED', message: error.message }
+      });
     }
   },
 

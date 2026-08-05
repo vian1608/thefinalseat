@@ -39,8 +39,8 @@ test('Admin Dashboard Customer Bookings Table Redesign', async (t) => {
   });
 
   await t.test('4. Single Expand Constraint: Toggling a row collapses previous expanded row state', () => {
-    assert.ok(jsContent.includes('expandedBookingId === booking.id'), 'State tracks single expanded booking ID');
-    assert.ok(jsContent.includes('setExpandedBookingId(booking.id)'), 'Expanding a row updates single expandedBookingId state');
+    assert.ok(jsContent.includes('expandedBookingId === booking.id') || jsContent.includes('expandedBookingId === bId'), 'State tracks single expanded booking ID');
+    assert.ok(jsContent.includes('setExpandedBookingId(bId)') || jsContent.includes('setExpandedBookingId(booking.id)'), 'Expanding a row updates single expandedBookingId state');
     assert.ok(jsContent.includes('setExpandedBookingId(null)'), 'Collapsing clears expandedBookingId state');
   });
 
@@ -92,5 +92,14 @@ test('Admin Dashboard Customer Bookings Table Redesign', async (t) => {
     assert.ok(cssContent.includes('@media (max-width: 768px)'), 'CSS includes mobile max-width 768px media query');
     assert.ok(cssContent.includes('.mobile-bookings-list'), 'CSS defines mobile bookings list');
     assert.ok(jsContent.includes('className="mobile-bookings-list"'), 'JS renders mobile bookings list');
+  });
+
+  await t.test('12. Pagination & AbortController: 10 bookings per page and 15s request timeout handling', () => {
+    assert.ok(jsContent.includes('pageSize'), 'JS defines pageSize state');
+    assert.ok(jsContent.includes('currentPage'), 'JS defines currentPage state');
+    assert.ok(jsContent.includes('totalPages'), 'JS defines totalPages state');
+    assert.ok(jsContent.includes('handlePageChange'), 'JS defines handlePageChange function');
+    assert.ok(jsContent.includes('AbortController'), 'JS uses AbortController for details request timeout');
+    assert.ok(jsContent.includes('handleRetryBookingDetails'), 'JS includes Retry button for details loading errors');
   });
 });
