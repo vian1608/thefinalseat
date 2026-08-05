@@ -357,7 +357,9 @@ export const bookingRepository = {
         ? supabase.from('bookings').select('*').eq('id', ref).maybeSingle()
         : supabase.from('bookings').select('*').eq('confirmation_code', ref).maybeSingle();
 
-      const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 1000));
+      const isPlaceholderSupabase = !env.supabaseUrl || env.supabaseUrl.includes('placeholder');
+      const baseTimeoutMs = isPlaceholderSupabase ? 200 : 1000;
+      const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), baseTimeoutMs));
       const res = await Promise.race([queryPromise, timeoutPromise]);
       data = res?.data || null;
     } catch (err) {
@@ -411,13 +413,16 @@ export const bookingRepository = {
     const refCode = baseBooking.confirmation_code || idOrCode;
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(refCode);
 
+    const isPlaceholderSupabase = !env.supabaseUrl || env.supabaseUrl.includes('placeholder');
+    const queryTimeoutMs = isPlaceholderSupabase ? 300 : 3000;
+
     const fetchWithTimeout = async (promise, sectionName, fallback) => {
       let timeoutId;
       const timeoutPromise = new Promise((resolve) => {
         timeoutId = setTimeout(() => {
-          logger.warn(`[getCompleteBookingById] Section '${sectionName}' timed out after 3000ms`);
+          logger.warn(`[getCompleteBookingById] Section '${sectionName}' timed out after ${queryTimeoutMs}ms`);
           resolve({ error: 'SECTION_TIMEOUT', data: fallback });
-        }, 3000);
+        }, queryTimeoutMs);
       });
       try {
         const res = await Promise.race([promise, timeoutPromise]);
