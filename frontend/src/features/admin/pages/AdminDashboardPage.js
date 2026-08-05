@@ -480,37 +480,58 @@ function AdminDashboard() {
     setDetailsLoading(true);
 
     try {
-      const lookupId = targetBooking.id || targetBooking.confirmation_code;
+      const lookupId = targetBooking.id || targetBooking.confirmation_code || targetBooking.confirmationCode;
+      console.log('BOOKING_DETAILS_REQUEST_START', { lookupId, timestamp: new Date().toISOString() });
+      console.log('BOOKING_ID_RECEIVED', { id: targetBooking.id, code: targetBooking.confirmation_code || targetBooking.confirmationCode });
+
       const res = await adminAPI.getBookingDetails(lookupId, { signal: controller.signal });
       clearTimeout(timeoutId);
 
       const payload = res?.data ?? res;
-      const details = payload?.booking ?? payload?.data?.booking ?? payload?.data ?? null;
+      const booking = payload?.booking ?? null;
 
-      if (!details) {
-        throw new Error('BOOKING_DETAILS_EMPTY');
+      console.log('BASE_BOOKING_FOUND', { found: !!booking, id: booking?.id, code: booking?.confirmationCode || booking?.confirmation_code });
+
+      if (!payload?.success || !booking) {
+        throw new Error(
+          (typeof payload?.error === 'object' ? payload.error?.message : payload?.error) || 'BOOKING_DETAILS_FETCH_FAILED'
+        );
       }
+
+      const safeId = booking.id || booking.confirmationCode || booking.confirmation_code || lookupId;
+      const safeBookingObj = {
+        ...booking,
+        id: safeId
+      };
+
+      console.log('RELATED_RECORDS_FETCHED', {
+        travellersCount: (safeBookingObj.travellers || safeBookingObj.passengers || []).length,
+        flightsCount: (safeBookingObj.flights || safeBookingObj.outbound_segments || []).length,
+        paymentsCount: (safeBookingObj.payments || []).length
+      });
 
       // Safe defaults for incomplete test bookings
       const safeDetails = {
-        ...details,
-        travellers: details.travellers || details.passengers || [],
-        flights: details.flights || details.outbound_segments || [],
-        payments: details.payments || [],
-        payment_splits: details.payment_splits || details.splits || [],
-        billingDetails: details.billingDetails || details.cardReference || null,
-        email_history: details.email_history || details.emailLogs || [],
-        audit: details.audit || details.auditEvents || []
+        ...safeBookingObj,
+        travellers: safeBookingObj.travellers || safeBookingObj.passengers || [],
+        flights: safeBookingObj.flights || safeBookingObj.outbound_segments || [],
+        payments: safeBookingObj.payments || [],
+        payment_splits: safeBookingObj.payment_splits || safeBookingObj.splits || [],
+        billingDetails: safeBookingObj.billingDetails || safeBookingObj.cardReference || null,
+        email_history: safeBookingObj.email_history || safeBookingObj.emailLogs || [],
+        audit: safeBookingObj.audit || safeBookingObj.auditEvents || []
       };
 
       setBookingDetailsCache(prev => ({
         ...prev,
         [bId]: safeDetails,
         ...(safeDetails.id ? { [safeDetails.id]: safeDetails } : {}),
-        ...(safeDetails.confirmation_code ? { [safeDetails.confirmation_code]: safeDetails } : {})
+        ...(safeDetails.confirmation_code ? { [safeDetails.confirmation_code]: safeDetails } : {}),
+        ...(safeDetails.confirmationCode ? { [safeDetails.confirmationCode]: safeDetails } : {})
       }));
 
       handleSelectBooking(safeDetails);
+      console.log('BOOKING_DETAILS_RESPONSE_SENT', { id: safeId, status: 'SUCCESS' });
     } catch (err) {
       clearTimeout(timeoutId);
       if (timedOut || err === 'TIMEOUT' || err.name === 'AbortError' || err.message?.includes('aborted')) {
@@ -519,7 +540,7 @@ function AdminDashboard() {
         console.error('[AdminDashboard] Fetch details error:', err);
         setDetailsError(err.message || 'BOOKING_DETAILS_FETCH_FAILED');
       }
-      setDetailsErrorRefCode(targetBooking.confirmation_code || targetBooking.id || 'N/A');
+      setDetailsErrorRefCode(targetBooking.confirmation_code || targetBooking.confirmationCode || targetBooking.id || 'N/A');
       handleSelectBooking(targetBooking);
     } finally {
       setDetailsLoading(false);
