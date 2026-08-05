@@ -2781,6 +2781,76 @@ export const bookingRepository = {
     }
   },
 
+  updatePricingAtomic: async ({ bookingId, supplierFare, taxesAndFees, agencyMarkup, customerTotal, currency = 'USD', reason, adminId = 'admin', expectedVersion }) => {
+    const base = await bookingRepository.resolveBooking(bookingId);
+
+    if (expectedVersion && base.updated_at && expectedVersion !== base.updated_at) {
+      const err = new Error('This booking was updated elsewhere. Refresh it before saving pricing.');
+      err.code = 'BOOKING_VERSION_CONFLICT';
+      err.status = 409;
+      throw err;
+    }
+
+    const now = new Date().toISOString();
+    const updateFields = {
+      supplier_fare: parseFloat(supplierFare || 0),
+      taxes_and_fees: parseFloat(taxesAndFees || 0),
+      agency_markup: parseFloat(agencyMarkup || 0),
+      customer_price: parseFloat(customerTotal),
+      total_amount: parseFloat(customerTotal),
+      currency: currency || 'USD',
+      price_change_reason: reason || 'Admin price update',
+      updated_at: now
+    };
+
+    // Update in memory store
+    const existingMem = bookingsMemoryStore.get(base.id) || {};
+    bookingsMemoryStore.set(base.id, { ...base, ...existingMem, ...updateFields });
+    if (base.confirmation_code) {
+      bookingsMemoryStore.set(base.confirmation_code, { ...base, ...existingMem, ...updateFields });
+    }
+
+    // Update DB
+    try {
+      await supabase.from('bookings').update(updateFields).eq('id', base.id);
+    } catch (dbErr) {
+      logger.warn(`[updatePricingAtomic] Supabase update warning for ${base.id}:`, dbErr.message);
+    }
+
+    // Record price revision
+    try {
+      await supabase.from('booking_price_revisions').insert({
+        booking_id: base.id,
+        supplier_fare: parseFloat(supplierFare || 0),
+        taxes: parseFloat(taxesAndFees || 0),
+        agency_markup: parseFloat(agencyMarkup || 0),
+        customer_total: parseFloat(customerTotal),
+        currency: currency || 'USD',
+        reason: reason || 'Admin price update',
+        admin_id: adminId,
+        created_at: now
+      });
+    } catch (revErr) {
+      logger.warn(`[updatePricingAtomic] Revision insert warning for ${base.id}:`, revErr.message);
+    }
+
+    // Record audit event
+    try {
+      await supabase.from('admin_audit_events').insert({
+        booking_id: base.id,
+        action: 'PRICING_UPDATE',
+        details: JSON.stringify({ supplierFare, taxesAndFees, agencyMarkup, customerTotal, reason }),
+        admin_id: adminId,
+        created_at: now
+      });
+    } catch (audErr) {
+      logger.warn(`[updatePricingAtomic] Audit insert warning for ${base.id}:`, audErr.message);
+    }
+
+    const updated = await bookingRepository.getById(base.id);
+    return updated || { ...base, ...updateFields };
+  },
+
   recordPaymentEvent: async (eventData) => {
     try {
       await supabase.from('booking_payment_events').insert({

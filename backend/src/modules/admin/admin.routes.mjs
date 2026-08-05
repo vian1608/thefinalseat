@@ -64,6 +64,9 @@ router.post('/bookings/:id/process-authorized', authenticate, authorize(['admin'
 
 router.post('/bookings/:id/itinerary', authenticate, authorize(['admin']), adminController.updateItinerary);
 router.post('/bookings/:id/pricing', authenticate, authorize(['admin']), adminController.updatePricing);
+router.patch('/bookings/:id/pricing', authenticate, authorize(['admin']), adminController.updatePricing);
+router.post('/bookings/:identifier/pricing', authenticate, authorize(['admin']), adminController.updatePricing);
+router.patch('/bookings/:identifier/pricing', authenticate, authorize(['admin']), adminController.updatePricing);
 router.post('/bookings/:id/payment-action', authenticate, authorize(['admin']), adminController.handlePaymentAction);
 router.get('/bookings/:id/authorization-evidence', authenticate, authorize(['admin']), passengerAuthorizationController.getEvidenceExport);
 router.get('/bookings/:id/authorization-pdf', authenticate, authorize(['admin']), adminController.downloadAuthorizationPdf);

@@ -713,78 +713,117 @@ export const adminController = {
   },
 
   updatePricing: async (req, res, next) => {
+    const startTime = Date.now();
+    const requestId = `PRICE-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const identifier = req.params.identifier || req.params.id;
+    const clientRequestId = req.headers['idempotency-key'] || req.body?.clientRequestId || null;
+
+    logger.info(`[PRICING_SAVE_START] requestId=${requestId} identifier=${identifier} clientRequestId=${clientRequestId}`);
+
     try {
-      const { id } = req.params;
-      const { supplierFare, baseFare, taxes, serviceFee, discount, customerTotal, currency, margin, reason, expectedVersion } = req.body || {};
+      const {
+        supplierFare,
+        taxesAndFees,
+        taxes,
+        customerTotal,
+        currency = 'USD',
+        reason,
+        bookingVersion,
+        expectedVersion
+      } = req.body || {};
 
-      const booking = await bookingRepository.getById(id);
-      if (!booking) {
-        return res.status(404).json({ success: false, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' } });
-      }
+      const sFare = parseFloat(supplierFare ?? 0);
+      const tFees = parseFloat(taxesAndFees ?? taxes ?? 0);
+      const cTotal = parseFloat(customerTotal ?? 0);
+      const trimmedReason = String(reason || '').trim();
 
-      if (expectedVersion && booking.version && booking.version !== expectedVersion) {
-        return res.status(409).json({
-          success: false,
-          error: { code: 'CONCURRENT_EDIT_CONFLICT', message: 'This booking was modified by another user. Please reload data.' }
-        });
-      }
-
-      const newCustomerTotal = parseFloat(customerTotal || 0);
-      const oldCustomerTotal = parseFloat(booking.customer_price || booking.total_amount || 0);
-
-      // Require reason if customer total changes
-      if (Math.abs(newCustomerTotal - oldCustomerTotal) > 0.01 && !reason) {
+      if (isNaN(sFare) || sFare < 0) {
         return res.status(400).json({
           success: false,
-          error: { code: 'REASON_REQUIRED', message: 'A mandatory reason is required whenever the customer total changes.' }
+          requestId,
+          error: { code: 'INVALID_SUPPLIER_FARE', message: 'Supplier fare must be a valid non-negative number.' }
         });
       }
 
-      // Record price revision audit entry
-      await bookingRepository.recordPriceRevision({
-        bookingId: booking.id,
-        supplierFare: parseFloat(supplierFare || 0),
-        baseFare: parseFloat(baseFare || 0),
-        taxes: parseFloat(taxes || 0),
-        serviceFee: parseFloat(serviceFee || 0),
-        discount: parseFloat(discount || 0),
-        customerTotal: newCustomerTotal,
+      if (isNaN(tFees) || tFees < 0) {
+        return res.status(400).json({
+          success: false,
+          requestId,
+          error: { code: 'INVALID_TAXES_AND_FEES', message: 'Taxes and fees must be a valid non-negative number.' }
+        });
+      }
+
+      if (isNaN(cTotal) || cTotal <= 0) {
+        return res.status(400).json({
+          success: false,
+          requestId,
+          error: { code: 'INVALID_CUSTOMER_TOTAL', message: 'Customer total must be a positive number.' }
+        });
+      }
+
+      if (!trimmedReason) {
+        return res.status(400).json({
+          success: false,
+          requestId,
+          error: { code: 'REASON_REQUIRED', message: 'A mandatory reason is required for price revisions.' }
+        });
+      }
+
+      const calculatedMarkup = cTotal - sFare - tFees;
+      const agencyMarkup = req.body?.agencyMarkup !== undefined ? parseFloat(req.body.agencyMarkup) : calculatedMarkup;
+
+      const adminId = req.user?.email || 'admin';
+      const updatedBooking = await bookingRepository.updatePricingAtomic({
+        bookingId: identifier,
+        supplierFare: sFare,
+        taxesAndFees: tFees,
+        agencyMarkup,
+        customerTotal: cTotal,
         currency: currency || 'USD',
-        margin: parseFloat(margin || 0),
-        reason: reason || 'Admin price update',
-        adminId: req.user?.id || 'admin'
+        reason: trimmedReason,
+        adminId,
+        expectedVersion: bookingVersion || expectedVersion
       });
 
-      // Update booking amounts
-      let reauthorizationRequired = false;
-      const currentStatus = (booking.status || '').toUpperCase();
-      if (Math.abs(newCustomerTotal - oldCustomerTotal) > 0.01 && ['AUTHORIZED', 'AWAITING_AUTH'].includes(currentStatus)) {
-        reauthorizationRequired = true;
-      }
+      const elapsedMs = Date.now() - startTime;
+      logger.info(`[PRICING_RESPONSE_SENT] requestId=${requestId} confirmationCode=${updatedBooking.confirmation_code || updatedBooking.confirmationCode} elapsedMs=${elapsedMs}`);
 
-      const updateFields = {
-        total_amount: newCustomerTotal,
-        customer_price: newCustomerTotal,
-        currency: currency || 'USD'
-      };
-
-      if (reauthorizationRequired) {
-        updateFields.status = 'REAUTHORIZATION_REQUIRED';
-      }
-
-      const updatedBooking = await bookingRepository.updateBookingWithLock(booking.id, expectedVersion, updateFields);
+      const sFareOut = parseFloat(updatedBooking.supplier_fare ?? sFare);
+      const tFeesOut = parseFloat(updatedBooking.taxes_and_fees ?? tFees);
+      const markupOut = parseFloat(updatedBooking.agency_markup ?? agencyMarkup);
+      const totalOut = parseFloat(updatedBooking.customer_price ?? updatedBooking.total_amount ?? cTotal);
 
       return res.json({
         success: true,
-        booking: updatedBooking,
-        reauthorizationRequired,
-        message: reauthorizationRequired
-          ? 'Pricing updated. Customer total changed; booking set to REAUTHORIZATION_REQUIRED.'
-          : 'Pricing updated successfully.'
+        requestId,
+        booking: {
+          id: updatedBooking.id,
+          confirmationCode: updatedBooking.confirmation_code || updatedBooking.confirmationCode || 'N/A',
+          supplierFare: sFareOut,
+          taxesAndFees: tFeesOut,
+          agencyMarkup: markupOut,
+          customerTotal: totalOut,
+          currency: updatedBooking.currency || currency || 'USD',
+          updatedAt: updatedBooking.updated_at || new Date().toISOString()
+        },
+        revision: {
+          reason: trimmedReason,
+          createdAt: updatedBooking.updated_at || new Date().toISOString()
+        }
       });
     } catch (error) {
-      logger.error(`Error updating pricing for booking ${req.params.id}: ${error.message}`);
-      next(error);
+      const statusCode = error.status || (error.code === 'BOOKING_NOT_FOUND' ? 404 : error.code === 'BOOKING_VERSION_CONFLICT' ? 409 : 400);
+      const elapsedMs = Date.now() - startTime;
+      logger.error(`[PRICING_SAVE_FAILED] requestId=${requestId} statusCode=${statusCode} elapsedMs=${elapsedMs} error=${error.message}`);
+
+      return res.status(statusCode).json({
+        success: false,
+        requestId,
+        error: {
+          code: error.code || 'PRICING_UPDATE_FAILED',
+          message: error.message
+        }
+      });
     }
   },
 
