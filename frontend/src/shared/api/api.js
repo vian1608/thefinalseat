@@ -283,6 +283,14 @@ export const adminAPI = {
   patchBillingDetails: async (id, data) => {
     const response = await api.patch(`/admin/bookings/${id}/billing-details`, data);
     return response.data;
+  },
+  parseItineraryText: async (text) => {
+    const response = await api.post('/admin/itineraries/parse', { text });
+    return response.data;
+  },
+  createBooking: async (data) => {
+    const response = await api.post('/admin/bookings', data);
+    return response.data;
   }
 };
 

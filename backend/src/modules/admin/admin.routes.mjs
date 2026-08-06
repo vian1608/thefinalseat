@@ -26,6 +26,7 @@ router.post('/bookings/bulk-delete', authenticate, authorize(['admin']), adminCo
 router.post('/bookings/import-backup', authenticate, authorize(['admin']), adminController.importBookingBackup);
 
 router.get('/bookings', authenticate, authorize(['admin']), adminController.getBookings);
+router.post('/bookings', authenticate, authorize(['admin']), adminController.createBooking);
 router.get('/bookings/:id', authenticate, authorize(['admin']), adminController.getBookingDetail);
 router.delete('/bookings/:bookingId', authenticate, authorize(['admin']), adminController.deleteBooking);
 router.delete('/bookings/:id', authenticate, authorize(['admin']), adminController.deleteBooking);
@@ -44,6 +45,8 @@ router.patch('/bookings/:id/payment', authenticate, authorize(['admin']), adminC
 router.patch('/bookings/:id/payment-authorization', authenticate, authorize(['admin']), adminController.updatePaymentAuthorization);
 router.patch('/bookings/:id/billing-reference', authenticate, authorize(['admin']), adminController.updateBillingDetails);
 router.patch('/bookings/:id/billing-details', authenticate, authorize(['admin']), adminController.updateBillingDetails);
+router.post('/itineraries/parse', authenticate, authorize(['admin']), adminController.parseItinerary);
+router.post('/parse-itinerary', authenticate, authorize(['admin']), adminController.parseItinerary);
 router.post('/bookings/:id/import-itinerary', authenticate, authorize(['admin']), bookingController.importItineraryText);
 router.patch('/bookings/:id/ticket', authenticate, authorize(['admin']), bookingController.updateTicket);
 router.patch('/bookings/:id/notes', authenticate, authorize(['admin']), bookingController.updateNotes);

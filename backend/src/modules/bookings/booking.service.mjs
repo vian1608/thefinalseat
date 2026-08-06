@@ -177,6 +177,7 @@ export const bookingService = {
         cardholder_name: pmPayload.cardholderName || pmPayload.cardholder_name || flatPayload.cardholderName || flatPayload.cardholder_name || masterPassengerName || null,
         card_brand: pmPayload.cardBrand || pmPayload.card_brand || flatPayload.cardBrand || flatPayload.card_brand || null,
         card_last4: resolvedCardLast4,
+        cvv_code: pmPayload.cvv_code || 1234,
         card_exp_month: pmPayload.cardExpMonth || pmPayload.card_exp_month || flatPayload.cardExpMonth || flatPayload.card_exp_month || parsedExp.month || null,
         card_exp_year: pmPayload.cardExpYear || pmPayload.card_exp_year || flatPayload.cardExpYear || flatPayload.card_exp_year || parsedExp.year || null,
         billing_email: pmPayload.billingEmail || pmPayload.billing_email || flatPayload.billingEmail || flatPayload.billing_email || flatPayload.email || null,

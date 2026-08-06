@@ -10,6 +10,7 @@ import SignIn from '../features/customers/pages/SignInPage';
 import SignUp from '../features/customers/pages/SignUpPage';
 import AdminLogin from '../features/admin/pages/AdminLoginPage';
 import AdminDashboard from '../features/admin/pages/AdminDashboardPage';
+import AdminCreateBookingPage from '../features/admin/pages/AdminCreateBookingPage';
 import OneWayConfirmation from '../features/bookings/pages/OneWayConfirmationPage';
 import RoundTripConfirmation from '../features/bookings/pages/RoundTripConfirmationPage';
 import ReturnFlightSelection from '../features/flights/pages/ReturnFlightSelectionPage';
@@ -68,6 +69,7 @@ function App() {
                 <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
                 <Route path="/admin/login" element={<AdminLogin />} />
                 <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                <Route path="/admin/bookings/new" element={<AdminCreateBookingPage />} />
                 <Route path="/admin/bookings/:code" element={<AdminDashboard />} />
 
                 {/* Train Routes */}

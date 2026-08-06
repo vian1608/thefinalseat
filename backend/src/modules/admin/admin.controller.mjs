@@ -1,4 +1,5 @@
 import adminService from './admin.service.mjs';
+import bookingService from '../bookings/booking.service.mjs';
 import bookingRepository from '../bookings/booking.repository.mjs';
 import bookingMapper from '../bookings/booking.mapper.mjs';
 import { BOOKING_STATUSES, PAYMENT_OPERATIONAL_STATES } from '../bookings/booking.constants.mjs';
@@ -10,9 +11,67 @@ import logger from '../../config/logger.mjs';
 import bcrypt from 'bcryptjs';
 import authRepository from '../auth/auth.repository.mjs';
 import env from '../../config/env.mjs';
-
+import { parseGdsItineraryText } from '../../shared/utils/gds-itinerary-parser.mjs';
 
 export const adminController = {
+  createBooking: async (req, res, next) => {
+    try {
+      const payload = req.body;
+      const result = await bookingService.create(payload);
+
+      const bookingId = result?.booking?.id || result?.id;
+      const finalBooking = await adminService.getCompleteBookingById(bookingId);
+
+      const actionType = payload.actionType || 'create_draft';
+      if (actionType === 'create_and_send_auth' && bookingId) {
+        await passengerAuthorizationService.sendAuthorizationEmail(bookingId).catch(err => {
+          logger.error(`[createBooking] Send auth email failed: ${err.message}`);
+        });
+      } else if (actionType === 'create_and_process_payment' && bookingId) {
+        await adminService.updatePaymentStatus(bookingId, 'paid').catch(err => {
+          logger.error(`[createBooking] Process payment failed: ${err.message}`);
+        });
+      }
+
+      res.status(201).json({
+        success: true,
+        message: 'New booking created successfully.',
+        data: finalBooking || result?.booking || result
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+  parseItinerary: async (req, res, next) => {
+    try {
+      const { text, rawText, itineraryText } = req.body || {};
+      const input = text || rawText || itineraryText;
+
+      if (!input || typeof input !== 'string') {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_INPUT', message: 'Itinerary text or structured JSON is required.' }
+        });
+      }
+
+      if (input.length > 100000) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INPUT_TOO_LARGE', message: 'Itinerary text exceeds maximum allowed size (100KB).' }
+        });
+      }
+
+      const parsed = parseGdsItineraryText(input);
+      return res.json(parsed);
+    } catch (err) {
+      logger.error(`[parseItinerary] Parse error: ${err.message}`);
+      return res.status(500).json({
+        success: false,
+        error: { code: 'PARSE_FAILED', message: err.message }
+      });
+    }
+  },
+
   deleteBooking: async (req, res, next) => {
     try {
       const { bookingId } = req.params;

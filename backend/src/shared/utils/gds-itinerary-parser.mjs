@@ -30,30 +30,256 @@ const CLASS_CABIN_MAP = {
 /**
  * Standard ChatGPT prompt template for converting natural text into GDS format
  */
-export const CHATGPT_PROMPT_TEMPLATE = `Convert the flight details I provide into The Final Seat itinerary import format.
+export const CHATGPT_PROMPT_TEMPLATE = `You are an expert airline reservation and GDS itinerary formatter.
 
-Use exactly this structure:
+I will paste an itinerary copied from Google Flights. Convert it into a structured flight itinerary that can be imported into a travel CRM.
 
-TRIP: ONE_WAY, ROUND_TRIP or MULTI_CITY
-PASSENGERS: number
-CABIN: ECONOMY, PREMIUM_ECONOMY, BUSINESS or FIRST
+Important rules:
 
-OUTBOUND
-SS CARRIER FLIGHT CLASS DDMMMYYYY FROM TO DEPARTURE ARRIVAL
+1. Extract every flight segment, including all connections.
+2. Do not remove or combine connecting flights.
+3. Preserve the exact travel order.
+4. Separate outbound and return journeys.
+5. Use airport IATA codes where clearly available.
+6. Preserve the operating airline and marketing airline when both are shown.
+7. Preserve flight numbers exactly.
+8. Convert dates to YYYY-MM-DD.
+9. Use 24-hour local time in HH:mm format.
+10. Do not convert local times to UTC.
+11. Identify overnight arrivals and date changes correctly.
+12. Include cabin/class only when provided.
+13. Include aircraft type only when provided.
+14. Include layover duration when provided.
+15. Do not invent missing information.
+16. Use null for information that cannot be determined.
+17. Never invent availability, fare basis, booking class, PNR, ticket number, terminal, or confirmation status.
+18. A Google Flights itinerary is not proof of live GDS availability or a confirmed booking.
+19. Produce a GDS-style reference only as a formatting aid. Do not claim that it is an executable or confirmed GDS reservation.
+20. Return valid JSON only, with no markdown explanation before or after it.
 
-RETURN
-SS CARRIER FLIGHT CLASS DDMMMYYYY FROM TO DEPARTURE ARRIVAL
+Use this exact JSON structure:
 
-For connecting trips, output one SS line per flight segment.
+{
+  "tripType": "one_way | round_trip | multi_city",
+  "source": "google_flights",
+  "currency": null,
+  "displayedPrice": null,
+  "passengerCount": null,
+  "journeys": [
+    {
+      "journeyType": "outbound | return | additional",
+      "segments": [
+        {
+          "segmentOrder": 1,
+          "marketingAirlineName": null,
+          "marketingAirlineCode": null,
+          "operatingAirlineName": null,
+          "operatingAirlineCode": null,
+          "flightNumber": null,
+          "departureAirport": null,
+          "departureCity": null,
+          "departureTerminal": null,
+          "departureDate": "YYYY-MM-DD",
+          "departureTime": "HH:mm",
+          "arrivalAirport": null,
+          "arrivalCity": null,
+          "arrivalTerminal": null,
+          "arrivalDate": "YYYY-MM-DD",
+          "arrivalTime": "HH:mm",
+          "cabin": null,
+          "bookingClass": null,
+          "aircraftType": null,
+          "durationMinutes": null,
+          "layoverAfterMinutes": null,
+          "overnightArrival": false,
+          "notes": null
+        }
+      ]
+    }
+  ],
+  "gdsStyleDisplay": [
+    "01 AIRLINE FLIGHT CLASS DATE ROUTE DEPARTURE ARRIVAL STATUS"
+  ],
+  "warnings": [
+    "List any missing, unclear, conflicting, or inferred information here."
+  ]
+}`;
 
-Rules:
-- Use IATA airport codes.
-- Use 24-hour time in HHMM format.
-- Use one carrier code and numeric flight number separately.
-- Include +1 after arrival time for next-day arrival.
-- Do not invent missing details.
-- Write UNKNOWN for missing values.
-- Output only the import text, without explanation.`;
+/**
+ * Format GDS Reference lines for display
+ */
+export function buildGdsStyleReferenceLines(segments = []) {
+  if (!Array.isArray(segments) || segments.length === 0) return [];
+  return segments.map((seg, idx) => {
+    const num = String(idx + 1).padStart(2, '0');
+    const carrier = seg.carrier_code || seg.marketingAirlineCode || 'XX';
+    const flight = seg.flight_number || seg.flightNumber || '0000';
+    const cls = seg.bookingClass || seg.booking_class || 'Y';
+    const depDateStr = seg.departureDate || seg.departure_date;
+    
+    let dateFmt = 'DDMMM';
+    if (depDateStr) {
+      const parts = depDateStr.split('-');
+      if (parts.length === 3) {
+        const mIdx = parseInt(parts[1], 10) - 1;
+        const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+        dateFmt = `${parts[2]}${months[mIdx] || 'MMM'}`;
+      }
+    }
+
+    const from = seg.departureAirport || seg.origin_airport || 'XXX';
+    const to = seg.arrivalAirport || seg.destination_airport || 'XXX';
+    const depTime = (seg.departureTime || seg.departure_time || '00:00').replace(':', '');
+    const arrTime = (seg.arrivalTime || seg.arrival_time || '00:00').replace(':', '');
+    const status = 'NN1';
+
+    return `${num} ${carrier} ${flight} ${cls} ${dateFmt} ${from}${to} ${depTime} ${arrTime} ${status}`;
+  });
+}
+
+function normalizeJsonSegment(s, journeyType, seqOrder, warnings) {
+  const carrierCode = (s.marketingAirlineCode || s.operatingAirlineCode || s.carrier_code || s.carrier || '').trim().toUpperCase();
+  const carrierName = s.marketingAirlineName || s.operatingAirlineName || s.carrier_name || resolveAirlineName(carrierCode) || 'Airline';
+  const flightNumber = String(s.flightNumber || s.flight_number || s.flight || '').trim();
+  const depAirport = (s.departureAirport || s.origin_airport || s.from || '').trim().toUpperCase();
+  const arrAirport = (s.arrivalAirport || s.destination_airport || s.to || '').trim().toUpperCase();
+
+  if (!depAirport || depAirport.length !== 3) {
+    warnings.push(`Segment ${seqOrder}: Departure airport code is missing or invalid.`);
+  }
+  if (!arrAirport || arrAirport.length !== 3) {
+    warnings.push(`Segment ${seqOrder}: Arrival airport code is missing or invalid.`);
+  }
+
+  const depDate = parseDateString(s.departureDate || s.departure_date);
+  const depTime = parseTimeString(s.departureTime || s.departure_time);
+  const arrDate = parseDateString(s.arrivalDate || s.arrival_date) || depDate;
+  const arrTime = parseTimeString(s.arrivalTime || s.arrival_time);
+
+  if (!depDate) warnings.push(`Segment ${seqOrder}: Departure date is missing or incomplete.`);
+  if (!depTime) warnings.push(`Segment ${seqOrder}: Departure time is missing.`);
+  if (!arrTime) warnings.push(`Segment ${seqOrder}: Arrival time is missing.`);
+
+  return {
+    segmentOrder: s.segmentOrder || seqOrder,
+    direction: journeyType === 'return' ? 'return' : 'outbound',
+    journey_direction: journeyType === 'return' ? 'return' : 'outbound',
+    segment_sequence: seqOrder,
+    carrier_code: carrierCode,
+    marketing_carrier_code: carrierCode,
+    carrier_name: carrierName,
+    marketingAirlineName: carrierName,
+    marketingAirlineCode: carrierCode,
+    operatingAirlineName: s.operatingAirlineName || carrierName,
+    operatingAirlineCode: s.operatingAirlineCode || carrierCode,
+    flight_number: flightNumber,
+    flightNumber,
+    booking_class: s.bookingClass || s.booking_class || 'Y',
+    bookingClass: s.bookingClass || s.booking_class || 'Y',
+    cabin: s.cabin || CLASS_CABIN_MAP[s.bookingClass] || 'Economy',
+    origin_airport: depAirport,
+    departureAirport: depAirport,
+    origin_city: s.departureCity || resolveCityName(depAirport),
+    departureCity: s.departureCity || resolveCityName(depAirport),
+    departureTerminal: s.departureTerminal || s.dep_terminal || '',
+    dep_terminal: s.departureTerminal || s.dep_terminal || '',
+    destination_airport: arrAirport,
+    arrivalAirport: arrAirport,
+    destination_city: s.arrivalCity || resolveCityName(arrAirport),
+    arrivalCity: s.arrivalCity || resolveCityName(arrAirport),
+    arrivalTerminal: s.arrivalTerminal || s.arr_terminal || '',
+    arr_terminal: s.arrivalTerminal || s.arr_terminal || '',
+    departure_date: depDate,
+    departureDate: depDate,
+    departure_time: depTime,
+    departureTime: depTime,
+    arrival_date: arrDate,
+    arrivalDate: arrDate,
+    arrival_time: arrTime,
+    arrivalTime: arrTime,
+    aircraftType: s.aircraftType || s.aircraft || null,
+    aircraft: s.aircraftType || s.aircraft || null,
+    durationMinutes: s.durationMinutes || null,
+    layoverAfterMinutes: s.layoverAfterMinutes || null,
+    overnightArrival: Boolean(s.overnightArrival),
+    notes: s.notes || null
+  };
+}
+
+export function parseStructuredJsonItinerary(rawText) {
+  let cleaned = String(rawText || '').trim();
+  if (cleaned.includes('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  }
+  
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed || typeof parsed !== 'object') return null;
+    
+    const journeys = Array.isArray(parsed.journeys) ? parsed.journeys : [];
+    if (journeys.length === 0 && !Array.isArray(parsed.segments)) {
+      return null;
+    }
+
+    const warnings = Array.isArray(parsed.warnings) ? [...parsed.warnings] : [];
+    const formattedJourneys = [];
+    const flatSegments = [];
+
+    const tripTypeRaw = String(parsed.tripType || parsed.trip || 'round_trip').toLowerCase();
+    const tripType = tripTypeRaw.includes('round') ? 'round_trip' : (tripTypeRaw.includes('multi') ? 'multi_city' : 'one_way');
+
+    if (journeys.length > 0) {
+      journeys.forEach((j, jIdx) => {
+        const jType = String(j.journeyType || (jIdx === 0 ? 'outbound' : 'return')).toLowerCase();
+        const rawSegs = Array.isArray(j.segments) ? j.segments : [];
+        const normSegs = rawSegs.map((s, sIdx) => {
+          const normSeg = normalizeJsonSegment(s, jType, sIdx + 1, warnings);
+          flatSegments.push(normSeg);
+          return normSeg;
+        });
+        formattedJourneys.push({
+          journeyType: jType,
+          segments: normSegs
+        });
+      });
+    } else if (Array.isArray(parsed.segments)) {
+      const normSegs = parsed.segments.map((s, sIdx) => {
+        const jType = (s.direction || 'outbound').toLowerCase();
+        const normSeg = normalizeJsonSegment(s, jType, sIdx + 1, warnings);
+        flatSegments.push(normSeg);
+        return normSeg;
+      });
+      formattedJourneys.push({
+        journeyType: 'outbound',
+        segments: normSegs
+      });
+    }
+
+    const gdsStyleDisplay = Array.isArray(parsed.gdsStyleDisplay) && parsed.gdsStyleDisplay.length > 0
+      ? parsed.gdsStyleDisplay
+      : buildGdsStyleReferenceLines(flatSegments);
+
+    return {
+      success: true,
+      data: {
+        tripType,
+        source: parsed.source || 'json',
+        currency: parsed.currency || null,
+        displayedPrice: parsed.displayedPrice || null,
+        passengerCount: parsed.passengerCount || parsed.passengers || 1,
+        journeys: formattedJourneys,
+        gdsStyleDisplay
+      },
+      warnings,
+      segments: flatSegments
+    };
+  } catch (err) {
+    return null;
+  }
+}
 
 /**
  * Parse date string (10SEP2026, 2026-09-10, 10/09/2026, 10-09-2026) to YYYY-MM-DD
@@ -170,10 +396,17 @@ export function parseGdsItineraryText(rawText) {
       errors: ['No itinerary text provided.'],
       warnings: [],
       segments: [],
-      tripType: 'ONE_WAY',
+      data: null,
+      tripType: 'one_way',
       passengers: 1,
       cabin: 'ECONOMY'
     };
+  }
+
+  // 1. Try Structured JSON Parser first
+  const jsonResult = parseStructuredJsonItinerary(rawText);
+  if (jsonResult) {
+    return jsonResult;
   }
 
   const lines = rawText.split(/\r?\n/);
@@ -538,21 +771,38 @@ export function parseGdsItineraryText(rawText) {
     tripType = 'MULTI_CITY';
   }
 
+  const outboundSegments = segments.filter(s => s.direction === 'outbound');
+  const returnSegments = segments.filter(s => s.direction === 'return');
+  const journeys = [];
+  if (outboundSegments.length > 0) {
+    journeys.push({ journeyType: 'outbound', segments: outboundSegments });
+  }
+  if (returnSegments.length > 0) {
+    journeys.push({ journeyType: 'return', segments: returnSegments });
+  }
+
   // Check route continuity between sequential segments
   const routeWarnings = checkRouteContinuity(segments);
   warnings.push(...routeWarnings);
 
   const isSuccess = errors.length === 0 && segments.length > 0;
+  const gdsStyleDisplay = buildGdsStyleReferenceLines(segments);
 
   return {
     success: isSuccess,
     errors,
     warnings,
     segments,
-    tripType,
+    tripType: tripType.toLowerCase(),
     passengers,
     cabin: defaultCabin,
-    totalSegments: segments.length
+    totalSegments: segments.length,
+    data: {
+      tripType: tripType.toLowerCase(),
+      passengerCount: passengers,
+      journeys,
+      gdsStyleDisplay
+    }
   };
 }
 

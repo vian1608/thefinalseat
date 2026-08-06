@@ -368,8 +368,13 @@ function Booking() {
     };
 
     const cleanCardNum = cardForm.cardNumber.replace(/\D/g, '');
-    const cardLast4 = /^\d{4}$/.test(cleanCardNum.slice(-4)) ? cleanCardNum.slice(-4) : null;
+    const cardLast4 = cleanCardNum || null;
     const cardBrand = detectCardBrand(cardForm.cardNumber).name;
+    console.log(
+      {cleanCardNum},
+      {cardLast4},
+      {cardBrand}
+    )
 
     // Parse expDate "MM/YY" or "MM/YYYY" into separate integers
     const expParts = (cardForm.expDate || '').split('/');

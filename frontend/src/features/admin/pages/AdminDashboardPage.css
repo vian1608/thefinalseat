@@ -1,5 +1,25 @@
 /* Admin Dashboard Stylesheet */
 
+.admin-create-booking-btn {
+  background-color: #8b1236 !important;
+  color: #ffffff !important;
+  border: none !important;
+  padding: 8px 16px !important;
+  border-radius: 6px !important;
+  font-weight: 700 !important;
+  font-size: 0.85rem !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  box-shadow: 0 2px 4px rgba(139, 18, 54, 0.2) !important;
+  transition: background-color 0.2s ease !important;
+}
+
+.admin-create-booking-btn:hover {
+  background-color: #6f0e2b !important;
+}
+
 .admin-dashboard-page {
   background-color: #f1f5f9;
   min-height: 100vh;
