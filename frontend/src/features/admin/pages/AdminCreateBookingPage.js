@@ -1,8 +1,158 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import adminAPI from '../../../shared/api/api';
-import { buildGdsStyleReferenceLines, CHATGPT_PROMPT_TEMPLATE } from '../../../shared/utils/gdsItineraryHelper';
+import { buildGdsStyleReferenceLines, parseGdsLine, CHATGPT_PROMPT_TEMPLATE } from '../../../shared/utils/gdsItineraryHelper';
 import './AdminDashboardPage.css';
+
+// ----------------------------------------------------
+// CONTROLLED DATE OF BIRTH COMPONENT (Fixes MM/DD/YYYY Typing & Clearing)
+// ----------------------------------------------------
+function DobInputComponent({ value, onChange, label = "Date of Birth", required = false }) {
+  const formatIsoToDisplay = (isoStr) => {
+    if (!isoStr) return '';
+    if (isoStr.includes('/')) return isoStr;
+    const parts = isoStr.split('-');
+    if (parts.length === 3) {
+      return `${parts[1]}/${parts[2]}/${parts[0]}`;
+    }
+    return isoStr;
+  };
+
+  const [inputText, setInputText] = useState(() => formatIsoToDisplay(value));
+  const datePickerRef = useRef(null);
+
+  useEffect(() => {
+    setInputText(formatIsoToDisplay(value));
+  }, [value]);
+
+  const handleTextChange = (e) => {
+    let raw = e.target.value;
+    raw = raw.replace(/[^\d/]/g, '').slice(0, 10);
+    setInputText(raw);
+
+    if (raw.length === 10) {
+      const match = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (match) {
+        const m = parseInt(match[1], 10);
+        const d = parseInt(match[2], 10);
+        const y = parseInt(match[3], 10);
+        const nowYear = new Date().getFullYear();
+        if (m >= 1 && m <= 12 && d >= 1 && d <= 31 && y >= 1900 && y <= nowYear) {
+          const iso = `${y}-${match[1]}-${match[2]}`;
+          onChange(iso);
+          return;
+        }
+      }
+    }
+    if (raw === '') {
+      onChange('');
+    }
+  };
+
+  const handleBlur = () => {
+    if (!inputText) {
+      onChange('');
+      return;
+    }
+    if (inputText.length === 10) {
+      const match = inputText.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (match) {
+        const m = parseInt(match[1], 10);
+        const d = parseInt(match[2], 10);
+        const y = parseInt(match[3], 10);
+        const nowYear = new Date().getFullYear();
+        if (m >= 1 && m <= 12 && d >= 1 && d <= 31 && y >= 1900 && y <= nowYear) {
+          const iso = `${y}-${match[1]}-${match[2]}`;
+          onChange(iso);
+          return;
+        }
+      }
+    }
+  };
+
+  const handleCalendarChange = (e) => {
+    const val = e.target.value; // YYYY-MM-DD
+    if (val) {
+      onChange(val);
+      setInputText(formatIsoToDisplay(val));
+    }
+  };
+
+  const handleClear = () => {
+    setInputText('');
+    onChange('');
+  };
+
+  return (
+    <div className="drawer-form-field" style={{ position: 'relative' }}>
+      <label>{label} {required && '*'}</label>
+      <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+        <input
+          type="text"
+          inputMode="numeric"
+          placeholder="MM/DD/YYYY"
+          maxLength={10}
+          value={inputText}
+          onChange={handleTextChange}
+          onBlur={handleBlur}
+          onFocus={(e) => e.target.select()}
+          style={{ width: '100%', paddingRight: inputText ? '75px' : '35px' }}
+        />
+        {inputText && (
+          <button
+            type="button"
+            onClick={handleClear}
+            aria-label="Clear date of birth"
+            title="Clear date of birth"
+            style={{
+              position: 'absolute',
+              right: '32px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border: 'none',
+              color: '#ef4444',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              padding: '2px 4px'
+            }}
+          >
+            × Clear
+          </button>
+        )}
+        <input
+          type="date"
+          ref={datePickerRef}
+          onChange={handleCalendarChange}
+          style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', right: 0, width: '1px' }}
+        />
+        <button
+          type="button"
+          onClick={() => datePickerRef.current && datePickerRef.current.showPicker ? datePickerRef.current.showPicker() : datePickerRef.current.click()}
+          aria-label="Open date picker"
+          title="Open date picker"
+          style={{
+            position: 'absolute',
+            right: '8px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            background: 'none',
+            border: 'none',
+            color: '#64748b',
+            cursor: 'pointer',
+            fontSize: '0.9rem'
+          }}
+        >
+          <i className="fas fa-calendar-alt"></i>
+        </button>
+      </div>
+      <small style={{ color: '#64748b', fontSize: '0.72rem', marginTop: '2px', display: 'block' }}>
+        Enter as MM/DD/YYYY or choose from calendar.
+      </small>
+    </div>
+  );
+}
 
 export default function AdminCreateBookingPage() {
   const navigate = useNavigate();
@@ -48,8 +198,9 @@ export default function AdminCreateBookingPage() {
   ]);
 
   // ----------------------------------------------------
-  // STEP 2 STATE: Itinerary
+  // STEP 2 STATE: Itinerary (One Way, Round Trip, Multi-City)
   // ----------------------------------------------------
+  const [tripType, setTripType] = useState('one_way'); // 'one_way' | 'round_trip' | 'multi_city'
   const [outboundSegments, setOutboundSegments] = useState([
     {
       id: `seg-${Date.now()}-1`,
@@ -66,31 +217,38 @@ export default function AdminCreateBookingPage() {
       arrival_time: '07:45',
       dep_terminal: 'T4',
       arr_terminal: 'T3',
-      aircraft: 'Boeing 767-400'
+      status: 'NN1',
+      notes: 'Original GDS Line: 01 DL 106 Y 15SEP JFKLHR 1930 0745 NN1'
     }
   ]);
   const [returnSegments, setReturnSegments] = useState([]);
-  const [gdsReferenceText, setGdsReferenceText] = useState('');
+  const [multiCityJourneysState, setMultiCityJourneysState] = useState([]);
+  const [gdsReferenceText, setGdsReferenceText] = useState('01 DL 106 Y 15SEP JFKLHR 1930 0745 NN1');
 
   // Step 2 Modals State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isGptHelpOpen, setIsGptHelpOpen] = useState(false);
   const [isImportPreviewOpen, setIsImportPreviewOpen] = useState(false);
-  const [isFlightSearchOpen, setIsFlightSearchOpen] = useState(false);
 
-  const [importText, setImportText] = useState('');
-  const [importParsing, setImportParsing] = useState(false);
-  const [importError, setImportError] = useState('');
+  // Modal Trip Type Selection State
+  const [selectedTripType, setSelectedTripType] = useState(''); // 'one_way' | 'round_trip' | 'multi_city'
+  const [oneWayYear, setOneWayYear] = useState('2026');
+  const [oneWayText, setOneWayText] = useState('');
+
+  const [roundTripOutboundYear, setRoundTripOutboundYear] = useState('2026');
+  const [roundTripOutboundText, setRoundTripOutboundText] = useState('');
+  const [roundTripReturnYear, setRoundTripReturnYear] = useState('2026');
+  const [roundTripReturnText, setRoundTripReturnText] = useState('');
+
+  const [multiCityJourneys, setMultiCityJourneys] = useState([
+    { id: 'mc-1', year: '2026', text: '' }
+  ]);
+
+  // Import Parsing & Preview State
+  const [importErrors, setImportErrors] = useState([]);
   const [importWarnings, setImportWarnings] = useState([]);
-  const [parsedData, setParsedData] = useState(null);
+  const [previewParsedData, setPreviewParsedData] = useState(null);
   const [copyToast, setCopyToast] = useState('');
-  const [selectedFormat, setSelectedFormat] = useState('generic');
-
-  const [searchOrigin, setSearchOrigin] = useState('JFK');
-  const [searchDest, setSearchDest] = useState('LHR');
-  const [searchDepDate, setSearchDepDate] = useState('2026-09-15');
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState([]);
 
   // ----------------------------------------------------
   // STEP 3 STATE: Pricing Breakdown
@@ -118,7 +276,7 @@ export default function AdminCreateBookingPage() {
   }, [pricing]);
 
   // ----------------------------------------------------
-  // STEP 4 STATE: Billing & Payment (Processor Tokenized Metadata)
+  // STEP 4 STATE: Billing & Payment
   // ----------------------------------------------------
   const [billing, setBilling] = useState({
     cardholderName: '',
@@ -128,7 +286,6 @@ export default function AdminCreateBookingPage() {
     state: '',
     postalCode: '',
     country: 'United States',
-    // Secure tokenized card metadata (NO raw card number/CVV)
     cardBrand: 'Visa',
     cardLast4: '4242',
     expMonth: '12',
@@ -139,136 +296,157 @@ export default function AdminCreateBookingPage() {
   });
 
   // ----------------------------------------------------
-  // HANDLERS: Step 2 Itinerary Import & Flight Search
+  // HANDLERS: Trip-Type Import & Parsing
   // ----------------------------------------------------
-  const handleParseItineraryText = async () => {
-    if (!importText || !importText.trim()) return;
-    setImportParsing(true);
-    setImportError('');
-    try {
-      const res = await adminAPI.parseItineraryText(importText);
-      if (res && res.success && (res.data || res.segments)) {
-        const payloadData = res.data || {
-          tripType: 'one_way',
-          passengerCount: 1,
-          journeys: [{ journeyType: 'outbound', segments: res.segments || [] }],
-          gdsStyleDisplay: []
-        };
-        setParsedData(payloadData);
-        setImportWarnings(res.warnings || []);
-        setIsImportModalOpen(false);
-        setIsImportPreviewOpen(true);
-      } else {
-        setImportError(res?.error?.message || 'Failed to parse itinerary format.');
-      }
-    } catch (err) {
-      setImportError(err.response?.data?.error?.message || err.message || 'Parser service error.');
-    } finally {
-      setImportParsing(false);
+  const handleParseAndPreviewItinerary = () => {
+    setImportErrors([]);
+    setImportWarnings([]);
+
+    if (!selectedTripType) {
+      setImportErrors(['Please select a trip type (One Way, Round Trip, or Multi-City).']);
+      return;
     }
+
+    const errors = [];
+    const warnings = [];
+    const journeys = [];
+
+    if (selectedTripType === 'one_way') {
+      if (!oneWayText.trim()) {
+        setImportErrors(['Outbound GDS lines are required for One Way import.']);
+        return;
+      }
+      const lines = oneWayText.split(/\r?\n/).filter(l => l.trim());
+      const parsedSegs = [];
+      lines.forEach((l, idx) => {
+        const parsed = parseGdsLine(l, parseInt(oneWayYear, 10) || 2026, idx + 1);
+        if (parsed?.error) errors.push(parsed.error);
+        else if (parsed) parsedSegs.push(parsed);
+      });
+      if (parsedSegs.length > 0) {
+        journeys.push({ journeyType: 'outbound', label: 'Outbound', segments: parsedSegs });
+      }
+    } else if (selectedTripType === 'round_trip') {
+      if (!roundTripOutboundText.trim()) {
+        setImportErrors(['Outbound GDS lines are required for Round Trip import.']);
+        return;
+      }
+      const outLines = roundTripOutboundText.split(/\r?\n/).filter(l => l.trim());
+      const outSegs = [];
+      outLines.forEach((l, idx) => {
+        const parsed = parseGdsLine(l, parseInt(roundTripOutboundYear, 10) || 2026, idx + 1);
+        if (parsed?.error) errors.push(`Outbound ${parsed.error}`);
+        else if (parsed) outSegs.push(parsed);
+      });
+      if (outSegs.length > 0) {
+        journeys.push({ journeyType: 'outbound', label: 'Outbound', segments: outSegs });
+      }
+
+      if (roundTripReturnText.trim()) {
+        const retLines = roundTripReturnText.split(/\r?\n/).filter(l => l.trim());
+        const retSegs = [];
+        retLines.forEach((l, idx) => {
+          const parsed = parseGdsLine(l, parseInt(roundTripReturnYear, 10) || 2026, idx + 1);
+          if (parsed?.error) errors.push(`Return ${parsed.error}`);
+          else if (parsed) retSegs.push(parsed);
+        });
+        if (retSegs.length > 0) {
+          journeys.push({ journeyType: 'return', label: 'Return', segments: retSegs });
+        }
+      } else {
+        warnings.push('Return itinerary has not been added yet. You can add it later.');
+      }
+    } else if (selectedTripType === 'multi_city') {
+      const activeJourneysWithText = multiCityJourneys.filter(j => j.text.trim());
+      if (activeJourneysWithText.length === 0) {
+        setImportErrors(['At least one multi-city flight journey box must contain valid GDS lines.']);
+        return;
+      }
+      multiCityJourneys.forEach((j, jIdx) => {
+        if (!j.text.trim()) return;
+        const lines = j.text.split(/\r?\n/).filter(l => l.trim());
+        const segs = [];
+        lines.forEach((l, idx) => {
+          const parsed = parseGdsLine(l, parseInt(j.year, 10) || 2026, idx + 1);
+          if (parsed?.error) errors.push(`Flight ${jIdx + 1}: ${parsed.error}`);
+          else if (parsed) segs.push(parsed);
+        });
+        if (segs.length > 0) {
+          journeys.push({ journeyType: `flight_${jIdx + 1}`, label: `Multi-City Flight ${jIdx + 1}`, segments: segs });
+        }
+      });
+    }
+
+    if (errors.length > 0) {
+      setImportErrors(errors);
+      return;
+    }
+
+    setPreviewParsedData({
+      tripType: selectedTripType,
+      journeys
+    });
+    setImportWarnings(warnings);
+    setIsImportModalOpen(false);
+    setIsImportPreviewOpen(true);
   };
 
-  const handleConfirmImport = () => {
-    if (!parsedData || !Array.isArray(parsedData.journeys)) return;
+  const handleConfirmImportIntoBooking = () => {
+    if (!previewParsedData || !Array.isArray(previewParsedData.journeys)) return;
+
+    setTripType(previewParsedData.tripType);
 
     let newOut = [];
     let newRet = [];
+    let newMulti = [];
+    let allSegsForGdsRef = [];
 
-    parsedData.journeys.forEach(j => {
-      const jType = (j.journeyType || 'outbound').toLowerCase();
-      const segs = (j.segments || []).map((s, idx) => ({
-        id: `imp-${Date.now()}-${idx}`,
-        carrier_code: s.carrier_code || s.marketingAirlineCode || 'XX',
-        carrier_name: s.carrier_name || s.marketingAirlineName || 'Airline',
-        flight_number: s.flight_number || s.flightNumber || '100',
-        booking_class: s.booking_class || s.bookingClass || 'Y',
-        cabin: s.cabin || 'Economy',
-        origin_airport: s.origin_airport || s.departureAirport || 'JFK',
-        origin_city: s.origin_city || s.departureCity || '',
-        destination_airport: s.destination_airport || s.arrivalAirport || 'LHR',
-        destination_city: s.destination_city || s.arrivalCity || '',
-        departure_date: s.departure_date || s.departureDate || '',
-        departure_time: s.departure_time || s.departureTime || '',
-        arrival_date: s.arrival_date || s.arrivalDate || '',
-        arrival_time: s.arrival_time || s.arrivalTime || ''
+    previewParsedData.journeys.forEach(j => {
+      const segs = j.segments.map((s, idx) => ({
+        id: `imp-${Date.now()}-${j.journeyType}-${idx}`,
+        carrier_code: s.carrier_code,
+        carrier_name: s.carrier_code === 'DL' ? 'Delta Air Lines' : (s.carrier_code === 'AA' ? 'American Airlines' : (s.carrier_code === 'BA' ? 'British Airways' : s.carrier_code)),
+        flight_number: s.flight_number,
+        booking_class: s.booking_class,
+        cabin: s.booking_class === 'F' ? 'First' : (s.booking_class === 'J' || s.booking_class === 'C' ? 'Business' : 'Economy'),
+        origin_airport: s.origin_airport,
+        destination_airport: s.destination_airport,
+        departure_date: s.departure_date,
+        departure_time: s.departure_time,
+        arrival_date: s.arrival_date || s.departure_date, // Editable, warning if unconfirmed
+        arrival_time: s.arrival_time,
+        status: s.status || 'NN1',
+        notes: s.notes || ''
       }));
 
-      if (jType === 'return') newRet.push(...segs);
-      else newOut.push(...segs);
+      allSegsForGdsRef.push(...segs);
+
+      if (j.journeyType === 'outbound') newOut.push(...segs);
+      else if (j.journeyType === 'return') newRet.push(...segs);
+      else newMulti.push({ label: j.label, segments: segs });
     });
 
     if (newOut.length > 0) setOutboundSegments(newOut);
     if (newRet.length > 0) setReturnSegments(newRet);
+    if (newMulti.length > 0) setMultiCityJourneysState(newMulti);
 
-    if (Array.isArray(parsedData.gdsStyleDisplay) && parsedData.gdsStyleDisplay.length > 0) {
-      setGdsReferenceText(parsedData.gdsStyleDisplay.join('\n'));
-    }
-
+    setGdsReferenceText(buildGdsStyleReferenceLines(allSegsForGdsRef).join('\n'));
     setIsImportPreviewOpen(false);
   };
 
   const handleClearItinerary = () => {
-    if (window.confirm('Clear all flight segments in itinerary?')) {
+    if (window.confirm('Clear all imported itinerary information?')) {
+      setTripType('one_way');
       setOutboundSegments([]);
       setReturnSegments([]);
+      setMultiCityJourneysState([]);
       setGdsReferenceText('');
+      setSelectedTripType('');
+      setOneWayText('');
+      setRoundTripOutboundText('');
+      setRoundTripReturnText('');
+      setMultiCityJourneys([{ id: 'mc-1', year: '2026', text: '' }]);
     }
-  };
-
-  const handleExecuteSearch = () => {
-    setIsSearching(true);
-    setTimeout(() => {
-      setSearchResults([
-        {
-          airline: 'Delta Air Lines',
-          flightNumber: 'DL 106',
-          origin: searchOrigin,
-          destination: searchDest,
-          depDate: searchDepDate,
-          depTime: '19:30',
-          arrTime: '07:45',
-          supplierPrice: '620.00',
-          customerPrice: '850.00'
-        },
-        {
-          airline: 'British Airways',
-          flightNumber: 'BA 178',
-          origin: searchOrigin,
-          destination: searchDest,
-          depDate: searchDepDate,
-          depTime: '08:00',
-          arrTime: '20:10',
-          supplierPrice: '680.00',
-          customerPrice: '920.00'
-        }
-      ]);
-      setIsSearching(false);
-    }, 500);
-  };
-
-  const handleSelectFlight = (res) => {
-    setOutboundSegments([{
-      id: `srch-${Date.now()}`,
-      carrier_code: res.airline.includes('Delta') ? 'DL' : 'BA',
-      carrier_name: res.airline,
-      flight_number: res.flightNumber.replace(/\D/g, ''),
-      booking_class: 'Y',
-      cabin: 'Economy',
-      origin_airport: res.origin,
-      destination_airport: res.destination,
-      departure_date: res.depDate,
-      departure_time: res.depTime,
-      arrival_date: res.depDate,
-      arrival_time: res.arrTime
-    }]);
-
-    setPricing(prev => ({
-      ...prev,
-      supplierCost: res.supplierPrice,
-      finalCustomerTotal: res.customerPrice
-    }));
-
-    setIsFlightSearchOpen(false);
   };
 
   // ----------------------------------------------------
@@ -277,7 +455,6 @@ export default function AdminCreateBookingPage() {
   const handleCreateBooking = async (actionType = 'create_draft') => {
     if (isSubmitting) return;
 
-    // Basic Validation
     if (!contactInfo.email || !contactInfo.email.includes('@')) {
       setErrorMsg('Please enter a valid contact email in Step 1.');
       setCurrentStep(1);
@@ -312,9 +489,10 @@ export default function AdminCreateBookingPage() {
           passportExpiry: p.passportExpiry
         })),
         flight: {
-          tripType: returnSegments.length > 0 ? 'round_trip' : 'one_way',
+          tripType,
           outbound: outboundSegments,
-          return: returnSegments
+          return: returnSegments,
+          multiCity: multiCityJourneysState
         },
         pricing: {
           supplierCost: pricing.supplierCost,
@@ -349,34 +527,25 @@ export default function AdminCreateBookingPage() {
       };
 
       const res = await adminAPI.createBooking(payload);
-
-      if (res && res.success && res.data) {
-        const createdId = res.data.id || res.data.confirmation_code;
-        setSuccessMsg(`Booking ${createdId} created successfully! Redirecting to booking editor…`);
-        setTimeout(() => {
-          navigate(`/admin/bookings/${createdId}`);
-        }, 800);
+      if (res && res.success) {
+        setSuccessMsg(`Booking created successfully! Reference Code: ${res.bookingCode || res.bookingId || 'TFS-NEW'}`);
+        setTimeout(() => navigate('/admin/dashboard'), 2000);
       } else {
-        setErrorMsg(res?.error?.message || 'Failed to create booking.');
+        setErrorMsg(res?.error?.message || res?.message || 'Failed to create booking');
       }
     } catch (err) {
-      setErrorMsg(err.response?.data?.error?.message || err.message || 'Server error creating booking.');
+      setErrorMsg(err.response?.data?.error?.message || err.message || 'Error executing booking creation');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1100px', margin: '0 auto', fontFamily: 'system-ui, sans-serif', color: '#1e293b' }}>
-      
-      {/* PAGE HEADER */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #e2e8f0', paddingBottom: '14px' }}>
-        <div>
-          <button
-            type="button"
-            onClick={() => navigate('/admin/dashboard')}
-            style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '6px 12px', fontSize: '0.8rem', fontWeight: 600, color: '#475569', cursor: 'pointer', marginBottom: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
+    <div className="admin-dashboard-page" style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+      {/* HEADER & ACTION BUTTONS */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #cbd5e1', paddingBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <button type="button" onClick={() => navigate('/admin/dashboard')} className="admin-secondary-btn">
             <i className="fas fa-arrow-left"></i> Back to Dashboard
           </button>
           <h1 style={{ margin: 0, color: '#1e3a5f', fontSize: '1.6rem', fontWeight: '800' }}>
@@ -490,13 +659,21 @@ export default function AdminCreateBookingPage() {
                       <option value="Male">Male</option><option value="Female">Female</option>
                     </select>
                   </div>
-                  <div className="drawer-form-field">
-                    <label>Date of Birth</label>
-                    <input type="date" value={p.dateOfBirth} onChange={e => { const next = [...passengers]; next[pIdx].dateOfBirth = e.target.value; }} />
-                  </div>
+
+                  {/* CONTROLLED RELIABLE DATE OF BIRTH COMPONENT */}
+                  <DobInputComponent
+                    label="Date of Birth"
+                    value={p.dateOfBirth}
+                    onChange={(val) => {
+                      const next = [...passengers];
+                      next[pIdx].dateOfBirth = val;
+                      setPassengers(next);
+                    }}
+                  />
+
                   <div className="drawer-form-field">
                     <label>Passport Number</label>
-                    <input type="text" value={p.passportNumber} onChange={e => { const next = [...passengers]; next[pIdx].passportNumber = e.target.value; }} placeholder="A12345678" />
+                    <input type="text" value={p.passportNumber} onChange={e => { const next = [...passengers]; next[pIdx].passportNumber = e.target.value; setPassengers(next); }} placeholder="A12345678" />
                   </div>
                 </div>
               </div>
@@ -517,20 +694,14 @@ export default function AdminCreateBookingPage() {
           <div>
             <h3 style={{ margin: '0 0 16px', color: '#1e3a5f' }}><i className="fas fa-plane" style={{ marginRight: '8px' }}></i> Step 2: Flight Selection &amp; Itinerary</h3>
 
-            {/* ITINERARY CONTROL TOOLBAR */}
+            {/* ITINERARY CONTROL TOOLBAR: [ Import Itinerary ] [ Information ⓘ ] [ Clear Itinerary ] */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', border: '1px solid #cbd5e1', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <button type="button" onClick={() => setIsFlightSearchOpen(true)} className="admin-primary-btn" style={{ background: '#1e3a5f' }}>
-                  <i className="fas fa-search"></i> Search Flights
-                </button>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <button type="button" onClick={() => setIsImportModalOpen(true)} className="admin-primary-btn" style={{ background: '#8b1236' }}>
                   <i className="fas fa-file-import"></i> Import Itinerary
                 </button>
                 <button type="button" onClick={() => setIsGptHelpOpen(true)} title="ChatGPT Itinerary Instructions" style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '50%', width: '32px', height: '32px', fontWeight: 'bold', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                   ⓘ
-                </button>
-                <button type="button" onClick={() => setOutboundSegments([...outboundSegments, { id: `seg-${Date.now()}`, carrier_code: '', carrier_name: '', flight_number: '', booking_class: 'Y', cabin: 'Economy', origin_airport: '', destination_airport: '', departure_date: '', departure_time: '', arrival_date: '', arrival_time: '' }])} className="admin-secondary-btn">
-                  + Enter Manually
                 </button>
               </div>
 
@@ -539,10 +710,10 @@ export default function AdminCreateBookingPage() {
               </button>
             </div>
 
-            {/* SEGMENTS LIST */}
+            {/* OUTBOUND SEGMENTS LIST */}
             <h4 style={{ color: '#334155', margin: '0 0 10px' }}>Outbound Segments ({outboundSegments.length})</h4>
             {outboundSegments.map((seg, idx) => (
-              <div key={seg.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '10px' }}>
+              <div key={seg.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '14px', marginBottom: '12px' }}>
                 <div className="drawer-grid-3col">
                   <div className="drawer-form-field">
                     <label>Airline Code &amp; Flight #</label>
@@ -550,11 +721,11 @@ export default function AdminCreateBookingPage() {
                   </div>
                   <div className="drawer-form-field">
                     <label>Origin Airport (IATA)</label>
-                    <input type="text" value={seg.origin_airport} onChange={e => { const next = [...outboundSegments]; next[idx].origin_airport = e.target.value.toUpperCase(); setOutboundSegments(next); }} placeholder="JFK" maxLength={3} />
+                    <input type="text" value={seg.origin_airport} onChange={e => { const next = [...outboundSegments]; next[idx].origin_airport = e.target.value.toUpperCase(); setOutboundSegments(next); }} placeholder="JFK" />
                   </div>
                   <div className="drawer-form-field">
                     <label>Destination Airport (IATA)</label>
-                    <input type="text" value={seg.destination_airport} onChange={e => { const next = [...outboundSegments]; next[idx].destination_airport = e.target.value.toUpperCase(); setOutboundSegments(next); }} placeholder="LHR" maxLength={3} />
+                    <input type="text" value={seg.destination_airport} onChange={e => { const next = [...outboundSegments]; next[idx].destination_airport = e.target.value.toUpperCase(); setOutboundSegments(next); }} placeholder="LHR" />
                   </div>
                   <div className="drawer-form-field">
                     <label>Departure Date</label>
@@ -563,6 +734,21 @@ export default function AdminCreateBookingPage() {
                   <div className="drawer-form-field">
                     <label>Departure Time</label>
                     <input type="text" value={seg.departure_time} onChange={e => { const next = [...outboundSegments]; next[idx].departure_time = e.target.value; setOutboundSegments(next); }} placeholder="19:30" />
+                  </div>
+                  <div className="drawer-form-field">
+                    <label>Arrival Time</label>
+                    <input type="text" value={seg.arrival_time} onChange={e => { const next = [...outboundSegments]; next[idx].arrival_time = e.target.value; setOutboundSegments(next); }} placeholder="07:45" />
+                  </div>
+
+                  {/* EDITABLE ARRIVAL DATE WITH UNCONFIRMED WARNING */}
+                  <div className="drawer-form-field" style={{ gridColumn: 'span 2' }}>
+                    <label>Arrival Date *</label>
+                    <input type="date" value={seg.arrival_date} onChange={e => { const next = [...outboundSegments]; next[idx].arrival_date = e.target.value; setOutboundSegments(next); }} />
+                    {(!seg.arrival_date || seg.arrival_date === seg.departure_date) && (
+                      <small style={{ color: '#d97706', fontSize: '0.72rem', display: 'block', marginTop: '4px' }}>
+                        <i className="fas fa-exclamation-circle"></i> Arrival date was not included in GDS line. Please verify whether this flight arrives the same day or following day.
+                      </small>
+                    )}
                   </div>
                   <div className="drawer-form-field">
                     <label>Cabin Class</label>
@@ -574,65 +760,97 @@ export default function AdminCreateBookingPage() {
               </div>
             ))}
 
-            {/* GDS REFERENCE TEXT AREA */}
-            <div style={{ marginTop: '16px', background: '#0f172a', color: '#38bdf8', padding: '14px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '0.8rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', color: '#94a3b8' }}>
-                <strong>GDS-Style Reference Lines (Agent Display)</strong>
-                <button type="button" onClick={() => navigator.clipboard.writeText(gdsReferenceText || buildGdsStyleReferenceLines(outboundSegments).join('\n'))} style={{ background: '#334155', color: '#fff', border: 'none', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}>
-                  Copy Reference
+            {/* RETURN SEGMENTS LIST (IF ROUND TRIP) */}
+            {returnSegments.length > 0 && (
+              <div style={{ marginTop: '20px' }}>
+                <h4 style={{ color: '#334155', margin: '0 0 10px' }}>Inbound / Return Segments ({returnSegments.length})</h4>
+                {returnSegments.map((seg, idx) => (
+                  <div key={seg.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '14px', marginBottom: '12px' }}>
+                    <div className="drawer-grid-3col">
+                      <div className="drawer-form-field">
+                        <label>Airline Code &amp; Flight #</label>
+                        <input type="text" value={`${seg.carrier_code} ${seg.flight_number}`} onChange={e => { const parts = e.target.value.split(' '); const next = [...returnSegments]; next[idx].carrier_code = parts[0] || ''; next[idx].flight_number = parts[1] || ''; setReturnSegments(next); }} placeholder="DL 107" />
+                      </div>
+                      <div className="drawer-form-field">
+                        <label>Origin Airport (IATA)</label>
+                        <input type="text" value={seg.origin_airport} onChange={e => { const next = [...returnSegments]; next[idx].origin_airport = e.target.value.toUpperCase(); setReturnSegments(next); }} placeholder="LHR" />
+                      </div>
+                      <div className="drawer-form-field">
+                        <label>Destination Airport (IATA)</label>
+                        <input type="text" value={seg.destination_airport} onChange={e => { const next = [...returnSegments]; next[idx].destination_airport = e.target.value.toUpperCase(); setReturnSegments(next); }} placeholder="JFK" />
+                      </div>
+                      <div className="drawer-form-field">
+                        <label>Departure Date</label>
+                        <input type="date" value={seg.departure_date} onChange={e => { const next = [...returnSegments]; next[idx].departure_date = e.target.value; setReturnSegments(next); }} />
+                      </div>
+                      <div className="drawer-form-field">
+                        <label>Departure Time</label>
+                        <input type="text" value={seg.departure_time} onChange={e => { const next = [...returnSegments]; next[idx].departure_time = e.target.value; setReturnSegments(next); }} placeholder="12:00" />
+                      </div>
+                      <div className="drawer-form-field">
+                        <label>Arrival Time</label>
+                        <input type="text" value={seg.arrival_time} onChange={e => { const next = [...returnSegments]; next[idx].arrival_time = e.target.value; setReturnSegments(next); }} placeholder="15:30" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* GDS-STYLE REFERENCE DISPLAY BOX */}
+            <div style={{ marginTop: '20px', background: '#0f172a', color: '#38bdf8', padding: '16px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '0.75rem', marginBottom: '8px' }}>
+                <span>GDS-Style Reference Lines (Agent Display)</span>
+                <button type="button" onClick={() => { navigator.clipboard.writeText(gdsReferenceText); setCopyToast('Copied reference lines!'); setTimeout(() => setCopyToast(''), 2000); }} style={{ background: '#1e293b', border: '1px solid #334155', color: '#f8fafc', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem' }}>
+                  {copyToast || 'Copy Reference'}
                 </button>
               </div>
-              <div>{gdsReferenceText || buildGdsStyleReferenceLines(outboundSegments).join('\n') || '01 DL 106 Y 15SEP JFK LHR 1930 0745 NN1'}</div>
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{gdsReferenceText || '// No GDS reference lines'}</pre>
             </div>
           </div>
         )}
 
-        {/* STEP 3: PRICING */}
+        {/* STEP 3: PRICING BREAKDOWN */}
         {currentStep === 3 && (
           <div>
-            <h3 style={{ margin: '0 0 16px', color: '#1e3a5f' }}><i className="fas fa-dollar-sign" style={{ marginRight: '8px' }}></i> Step 3: Financial Pricing Breakdown</h3>
-
-            <div className="drawer-grid-3col" style={{ marginBottom: '16px' }}>
+            <h3 style={{ margin: '0 0 16px', color: '#1e3a5f' }}><i className="fas fa-calculator" style={{ marginRight: '8px' }}></i> Step 3: Pricing Breakdown</h3>
+            <div className="drawer-grid-3col">
               <div className="drawer-form-field">
-                <label style={{ fontWeight: 700 }}>Supplier / Flight Cost ($)</label>
-                <input type="text" value={pricing.supplierCost} onChange={e => setPricing({ ...pricing, supplierCost: e.target.value })} />
+                <label style={{ fontWeight: 700 }}>Supplier Flight Cost ($)</label>
+                <input type="number" step="0.01" value={pricing.supplierCost} onChange={e => setPricing({ ...pricing, supplierCost: e.target.value })} />
               </div>
               <div className="drawer-form-field">
                 <label>Supplier Taxes ($)</label>
-                <input type="text" value={pricing.supplierTaxes} onChange={e => setPricing({ ...pricing, supplierTaxes: e.target.value })} />
+                <input type="number" step="0.01" value={pricing.supplierTaxes} onChange={e => setPricing({ ...pricing, supplierTaxes: e.target.value })} />
               </div>
               <div className="drawer-form-field">
                 <label>Supplier Fees ($)</label>
-                <input type="text" value={pricing.supplierFees} onChange={e => setPricing({ ...pricing, supplierFees: e.target.value })} />
+                <input type="number" step="0.01" value={pricing.supplierFees} onChange={e => setPricing({ ...pricing, supplierFees: e.target.value })} />
               </div>
               <div className="drawer-form-field">
-                <label>Agency Service Fee ($)</label>
-                <input type="text" value={pricing.agencyFee} onChange={e => setPricing({ ...pricing, agencyFee: e.target.value })} />
+                <label style={{ fontWeight: 700 }}>Agency Service Fee ($)</label>
+                <input type="number" step="0.01" value={pricing.agencyFee} onChange={e => setPricing({ ...pricing, agencyFee: e.target.value })} />
               </div>
               <div className="drawer-form-field">
-                <label>Markup ($)</label>
-                <input type="text" value={pricing.markup} onChange={e => setPricing({ ...pricing, markup: e.target.value })} />
+                <label>Agency Markup ($)</label>
+                <input type="number" step="0.01" value={pricing.markup} onChange={e => setPricing({ ...pricing, markup: e.target.value })} />
               </div>
               <div className="drawer-form-field">
                 <label>Discount ($)</label>
-                <input type="text" value={pricing.discount} onChange={e => setPricing({ ...pricing, discount: e.target.value })} />
+                <input type="number" step="0.01" value={pricing.discount} onChange={e => setPricing({ ...pricing, discount: e.target.value })} />
               </div>
             </div>
 
-            <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'center' }}>
+            <div style={{ marginTop: '20px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <label style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Calculated Total (Cost + Taxes + Fees + Markup - Discount):</label>
-                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>${calculatedTotal} {pricing.currency}</div>
+                <span style={{ fontSize: '0.85rem', color: '#64748b', display: 'block' }}>Calculated Customer Total</span>
+                <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1e3a5f' }}>${calculatedTotal} {pricing.currency}</span>
               </div>
-              <div className="drawer-form-field" style={{ margin: 0 }}>
-                <label style={{ fontWeight: 800, color: '#166534' }}>Final Customer Total ($) *</label>
-                <input type="text" value={pricing.finalCustomerTotal} onChange={e => setPricing({ ...pricing, finalCustomerTotal: e.target.value })} style={{ fontSize: '1.2rem', fontWeight: 700, borderColor: '#166534' }} />
-              </div>
-            </div>
 
-            <div className="drawer-form-field" style={{ marginTop: '14px' }}>
-              <label>Price Override / Negotiation Reason</label>
-              <input type="text" value={pricing.priceOverrideReason} onChange={e => setPricing({ ...pricing, priceOverrideReason: e.target.value })} placeholder="e.g. Phone consultation discount applied" />
+              <div style={{ width: '220px' }}>
+                <label style={{ fontWeight: 700, fontSize: '0.8rem', color: '#1e3a5f', display: 'block', marginBottom: '4px' }}>Final Customer Total Override ($)</label>
+                <input type="number" step="0.01" value={pricing.finalCustomerTotal} onChange={e => setPricing({ ...pricing, finalCustomerTotal: e.target.value })} style={{ width: '100%', fontWeight: 700, fontSize: '1.1rem', color: '#8b1236' }} />
+              </div>
             </div>
           </div>
         )}
@@ -640,15 +858,14 @@ export default function AdminCreateBookingPage() {
         {/* STEP 4: BILLING & PAYMENT */}
         {currentStep === 4 && (
           <div>
-            <h3 style={{ margin: '0 0 16px', color: '#1e3a5f' }}><i className="fas fa-credit-card" style={{ marginRight: '8px' }}></i> Step 4: Billing Address &amp; Tokenized Card Metadata</h3>
-
-            <div className="drawer-grid-2col" style={{ marginBottom: '14px' }}>
+            <h3 style={{ margin: '0 0 16px', color: '#1e3a5f' }}><i className="fas fa-credit-card" style={{ marginRight: '8px' }}></i> Step 4: Billing &amp; Payment Details</h3>
+            <div className="drawer-grid-2col" style={{ marginBottom: '16px' }}>
               <div className="drawer-form-field">
-                <label style={{ fontWeight: 700 }}>Cardholder Full Name</label>
+                <label style={{ fontWeight: 700 }}>Cardholder Name</label>
                 <input type="text" value={billing.cardholderName} onChange={e => setBilling({ ...billing, cardholderName: e.target.value })} placeholder="John Doe" />
               </div>
               <div className="drawer-form-field">
-                <label>Billing Address Line 1</label>
+                <label style={{ fontWeight: 700 }}>Address Line 1</label>
                 <input type="text" value={billing.addressLine1} onChange={e => setBilling({ ...billing, addressLine1: e.target.value })} placeholder="123 Main St" />
               </div>
               <div className="drawer-form-field">
@@ -656,32 +873,31 @@ export default function AdminCreateBookingPage() {
                 <input type="text" value={billing.city} onChange={e => setBilling({ ...billing, city: e.target.value })} placeholder="New York" />
               </div>
               <div className="drawer-form-field">
-                <label>State / Region</label>
+                <label>State / Province</label>
                 <input type="text" value={billing.state} onChange={e => setBilling({ ...billing, state: e.target.value })} placeholder="NY" />
               </div>
               <div className="drawer-form-field">
-                <label>Postal / ZIP Code</label>
+                <label>Postal Code</label>
                 <input type="text" value={billing.postalCode} onChange={e => setBilling({ ...billing, postalCode: e.target.value })} placeholder="10001" />
               </div>
               <div className="drawer-form-field">
                 <label>Country</label>
-                <input type="text" value={billing.country} onChange={e => setBilling({ ...billing, country: e.target.value })} />
+                <select value={billing.country} onChange={e => setBilling({ ...billing, country: e.target.value })}>
+                  <option value="United States">United States</option><option value="Canada">Canada</option><option value="United Kingdom">United Kingdom</option>
+                </select>
               </div>
             </div>
 
-            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '14px', borderRadius: '8px', marginBottom: '14px' }}>
-              <div style={{ fontWeight: 700, color: '#166534', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <i className="fas fa-shield-alt"></i> PCI Tokenized Card Metadata Entry
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '16px', marginTop: '16px' }}>
+              <h4 style={{ margin: '0 0 10px', color: '#166534', fontSize: '0.9rem' }}><i className="fas fa-shield-alt" style={{ marginRight: '6px' }}></i> Tokenized Card Metadata (PCI Compliant)</h4>
+              <div className="drawer-grid-3col">
+                <div className="drawer-form-field"><label>Card Brand</label><input type="text" value={billing.cardBrand} readOnly style={{ background: '#f8fafc' }} /></div>
+                <div className="drawer-form-field"><label>Last 4 Digits</label><input type="text" value={billing.cardLast4} readOnly style={{ background: '#f8fafc' }} /></div>
+                <div className="drawer-form-field"><label>Expiry</label><input type="text" value={`${billing.expMonth}/${billing.expYear}`} readOnly style={{ background: '#f8fafc' }} /></div>
               </div>
-              <div style={{ fontSize: '0.78rem', color: '#15803d', marginBottom: '10px' }}>
-                Raw credit card numbers and CVV codes are NEVER stored in React state or sent to our database.
-              </div>
-              <div className="drawer-grid-4col">
-                <div className="drawer-form-field"><label>Brand</label><input type="text" value={billing.cardBrand} onChange={e => setBilling({ ...billing, cardBrand: e.target.value })} /></div>
-                <div className="drawer-form-field"><label>Last 4</label><input type="text" value={billing.cardLast4} onChange={e => setBilling({ ...billing, cardLast4: e.target.value })} maxLength={4} /></div>
-                <div className="drawer-form-field"><label>Exp Month</label><input type="text" value={billing.expMonth} onChange={e => setBilling({ ...billing, expMonth: e.target.value })} maxLength={2} /></div>
-                <div className="drawer-form-field"><label>Exp Year</label><input type="text" value={billing.expYear} onChange={e => setBilling({ ...billing, expYear: e.target.value })} maxLength={4} /></div>
-              </div>
+              <small style={{ color: '#15803d', fontSize: '0.75rem', marginTop: '6px', display: 'block' }}>
+                Note: Raw credit card numbers and CVV codes are NEVER stored in state, backend database, or logs.
+              </small>
             </div>
           </div>
         )}
@@ -689,138 +905,336 @@ export default function AdminCreateBookingPage() {
         {/* STEP 5: REVIEW & CREATE */}
         {currentStep === 5 && (
           <div>
-            <h3 style={{ margin: '0 0 16px', color: '#1e3a5f' }}><i className="fas fa-check-circle" style={{ marginRight: '8px' }}></i> Step 5: Review &amp; Select Creation Action</h3>
+            <h3 style={{ margin: '0 0 16px', color: '#1e3a5f' }}><i className="fas fa-check-double" style={{ marginRight: '8px' }}></i> Step 5: Review &amp; Create Booking</h3>
 
-            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', marginBottom: '20px', fontSize: '0.85rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div><strong>Primary Traveler:</strong> {passengers[0]?.firstName} {passengers[0]?.lastName}</div>
-                <div><strong>Email:</strong> {contactInfo.email || 'N/A'}</div>
-                <div><strong>Itinerary:</strong> {outboundSegments[0]?.origin_airport} → {outboundSegments[0]?.destination_airport} ({outboundSegments.length} seg)</div>
-                <div><strong>Customer Price:</strong> <strong style={{ color: '#166534' }}>${pricing.finalCustomerTotal || calculatedTotal} {pricing.currency}</strong></div>
+            <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '20px', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '12px' }}>
+                <div>
+                  <h4 style={{ margin: 0, color: '#1e3a5f' }}>Primary Customer: {passengers[0]?.firstName} {passengers[0]?.lastName}</h4>
+                  <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Email: {contactInfo.email || 'Not provided'} | Phone: {contactInfo.phone || 'Not provided'}</span>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block' }}>Total Customer Price</span>
+                  <span style={{ fontSize: '1.3rem', fontWeight: 800, color: '#8b1236' }}>${pricing.finalCustomerTotal || calculatedTotal} USD</span>
+                </div>
+              </div>
+
+              <div style={{ fontSize: '0.85rem', color: '#334155' }}>
+                <p style={{ margin: '4px 0' }}><strong>Trip Type:</strong> {tripType.toUpperCase()}</p>
+                <p style={{ margin: '4px 0' }}><strong>Outbound Flight:</strong> {outboundSegments[0]?.carrier_code} {outboundSegments[0]?.flight_number} ({outboundSegments[0]?.origin_airport} → {outboundSegments[0]?.destination_airport})</p>
+                {returnSegments.length > 0 && (
+                  <p style={{ margin: '4px 0' }}><strong>Return Flight:</strong> {returnSegments[0]?.carrier_code} {returnSegments[0]?.flight_number} ({returnSegments[0]?.origin_airport} → {returnSegments[0]?.destination_airport})</p>
+                )}
+                <p style={{ margin: '4px 0' }}><strong>Total Passengers:</strong> {passengers.length}</p>
               </div>
             </div>
 
-            <h4 style={{ color: '#334155', marginBottom: '12px' }}>Select Final Creation Action:</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-              <button type="button" onClick={() => handleCreateBooking('create_draft')} disabled={isSubmitting} className="admin-secondary-btn" style={{ padding: '12px', fontSize: '0.85rem', fontWeight: 700 }}>
-                <i className="fas fa-pencil-alt" style={{ marginRight: '6px' }}></i> Create Draft Booking
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+              <button type="button" onClick={() => handleCreateBooking('create_draft')} disabled={isSubmitting} className="admin-secondary-btn" style={{ padding: '12px', fontWeight: 700 }}>
+                Create Draft Booking
               </button>
-              <button type="button" onClick={() => handleCreateBooking('create_no_payment')} disabled={isSubmitting} className="admin-secondary-btn" style={{ padding: '12px', fontSize: '0.85rem', fontWeight: 700, background: '#fef3c7', color: '#92400e', borderColor: '#fde68a' }}>
-                <i className="fas fa-clock" style={{ marginRight: '6px' }}></i> Create Booking Without Payment
+              <button type="button" onClick={() => handleCreateBooking('create_without_payment')} disabled={isSubmitting} className="admin-secondary-btn" style={{ background: '#fef3c7', color: '#92400e', borderColor: '#fde68a', padding: '12px', fontWeight: 700 }}>
+                Create Booking Without Payment
               </button>
-              <button type="button" onClick={() => handleCreateBooking('create_and_send_auth')} disabled={isSubmitting} className="admin-primary-btn" style={{ padding: '12px', fontSize: '0.85rem', background: '#7c3aed' }}>
-                <i className="fas fa-envelope-open-text" style={{ marginRight: '6px' }}></i> Create &amp; Send Authorization
+              <button type="button" onClick={() => handleCreateBooking('create_and_send_auth')} disabled={isSubmitting} className="admin-primary-btn" style={{ background: '#1e3a5f', padding: '12px', fontWeight: 700 }}>
+                <i className="fas fa-paper-plane" style={{ marginRight: '6px' }}></i> Create &amp; Send Auth
               </button>
-              <button type="button" onClick={() => handleCreateBooking('create_and_process_payment')} disabled={isSubmitting} className="admin-primary-btn" style={{ padding: '12px', fontSize: '0.85rem', background: '#047857' }}>
+              <button type="button" onClick={() => handleCreateBooking('create_and_process_payment')} disabled={isSubmitting} className="admin-primary-btn" style={{ background: '#8b1236', padding: '12px', fontWeight: 700 }}>
                 <i className="fas fa-credit-card" style={{ marginRight: '6px' }}></i> Create &amp; Process Payment
               </button>
             </div>
           </div>
         )}
 
-        {/* BOTTOM STEP NAVIGATION CONTROL BAR */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
-          <button
-            type="button"
-            disabled={currentStep === 1}
-            onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))}
-            className="admin-secondary-btn"
-          >
-            ← Back
-          </button>
-
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button type="button" onClick={() => navigate('/admin/dashboard')} className="admin-secondary-btn">
-              Cancel
+        {/* STEP FOOTER NAVIGATION */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+          {currentStep > 1 ? (
+            <button type="button" onClick={() => setCurrentStep(currentStep - 1)} className="admin-secondary-btn">
+              ← Back
             </button>
-            {currentStep < 5 && (
-              <button
-                type="button"
-                onClick={() => setCurrentStep(prev => Math.min(5, prev + 1))}
-                className="admin-primary-btn"
-                style={{ background: '#1e3a5f' }}
-              >
-                Continue →
-              </button>
-            )}
-          </div>
-        </div>
+          ) : <div />}
 
+          {currentStep < 5 && (
+            <button type="button" onClick={() => setCurrentStep(currentStep + 1)} className="admin-primary-btn" style={{ background: '#1e3a5f' }}>
+              Continue →
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* STEP 2 MODALS */}
+      {/* ================================================== */}
+      {/* 3-TRIP-TYPE ITINERARY IMPORT MODAL */}
+      {/* ================================================== */}
       {isImportModalOpen && (
-        <div className="review-modal-backdrop" style={{ zIndex: 1100 }}>
-          <div className="review-modal-card" style={{ maxWidth: '650px', width: '90%' }}>
-            <h3 style={{ margin: '0 0 10px', color: '#1e3a5f' }}>Import Itinerary</h3>
-            <textarea rows={7} value={importText} onChange={e => setImportText(e.target.value)} placeholder="Paste Google Flights or GDS text here..." style={{ width: '100%', fontFamily: 'monospace', padding: '10px' }} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
-              <button type="button" onClick={() => setIsImportModalOpen(false)} className="admin-secondary-btn">Cancel</button>
-              <button type="button" onClick={handleParseItineraryText} disabled={importParsing} className="admin-primary-btn" style={{ background: '#8b1236' }}>
-                {importParsing ? 'Parsing...' : 'Import and Preview'}
+        <div className="admin-modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <div style={{ background: '#ffffff', borderRadius: '12px', maxWidth: '750px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, color: '#1e3a5f', fontSize: '1.25rem' }}><i className="fas fa-file-import" style={{ marginRight: '8px' }}></i> Import Itinerary</h3>
+              <button type="button" onClick={() => setIsImportModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#64748b' }}>×</button>
+            </div>
+
+            {/* STEP 1: ASK FOR TRIP TYPE */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ fontWeight: 700, color: '#1e3a5f', display: 'block', marginBottom: '8px' }}>
+                What type of trip is this? *
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                {[
+                  { id: 'one_way', label: 'One Way', icon: 'fa-arrow-right' },
+                  { id: 'round_trip', label: 'Round Trip', icon: 'fa-exchange-alt' },
+                  { id: 'multi_city', label: 'Multi-City', icon: 'fa-route' }
+                ].map(type => (
+                  <button
+                    key={type.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedTripType(type.id);
+                      setImportErrors([]);
+                    }}
+                    style={{
+                      padding: '12px 8px',
+                      borderRadius: '8px',
+                      border: selectedTripType === type.id ? '2px solid #8b1236' : '1px solid #cbd5e1',
+                      background: selectedTripType === type.id ? '#fff1f2' : '#f8fafc',
+                      color: selectedTripType === type.id ? '#8b1236' : '#334155',
+                      fontWeight: selectedTripType === type.id ? '700' : '600',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <i className={`fas ${type.icon}`} style={{ fontSize: '1.1rem' }}></i>
+                    <span>{type.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* ERROR DISPLAY IN MODAL */}
+            {importErrors.length > 0 && (
+              <div style={{ background: '#fee2e2', border: '1px solid #fecaca', color: '#991b1b', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.83rem' }}>
+                <strong><i className="fas fa-exclamation-circle" style={{ marginRight: '6px' }}></i> Import Validation Errors:</strong>
+                <ul style={{ margin: '6px 0 0 18px', padding: 0 }}>
+                  {importErrors.map((err, i) => <li key={i}>{err}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {/* TRIP-TYPE SPECIFIC IMPORT TEXTAREAS */}
+            {selectedTripType === 'one_way' && (
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <label style={{ fontWeight: 700, color: '#1e3a5f' }}>Outbound Itinerary *</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Travel Year:</span>
+                    <select value={oneWayYear} onChange={e => setOneWayYear(e.target.value)} style={{ padding: '2px 6px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+                      <option value="2026">2026</option><option value="2027">2027</option><option value="2028">2028</option>
+                    </select>
+                  </div>
+                </div>
+                <textarea
+                  rows={5}
+                  value={oneWayText}
+                  onChange={e => setOneWayText(e.target.value)}
+                  placeholder="Paste Outbound GDS-Style Lines&#10;e.g. 01 DL 106 Y 15SEP JFKLHR 1930 0745 NN1"
+                  style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.85rem', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                />
+              </div>
+            )}
+
+            {selectedTripType === 'round_trip' && (
+              <div>
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label style={{ fontWeight: 700, color: '#1e3a5f' }}>Outbound Itinerary *</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Travel Year:</span>
+                      <select value={roundTripOutboundYear} onChange={e => setRoundTripOutboundYear(e.target.value)} style={{ padding: '2px 6px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+                        <option value="2026">2026</option><option value="2027">2027</option>
+                      </select>
+                    </div>
+                  </div>
+                  <textarea
+                    rows={4}
+                    value={roundTripOutboundText}
+                    onChange={e => setRoundTripOutboundText(e.target.value)}
+                    placeholder="Paste Outbound GDS-Style Lines&#10;e.g. 01 DL 106 Y 15SEP JFKLHR 1930 0745 NN1"
+                    style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.85rem', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label style={{ fontWeight: 700, color: '#1e3a5f' }}>Inbound / Return Itinerary — Optional</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Travel Year:</span>
+                      <select value={roundTripReturnYear} onChange={e => setRoundTripReturnYear(e.target.value)} style={{ padding: '2px 6px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+                        <option value="2026">2026</option><option value="2027">2027</option>
+                      </select>
+                    </div>
+                  </div>
+                  <textarea
+                    rows={4}
+                    value={roundTripReturnText}
+                    onChange={e => setRoundTripReturnText(e.target.value)}
+                    placeholder="Paste Inbound / Return GDS-Style Lines — Optional"
+                    style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.85rem', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {selectedTripType === 'multi_city' && (
+              <div>
+                {multiCityJourneys.map((j, jIdx) => (
+                  <div key={j.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ fontWeight: 700, color: '#1e3a5f' }}>Multi-City Flight {jIdx + 1}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Travel Year:</span>
+                        <select value={j.year} onChange={e => { const next = [...multiCityJourneys]; next[jIdx].year = e.target.value; setMultiCityJourneys(next); }} style={{ padding: '2px 6px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+                          <option value="2026">2026</option><option value="2027">2027</option>
+                        </select>
+                        {jIdx > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setMultiCityJourneys(multiCityJourneys.filter((_, idx) => idx !== jIdx))}
+                            style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={j.text}
+                      onChange={e => { const next = [...multiCityJourneys]; next[jIdx].text = e.target.value; setMultiCityJourneys(next); }}
+                      placeholder={`Paste GDS lines for Multi-City Flight ${jIdx + 1}`}
+                      style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.85rem', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                    />
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => setMultiCityJourneys([...multiCityJourneys, { id: `mc-${Date.now()}`, year: '2026', text: '' }])}
+                  style={{ background: '#e0f2fe', border: '1px solid #bae6fd', color: '#0369a1', padding: '8px 14px', borderRadius: '6px', fontWeight: '700', fontSize: '0.82rem', cursor: 'pointer', marginBottom: '16px' }}
+                >
+                  + Add Another Flight
+                </button>
+              </div>
+            )}
+
+            {/* MODAL FOOTER BUTTONS */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+              <button type="button" onClick={() => setIsImportModalOpen(false)} className="admin-secondary-btn">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleParseAndPreviewItinerary}
+                disabled={!selectedTripType}
+                className="admin-primary-btn"
+                style={{ background: '#8b1236', opacity: !selectedTripType ? 0.6 : 1 }}
+              >
+                Import and Preview →
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {isGptHelpOpen && (
-        <div className="review-modal-backdrop" style={{ zIndex: 1200 }}>
-          <div className="review-modal-card" style={{ maxWidth: '700px', width: '90%' }}>
-            <h3 style={{ margin: '0 0 10px', color: '#1e3a5f' }}>Convert Google Flights Itinerary with ChatGPT</h3>
-            <div style={{ fontSize: '0.8rem', lineHeight: '1.4', marginBottom: '10px' }}>
-              Copy Google Flights itinerary and use the 20-rule prompt below in ChatGPT to generate structured JSON.
+      {/* ================================================== */}
+      {/* IMPORT PREVIEW MODAL */}
+      {/* ================================================== */}
+      {isImportPreviewOpen && previewParsedData && (
+        <div className="admin-modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <div style={{ background: '#ffffff', borderRadius: '12px', maxWidth: '750px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, color: '#1e3a5f', fontSize: '1.2rem' }}><i className="fas fa-search" style={{ marginRight: '8px' }}></i> Preview Parsed Itinerary</h3>
+              <button type="button" onClick={() => setIsImportPreviewOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#64748b' }}>×</button>
             </div>
-            <button type="button" onClick={() => { navigator.clipboard.writeText(CHATGPT_PROMPT_TEMPLATE); setCopyToast('GPT prompt copied'); setTimeout(() => setCopyToast(''), 3000); }} className="admin-primary-btn" style={{ background: '#2563eb', marginBottom: '10px' }}>
-              Copy GPT Prompt
-            </button>
-            {copyToast && <div style={{ color: '#15803d', fontWeight: 'bold', fontSize: '0.8rem', marginBottom: '6px' }}>{copyToast}</div>}
-            <div style={{ background: '#0f172a', color: '#38bdf8', padding: '10px', borderRadius: '6px', fontSize: '0.75rem', fontFamily: 'monospace', maxHeight: '180px', overflowY: 'auto' }}>
-              {CHATGPT_PROMPT_TEMPLATE}
-            </div>
-            <div style={{ marginTop: '12px', textAlign: 'right' }}>
-              <button type="button" onClick={() => setIsGptHelpOpen(false)} className="admin-secondary-btn">Close</button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {isImportPreviewOpen && parsedData && (
-        <div className="review-modal-backdrop" style={{ zIndex: 1150 }}>
-          <div className="review-modal-card" style={{ maxWidth: '700px', width: '90%' }}>
-            <h3 style={{ margin: '0 0 10px', color: '#1e3a5f' }}>Import Preview</h3>
-            <div>Parsed {parsedData.journeys?.length || 0} journey(s)</div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '14px' }}>
-              <button type="button" onClick={() => setIsImportPreviewOpen(false)} className="admin-secondary-btn">Cancel</button>
-              <button type="button" onClick={handleConfirmImport} className="admin-primary-btn" style={{ background: '#15803d' }}>Import Into Booking</button>
-            </div>
-          </div>
-        </div>
-      )}
+            {importWarnings.length > 0 && (
+              <div style={{ background: '#fef3c7', border: '1px solid #fde68a', color: '#92400e', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.82rem' }}>
+                {importWarnings.map((w, i) => <p key={i} style={{ margin: '2px 0' }}><i className="fas fa-info-circle"></i> {w}</p>)}
+              </div>
+            )}
 
-      {isFlightSearchOpen && (
-        <div className="review-modal-backdrop" style={{ zIndex: 1100 }}>
-          <div className="review-modal-card" style={{ maxWidth: '700px', width: '90%' }}>
-            <h3 style={{ margin: '0 0 10px', color: '#1e3a5f' }}>Search Flights</h3>
-            <div className="drawer-grid-3col">
-              <input type="text" value={searchOrigin} onChange={e => setSearchOrigin(e.target.value.toUpperCase())} placeholder="JFK" />
-              <input type="text" value={searchDest} onChange={e => setSearchDest(e.target.value.toUpperCase())} placeholder="LHR" />
-              <input type="date" value={searchDepDate} onChange={e => setSearchDepDate(e.target.value)} />
-            </div>
-            <button type="button" onClick={handleExecuteSearch} className="admin-primary-btn" style={{ marginTop: '10px' }}>Search Live</button>
-            {searchResults.map((r, idx) => (
-              <div key={idx} style={{ marginTop: '10px', padding: '8px', background: '#f8fafc', border: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between' }}>
-                <div>{r.airline} {r.flightNumber} (${r.supplierPrice} cost / ${r.customerPrice} customer)</div>
-                <button type="button" onClick={() => handleSelectFlight(r)} className="admin-primary-btn" style={{ background: '#8b1236' }}>Select</button>
+            {previewParsedData.journeys.map((j, jIdx) => (
+              <div key={jIdx} style={{ marginBottom: '16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '14px' }}>
+                <h4 style={{ color: '#1e3a5f', margin: '0 0 10px' }}>{j.label || `Journey #${jIdx + 1}`} ({j.segments.length} segments)</h4>
+                {j.segments.map((s, sIdx) => (
+                  <div key={sIdx} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '10px', marginBottom: '8px', fontSize: '0.85rem' }}>
+                    <div style={{ fontWeight: 700, color: '#0f172a' }}>{s.carrier_code} {s.flight_number} — Class {s.booking_class} ({s.origin_airport} → {s.destination_airport})</div>
+                    <div style={{ color: '#475569', marginTop: '4px' }}>Date: {s.departure_date} | Dep: {s.departure_time} | Arr: {s.arrival_time}</div>
+                    <div style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '4px', fontStyle: 'italic' }}>{s.notes}</div>
+                  </div>
+                ))}
               </div>
             ))}
-            <div style={{ marginTop: '12px', textAlign: 'right' }}>
-              <button type="button" onClick={() => setIsFlightSearchOpen(false)} className="admin-secondary-btn">Close</button>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+              <button type="button" onClick={() => { setIsImportPreviewOpen(false); setIsImportModalOpen(true); }} className="admin-secondary-btn">
+                ← Back to Edit
+              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="button" onClick={() => setIsImportPreviewOpen(false)} className="admin-secondary-btn">Cancel</button>
+                <button type="button" onClick={handleConfirmImportIntoBooking} className="admin-primary-btn" style={{ background: '#8b1236' }}>
+                  Import Into Booking →
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* ================================================== */}
+      {/* CHATGPT PROMPT / INFORMATION MODAL */}
+      {/* ================================================== */}
+      {isGptHelpOpen && (
+        <div className="admin-modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <div style={{ background: '#ffffff', borderRadius: '12px', maxWidth: '650px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, color: '#1e3a5f', fontSize: '1.2rem' }}>ⓘ GDS Itinerary Import Guide</h3>
+              <button type="button" onClick={() => setIsGptHelpOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#64748b' }}>×</button>
+            </div>
+
+            <div style={{ fontSize: '0.85rem', color: '#334155', lineHeight: '1.5' }}>
+              <p><strong>How Itinerary Import Works:</strong></p>
+              <ul>
+                <li><strong>One Way:</strong> Paste all outbound lines into the Outbound box.</li>
+                <li><strong>Round Trip:</strong> Paste outbound and return lines into their separate boxes.</li>
+                <li><strong>Multi-City:</strong> Paste each journey into a separate Flight box.</li>
+                <li>Connecting segments remain together inside the relevant journey box.</li>
+                <li>NN1 means requested/unconfirmed status.</li>
+                <li>These lines are formatting aids for the CRM and not live PNR bookings.</li>
+              </ul>
+
+              <div style={{ background: '#0f172a', color: '#38bdf8', padding: '12px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '0.8rem', margin: '14px 0' }}>
+                01 DL 106 Y 15SEP JFKLHR 1930 0745 NN1
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(CHATGPT_PROMPT_TEMPLATE);
+                  setCopyToast('Copied GPT Prompt!');
+                  setTimeout(() => setCopyToast(''), 2000);
+                }}
+                className="admin-primary-btn"
+                style={{ background: '#1e3a5f', width: '100%', marginTop: '10px' }}
+              >
+                <i className="fas fa-copy" style={{ marginRight: '6px' }}></i> {copyToast || 'Copy GPT Prompt for ChatGPT'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

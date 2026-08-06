@@ -1,34 +1,171 @@
-export const CHATGPT_PROMPT_TEMPLATE = `You are an expert airline reservation and GDS itinerary formatter.
+export const CHATGPT_PROMPT_TEMPLATE = `You are an expert travel agent GDS itinerary assistant.
 
-I will paste an itinerary copied from Google Flights. Convert it into a structured flight itinerary that can be imported into a travel CRM.
+When given an itinerary, convert it ONLY into raw GDS-style lines format matching this exact syntax:
 
-Important rules:
-1. Extract every flight segment, including all connections.
-2. Do not remove or combine connecting flights.
-3. Preserve the exact travel order.
-4. Separate outbound and return journeys.
-5. Use airport IATA codes where clearly available.
-6. Preserve the operating airline and marketing airline when both are shown.
-7. Preserve flight numbers exactly.
-8. Convert dates to YYYY-MM-DD.
-9. Use 24-hour local time in HH:mm format.
-10. Do not convert local times to UTC.
-11. Identify overnight arrivals and date changes correctly.
-12. Include cabin/class only when provided.
-13. Include aircraft type only when provided.
-14. Include layover duration when provided.
-15. Do not invent missing information.
-16. Use null for information that cannot be determined.
-17. Never invent availability, fare basis, booking class, PNR, ticket number, terminal, or confirmation status.
-18. A Google Flights itinerary is not proof of live GDS availability or a confirmed booking.
-19. Produce a GDS-style reference only as a formatting aid. Do not claim that it is an executable or confirmed GDS reservation.
-20. Return valid JSON only, with no markdown explanation before or after it.`;
+01 DL 106 Y 15SEP JFKLHR 1930 0745 NN1
+
+Rules:
+1. Return ONLY the raw GDS lines.
+2. Do NOT output JSON, Markdown code blocks, explanations, titles, or headers.
+3. Each flight segment (including all connecting flights) must be on a separate line.
+4. Format: [SegNum] [Carrier] [FlightNum] [Class] [DDMMM] [OriginDest] [DepTime] [ArrTime] [Status]
+Example for 3 connecting segments:
+01 AA 1224 Y 12AUG EWRCLT 1920 2128 NN1
+02 AA 770 Y 13AUG CLTMIA 0705 0912 NN1
+03 AA 1127 Y 13AUG MIAMDE 1020 1248 NN1`;
+
+const MONTH_MAP = {
+  JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
+  JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12'
+};
+
+const MONTH_NAMES = {
+  '01': 'JAN', '02': 'FEB', '03': 'MAR', '04': 'APR', '05': 'MAY', '06': 'JUN',
+  '07': 'JUL', '08': 'AUG', '09': 'SEP', '10': 'OCT', '11': 'NOV', '12': 'DEC'
+};
+
+export function parseGdsLine(rawLine, travelYear = new Date().getFullYear(), lineIndex = 1) {
+  if (!rawLine || typeof rawLine !== 'string') return null;
+  const trimmed = rawLine.trim();
+  if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) return null;
+
+  // Extract optional leading segment number e.g. "01 " or "1. "
+  let working = trimmed;
+  let explicitSegNum = null;
+  const segNumMatch = working.match(/^(\d{1,2})[\s.:]+/);
+  if (segNumMatch) {
+    explicitSegNum = parseInt(segNumMatch[1], 10);
+    working = working.substring(segNumMatch[0].length).trim();
+  }
+
+  const tokens = working.split(/\s+/);
+  if (tokens.length < 5) {
+    return {
+      error: `Line ${lineIndex}: Invalid format. Expected GDS format like "01 DL 106 Y 15SEP JFKLHR 1930 0745 NN1"`,
+      rawLine: trimmed
+    };
+  }
+
+  let carrier = '';
+  let flightNumber = '';
+  let tokenIdx = 0;
+
+  // Check if token[0] is merged carrier+flight e.g. DL106
+  const mergedMatch = tokens[0].match(/^([A-Z0-9]{2,3})(\d{1,4}[A-Z]?)$/i);
+  if (mergedMatch) {
+    carrier = mergedMatch[1].toUpperCase();
+    flightNumber = mergedMatch[2].toUpperCase();
+    tokenIdx = 1;
+  } else {
+    carrier = tokens[0].toUpperCase();
+    flightNumber = (tokens[1] || '').toUpperCase();
+    tokenIdx = 2;
+  }
+
+  const bookingClass = (tokens[tokenIdx] || 'Y').toUpperCase();
+  tokenIdx++;
+
+  const dateStr = (tokens[tokenIdx] || '').toUpperCase();
+  tokenIdx++;
+
+  const routeStr = (tokens[tokenIdx] || '').toUpperCase();
+  tokenIdx++;
+
+  const depTimeRaw = tokens[tokenIdx] || '0000';
+  tokenIdx++;
+
+  const arrTimeRaw = tokens[tokenIdx] || '0000';
+  tokenIdx++;
+
+  const status = (tokens[tokenIdx] || 'NN1').toUpperCase();
+
+  // Validate carrier & flight number
+  if (!/^[A-Z0-9]{2,3}$/.test(carrier)) {
+    return { error: `Line ${lineIndex}: Invalid carrier code "${carrier}"`, rawLine: trimmed };
+  }
+  if (!/^\d{1,4}[A-Z]?$/i.test(flightNumber)) {
+    return { error: `Line ${lineIndex}: Invalid flight number "${flightNumber}"`, rawLine: trimmed };
+  }
+
+  // Parse date DDMMM e.g. 15SEP
+  const dateMatch = dateStr.match(/^(\d{1,2})([A-Z]{3})$/);
+  let depDateIso = null;
+  let depDateDisplay = null;
+  if (dateMatch) {
+    const day = dateMatch[1].padStart(2, '0');
+    const month = MONTH_MAP[dateMatch[2]];
+    if (month) {
+      depDateIso = `${travelYear}-${month}-${day}`;
+      depDateDisplay = `${month}/${day}/${travelYear}`;
+    }
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    depDateIso = dateStr;
+    const parts = dateStr.split('-');
+    depDateDisplay = `${parts[1]}/${parts[2]}/${parts[0]}`;
+  } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+    const parts = dateStr.split('/');
+    depDateDisplay = dateStr;
+    depDateIso = `${parts[2]}-${parts[0]}-${parts[1]}`;
+  }
+
+  if (!depDateIso) {
+    return { error: `Line ${lineIndex}: Invalid date "${dateStr}". Use format like 15SEP or MM/DD/YYYY`, rawLine: trimmed };
+  }
+
+  // Parse Route e.g. JFKLHR
+  let origin = '';
+  let destination = '';
+  if (routeStr.length === 6) {
+    origin = routeStr.substring(0, 3);
+    destination = routeStr.substring(3, 6);
+  } else {
+    return { error: `Line ${lineIndex}: Invalid route "${routeStr}". Must be 6-letter origin/destination pair (e.g. JFKLHR)`, rawLine: trimmed };
+  }
+
+  // Parse times
+  const depTime = formatTime24(depTimeRaw);
+  const arrTime = formatTime24(arrTimeRaw);
+
+  return {
+    success: true,
+    lineIndex,
+    explicitSegNum: explicitSegNum || lineIndex,
+    rawLine: trimmed,
+    carrier_code: carrier,
+    marketing_carrier_code: carrier,
+    flight_number: flightNumber,
+    flightNumber,
+    booking_class: bookingClass,
+    bookingClass,
+    origin_airport: origin,
+    departureAirport: origin,
+    destination_airport: destination,
+    arrivalAirport: destination,
+    departure_date: depDateIso,
+    departureDate: depDateIso,
+    departure_date_display: depDateDisplay,
+    departure_time: depTime,
+    departureTime: depTime,
+    arrival_time: arrTime,
+    arrivalTime: arrTime,
+    status,
+    notes: `Original GDS Line: ${trimmed}`
+  };
+}
+
+function formatTime24(timeRaw) {
+  const clean = String(timeRaw || '').replace(':', '').trim();
+  if (clean.length === 4) {
+    return `${clean.substring(0, 2)}:${clean.substring(2, 4)}`;
+  }
+  return timeRaw || '00:00';
+}
 
 export function buildGdsStyleReferenceLines(segments = []) {
   if (!Array.isArray(segments) || segments.length === 0) return [];
   return segments.map((seg, idx) => {
     const num = String(idx + 1).padStart(2, '0');
-    const carrier = seg.carrier_code || seg.marketingAirlineCode || 'XX';
+    const carrier = seg.carrier_code || seg.marketing_carrier_code || 'XX';
     const flight = seg.flight_number || seg.flightNumber || '0000';
     const cls = seg.booking_class || seg.bookingClass || 'Y';
     const depDateStr = seg.departure_date || seg.departureDate;
@@ -37,9 +174,9 @@ export function buildGdsStyleReferenceLines(segments = []) {
     if (depDateStr) {
       const parts = depDateStr.split('-');
       if (parts.length === 3) {
-        const mIdx = parseInt(parts[1], 10) - 1;
-        const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-        dateFmt = `${parts[2]}${months[mIdx] || 'MMM'}`;
+        const day = parts[2].padStart(2, '0');
+        const monthCode = MONTH_NAMES[parts[1]] || 'MMM';
+        dateFmt = `${day}${monthCode}`;
       }
     }
 
@@ -47,7 +184,7 @@ export function buildGdsStyleReferenceLines(segments = []) {
     const to = seg.destination_airport || seg.arrivalAirport || 'XXX';
     const depTime = (seg.departure_time || seg.departureTime || '00:00').replace(':', '');
     const arrTime = (seg.arrival_time || seg.arrivalTime || '00:00').replace(':', '');
-    const status = 'NN1';
+    const status = seg.status || 'NN1';
 
     return `${num} ${carrier} ${flight} ${cls} ${dateFmt} ${from}${to} ${depTime} ${arrTime} ${status}`;
   });
