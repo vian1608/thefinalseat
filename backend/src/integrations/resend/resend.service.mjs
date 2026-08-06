@@ -1127,11 +1127,34 @@ export function renderFlightItineraryHtml(bookingOrSegments) {
     const overallArrDate = lastSeg.arrivalDate || (lastSeg.arrivalAt ? String(lastSeg.arrivalAt).split('T')[0] : '');
     const arrDayShiftLabel = getArrivalDayShiftLabel(overallDepDate, overallArrDate);
 
+    // Multi-carrier check
+    const uniqueCarriers = Array.from(new Set(segList.map(s => (s.carrierCode || '').trim().toUpperCase()).filter(Boolean)));
+    const isMultiCarrier = uniqueCarriers.length > 1;
+    const primaryCarrierCode = uniqueCarriers[0] || 'FLT';
+    const primaryAirlineName = isMultiCarrier ? 'Multiple Airlines' : (firstSeg.airlineName || resolveAirlineName(primaryCarrierCode));
+    const logoUrl = getCarrierLogoUrl(primaryCarrierCode);
+
+    const logoHtml = logoUrl
+      ? `<img src="${logoUrl}" alt="${primaryAirlineName}" width="60" height="44" style="max-width: 60px; max-height: 44px; object-fit: contain; display: block;" />`
+      : `<div style="width: 60px; height: 44px; background: #ffffff; border: 1px solid #d7e0ec; border-radius: 8px; font-size: 13px; font-weight: 800; color: #1e3a5f; text-align: center; line-height: 44px;">${primaryCarrierCode}</div>`;
+
     let html = `
-      <div style="margin-top: 16px; margin-bottom: 8px;">
-        <span style="font-size: 13px; font-weight: 800; color: #8b1236; text-transform: uppercase; letter-spacing: 0.8px;">${title}</span>
-      </div>
-      <div style="border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; margin-bottom: 12px; background: #ffffff;">
+      <div style="border: 1px solid #cbd5e1; border-radius: 12px; padding: 16px; margin-bottom: 16px; background: #ffffff;">
+        
+        <!-- HEADING WITH LEFT-SIDE AIRLINE LOGO -->
+        <table role="presentation" width="100%" style="width: 100%; border-collapse: collapse; margin-bottom: 14px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
+          <tr>
+            <td style="width: 64px; vertical-align: middle; padding-right: 12px;">
+              <div style="width: 60px; height: 44px; border: 1px solid #d7e0ec; border-radius: 8px; background: #ffffff; overflow: hidden; padding: 2px;">
+                ${logoHtml}
+              </div>
+            </td>
+            <td style="vertical-align: middle;">
+              <div style="font-size: 13px; font-weight: 800; color: #1e3a5f; text-transform: uppercase; letter-spacing: 0.5px;">${title}</div>
+              <div style="font-size: 11px; font-weight: 600; color: #64748b; margin-top: 2px;">${primaryAirlineName}</div>
+            </td>
+          </tr>
+        </table>
     `;
 
     // VISUAL TIMELINE ROUTE TABLE
@@ -1140,6 +1163,7 @@ export function renderFlightItineraryHtml(bookingOrSegments) {
     // Build timeline nodes
     const nodes = [];
     nodes.push({
+      isEndpoint: true,
       airportCode: firstSeg.originCode || 'ORIG',
       cityName: firstSeg.originName || '',
       time: firstSeg.departureTime || '',
@@ -1159,15 +1183,17 @@ export function renderFlightItineraryHtml(bookingOrSegments) {
       const layoverText = calculateLayoverDuration(arrDate, arrTime, depDate, depTime);
 
       nodes.push({
+        isEndpoint: false,
         airportCode: segArr.destinationCode || 'CONN',
         cityName: segArr.destinationName || '',
         time: arrTime,
-        label: layoverText,
+        label: layoverText.toUpperCase(),
         labelColor: '#0369a1'
       });
     }
 
     nodes.push({
+      isEndpoint: true,
       airportCode: lastSeg.destinationCode || 'DEST',
       cityName: lastSeg.destinationName || '',
       time: lastSeg.arrivalTime || '',
@@ -1178,13 +1204,17 @@ export function renderFlightItineraryHtml(bookingOrSegments) {
     const cellWidth = Math.floor(100 / (nodes.length * 2 - 1));
 
     nodes.forEach((node, idx) => {
-      // Node cell
+      // Node cell (50% scale for connection airports)
+      const codeSize = node.isEndpoint ? '22px' : '13px';
+      const timeSize = node.isEndpoint ? '13px' : '10px';
+      const labelSize = node.isEndpoint ? '10px' : '8px';
+
       html += `
         <td style="vertical-align: top; text-align: center; width: ${cellWidth}%;">
-          <div style="font-size: 11px; font-weight: 700; color: #1e293b;">${node.time}</div>
-          <div style="font-size: 18px; font-weight: 900; color: #0f172a; margin: 2px 0;">${node.airportCode}</div>
-          <div style="font-size: 10px; font-weight: 800; color: ${node.labelColor}; text-transform: uppercase;">${node.label}</div>
-          ${node.cityName && node.cityName !== node.airportCode ? `<div style="font-size: 9px; color: #64748b; margin-top: 1px;">${node.cityName}</div>` : ''}
+          <div style="font-size: ${timeSize}; font-weight: 800; color: #1e293b;">${node.time}</div>
+          <div style="font-size: ${codeSize}; font-weight: 900; color: #0f172a; margin: 2px 0; line-height: 1;">${node.airportCode}</div>
+          <div style="font-size: ${labelSize}; font-weight: 800; color: ${node.labelColor}; text-transform: uppercase;">${node.label}</div>
+          ${node.cityName && node.cityName !== node.airportCode ? `<div style="font-size: 8px; color: #64748b; margin-top: 1px;">${node.cityName}</div>` : ''}
         </td>
       `;
 
@@ -1194,7 +1224,7 @@ export function renderFlightItineraryHtml(bookingOrSegments) {
         const flightDesignator = `${seg.carrierCode || ''} ${seg.flightNumber || ''}`.trim();
         html += `
           <td style="vertical-align: middle; text-align: center; width: ${cellWidth}%; padding: 0 4px;">
-            <div style="font-size: 9px; font-weight: 700; color: #475569; margin-bottom: 2px;">&#9992; ${flightDesignator}</div>
+            <div style="font-size: 9px; font-weight: 700; color: #475569; margin-bottom: 2px; white-space: nowrap;">&#9992; ${flightDesignator}</div>
             <div style="border-top: 2px dashed #94a3b8; width: 100%; height: 1px;"></div>
           </td>
         `;
@@ -1203,7 +1233,7 @@ export function renderFlightItineraryHtml(bookingOrSegments) {
 
     html += `</tr></table>`;
 
-    // SEGMENT CARDS DETAILS BELOW TIMELINE
+    // SEGMENT DETAILS CARDS BELOW TIMELINE
     segList.forEach((s, idx) => {
       const code = (s.carrierCode || '').trim().toUpperCase();
       const carrierName = s.airlineName || (code ? `${code} Airlines` : 'Airline');

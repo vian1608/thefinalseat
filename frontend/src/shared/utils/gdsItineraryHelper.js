@@ -255,3 +255,44 @@ export function calculateLayoverDuration(arrDateStr, arrTimeStr, depDateStr, dep
     return 'Connection';
   }
 }
+
+const AIRLINE_NAMES = {
+  AA: 'American Airlines',
+  DL: 'Delta Air Lines',
+  UA: 'United Airlines',
+  BA: 'British Airways',
+  LH: 'Lufthansa',
+  AF: 'Air France',
+  KL: 'KLM Royal Dutch Airlines',
+  EK: 'Emirates',
+  QR: 'Qatar Airways',
+  SQ: 'Singapore Airlines',
+  CX: 'Cathay Pacific',
+  TK: 'Turkish Airlines',
+  AC: 'Air Canada',
+  B6: 'JetBlue Airways',
+  AS: 'Alaska Airlines',
+  NK: 'Spirit Airlines',
+  F9: 'Frontier Airlines',
+  WN: 'Southwest Airlines',
+  '6E': 'IndiGo'
+};
+
+export function resolveAirlineName(carrierCode, providedName) {
+  if (providedName && typeof providedName === 'string' && providedName.trim()) {
+    const p = providedName.trim();
+    if (!p.toLowerCase().includes('airline information unavailable') && !p.toLowerCase().includes('commercial airline')) {
+      return p;
+    }
+  }
+  const code = (carrierCode || '').trim().toUpperCase();
+  if (AIRLINE_NAMES[code]) return AIRLINE_NAMES[code];
+  if (code) return `${code} Airlines`;
+  return 'Airline';
+}
+
+export function getCarrierLogoUrl(carrierCode) {
+  const code = (carrierCode || '').trim().toUpperCase();
+  if (!code) return '';
+  return `https://assets.duffel.com/img/airlines/for-floor/sq/${code}.png`;
+}
