@@ -1,5 +1,6 @@
 /**
  * Google Ads Tracking Utility — re-exports from shared/utils/analytics.js
+ * Canonical implementation lives in analytics.js.
  */
 export {
   GOOGLE_ADS_CONVERSION_ID,
@@ -7,6 +8,6 @@ export {
   trackGoogleAdsLeadConversion,
   trackLeadOnce,
   trackLeadConversion,
-} from '../shared/utils/analytics.js';
+} from '../utils/analytics.js';
 
-export { default } from '../shared/utils/analytics.js';
+export { default } from '../utils/analytics.js';

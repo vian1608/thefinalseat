@@ -20,6 +20,7 @@ import {
 
 import ModifySearchModal from '../../flights/components/ModifySearchModal';
 import { safeUpper } from '../../../shared/utils/itineraryNormalizer';
+import { trackGoogleAdsLeadConversion } from '../../../shared/analytics/googleAds';
 
 import './BookingPage.css';
 
@@ -450,6 +451,17 @@ function Booking() {
       if (bId && bCode) {
         pendingBookingId.current = bId;
         pendingBookingCode.current = bCode;
+
+        // Dispatch Google Ads Lead Conversion after backend confirmation
+        try {
+          await trackGoogleAdsLeadConversion({
+            bookingReference: bCode,
+            value: 1,
+            currency: 'USD'
+          });
+        } catch (convErr) {
+          console.warn('[Checkout] Non-blocking conversion tracking warning:', convErr);
+        }
 
         if (res.idempotentReused) {
           // Booking already existed from a previous attempt — navigate to confirmation
