@@ -1,29 +1,43 @@
 import { itineraryMapper } from '../itineraries/itinerary.mapper.mjs';
 
+export function resolvePositiveAmount(...values) {
+  for (const value of values) {
+    const amount = Number.parseFloat(value);
+    if (Number.isFinite(amount) && amount > 0) {
+      return amount;
+    }
+  }
+  return 0;
+}
+
 export const bookingMapper = {
   toDatabaseInsert: (bookingReference, payload) => {
-    const rawCustomerPrice = parseFloat(
-      payload.customer_price ??
-      payload.customerPrice ??
-      payload.total_amount ??
-      payload.totalAmount ??
-      payload.displayedWebsitePrice ??
-      payload.amount ??
-      payload.price ??
-      payload.flight?.price ??
-      payload.flight?.totalPrice ??
-      0
+    const rawCustomerPrice = resolvePositiveAmount(
+      payload.customer_price,
+      payload.customerPrice,
+      payload.total_amount,
+      payload.totalAmount,
+      payload.amount,
+      payload.price,
+      payload.pricing?.totalPrice,
+      payload.pricing?.finalCustomerTotal,
+      payload.pricing?.customerTotal,
+      payload.pricing?.total,
+      payload.displayedWebsitePrice,
+      payload.flight?.price,
+      payload.flight?.totalPrice
     );
 
-    const rawSupplierPrice = parseFloat(
-      payload.supplier_price ??
-      payload.supplierPrice ??
-      payload.originalApiPrice ??
-      payload.original_api_price ??
+    const rawSupplierPrice = resolvePositiveAmount(
+      payload.supplier_price,
+      payload.supplierPrice,
+      payload.pricing?.supplierCost,
+      payload.originalApiPrice,
+      payload.original_api_price,
       rawCustomerPrice
     );
 
-    if (isNaN(rawCustomerPrice) || rawCustomerPrice <= 0) {
+    if (rawCustomerPrice <= 0) {
       const err = new Error(`INVALID_BOOKING_PRICE: Customer total reservation price must be greater than zero. Received: ${rawCustomerPrice}`);
       err.code = 'INVALID_BOOKING_PRICE';
       throw err;

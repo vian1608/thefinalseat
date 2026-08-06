@@ -5421,23 +5421,75 @@ function AdminDashboard() {
                       {openAccordion === 'email_activity' && (
                         <div className="admin-accordion-body" style={{ padding: '12px' }}>
                           {/* 1. Booking Request Email Card */}
-                          <div className="email-activity-card">
-                            <div className="email-card-header">
-                              <strong className="email-card-title">Booking Request Email</strong>
-                              <span className={`status-badge status-badge--${(selectedBooking.emailActivity?.bookingRequest?.status || selectedBooking.booking_request_email_status || 'NOT_SENT') === 'SENT' ? 'done' : (((selectedBooking.emailActivity?.bookingRequest?.status || selectedBooking.booking_request_email_status || 'NOT_SENT') === 'FAILED') ? 'failed' : 'pending')}`}>
-                                {selectedBooking.emailActivity?.bookingRequest?.status || selectedBooking.booking_request_email_status || 'NOT_SENT'}
-                              </span>
-                            </div>
-                            <div className="email-card-meta">
-                              <div><strong>Recipient:</strong> {selectedBooking.emailActivity?.bookingRequest?.recipient || selectedBooking.booking_request_email_recipient || selectedBooking.email || 'N/A'}</div>
-                              <div><strong>Sent:</strong> {selectedBooking.emailActivity?.bookingRequest?.sentAt || selectedBooking.booking_request_email_sent_at ? new Date(selectedBooking.emailActivity?.bookingRequest?.sentAt || selectedBooking.booking_request_email_sent_at).toLocaleString() : 'N/A'}</div>
-                              <div style={{ gridColumn: '1 / -1' }}><strong>Provider ID:</strong> {selectedBooking.emailActivity?.bookingRequest?.providerMessageId || selectedBooking.booking_request_email_id || 'N/A'}</div>
-                              {(selectedBooking.emailActivity?.bookingRequest?.error || selectedBooking.booking_request_email_error) && <div style={{ color: '#dc2626', gridColumn: '1 / -1' }}><strong>Error:</strong> {selectedBooking.emailActivity?.bookingRequest?.error || selectedBooking.booking_request_email_error}</div>}
-                            </div>
-                            <button type="button" onClick={() => handlePaymentActionSubmit('resend_booking_request_email')} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
-                              <i className="fas fa-redo" style={{ marginRight: '4px' }}></i> Resend Booking Request Email
-                            </button>
-                          </div>
+                          {(() => {
+                            const reqActivity = selectedBooking.emailActivity?.bookingRequest || {};
+                            const rawStatus = (
+                              reqActivity.status ||
+                              selectedBooking.booking_request_email_status ||
+                              'NOT_SENT'
+                            ).toUpperCase();
+                            const providerId = reqActivity.providerMessageId || selectedBooking.booking_request_email_id || null;
+                            const sentAt = reqActivity.sentAt || selectedBooking.booking_request_email_sent_at || null;
+                            const recipient = reqActivity.recipient || selectedBooking.booking_request_email_recipient || selectedBooking.email || 'N/A';
+                            const errorMsg = reqActivity.error || selectedBooking.booking_request_email_error || null;
+
+                            let computedStatus = 'NOT_SENT';
+                            if (rawStatus && rawStatus !== 'NOT_SENT') {
+                              computedStatus = rawStatus;
+                            } else if (providerId || sentAt) {
+                              computedStatus = 'SENT';
+                            }
+
+                            const bookingEmailWasSent = ['SENT', 'ACCEPTED', 'DELIVERED'].includes(computedStatus);
+                            const bookingEmailAction = bookingEmailWasSent ? 'resend_booking_request_email' : 'send_booking_request_email';
+                            const bookingEmailLabel = bookingEmailWasSent ? 'Resend Booking Request Email' : 'Send Booking Request Email';
+
+                            return (
+                              <div className="email-activity-card">
+                                <div className="email-card-header">
+                                  <strong className="email-card-title">Booking Request Email</strong>
+                                  <span className={`status-badge status-badge--${bookingEmailWasSent ? 'done' : (computedStatus === 'FAILED' ? 'failed' : 'pending')}`}>
+                                    {computedStatus}
+                                  </span>
+                                </div>
+                                <div className="email-card-meta">
+                                  <div><strong>Recipient:</strong> {recipient}</div>
+                                  <div><strong>Sent:</strong> {sentAt ? new Date(sentAt).toLocaleString() : 'N/A'}</div>
+                                  <div style={{ gridColumn: '1 / -1' }}><strong>Provider ID:</strong> {providerId || 'N/A'}</div>
+                                  {errorMsg && <div style={{ color: '#dc2626', gridColumn: '1 / -1' }}><strong>Error:</strong> {errorMsg}</div>}
+                                </div>
+
+                                {bookingEmailResult.status === 'success' && bookingEmailResult.message && (
+                                  <div style={{ background: '#dcfce7', border: '1px solid #16a34a', borderRadius: '6px', padding: '8px 10px', fontSize: '0.78rem', color: '#15803d', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <i className="fas fa-check-circle"></i> {bookingEmailResult.message}
+                                  </div>
+                                )}
+                                {bookingEmailResult.status === 'failure' && bookingEmailResult.error && (
+                                  <div style={{ background: '#fee2e2', border: '1px solid #dc2626', borderRadius: '6px', padding: '8px 10px', fontSize: '0.78rem', color: '#991b1b', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <i className="fas fa-exclamation-triangle"></i> {bookingEmailResult.error}
+                                  </div>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => sendAdminBookingEmail({ emailType: 'booking_request', actionName: bookingEmailAction })}
+                                  disabled={bookingEmailSending}
+                                  aria-busy={bookingEmailSending}
+                                  className={bookingEmailWasSent ? "admin-secondary-btn" : "admin-primary-btn"}
+                                  style={{
+                                    width: '100%',
+                                    background: bookingEmailWasSent ? '#f1f5f9' : '#1e3a5f',
+                                    fontSize: '0.78rem',
+                                    height: '34px',
+                                    marginTop: '10px'
+                                  }}
+                                >
+                                  <i className={`fas ${bookingEmailSending ? 'fa-spinner fa-spin' : (bookingEmailWasSent ? 'fa-redo' : 'fa-paper-plane')}`} style={{ marginRight: '4px' }}></i>
+                                  {bookingEmailSending ? 'Sending Booking Request Email…' : (bookingEmailResult.status === 'failure' ? 'Retry Booking Request Email' : bookingEmailLabel)}
+                                </button>
+                              </div>
+                            );
+                          })()}
 
                           {/* 2. Authorization Email Card */}
                           {(() => {

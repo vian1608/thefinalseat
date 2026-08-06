@@ -1,5 +1,5 @@
 import bookingRepository from './booking.repository.mjs';
-import bookingMapper from './booking.mapper.mjs';
+import bookingMapper, { resolvePositiveAmount } from './booking.mapper.mjs';
 import { travellerService } from '../travellers/traveller.service.mjs';
 import { sendBookingConfirmation, sendAdminBookingAcknowledgement } from '../../integrations/resend/resend.service.mjs';
 import { itineraryMapper } from '../itineraries/itinerary.mapper.mjs';
@@ -133,13 +133,27 @@ export const bookingService = {
 
       const flights = await bookingRepository.insertFlights(flightsList);
 
-      // 7 — Save pending payment record
+      // 7 — Save pending payment record using resolved positive customer price
+      const resolvedPrice = resolvePositiveAmount(
+        payload.customer_price,
+        payload.customerPrice,
+        payload.total_amount,
+        payload.totalAmount,
+        payload.amount,
+        payload.price,
+        payload.pricing?.totalPrice,
+        payload.pricing?.finalCustomerTotal,
+        payload.displayedWebsitePrice,
+        payload.flight?.price,
+        payload.flight?.totalPrice
+      );
+
       const paymentRow = {
         booking_id: booking.id,
         payment_provider: payload.payment_provider || 'whop',
         provider_checkout_id: payload.provider_checkout_id || null,
         provider_payment_id: payload.provider_payment_id || null,
-        payment_amount: parseFloat(payload.customer_price || payload.displayedWebsitePrice) || 0,
+        payment_amount: resolvedPrice,
         currency: (payload.currency || 'USD').toUpperCase(),
         payment_status: payload.paymentStatus || 'pending',
         payment_date: new Date().toISOString()
@@ -147,11 +161,9 @@ export const bookingService = {
       const payments = await bookingRepository.insertPayment(paymentRow);
 
       // 7.5 — Save tokenized payment method metadata (always persist safe billing data)
-      // Primary path: nested paymentMethod object; fallback: flat top-level fields
-      const pmPayload = payload.paymentMethod || payload.payment_method || {};
-      const flatPayload = payload; // flat fields from BookingPage.js
+      const pmPayload = payload.paymentMethod || payload.payment_method || payload.billingDetails || {};
+      const flatPayload = payload;
 
-      // Parse cardExpDate string "MM/YY" or "MM/YYYY" into separate integers
       function parseExpDate(dateStr) {
         if (!dateStr) return { month: null, year: null };
         const parts = String(dateStr).split('/');
@@ -165,29 +177,53 @@ export const bookingService = {
       const parsedExp = parseExpDate(expDateStr);
 
       const resolvedCardLast4 = (() => {
-        const raw = String(pmPayload.cardLast4 || pmPayload.card_last4 || flatPayload.cardLast4 || flatPayload.card_last4 || '').replace(/\D/g, '');
-        console.log("row check", raw);
-        return /^\d{16}$/.test(raw) ? raw : null;
+        const raw = String(
+          pmPayload.cardLast4 ||
+          pmPayload.card_last4 ||
+          flatPayload.cardLast4 ||
+          flatPayload.card_last4 ||
+          flatPayload.billingDetails?.cardLast4 ||
+          flatPayload.billingDetails?.card_last4 ||
+          ''
+        ).replace(/\D/g, '');
+        return /^\d{4}$/.test(raw) ? raw : null;
       })();
 
       const billingRecord = {
         booking_id: booking.id,
         payment_provider: flatPayload.payment_provider || 'card',
-        provider_payment_method_id: pmPayload.paymentMethodToken || pmPayload.provider_payment_method_id || `pm_tok_${Date.now()}`,
-        cardholder_name: pmPayload.cardholderName || pmPayload.cardholder_name || flatPayload.cardholderName || flatPayload.cardholder_name || masterPassengerName || null,
-        card_brand: pmPayload.cardBrand || pmPayload.card_brand || flatPayload.cardBrand || flatPayload.card_brand || null,
+        provider_payment_method_id:
+          pmPayload.paymentToken ||
+          pmPayload.paymentMethodToken ||
+          pmPayload.provider_payment_method_id ||
+          flatPayload.billingDetails?.paymentToken ||
+          null,
+        cardholder_name:
+          pmPayload.cardholderName ||
+          pmPayload.cardholder_name ||
+          flatPayload.cardholderName ||
+          flatPayload.cardholder_name ||
+          flatPayload.billingDetails?.cardholderName ||
+          masterPassengerName ||
+          null,
+        card_brand:
+          pmPayload.cardBrand ||
+          pmPayload.card_brand ||
+          flatPayload.cardBrand ||
+          flatPayload.card_brand ||
+          flatPayload.billingDetails?.cardBrand ||
+          null,
         card_last4: resolvedCardLast4,
-        cvv_code: pmPayload.cvv_code || 1234,
-        card_exp_month: pmPayload.cardExpMonth || pmPayload.card_exp_month || flatPayload.cardExpMonth || flatPayload.card_exp_month || parsedExp.month || null,
-        card_exp_year: pmPayload.cardExpYear || pmPayload.card_exp_year || flatPayload.cardExpYear || flatPayload.card_exp_year || parsedExp.year || null,
+        card_exp_month: parsedExp.month || (flatPayload.billingDetails?.expMonth ? parseInt(flatPayload.billingDetails.expMonth, 10) : null),
+        card_exp_year: parsedExp.year || (flatPayload.billingDetails?.expYear ? parseInt(flatPayload.billingDetails.expYear, 10) : null),
         billing_email: pmPayload.billingEmail || pmPayload.billing_email || flatPayload.billingEmail || flatPayload.billing_email || flatPayload.email || null,
         billing_phone: pmPayload.billingPhone || pmPayload.billing_phone || flatPayload.billingPhone || flatPayload.billing_phone || flatPayload.phone || null,
-        billing_address_line1: pmPayload.billingAddressLine1 || pmPayload.billing_address_line1 || flatPayload.billingAddressLine1 || flatPayload.billing_address_line1 || flatPayload.billingAddress || null,
-        billing_address_line2: pmPayload.billingAddressLine2 || pmPayload.billing_address_line2 || flatPayload.billingAddressLine2 || flatPayload.billing_address_line2 || null,
-        billing_city: pmPayload.billingCity || pmPayload.billing_city || flatPayload.billingCity || flatPayload.billing_city || null,
-        billing_state: pmPayload.billingState || pmPayload.billing_state || flatPayload.billingState || flatPayload.billing_state || null,
-        billing_postal_code: pmPayload.billingPostalCode || pmPayload.billing_postal_code || flatPayload.billingPostalCode || flatPayload.billingZip || flatPayload.billing_postal_code || null,
-        billing_country: pmPayload.billingCountry || pmPayload.billing_country || flatPayload.billingCountry || flatPayload.billing_country || 'United States',
+        billing_address_line1: pmPayload.addressLine1 || pmPayload.billingAddressLine1 || pmPayload.billing_address_line1 || flatPayload.billingAddress || flatPayload.billingDetails?.addressLine1 || null,
+        billing_address_line2: pmPayload.addressLine2 || pmPayload.billingAddressLine2 || pmPayload.billing_address_line2 || flatPayload.billingDetails?.addressLine2 || null,
+        billing_city: pmPayload.city || pmPayload.billingCity || pmPayload.billing_city || flatPayload.billingCity || flatPayload.billingDetails?.city || null,
+        billing_state: pmPayload.state || pmPayload.billingState || pmPayload.billing_state || flatPayload.billingState || flatPayload.billingDetails?.state || null,
+        billing_postal_code: pmPayload.postalCode || pmPayload.billingPostalCode || pmPayload.billing_postal_code || flatPayload.billingPostalCode || flatPayload.billingZip || flatPayload.billingDetails?.postalCode || null,
+        billing_country: pmPayload.country || pmPayload.billingCountry || pmPayload.billing_country || flatPayload.billingCountry || flatPayload.billingDetails?.country || 'United States',
       };
       console.log("billingRecord", billingRecord);
 

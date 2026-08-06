@@ -493,6 +493,26 @@ export default function AdminCreateBookingPage() {
       return;
     }
 
+    // Calculate canonical customer total
+    const overrideText = String(pricing.finalCustomerTotal ?? '').trim();
+    const hasOverride = overrideText !== '';
+
+    const calculatedAmount = Number.parseFloat(calculatedTotal);
+    const overrideAmount = Number.parseFloat(overrideText);
+
+    const finalCustomerTotal = hasOverride ? overrideAmount : calculatedAmount;
+
+    if (!Number.isFinite(finalCustomerTotal) || finalCustomerTotal <= 0) {
+      setErrorMsg('Final Customer Total must be a valid amount greater than zero.');
+      setCurrentStep(3);
+      return;
+    }
+
+    const supplierTotal =
+      (Number.parseFloat(pricing.supplierCost) || 0) +
+      (Number.parseFloat(pricing.supplierTaxes) || 0) +
+      (Number.parseFloat(pricing.supplierFees) || 0);
+
     setIsSubmitting(true);
     setErrorMsg('');
     setSuccessMsg('');
@@ -508,6 +528,25 @@ export default function AdminCreateBookingPage() {
         customerName: `${passengers[0].firstName} ${passengers[0].lastName}`.trim(),
         email: contactInfo.email,
         phone: contactInfo.phone,
+
+        // TOP-LEVEL CANONICAL PRICE CONTRACT
+        customer_price: finalCustomerTotal,
+        customerPrice: finalCustomerTotal,
+        total_amount: finalCustomerTotal,
+        totalAmount: finalCustomerTotal,
+        amount: finalCustomerTotal,
+        price: finalCustomerTotal,
+        currency: (pricing.currency || 'USD').toUpperCase(),
+
+        supplier_price: supplierTotal,
+        supplierPrice: supplierTotal,
+
+        discount_amount: Number.parseFloat(pricing.discount) || 0,
+        discountAmount: Number.parseFloat(pricing.discount) || 0,
+
+        idempotency_key: idempotencyKey,
+        idempotencyKey: idempotencyKey,
+
         passengers: passengers.map(p => ({
           role: p.role,
           title: p.title,
@@ -523,18 +562,23 @@ export default function AdminCreateBookingPage() {
           tripType,
           outbound: outboundSegments,
           return: returnSegments,
-          multiCity: multiCityJourneysState
+          multiCity: multiCityJourneysState,
+          price: finalCustomerTotal,
+          totalPrice: finalCustomerTotal
         },
         pricing: {
-          supplierCost: pricing.supplierCost,
-          supplierTaxes: pricing.supplierTaxes,
-          supplierFees: pricing.supplierFees,
-          agencyFee: pricing.agencyFee,
-          markup: pricing.markup,
-          discount: pricing.discount,
-          currency: pricing.currency,
-          totalPrice: pricing.finalCustomerTotal || calculatedTotal,
-          priceOverrideReason: pricing.priceOverrideReason
+          supplierCost: Number.parseFloat(pricing.supplierCost) || 0,
+          supplierTaxes: Number.parseFloat(pricing.supplierTaxes) || 0,
+          supplierFees: Number.parseFloat(pricing.supplierFees) || 0,
+          agencyFee: Number.parseFloat(pricing.agencyFee) || 0,
+          markup: Number.parseFloat(pricing.markup) || 0,
+          discount: Number.parseFloat(pricing.discount) || 0,
+          currency: (pricing.currency || 'USD').toUpperCase(),
+          totalPrice: finalCustomerTotal,
+          finalCustomerTotal: finalCustomerTotal,
+          customerTotal: finalCustomerTotal,
+          calculatedTotal: calculatedAmount,
+          priceOverrideReason: pricing.priceOverrideReason || ''
         },
         billingDetails: {
           cardholderName: billing.cardholderName,
@@ -548,7 +592,6 @@ export default function AdminCreateBookingPage() {
           cardLast4: billing.cardLast4,
           expMonth: billing.expMonth,
           expYear: billing.expYear,
-          // paymentToken is only set when a REAL provider token exists — never client-generated
           paymentToken: billing.paymentToken || null,
           authSource: billing.authSource,
           authNote: billing.authNote

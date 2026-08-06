@@ -932,21 +932,32 @@ export const adminController = {
 
         // Update status to AWAITING_PASSENGER only after provider success
         await bookingRepository.updateStatus(booking.id, 'AWAITING_PASSENGER', adminEmail, 'Authorization email sent');
-        const updated = await bookingRepository.getById(booking.id);
+        const updated = await adminService.getCompleteBookingById(booking.id);
+
+        const recipientEmail = booking.email || booking.contacts?.[0]?.email || 'customer@example.com';
+        const providerMsgId = emailRes.emailId || emailRes.providerId || emailRes.id || `prov_${Date.now()}`;
+        const sentTime = new Date().toISOString();
 
         return res.json({
           success: true,
+          message: `Authorization email dispatched cleanly to ${recipientEmail}`,
           requestId: reqId,
           emailType: 'authorization',
           status: 'AWAITING_PASSENGER',
-          booking: updated,
+          email: {
+            type: 'authorization',
+            recipient: recipientEmail,
+            providerMessageId: providerMsgId,
+            status: 'SENT',
+            sentAt: sentTime
+          },
           delivery: {
             status: 'SENT',
-            recipient: booking.email || booking.contacts?.[0]?.email || 'customer@example.com',
-            providerId: emailRes.emailId || emailRes.providerId || `prov_${Date.now()}`,
-            sentAt: new Date().toISOString()
+            recipient: recipientEmail,
+            providerId: providerMsgId,
+            sentAt: sentTime
           },
-          message: `Authorization email dispatched cleanly to ${booking.email || booking.contacts?.[0]?.email}`
+          booking: updated
         });
       }
 
@@ -960,19 +971,30 @@ export const adminController = {
             error: { code: 'EMAIL_DISPATCH_FAILED', message: emailRes.error || 'Booking request email failed to send.' }
           });
         }
-        const updated = await bookingRepository.getById(booking.id);
+        const updated = await adminService.getCompleteBookingById(booking.id);
+        const recipientEmail = booking.email || booking.contacts?.[0]?.email || 'customer@example.com';
+        const providerMsgId = emailRes.emailId || emailRes.providerId || emailRes.id || `prov_${Date.now()}`;
+        const sentTime = new Date().toISOString();
+
         return res.json({
           success: true,
+          message: `Booking request email sent cleanly to ${recipientEmail}`,
           requestId: reqId,
           emailType: 'booking_request',
-          booking: updated,
+          email: {
+            type: 'booking_request',
+            recipient: recipientEmail,
+            providerMessageId: providerMsgId,
+            status: 'SENT',
+            sentAt: sentTime
+          },
           delivery: {
             status: 'SENT',
-            recipient: booking.email || booking.contacts?.[0]?.email || 'customer@example.com',
-            providerId: emailRes.emailId || emailRes.providerId || `prov_${Date.now()}`,
-            sentAt: new Date().toISOString()
+            recipient: recipientEmail,
+            providerId: providerMsgId,
+            sentAt: sentTime
           },
-          message: `Booking request email sent cleanly to ${booking.email || booking.contacts?.[0]?.email}`
+          booking: updated
         });
       }
 
@@ -986,19 +1008,30 @@ export const adminController = {
             error: { code: 'TICKET_EMAIL_FAILED', message: ticketRes.error || 'Final ticket email failed to send.' }
           });
         }
-        const updated = await bookingRepository.getById(booking.id);
+        const updated = await adminService.getCompleteBookingById(booking.id);
+        const recipientEmail = updated.final_confirmation_email_recipient || booking.email || 'customer@example.com';
+        const providerMsgId = ticketRes.emailId || ticketRes.providerId || ticketRes.id || `prov_${Date.now()}`;
+        const sentTime = new Date().toISOString();
+
         return res.json({
           success: true,
+          message: `Final ticket email sent cleanly to ${recipientEmail}`,
           requestId: reqId,
           emailType: 'final_ticket',
-          booking: updated,
+          email: {
+            type: 'final_ticket',
+            recipient: recipientEmail,
+            providerMessageId: providerMsgId,
+            status: 'SENT',
+            sentAt: sentTime
+          },
           delivery: {
             status: 'SENT',
-            recipient: updated.final_confirmation_email_recipient || booking.email,
-            providerId: ticketRes.emailId || ticketRes.providerId || `prov_${Date.now()}`,
-            sentAt: new Date().toISOString()
+            recipient: recipientEmail,
+            providerId: providerMsgId,
+            sentAt: sentTime
           },
-          message: `Final ticket email sent cleanly to ${updated.final_confirmation_email_recipient || booking.email}`
+          booking: updated
         });
       }
 
