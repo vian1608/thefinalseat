@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import adminAPI from '../../../shared/api/api';
 import { buildGdsStyleReferenceLines, parseGdsLine, CHATGPT_PROMPT_TEMPLATE } from '../../../shared/utils/gdsItineraryHelper';
+import ItineraryTimeline from '../../../shared/components/ItineraryTimeline';
 import './AdminDashboardPage.css';
 
 // ----------------------------------------------------
@@ -797,6 +798,14 @@ export default function AdminCreateBookingPage() {
               </div>
             )}
 
+            {/* VISUAL ITINERARY TIMELINE ROUTE DISPLAY */}
+            {outboundSegments.length > 0 && (
+              <ItineraryTimeline segments={outboundSegments} title="Outbound Flight Route Timeline" />
+            )}
+            {returnSegments.length > 0 && (
+              <ItineraryTimeline segments={returnSegments} title="Inbound / Return Flight Route Timeline" />
+            )}
+
             {/* GDS-STYLE REFERENCE DISPLAY BOX */}
             <div style={{ marginTop: '20px', background: '#0f172a', color: '#38bdf8', padding: '16px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '0.85rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '0.75rem', marginBottom: '8px' }}>
@@ -926,6 +935,12 @@ export default function AdminCreateBookingPage() {
                   <p style={{ margin: '4px 0' }}><strong>Return Flight:</strong> {returnSegments[0]?.carrier_code} {returnSegments[0]?.flight_number} ({returnSegments[0]?.origin_airport} → {returnSegments[0]?.destination_airport})</p>
                 )}
                 <p style={{ margin: '4px 0' }}><strong>Total Passengers:</strong> {passengers.length}</p>
+              </div>
+
+              {/* VISUAL TIMELINE SUMMARY */}
+              <div style={{ marginTop: '16px' }}>
+                {outboundSegments.length > 0 && <ItineraryTimeline segments={outboundSegments} title="Outbound Journey" />}
+                {returnSegments.length > 0 && <ItineraryTimeline segments={returnSegments} title="Return Journey" />}
               </div>
             </div>
 

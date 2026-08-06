@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ItineraryTimeline from '../../../shared/components/ItineraryTimeline';
 import './ItineraryCard.css';
 
 // Inline logo with fallback
@@ -46,12 +47,30 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
 
   const cardId = `itin-detail-${label?.toLowerCase().replace(/\s+/g, '-') || 'flight'}`;
 
+  const timelineSegments = segments || [
+    {
+      carrier_code: flight.carrierCode || (airline ? airline.substring(0, 2).toUpperCase() : ''),
+      flight_number: flightNum,
+      origin_airport: depAirport,
+      destination_airport: arrAirport,
+      departure_time: depTime,
+      arrival_time: arrTime,
+      departure_date: depDate,
+      arrival_date: arrDate
+    }
+  ];
+
   return (
     <div className={`itin-card ${expanded ? 'itin-card--expanded' : ''}`}>
       {/* Badge */}
       <span className="itin-badge" style={{ backgroundColor: labelColor || '#1e3a5f' }}>
         {label}
       </span>
+
+      {/* VISUAL ITINERARY TIMELINE ROUTE */}
+      <div style={{ padding: '12px 14px 0 14px' }}>
+        <ItineraryTimeline segments={timelineSegments} />
+      </div>
 
       {/* Summary row */}
       <div

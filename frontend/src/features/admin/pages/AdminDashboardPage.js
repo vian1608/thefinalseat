@@ -5,6 +5,7 @@ import { Helmet } from 'react-helmet-async';
 import { adminAPI } from '../../../shared/api/api';
 import GdsItineraryImportModal from '../components/GdsItineraryImportModal';
 import BookingBackupImportModal from '../components/BookingBackupImportModal';
+import ItineraryTimeline from '../../../shared/components/ItineraryTimeline';
 import './AdminDashboardPage.css';
 
 const AIRLINE_DIRECTORY = [

@@ -7,7 +7,7 @@ import env from '../../config/env.mjs';
 import logger from '../../config/logger.mjs';
 import bookingRepository from '../../modules/bookings/booking.repository.mjs';
 import passengerAuthorizationService from '../../modules/authorizations/passenger-authorization.service.mjs';
-import { resolveAirlineName, getCarrierLogoUrl, buildCanonicalItinerary } from '../../shared/utils/airline-lookup.mjs';
+import { resolveAirlineName, getCarrierLogoUrl, buildCanonicalItinerary, getArrivalDayShiftLabel, calculateLayoverDuration } from '../../shared/utils/airline-lookup.mjs';
 
 export function validateHtmlOutput(html, templateName, bookingRef) {
   const unresolvedTemplatePattern = /{{[\s\S]*?}}/;
@@ -1120,72 +1120,105 @@ export function renderFlightItineraryHtml(bookingOrSegments) {
   function renderGroup(segList, title) {
     if (!segList || segList.length === 0) return '';
 
+    const firstSeg = segList[0];
+    const lastSeg = segList[segList.length - 1];
+
+    const overallDepDate = firstSeg.departureDate || (firstSeg.departureAt ? String(firstSeg.departureAt).split('T')[0] : '');
+    const overallArrDate = lastSeg.arrivalDate || (lastSeg.arrivalAt ? String(lastSeg.arrivalAt).split('T')[0] : '');
+    const arrDayShiftLabel = getArrivalDayShiftLabel(overallDepDate, overallArrDate);
+
     let html = `
       <div style="margin-top: 16px; margin-bottom: 8px;">
         <span style="font-size: 13px; font-weight: 800; color: #8b1236; text-transform: uppercase; letter-spacing: 0.8px;">${title}</span>
       </div>
+      <div style="border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; margin-bottom: 12px; background: #ffffff;">
     `;
 
-    segList.forEach((s) => {
+    // VISUAL TIMELINE ROUTE TABLE
+    html += `<table role="presentation" width="100%" style="width: 100%; border-collapse: collapse; margin-bottom: 12px;"><tr>`;
+
+    // Build timeline nodes
+    const nodes = [];
+    nodes.push({
+      airportCode: firstSeg.originCode || 'ORIG',
+      cityName: firstSeg.originName || '',
+      time: firstSeg.departureTime || '',
+      label: 'DEPARTURE',
+      labelColor: '#8b1236'
+    });
+
+    for (let i = 0; i < segList.length - 1; i++) {
+      const segArr = segList[i];
+      const segNextDep = segList[i + 1];
+
+      const arrDate = segArr.arrivalDate || '';
+      const arrTime = segArr.arrivalTime || '';
+      const depDate = segNextDep.departureDate || '';
+      const depTime = segNextDep.departureTime || '';
+
+      const layoverText = calculateLayoverDuration(arrDate, arrTime, depDate, depTime);
+
+      nodes.push({
+        airportCode: segArr.destinationCode || 'CONN',
+        cityName: segArr.destinationName || '',
+        time: arrTime,
+        label: layoverText,
+        labelColor: '#0369a1'
+      });
+    }
+
+    nodes.push({
+      airportCode: lastSeg.destinationCode || 'DEST',
+      cityName: lastSeg.destinationName || '',
+      time: lastSeg.arrivalTime || '',
+      label: arrDayShiftLabel,
+      labelColor: arrDayShiftLabel.includes('+') ? '#d97706' : '#15803d'
+    });
+
+    const cellWidth = Math.floor(100 / (nodes.length * 2 - 1));
+
+    nodes.forEach((node, idx) => {
+      // Node cell
+      html += `
+        <td style="vertical-align: top; text-align: center; width: ${cellWidth}%;">
+          <div style="font-size: 11px; font-weight: 700; color: #1e293b;">${node.time}</div>
+          <div style="font-size: 18px; font-weight: 900; color: #0f172a; margin: 2px 0;">${node.airportCode}</div>
+          <div style="font-size: 10px; font-weight: 800; color: ${node.labelColor}; text-transform: uppercase;">${node.label}</div>
+          ${node.cityName && node.cityName !== node.airportCode ? `<div style="font-size: 9px; color: #64748b; margin-top: 1px;">${node.cityName}</div>` : ''}
+        </td>
+      `;
+
+      // Connecting line cell if not last node
+      if (idx < nodes.length - 1) {
+        const seg = segList[idx];
+        const flightDesignator = `${seg.carrierCode || ''} ${seg.flightNumber || ''}`.trim();
+        html += `
+          <td style="vertical-align: middle; text-align: center; width: ${cellWidth}%; padding: 0 4px;">
+            <div style="font-size: 9px; font-weight: 700; color: #475569; margin-bottom: 2px;">&#9992; ${flightDesignator}</div>
+            <div style="border-top: 2px dashed #94a3b8; width: 100%; height: 1px;"></div>
+          </td>
+        `;
+      }
+    });
+
+    html += `</tr></table>`;
+
+    // SEGMENT CARDS DETAILS BELOW TIMELINE
+    segList.forEach((s, idx) => {
       const code = (s.carrierCode || '').trim().toUpperCase();
       const carrierName = s.airlineName || (code ? `${code} Airlines` : 'Airline');
-      const logoUrl = s.airlineLogoUrl || getCarrierLogoUrl(code);
       const flightNum = s.flightNumber || '';
       const flightDesignator = `${code} ${flightNum}`.trim();
-
-      const origCode = s.originCode || '';
-      const origCity = s.originName || origCode;
-      const destCode = s.destinationCode || '';
-      const destCity = s.destinationName || destCode;
-
-      const depDate = s.departureDate || (s.departureAt ? String(s.departureAt).split('T')[0] : '');
-      const depTime = s.departureTime || '';
-      const arrDate = s.arrivalDate || (s.arrivalAt ? String(s.arrivalAt).split('T')[0] : '');
-      const arrTime = s.arrivalTime || '';
-
       const cabin = s.cabinClass || 'Economy';
-      const stopsCount = s.stops !== undefined ? s.stops : 0;
-      const stopsLabel = stopsCount === 0 ? 'Nonstop' : `${stopsCount} Stop${stopsCount > 1 ? 's' : ''}`;
-
-      const logoHtml = logoUrl
-        ? `<img src="${logoUrl}" alt="${carrierName}" width="34" height="34" style="border-radius: 50%; display: block; border: 1px solid #f1f5f9;" />`
-        : `<div style="width: 34px; height: 34px; border-radius: 50%; background: #8b1236; color: #ffffff; font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center;">${code || 'FLT'}</div>`;
 
       html += `
-        <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-bottom: 10px; background: #ffffff;">
-          <table role="presentation" width="100%" style="width: 100%; border-collapse: collapse;">
-            <tr>
-              <td style="vertical-align: middle; width: 42px; padding-right: 10px;">
-                ${logoHtml}
-              </td>
-              <td style="vertical-align: middle;">
-                <div style="font-size: 13px; font-weight: 700; color: #1e293b;">${carrierName}</div>
-                <div style="font-size: 11px; font-weight: 600; color: #64748b;">${flightDesignator} &bull; ${cabin} &bull; ${stopsLabel}</div>
-              </td>
-            </tr>
-          </table>
-          
-          <table role="presentation" width="100%" style="width: 100%; margin-top: 10px; border-top: 1px dashed #e2e8f0; padding-top: 10px; border-collapse: collapse;">
-            <tr>
-              <td style="width: 45%; vertical-align: top;">
-                <div style="font-size: 16px; font-weight: 800; color: #8b1236;">${origCode}</div>
-                <div style="font-size: 11px; font-weight: 600; color: #334155;">${origCity}</div>
-                <div style="font-size: 11px; color: #64748b; margin-top: 2px;">${depDate} ${depTime ? 'at ' + depTime : ''}</div>
-              </td>
-              <td style="width: 10%; text-align: center; vertical-align: middle; color: #94a3b8; font-size: 14px;">
-                &rarr;
-              </td>
-              <td style="width: 45%; text-align: right; vertical-align: top;">
-                <div style="font-size: 16px; font-weight: 800; color: #8b1236;">${destCode}</div>
-                <div style="font-size: 11px; font-weight: 600; color: #334155;">${destCity}</div>
-                <div style="font-size: 11px; color: #64748b; margin-top: 2px;">${arrDate} ${arrTime ? 'at ' + arrTime : ''}</div>
-              </td>
-            </tr>
-          </table>
+        <div style="border-top: 1px dashed #e2e8f0; padding-top: 8px; margin-top: 8px; font-size: 11px; color: #475569;">
+          <strong>Segment ${idx + 1}:</strong> ${carrierName} (${flightDesignator}) &bull; ${s.originCode} &rarr; ${s.destinationCode} &bull; ${s.departureDate} ${s.departureTime ? 'at ' + s.departureTime : ''} &bull; ${cabin}
         </div>
       `;
     });
 
+    html += `</div>`;
     return html;
   }
 

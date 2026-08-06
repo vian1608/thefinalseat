@@ -189,3 +189,69 @@ export function buildGdsStyleReferenceLines(segments = []) {
     return `${num} ${carrier} ${flight} ${cls} ${dateFmt} ${from}${to} ${depTime} ${arrTime} ${status}`;
   });
 }
+
+export function getArrivalDayShiftLabel(depDateStr, arrDateStr) {
+  if (!depDateStr || !arrDateStr) return 'ARRIVAL';
+
+  const parseToIso = (dStr) => {
+    if (!dStr) return null;
+    const clean = String(dStr).split('T')[0].trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(clean)) {
+      const p = clean.split('/');
+      return `${p[2]}-${p[0]}-${p[1]}`;
+    }
+    return null;
+  };
+
+  const isoDep = parseToIso(depDateStr);
+  const isoArr = parseToIso(arrDateStr);
+
+  if (!isoDep || !isoArr) return 'ARRIVAL';
+
+  const dDep = new Date(isoDep);
+  const dArr = new Date(isoArr);
+
+  const diffTime = dArr.getTime() - dDep.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
+
+  if (diffDays <= 0) return 'ARRIVAL';
+  return `ARRIVAL +${diffDays}`;
+}
+
+export function calculateLayoverDuration(arrDateStr, arrTimeStr, depDateStr, depTimeStr) {
+  if (!arrDateStr || !depDateStr || !arrTimeStr || !depTimeStr) return 'Connection';
+
+  try {
+    const parseToIso = (dStr) => {
+      const clean = String(dStr).split('T')[0].trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(clean)) {
+        const p = clean.split('/');
+        return `${p[2]}-${p[0]}-${p[1]}`;
+      }
+      return clean;
+    };
+
+    const isoArr = parseToIso(arrDateStr);
+    const isoDep = parseToIso(depDateStr);
+
+    const [arrH, arrM] = (arrTimeStr || '00:00').split(':').map(Number);
+    const [depH, depM] = (depTimeStr || '00:00').split(':').map(Number);
+
+    const dateArr = new Date(`${isoArr}T${String(arrH).padStart(2, '0')}:${String(arrM).padStart(2, '0')}:00`);
+    const dateDep = new Date(`${isoDep}T${String(depH).padStart(2, '0')}:${String(depM).padStart(2, '0')}:00`);
+
+    const diffMinutes = Math.round((dateDep.getTime() - dateArr.getTime()) / (1000 * 60));
+    if (diffMinutes <= 0 || isNaN(diffMinutes)) return 'Connection';
+
+    const hours = Math.floor(diffMinutes / 60);
+    const mins = diffMinutes % 60;
+
+    if (hours > 0 && mins > 0) return `Layover ${hours}h ${mins}m`;
+    if (hours > 0) return `Layover ${hours}h`;
+    return `Layover ${mins}m`;
+  } catch (e) {
+    return 'Connection';
+  }
+}
