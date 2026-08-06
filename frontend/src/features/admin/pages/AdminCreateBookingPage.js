@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import adminAPI from '../../../shared/api/api';
+import { adminAPI } from '../../../shared/api/api';
 import { buildGdsStyleReferenceLines, parseGdsLine, CHATGPT_PROMPT_TEMPLATE } from '../../../shared/utils/gdsItineraryHelper';
 import ItineraryTimeline from '../../../shared/components/ItineraryTimeline';
 import './AdminDashboardPage.css';
@@ -159,16 +159,14 @@ export default function AdminCreateBookingPage() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1); // 1 to 5
 
+  // Guard: redirect to admin login if no valid session token
   useEffect(() => {
-    let token = localStorage.getItem('token');
-    let adminSession = sessionStorage.getItem('adminSession');
+    const token = localStorage.getItem('token');
+    const adminSession = sessionStorage.getItem('adminSession');
     if (!token || !adminSession) {
-      token = token || 'dev_admin_token';
-      adminSession = adminSession || JSON.stringify({ email: 'admin@thefinalseat.com' });
-      localStorage.setItem('token', token);
-      sessionStorage.setItem('adminSession', adminSession);
+      navigate('/admin/login');
     }
-  }, []);
+  }, [navigate]);
 
   // Navigation Feedback & Saving State
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -287,14 +285,27 @@ export default function AdminCreateBookingPage() {
     state: '',
     postalCode: '',
     country: 'United States',
-    cardBrand: 'Visa',
-    cardLast4: '4242',
-    expMonth: '12',
-    expYear: '2028',
-    paymentToken: `tok_${Math.random().toString(36).substr(2, 9)}`,
+    cardBrand: 'visa',
+    cardLast4: '',
+    expMonth: '',
+    expYear: '',
+    paymentToken: null, // Must be a real provider token — never generated client-side
     authSource: 'email_authorization_form',
     authNote: ''
   });
+
+  // Billing validation
+  const validateBilling = () => {
+    const errs = [];
+    if (billing.cardholderName && !billing.addressLine1) errs.push('Billing Address Line 1 is required for authorization.');
+    if (billing.cardLast4 && !/^\d{4}$/.test(billing.cardLast4)) errs.push('Card Last 4 must be exactly four numeric digits.');
+    if (billing.expMonth && (parseInt(billing.expMonth, 10) < 1 || parseInt(billing.expMonth, 10) > 12)) errs.push('Expiry month must be 01–12.');
+    const nowYear = new Date().getFullYear();
+    if (billing.expYear && parseInt(billing.expYear, 10) < nowYear) errs.push('Expiry year must not be in the past.');
+    return errs;
+  };
+
+  const EXPIRY_YEARS = Array.from({ length: 16 }, (_, i) => String(new Date().getFullYear() + i));
 
   // ----------------------------------------------------
   // HANDLERS: Trip-Type Import & Parsing
@@ -456,15 +467,29 @@ export default function AdminCreateBookingPage() {
   const handleCreateBooking = async (actionType = 'create_draft') => {
     if (isSubmitting) return;
 
+    // Validate required contact fields
     if (!contactInfo.email || !contactInfo.email.includes('@')) {
       setErrorMsg('Please enter a valid contact email in Step 1.');
       setCurrentStep(1);
       return;
     }
-
     if (passengers.length === 0 || !passengers[0].firstName || !passengers[0].lastName) {
       setErrorMsg('Please enter primary passenger First and Last Name in Step 1.');
       setCurrentStep(1);
+      return;
+    }
+
+    // Block Create & Process Payment when no real provider token
+    if (actionType === 'create_and_process_payment' && !billing.paymentToken) {
+      setErrorMsg('Payment processing is not configured. Create the booking without payment or send authorization.');
+      return;
+    }
+
+    // Validate billing fields when provided
+    const billingErrors = validateBilling();
+    if (billingErrors.length > 0) {
+      setErrorMsg(billingErrors.join(' | '));
+      setCurrentStep(4);
       return;
     }
 
@@ -472,9 +497,14 @@ export default function AdminCreateBookingPage() {
     setErrorMsg('');
     setSuccessMsg('');
 
+    const idempotencyKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
     try {
       const payload = {
         actionType,
+        clientRequestId: idempotencyKey,
         customerName: `${passengers[0].firstName} ${passengers[0].lastName}`.trim(),
         email: contactInfo.email,
         phone: contactInfo.phone,
@@ -518,24 +548,40 @@ export default function AdminCreateBookingPage() {
           cardLast4: billing.cardLast4,
           expMonth: billing.expMonth,
           expYear: billing.expYear,
-          paymentToken: billing.paymentToken,
+          // paymentToken is only set when a REAL provider token exists — never client-generated
+          paymentToken: billing.paymentToken || null,
           authSource: billing.authSource,
           authNote: billing.authNote
         },
-        status: actionType === 'create_and_process_payment' ? 'CONFIRMED' : (actionType === 'create_and_send_auth' ? 'AWAITING_PASSENGER' : 'PENDING'),
-        payment_status: actionType === 'create_and_process_payment' ? 'paid' : 'pending',
-        authorization_status: actionType === 'create_and_send_auth' ? 'PENDING' : (actionType === 'create_and_process_payment' ? 'ACCEPTED' : 'NOT_REQUIRED')
       };
 
       const res = await adminAPI.createBooking(payload);
-      if (res && res.success) {
-        setSuccessMsg(`Booking created successfully! Reference Code: ${res.bookingCode || res.bookingId || 'TFS-NEW'}`);
-        setTimeout(() => navigate('/admin/dashboard'), 2000);
+
+      // Read booking reference safely from multiple possible response shapes
+      const resData = res?.data ?? res;
+      const bookingRef =
+        resData?.confirmation_code ||
+        resData?.confirmationCode ||
+        resData?.booking_reference ||
+        resData?.bookingCode ||
+        resData?.bookingId ||
+        resData?.id ||
+        'TFS-NEW';
+
+      if (res?.success || resData?.success || res?.id || resData?.id || res?.bookingCode || resData?.confirmation_code) {
+        setSuccessMsg(`Booking created! Reference: ${bookingRef}. Navigating to dashboard…`);
+        setTimeout(() => navigate('/admin/dashboard'), 2500);
       } else {
-        setErrorMsg(res?.error?.message || res?.message || 'Failed to create booking');
+        const errMsg = resData?.error?.message || resData?.message || res?.message || 'Failed to create booking. Check all required fields.';
+        setErrorMsg(errMsg);
       }
     } catch (err) {
-      setErrorMsg(err.response?.data?.error?.message || err.message || 'Error executing booking creation');
+      const errMsg =
+        err?.response?.data?.error?.message ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Error submitting booking. Please check your network connection.';
+      setErrorMsg(errMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -898,15 +944,88 @@ export default function AdminCreateBookingPage() {
             </div>
 
             <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '16px', marginTop: '16px' }}>
-              <h4 style={{ margin: '0 0 10px', color: '#166534', fontSize: '0.9rem' }}><i className="fas fa-shield-alt" style={{ marginRight: '6px' }}></i> Tokenized Card Metadata (PCI Compliant)</h4>
+              <h4 style={{ margin: '0 0 4px', color: '#166534', fontSize: '0.9rem' }}>
+                <i className="fas fa-shield-alt" style={{ marginRight: '6px' }}></i> Card Reference (No full card number or CVV)
+              </h4>
+              <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: '#15803d' }}>
+                Enter the card brand, last 4 digits and expiry only. Full card number and CVV are never collected here.
+              </p>
               <div className="drawer-grid-3col">
-                <div className="drawer-form-field"><label>Card Brand</label><input type="text" value={billing.cardBrand} readOnly style={{ background: '#f8fafc' }} /></div>
-                <div className="drawer-form-field"><label>Last 4 Digits</label><input type="text" value={billing.cardLast4} readOnly style={{ background: '#f8fafc' }} /></div>
-                <div className="drawer-form-field"><label>Expiry</label><input type="text" value={`${billing.expMonth}/${billing.expYear}`} readOnly style={{ background: '#f8fafc' }} /></div>
+                <div className="drawer-form-field">
+                  <label style={{ fontWeight: 700 }}>Card Brand</label>
+                  <select
+                    value={billing.cardBrand}
+                    onChange={e => setBilling({ ...billing, cardBrand: e.target.value })}
+                  >
+                    <option value="">— Select brand —</option>
+                    <option value="visa">Visa</option>
+                    <option value="mastercard">Mastercard</option>
+                    <option value="amex">American Express</option>
+                    <option value="discover">Discover</option>
+                  </select>
+                </div>
+                <div className="drawer-form-field">
+                  <label style={{ fontWeight: 700 }}>Last 4 Digits</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={4}
+                    placeholder="e.g. 1234"
+                    value={billing.cardLast4}
+                    onChange={e => setBilling({ ...billing, cardLast4: e.target.value.replace(/\D/g, '').slice(0, 4) })}
+                  />
+                </div>
+                <div className="drawer-form-field">
+                  <label style={{ fontWeight: 700 }}>Expiry Month</label>
+                  <select
+                    value={billing.expMonth}
+                    onChange={e => setBilling({ ...billing, expMonth: e.target.value })}
+                  >
+                    <option value="">MM</option>
+                    {['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="drawer-form-field">
+                  <label style={{ fontWeight: 700 }}>Expiry Year</label>
+                  <select
+                    value={billing.expYear}
+                    onChange={e => setBilling({ ...billing, expYear: e.target.value })}
+                  >
+                    <option value="">YYYY</option>
+                    {EXPIRY_YEARS.map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="drawer-form-field" style={{ gridColumn: 'span 2' }}>
+                  <label>Cardholder Name</label>
+                  <input
+                    type="text"
+                    placeholder="Name as on card"
+                    value={billing.cardholderName}
+                    onChange={e => setBilling({ ...billing, cardholderName: e.target.value })}
+                  />
+                </div>
               </div>
-              <small style={{ color: '#15803d', fontSize: '0.75rem', marginTop: '6px', display: 'block' }}>
-                Note: Raw credit card numbers and CVV codes are NEVER stored in state, backend database, or logs.
+              {billing.cardBrand && billing.cardLast4.length === 4 && (
+                <div style={{ marginTop: '10px', padding: '8px 12px', background: '#dcfce7', borderRadius: '6px', fontSize: '0.85rem', color: '#166534', fontWeight: 700 }}>
+                  {billing.cardBrand.charAt(0).toUpperCase() + billing.cardBrand.slice(1)} •••• {billing.cardLast4}
+                  {billing.expMonth && billing.expYear && ` — Exp. ${billing.expMonth}/${billing.expYear}`}
+                </div>
+              )}
+              <small style={{ color: '#15803d', fontSize: '0.75rem', marginTop: '8px', display: 'block' }}>
+                ⚠ Raw credit card numbers and CVV codes are NEVER stored in state, database, or logs.
               </small>
+            </div>
+
+            <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '8px', padding: '12px 16px', marginTop: '16px' }}>
+              <p style={{ margin: 0, fontSize: '0.82rem', color: '#92400e', fontWeight: 600 }}>
+                <i className="fas fa-info-circle" style={{ marginRight: '6px' }}></i>
+                <strong>Payment Processing:</strong> "Create &amp; Process Payment" requires a real payment provider token.
+                If no payment processor is configured, use "Create Without Payment" or "Create &amp; Send Auth" instead.
+              </p>
             </div>
           </div>
         )}
@@ -952,11 +1071,23 @@ export default function AdminCreateBookingPage() {
                 Create Booking Without Payment
               </button>
               <button type="button" onClick={() => handleCreateBooking('create_and_send_auth')} disabled={isSubmitting} className="admin-primary-btn" style={{ background: '#1e3a5f', padding: '12px', fontWeight: 700 }}>
-                <i className="fas fa-paper-plane" style={{ marginRight: '6px' }}></i> Create &amp; Send Auth
+                {isSubmitting ? <><i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i>Submitting…</> : <><i className="fas fa-paper-plane" style={{ marginRight: '6px' }}></i>Create &amp; Send Auth</>}
               </button>
-              <button type="button" onClick={() => handleCreateBooking('create_and_process_payment')} disabled={isSubmitting} className="admin-primary-btn" style={{ background: '#8b1236', padding: '12px', fontWeight: 700 }}>
-                <i className="fas fa-credit-card" style={{ marginRight: '6px' }}></i> Create &amp; Process Payment
+              <button
+                type="button"
+                onClick={() => handleCreateBooking('create_and_process_payment')}
+                disabled={isSubmitting || !billing.paymentToken}
+                className="admin-primary-btn"
+                style={{ background: '#8b1236', padding: '12px', fontWeight: 700, opacity: (!billing.paymentToken ? 0.5 : 1) }}
+                title={!billing.paymentToken ? 'Payment processing is not configured. Use Create Without Payment or Send Auth.' : 'Create and process payment'}
+              >
+                {isSubmitting ? <><i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i>Submitting…</> : <><i className="fas fa-credit-card" style={{ marginRight: '6px' }}></i>Create &amp; Process Payment</>}
               </button>
+              {!billing.paymentToken && (
+                <p style={{ gridColumn: 'span 2', margin: '4px 0 0', fontSize: '0.78rem', color: '#92400e', fontStyle: 'italic' }}>
+                  Payment processing is not configured. Create the booking without payment or send authorization.
+                </p>
+              )}
             </div>
           </div>
         )}

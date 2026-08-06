@@ -291,7 +291,47 @@ export const adminAPI = {
   createBooking: async (data) => {
     const response = await api.post('/admin/bookings', data);
     return response.data;
-  }
+  },
+  /**
+   * Centralized admin email action.
+   * Supported actions:
+   *   send_booking_request_email | resend_booking_request_email
+   *   send_authorization | resend_authorization
+   *   send_authorization_email | resend_authorization_email
+   *   send_final_ticket_email | resend_final_ticket_email
+   *
+   * Returns: { success, message, requestId, email: { type, recipient, providerMessageId, status, sentAt }, booking }
+   */
+  sendEmailAction: async (bookingId, action, extraData = {}) => {
+    const idempotencyKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const response = await api.post(
+      `/admin/bookings/${bookingId}/payment-action`,
+      { action, clientRequestId: idempotencyKey, ...extraData },
+      { headers: { 'Idempotency-Key': idempotencyKey } }
+    );
+    return response.data;
+  },
+  sendBookingRequestEmail: async (bookingId, resend = false) => {
+    return adminAPI.sendEmailAction(
+      bookingId,
+      resend ? 'resend_booking_request_email' : 'send_booking_request_email'
+    );
+  },
+  sendAuthorizationEmail: async (bookingId, resend = false) => {
+    return adminAPI.sendEmailAction(
+      bookingId,
+      resend ? 'resend_authorization' : 'send_authorization'
+    );
+  },
+  sendFinalTicketEmail: async (bookingId, resend = false) => {
+    return adminAPI.sendEmailAction(
+      bookingId,
+      resend ? 'resend_final_ticket_email' : 'send_final_ticket_email'
+    );
+  },
 };
+
 
 export default api;
