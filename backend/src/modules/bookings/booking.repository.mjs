@@ -763,20 +763,25 @@ export const bookingRepository = {
       airlineName,
       airlineLogoUrl,
       airlineConfirmationNumber,
+      airlinePnr,
       ticketNumber,
+      ticketIssueDate,
       ticketIssuedAt,
+      ticket_issue_date,
+      ticket_issued_at,
       ticketNotes,
       supplierConfirmation
     } = ticketData;
 
+    const rawPnr = airlineConfirmationNumber ?? airlinePnr;
     let cleanPnr = booking.airline_confirmation_number || null;
-    if (airlineConfirmationNumber !== undefined && airlineConfirmationNumber !== null && String(airlineConfirmationNumber).trim() !== '') {
-      const rawPnr = String(airlineConfirmationNumber).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (!/^[A-Z0-9]{1,6}$/.test(rawPnr)) {
+    if (rawPnr !== undefined && rawPnr !== null && String(rawPnr).trim() !== '') {
+      const parsedPnr = String(rawPnr).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!/^[A-Z0-9]{1,6}$/.test(parsedPnr)) {
         throw new Error('PNR must contain no more than 6 letters or numbers.');
       }
-      cleanPnr = rawPnr;
-    } else if (airlineConfirmationNumber === '' || airlineConfirmationNumber === null) {
+      cleanPnr = parsedPnr;
+    } else if (rawPnr === '' || rawPnr === null) {
       cleanPnr = null;
     }
 
@@ -797,7 +802,7 @@ export const bookingRepository = {
     const cleanSupp = supplierConfirmation !== undefined ? (supplierConfirmation ? String(supplierConfirmation).trim() : null) : (booking.supplier_confirmation || null);
     const cleanNotes = ticketNotes !== undefined ? (ticketNotes ? String(ticketNotes).trim() : null) : (booking.ticket_notes || null);
 
-    const rawDate = ticketIssueDate || ticketIssuedAt;
+    const rawDate = ticketIssueDate ?? ticketIssuedAt ?? ticket_issue_date ?? ticket_issued_at;
     let cleanIssuedAt = booking.ticket_issued_at ? String(booking.ticket_issued_at).slice(0, 10) : null;
     if (rawDate !== undefined && rawDate !== null && String(rawDate).trim() !== '') {
       const dateStr = String(rawDate).trim().slice(0, 10);
@@ -816,9 +821,9 @@ export const bookingRepository = {
     if (airlineCode !== undefined) updatePayload.airline_code = cleanCode;
     if (airlineName !== undefined) updatePayload.airline_name = cleanName;
     if (airlineLogoUrl !== undefined) updatePayload.airline_logo_url = cleanLogo;
-    if (airlineConfirmationNumber !== undefined) updatePayload.airline_confirmation_number = cleanPnr;
+    if (airlineConfirmationNumber !== undefined || airlinePnr !== undefined) updatePayload.airline_confirmation_number = cleanPnr;
     if (ticketNumber !== undefined) updatePayload.ticket_number = cleanTkt;
-    if (ticketIssuedAt !== undefined) updatePayload.ticket_issued_at = cleanIssuedAt;
+    if (ticketIssuedAt !== undefined || ticketIssueDate !== undefined || ticket_issue_date !== undefined || ticket_issued_at !== undefined) updatePayload.ticket_issued_at = cleanIssuedAt;
     if (ticketNotes !== undefined) updatePayload.ticket_notes = cleanNotes;
     if (supplierConfirmation !== undefined) updatePayload.supplier_confirmation = cleanSupp;
 
@@ -830,13 +835,13 @@ export const bookingRepository = {
     let eventType = 'TICKET_DETAILS_UPDATED';
     if (!booking.airline_confirmation_number && cleanPnr) {
       eventType = 'TICKET_DETAILS_CREATED';
-    } else if (airlineConfirmationNumber !== undefined && cleanPnr !== booking.airline_confirmation_number) {
+    } else if (cleanPnr !== booking.airline_confirmation_number) {
       eventType = 'AIRLINE_PNR_UPDATED';
     } else if ((airlineName !== undefined || airlineCode !== undefined) && (cleanName !== booking.airline_name || cleanCode !== booking.airline_code)) {
       eventType = 'AIRLINE_UPDATED';
     } else if (ticketNumber !== undefined && cleanTkt !== booking.ticket_number) {
       eventType = 'TICKET_NUMBER_UPDATED';
-    } else if (ticketIssuedAt !== undefined && cleanIssuedAt !== booking.ticket_issued_at) {
+    } else if (cleanIssuedAt !== booking.ticket_issued_at) {
       eventType = 'TICKET_ISSUE_DATE_UPDATED';
     }
 
@@ -847,6 +852,8 @@ export const bookingRepository = {
       adminId,
       reason: `[${eventType}] PNR: ${cleanPnr || 'N/A'}, Airline: ${cleanName || 'N/A'} (${cleanCode || 'N/A'}), Ticket: ${cleanTkt || 'N/A'}, IssuedAt: ${cleanIssuedAt || 'N/A'}`
     });
+
+    return await bookingRepository.getCompleteBookingById(realId);
 
     // Create Immutable Append-Only Ticket Snapshot
     if (cleanPnr || cleanTkt) {

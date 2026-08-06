@@ -38,6 +38,7 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     assert.match(content, /sendBookingRequestEmail:/, 'api.js adminAPI must contain sendBookingRequestEmail');
     assert.match(content, /sendAuthorizationEmail:/, 'api.js adminAPI must contain sendAuthorizationEmail');
     assert.match(content, /sendFinalTicketEmail:/, 'api.js adminAPI must contain sendFinalTicketEmail');
+    assert.match(content, /getBookingEmailStatus:/, 'api.js adminAPI must contain getBookingEmailStatus');
   });
 
   await t.test('5. Response reader handles confirmation_code, confirmationCode, booking_reference, and id', () => {
@@ -77,6 +78,38 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     assert.match(content, /return \/\^\\d\{4\}\$\/\.test\(raw\)/, 'booking.service.mjs must use /^\\d{4}$/ for card_last4 validation');
     assert.doesNotMatch(content, /cvv_code:\s*pmPayload\.cvv_code\s*\|\|\s*1234/, 'booking.service.mjs must NOT hardcode fake CVV 1234');
     assert.doesNotMatch(content, /pm_tok_\$\{Date\.now\(\)\}/, 'booking.service.mjs must NOT generate fake pm_tok_ payment tokens');
+  });
+
+  await t.test('10. Step card outer class and pricing 2-column grid exist in CSS & JS', () => {
+    const cssPath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.css');
+    const jsPath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
+    const cssContent = fs.readFileSync(cssPath, 'utf-8');
+    const jsContent = fs.readFileSync(jsPath, 'utf-8');
+    assert.match(cssContent, /\.admin-create-booking-step-card/, 'CSS must contain .admin-create-booking-step-card rule');
+    assert.match(cssContent, /\.admin-pricing-grid/, 'CSS must contain .admin-pricing-grid rule');
+    assert.match(jsContent, /className="admin-create-booking-step-card"/, 'JS must use admin-create-booking-step-card class');
+    assert.match(jsContent, /className="admin-pricing-grid"/, 'JS must use admin-pricing-grid class');
+  });
+
+  await t.test('11. Single Cardholder Name field in Step 4 Billing', () => {
+    const filePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const cardholderMatches = content.match(/<label[^>]*>\s*Cardholder Name/g) || [];
+    assert.equal(cardholderMatches.length, 1, 'Step 4 must contain exactly ONE Cardholder Name input label');
+  });
+
+  await t.test('12. Ticket date aliases are normalized in booking.repository.mjs', () => {
+    const filePath = path.join(projectRoot, 'backend/src/modules/bookings/booking.repository.mjs');
+    const content = fs.readFileSync(filePath, 'utf-8');
+    assert.match(content, /ticketIssueDate \?\? ticketIssuedAt \?\? ticket_issue_date \?\? ticket_issued_at/, 'Repository must check all ticket date aliases');
+    assert.match(content, /if \(ticketIssuedAt !== undefined \|\| ticketIssueDate !== undefined/, 'Repository must include ticket_issued_at in updatePayload');
+  });
+
+  await t.test('13. Draft creation allows missing DOB and sets status DRAFT', () => {
+    const filePath = path.join(projectRoot, 'backend/src/modules/bookings/booking.service.mjs');
+    const content = fs.readFileSync(filePath, 'utf-8');
+    assert.match(content, /if \(payload\.actionType !== 'create_draft'\)/, 'booking.service.mjs must skip traveller validation for drafts');
+    assert.match(content, /status: payload\.actionType === 'create_draft' \? 'DRAFT'/, 'booking.service.mjs must set status DRAFT for create_draft action');
   });
 
 });

@@ -8,7 +8,7 @@ import './AdminDashboardPage.css';
 // ----------------------------------------------------
 // CONTROLLED DATE OF BIRTH COMPONENT (Fixes MM/DD/YYYY Typing & Clearing)
 // ----------------------------------------------------
-function DobInputComponent({ value, onChange, label = "Date of Birth", required = false }) {
+function DobInputComponent({ value, onChange, label = "Date of Birth", required = false, hasError = false, errorMessage = "" }) {
   const formatIsoToDisplay = (isoStr) => {
     if (!isoStr) return '';
     if (isoStr.includes('/')) return isoStr;
@@ -86,18 +86,26 @@ function DobInputComponent({ value, onChange, label = "Date of Birth", required 
 
   return (
     <div className="drawer-form-field" style={{ position: 'relative' }}>
-      <label>{label} {required && '*'}</label>
+      <label>
+        {label} {required && <span className="required-marker" style={{ color: '#b91c1c', fontWeight: 800, marginLeft: '2px' }}>*</span>}
+      </label>
       <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
         <input
           type="text"
           inputMode="numeric"
           placeholder="MM/DD/YYYY"
           maxLength={10}
+          aria-required={required ? "true" : "false"}
           value={inputText}
           onChange={handleTextChange}
           onBlur={handleBlur}
           onFocus={(e) => e.target.select()}
-          style={{ width: '100%', paddingRight: inputText ? '75px' : '35px' }}
+          style={{
+            width: '100%',
+            paddingRight: inputText ? '75px' : '35px',
+            border: hasError ? '2px solid #b91c1c' : undefined,
+            background: hasError ? '#fef2f2' : undefined
+          }}
         />
         {inputText && (
           <button
@@ -148,8 +156,8 @@ function DobInputComponent({ value, onChange, label = "Date of Birth", required 
           <i className="fas fa-calendar-alt"></i>
         </button>
       </div>
-      <small style={{ color: '#64748b', fontSize: '0.72rem', marginTop: '2px', display: 'block' }}>
-        Enter as MM/DD/YYYY or choose from calendar.
+      <small style={{ color: hasError ? '#b91c1c' : '#64748b', fontSize: '0.72rem', marginTop: '2px', display: 'block', fontWeight: hasError ? 700 : 'normal' }}>
+        {hasError && errorMessage ? errorMessage : 'Enter as MM/DD/YYYY or choose from calendar.'}
       </small>
     </div>
   );
@@ -168,8 +176,10 @@ export default function AdminCreateBookingPage() {
     }
   }, [navigate]);
 
-  // Navigation Feedback & Saving State
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Navigation Feedback & Isolated Action Submission State
+  const [activeSubmissionAction, setActiveSubmissionAction] = useState(null);
+  const isSubmitting = activeSubmissionAction !== null;
+  const [dobErrors, setDobErrors] = useState({});
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -461,35 +471,134 @@ export default function AdminCreateBookingPage() {
     }
   };
 
+  // Dedicated Step Validation Functions
+  const validatePassengerStep = (isDraft = false) => {
+    const errs = [];
+    const newDobErrs = {};
+    if (!contactInfo.email || !contactInfo.email.includes('@')) {
+      errs.push('Please enter a valid Contact Email in Step 1.');
+    }
+    if (passengers.length === 0 || !passengers[0].firstName || !passengers[0].lastName) {
+      errs.push('Please enter primary passenger First and Last Name in Step 1.');
+    }
+    if (!isDraft) {
+      passengers.forEach((p, idx) => {
+        if (!p.dateOfBirth) {
+          errs.push(`Passenger #${idx + 1} (${p.firstName || 'Passenger'}): Date of birth is required.`);
+          newDobErrs[p.id || idx] = 'Date of birth is required.';
+        }
+      });
+    }
+    setDobErrors(newDobErrs);
+    return errs;
+  };
+
+  const validateItineraryStep = () => {
+    if (outboundSegments.length === 0) {
+      return ['At least one outbound flight segment is required in Step 2.'];
+    }
+    return [];
+  };
+
+  const validatePricingStep = () => {
+    const overrideText = String(pricing.finalCustomerTotal ?? '').trim();
+    const hasOverride = overrideText !== '';
+    const calculatedAmount = Number.parseFloat(calculatedTotal);
+    const overrideAmount = Number.parseFloat(overrideText);
+    const finalCustomerTotal = hasOverride ? overrideAmount : calculatedAmount;
+    if (!Number.isFinite(finalCustomerTotal) || finalCustomerTotal <= 0) {
+      return ['Final Customer Total must be a valid amount greater than zero in Step 3.'];
+    }
+    return [];
+  };
+
+  const validateBillingStep = (actionType) => {
+    if (['create_and_send_auth', 'create_and_process_payment'].includes(actionType)) {
+      const errs = [];
+      if (!billing.cardholderName) errs.push('Cardholder Name is required for authorization.');
+      if (!billing.addressLine1) errs.push('Address Line 1 is required for authorization.');
+      if (!billing.city) errs.push('City is required for authorization.');
+      if (!billing.postalCode) errs.push('Postal Code is required for authorization.');
+      if (!billing.cardBrand) errs.push('Card Brand is required for authorization.');
+      if (!billing.cardLast4 || !/^\d{4}$/.test(billing.cardLast4)) errs.push('Card Last 4 must be exactly 4 numeric digits.');
+      if (!billing.expMonth || !billing.expYear) errs.push('Card expiry month and year are required for authorization.');
+      return errs;
+    }
+    return validateBilling();
+  };
+
+  const handleStepNext = (targetStep) => {
+    setErrorMsg('');
+    if (targetStep > currentStep) {
+      if (currentStep === 1) {
+        const passErrs = validatePassengerStep(false);
+        if (passErrs.length > 0) {
+          setErrorMsg(passErrs.join(' | '));
+          return;
+        }
+      } else if (currentStep === 2) {
+        const itinErrs = validateItineraryStep();
+        if (itinErrs.length > 0) {
+          setErrorMsg(itinErrs.join(' | '));
+          return;
+        }
+      } else if (currentStep === 3) {
+        const priceErrs = validatePricingStep();
+        if (priceErrs.length > 0) {
+          setErrorMsg(priceErrs.join(' | '));
+          return;
+        }
+      }
+    }
+    setCurrentStep(targetStep);
+  };
+
   // ----------------------------------------------------
   // SUBMISSION HANDLER: Step 5 Final Action
   // ----------------------------------------------------
   const handleCreateBooking = async (actionType = 'create_draft') => {
     if (isSubmitting) return;
 
-    // Validate required contact fields
-    if (!contactInfo.email || !contactInfo.email.includes('@')) {
-      setErrorMsg('Please enter a valid contact email in Step 1.');
+    const isDraft = actionType === 'create_draft';
+    const passErrs = validatePassengerStep(isDraft);
+    if (passErrs.length > 0) {
+      setErrorMsg(passErrs.join(' | '));
       setCurrentStep(1);
+      setActiveSubmissionAction(null);
       return;
     }
-    if (passengers.length === 0 || !passengers[0].firstName || !passengers[0].lastName) {
-      setErrorMsg('Please enter primary passenger First and Last Name in Step 1.');
-      setCurrentStep(1);
-      return;
+
+    if (!isDraft) {
+      const itinErrs = validateItineraryStep();
+      if (itinErrs.length > 0) {
+        setErrorMsg(itinErrs.join(' | '));
+        setCurrentStep(2);
+        setActiveSubmissionAction(null);
+        return;
+      }
+
+      const priceErrs = validatePricingStep();
+      if (priceErrs.length > 0) {
+        setErrorMsg(priceErrs.join(' | '));
+        setCurrentStep(3);
+        setActiveSubmissionAction(null);
+        return;
+      }
     }
 
     // Block Create & Process Payment when no real provider token
     if (actionType === 'create_and_process_payment' && !billing.paymentToken) {
       setErrorMsg('Payment processing is not configured. Create the booking without payment or send authorization.');
+      setActiveSubmissionAction(null);
       return;
     }
 
     // Validate billing fields when provided
-    const billingErrors = validateBilling();
+    const billingErrors = validateBillingStep(actionType);
     if (billingErrors.length > 0) {
       setErrorMsg(billingErrors.join(' | '));
       setCurrentStep(4);
+      setActiveSubmissionAction(null);
       return;
     }
 
@@ -513,7 +622,7 @@ export default function AdminCreateBookingPage() {
       (Number.parseFloat(pricing.supplierTaxes) || 0) +
       (Number.parseFloat(pricing.supplierFees) || 0);
 
-    setIsSubmitting(true);
+    setActiveSubmissionAction(actionType);
     setErrorMsg('');
     setSuccessMsg('');
 
@@ -598,7 +707,28 @@ export default function AdminCreateBookingPage() {
         },
       };
 
-      const res = await adminAPI.createBooking(payload);
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 30000);
+
+      let res = null;
+      try {
+        res = await adminAPI.createBooking(payload, { signal: controller.signal });
+        window.clearTimeout(timeoutId);
+      } catch (reqErr) {
+        window.clearTimeout(timeoutId);
+        if (reqErr.name === 'AbortError' || reqErr.message?.includes('30 seconds') || reqErr.code === 'ECONNABORTED') {
+          // Reconcile via GET status
+          setSuccessMsg('The request timed out. Verifying whether the booking was created…');
+          const reconciledRes = await adminAPI.getBookingEmailStatus(idempotencyKey).catch(() => null);
+          if (reconciledRes?.booking || reconciledRes?.id) {
+            res = reconciledRes;
+          } else {
+            throw new Error('Booking creation request timed out. Please refresh the dashboard or retry with the same request.');
+          }
+        } else {
+          throw reqErr;
+        }
+      }
 
       // Read booking reference safely from multiple possible response shapes
       const resData = res?.data ?? res;
@@ -610,9 +740,18 @@ export default function AdminCreateBookingPage() {
         resData?.bookingId ||
         resData?.id ||
         'TFS-NEW';
+      const createdBookingId = resData?.id || res?.id || resData?.bookingId;
 
       if (res?.success || resData?.success || res?.id || resData?.id || res?.bookingCode || resData?.confirmation_code) {
-        setSuccessMsg(`Booking created! Reference: ${bookingRef}. Navigating to dashboard…`);
+        if (actionType === 'create_and_send_auth' && createdBookingId) {
+          setSuccessMsg(`Booking ${bookingRef} created! Phase 2: Sending Authorization Email…`);
+          await adminAPI.sendAuthorizationEmail(createdBookingId, false).catch(authErr => {
+            console.error('Phase 2 Auth Email error:', authErr);
+          });
+          setSuccessMsg(`Booking ${bookingRef} created and Authorization Email dispatched! Navigating to dashboard…`);
+        } else {
+          setSuccessMsg(`Booking created! Reference: ${bookingRef}. Navigating to dashboard…`);
+        }
         setTimeout(() => navigate('/admin/dashboard'), 2500);
       } else {
         const errMsg = resData?.error?.message || resData?.message || res?.message || 'Failed to create booking. Check all required fields.';
@@ -626,7 +765,7 @@ export default function AdminCreateBookingPage() {
         'Error submitting booking. Please check your network connection.';
       setErrorMsg(errMsg);
     } finally {
-      setIsSubmitting(false);
+      setActiveSubmissionAction(null);
     }
   };
 
@@ -697,7 +836,13 @@ export default function AdminCreateBookingPage() {
       </div>
 
       {/* STEP BODY CONTAINER */}
-      <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+      <div className="admin-create-booking-step-card">
+
+        {/* REQUIRED FIELDS LEGEND */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', fontSize: '0.78rem', color: '#64748b' }}>
+          <span>* Required field</span>
+          <span>Step {currentStep} of 5</span>
+        </div>
 
         {/* STEP 1: PASSENGER & CONTACT */}
         {currentStep === 1 && (
@@ -706,8 +851,8 @@ export default function AdminCreateBookingPage() {
 
             <div className="drawer-grid-2col" style={{ marginBottom: '20px' }}>
               <div className="drawer-form-field">
-                <label style={{ fontWeight: 700 }}>Contact Email *</label>
-                <input type="email" value={contactInfo.email} onChange={e => setContactInfo({ ...contactInfo, email: e.target.value })} placeholder="customer@example.com" />
+                <label style={{ fontWeight: 700 }}>Contact Email <span className="required-marker">*</span></label>
+                <input type="email" value={contactInfo.email} onChange={e => { setContactInfo({ ...contactInfo, email: e.target.value }); setErrorMsg(''); }} placeholder="customer@example.com" />
               </div>
               <div className="drawer-form-field">
                 <label style={{ fontWeight: 700 }}>Contact Phone</label>
@@ -736,12 +881,12 @@ export default function AdminCreateBookingPage() {
                     </select>
                   </div>
                   <div className="drawer-form-field">
-                    <label>First Name *</label>
-                    <input type="text" value={p.firstName} onChange={e => { const next = [...passengers]; next[pIdx].firstName = e.target.value; setPassengers(next); }} placeholder="John" />
+                    <label>First Name <span className="required-marker">*</span></label>
+                    <input type="text" value={p.firstName} onChange={e => { const next = [...passengers]; next[pIdx].firstName = e.target.value; setPassengers(next); setErrorMsg(''); }} placeholder="John" />
                   </div>
                   <div className="drawer-form-field">
-                    <label>Last Name *</label>
-                    <input type="text" value={p.lastName} onChange={e => { const next = [...passengers]; next[pIdx].lastName = e.target.value; setPassengers(next); }} placeholder="Doe" />
+                    <label>Last Name <span className="required-marker">*</span></label>
+                    <input type="text" value={p.lastName} onChange={e => { const next = [...passengers]; next[pIdx].lastName = e.target.value; setPassengers(next); setErrorMsg(''); }} placeholder="Doe" />
                   </div>
                   <div className="drawer-form-field">
                     <label>Gender</label>
@@ -753,11 +898,18 @@ export default function AdminCreateBookingPage() {
                   {/* CONTROLLED RELIABLE DATE OF BIRTH COMPONENT */}
                   <DobInputComponent
                     label="Date of Birth"
+                    required={true}
                     value={p.dateOfBirth}
+                    hasError={!!dobErrors[p.id || pIdx]}
+                    errorMessage={dobErrors[p.id || pIdx]}
                     onChange={(val) => {
                       const next = [...passengers];
                       next[pIdx].dateOfBirth = val;
                       setPassengers(next);
+                      if (val) {
+                        setDobErrors(prev => ({ ...prev, [p.id || pIdx]: null }));
+                        setErrorMsg('');
+                      }
                     }}
                   />
 
@@ -912,26 +1064,26 @@ export default function AdminCreateBookingPage() {
         {currentStep === 3 && (
           <div>
             <h3 style={{ margin: '0 0 16px', color: '#1e3a5f' }}><i className="fas fa-calculator" style={{ marginRight: '8px' }}></i> Step 3: Pricing Breakdown</h3>
-            <div className="drawer-grid-3col">
+            <div className="admin-pricing-grid">
               <div className="drawer-form-field">
                 <label style={{ fontWeight: 700 }}>Supplier Flight Cost ($)</label>
                 <input type="number" step="0.01" value={pricing.supplierCost} onChange={e => setPricing({ ...pricing, supplierCost: e.target.value })} />
-              </div>
-              <div className="drawer-form-field">
-                <label>Supplier Taxes ($)</label>
-                <input type="number" step="0.01" value={pricing.supplierTaxes} onChange={e => setPricing({ ...pricing, supplierTaxes: e.target.value })} />
-              </div>
-              <div className="drawer-form-field">
-                <label>Supplier Fees ($)</label>
-                <input type="number" step="0.01" value={pricing.supplierFees} onChange={e => setPricing({ ...pricing, supplierFees: e.target.value })} />
               </div>
               <div className="drawer-form-field">
                 <label style={{ fontWeight: 700 }}>Agency Service Fee ($)</label>
                 <input type="number" step="0.01" value={pricing.agencyFee} onChange={e => setPricing({ ...pricing, agencyFee: e.target.value })} />
               </div>
               <div className="drawer-form-field">
+                <label>Supplier Taxes ($)</label>
+                <input type="number" step="0.01" value={pricing.supplierTaxes} onChange={e => setPricing({ ...pricing, supplierTaxes: e.target.value })} />
+              </div>
+              <div className="drawer-form-field">
                 <label>Agency Markup ($)</label>
                 <input type="number" step="0.01" value={pricing.markup} onChange={e => setPricing({ ...pricing, markup: e.target.value })} />
+              </div>
+              <div className="drawer-form-field">
+                <label>Supplier Fees ($)</label>
+                <input type="number" step="0.01" value={pricing.supplierFees} onChange={e => setPricing({ ...pricing, supplierFees: e.target.value })} />
               </div>
               <div className="drawer-form-field">
                 <label>Discount ($)</label>
@@ -939,13 +1091,13 @@ export default function AdminCreateBookingPage() {
               </div>
             </div>
 
-            <div style={{ marginTop: '20px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ marginTop: '20px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div>
                 <span style={{ fontSize: '0.85rem', color: '#64748b', display: 'block' }}>Calculated Customer Total</span>
                 <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1e3a5f' }}>${calculatedTotal} {pricing.currency}</span>
               </div>
 
-              <div style={{ width: '220px' }}>
+              <div style={{ width: '240px' }}>
                 <label style={{ fontWeight: 700, fontSize: '0.8rem', color: '#1e3a5f', display: 'block', marginBottom: '4px' }}>Final Customer Total Override ($)</label>
                 <input type="number" step="0.01" value={pricing.finalCustomerTotal} onChange={e => setPricing({ ...pricing, finalCustomerTotal: e.target.value })} style={{ width: '100%', fontWeight: 700, fontSize: '1.1rem', color: '#8b1236' }} />
               </div>
@@ -957,29 +1109,32 @@ export default function AdminCreateBookingPage() {
         {currentStep === 4 && (
           <div>
             <h3 style={{ margin: '0 0 16px', color: '#1e3a5f' }}><i className="fas fa-credit-card" style={{ marginRight: '8px' }}></i> Step 4: Billing &amp; Payment Details</h3>
+            <p style={{ fontSize: '0.78rem', color: '#64748b', margin: '-8px 0 16px' }}>
+              * Required for authorization or payment processing. Optional when creating a draft or booking without payment.
+            </p>
             <div className="drawer-grid-2col" style={{ marginBottom: '16px' }}>
               <div className="drawer-form-field">
-                <label style={{ fontWeight: 700 }}>Cardholder Name</label>
+                <label style={{ fontWeight: 700 }}>Cardholder Name <span className="required-marker">*</span></label>
                 <input type="text" value={billing.cardholderName} onChange={e => setBilling({ ...billing, cardholderName: e.target.value })} placeholder="John Doe" />
               </div>
               <div className="drawer-form-field">
-                <label style={{ fontWeight: 700 }}>Address Line 1</label>
+                <label style={{ fontWeight: 700 }}>Address Line 1 <span className="required-marker">*</span></label>
                 <input type="text" value={billing.addressLine1} onChange={e => setBilling({ ...billing, addressLine1: e.target.value })} placeholder="123 Main St" />
               </div>
               <div className="drawer-form-field">
-                <label>City</label>
+                <label style={{ fontWeight: 700 }}>City <span className="required-marker">*</span></label>
                 <input type="text" value={billing.city} onChange={e => setBilling({ ...billing, city: e.target.value })} placeholder="New York" />
               </div>
               <div className="drawer-form-field">
-                <label>State / Province</label>
+                <label style={{ fontWeight: 700 }}>State / Province <span className="required-marker">*</span></label>
                 <input type="text" value={billing.state} onChange={e => setBilling({ ...billing, state: e.target.value })} placeholder="NY" />
               </div>
               <div className="drawer-form-field">
-                <label>Postal Code</label>
+                <label style={{ fontWeight: 700 }}>Postal Code <span className="required-marker">*</span></label>
                 <input type="text" value={billing.postalCode} onChange={e => setBilling({ ...billing, postalCode: e.target.value })} placeholder="10001" />
               </div>
               <div className="drawer-form-field">
-                <label>Country</label>
+                <label style={{ fontWeight: 700 }}>Country <span className="required-marker">*</span></label>
                 <select value={billing.country} onChange={e => setBilling({ ...billing, country: e.target.value })}>
                   <option value="United States">United States</option><option value="Canada">Canada</option><option value="United Kingdom">United Kingdom</option>
                 </select>
@@ -1042,15 +1197,6 @@ export default function AdminCreateBookingPage() {
                     ))}
                   </select>
                 </div>
-                <div className="drawer-form-field" style={{ gridColumn: 'span 2' }}>
-                  <label>Cardholder Name</label>
-                  <input
-                    type="text"
-                    placeholder="Name as on card"
-                    value={billing.cardholderName}
-                    onChange={e => setBilling({ ...billing, cardholderName: e.target.value })}
-                  />
-                </div>
               </div>
               {billing.cardBrand && billing.cardLast4.length === 4 && (
                 <div style={{ marginTop: '10px', padding: '8px 12px', background: '#dcfce7', borderRadius: '6px', fontSize: '0.85rem', color: '#166534', fontWeight: 700 }}>
@@ -1106,34 +1252,57 @@ export default function AdminCreateBookingPage() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
-              <button type="button" onClick={() => handleCreateBooking('create_draft')} disabled={isSubmitting} className="admin-secondary-btn" style={{ padding: '12px', fontWeight: 700 }}>
-                Create Draft Booking
-              </button>
-              <button type="button" onClick={() => handleCreateBooking('create_without_payment')} disabled={isSubmitting} className="admin-secondary-btn" style={{ background: '#fef3c7', color: '#92400e', borderColor: '#fde68a', padding: '12px', fontWeight: 700 }}>
-                Create Booking Without Payment
-              </button>
-              <button type="button" onClick={() => handleCreateBooking('create_and_send_auth')} disabled={isSubmitting} className="admin-primary-btn" style={{ background: '#1e3a5f', padding: '12px', fontWeight: 700 }}>
-                {isSubmitting ? <><i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i>Submitting…</> : <><i className="fas fa-paper-plane" style={{ marginRight: '6px' }}></i>Create &amp; Send Auth</>}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleCreateBooking('create_and_process_payment')}
-                disabled={isSubmitting || !billing.paymentToken}
-                className="admin-primary-btn"
-                style={{ background: '#8b1236', padding: '12px', fontWeight: 700, opacity: (!billing.paymentToken ? 0.5 : 1) }}
-                title={!billing.paymentToken ? 'Payment processing is not configured. Use Create Without Payment or Send Auth.' : 'Create and process payment'}
-              >
-                {isSubmitting ? <><i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i>Submitting…</> : <><i className="fas fa-credit-card" style={{ marginRight: '6px' }}></i>Create &amp; Process Payment</>}
-              </button>
-              {!billing.paymentToken && (
-                <p style={{ gridColumn: 'span 2', margin: '4px 0 0', fontSize: '0.78rem', color: '#92400e', fontStyle: 'italic' }}>
-                  Payment processing is not configured. Create the booking without payment or send authorization.
-                </p>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => handleCreateBooking('create_without_payment')}
+              disabled={isSubmitting}
+              className="admin-primary-btn"
+              style={{ background: '#059669', padding: '12px', fontWeight: 700, flex: 1, opacity: (isSubmitting && activeSubmissionAction !== 'create_without_payment' ? 0.5 : 1) }}
+            >
+              {activeSubmissionAction === 'create_without_payment' ? (
+                <><i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i>Creating Booking…</>
+              ) : (
+                'Create Booking Without Payment'
               )}
-            </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleCreateBooking('create_and_send_auth')}
+              disabled={isSubmitting}
+              className="admin-primary-btn"
+              style={{ background: '#1e3a5f', padding: '12px', fontWeight: 700, flex: 1, opacity: (isSubmitting && activeSubmissionAction !== 'create_and_send_auth' ? 0.5 : 1) }}
+            >
+              {activeSubmissionAction === 'create_and_send_auth' ? (
+                <><i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i>Phase 1: Creating Booking…</>
+              ) : (
+                <><i className="fas fa-paper-plane" style={{ marginRight: '6px' }}></i>Create &amp; Send Auth</>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleCreateBooking('create_and_process_payment')}
+              disabled={isSubmitting || !billing.paymentToken}
+              className="admin-primary-btn"
+              style={{ background: '#8b1236', padding: '12px', fontWeight: 700, flex: 1, opacity: (!billing.paymentToken || isSubmitting ? 0.5 : 1) }}
+              title={!billing.paymentToken ? 'Payment processing is not configured. Use Create Without Payment or Send Auth.' : 'Create and process payment'}
+            >
+              {activeSubmissionAction === 'create_and_process_payment' ? (
+                <><i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i>Processing Payment…</>
+              ) : (
+                <><i className="fas fa-credit-card" style={{ marginRight: '6px' }}></i>Create &amp; Process Payment</>
+              )}
+            </button>
           </div>
-        )}
+          {!billing.paymentToken && (
+            <p style={{ margin: '8px 0 0', fontSize: '0.78rem', color: '#92400e', fontStyle: 'italic' }}>
+              Payment processing is not configured. Create the booking without payment or send authorization.
+            </p>
+          )}
+        </div>
+      )}
 
         {/* STEP FOOTER NAVIGATION */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>

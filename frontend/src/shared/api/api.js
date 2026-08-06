@@ -272,10 +272,6 @@ export const adminAPI = {
     const response = await api.patch(`/admin/bookings/${id}/pricing`, data);
     return response.data;
   },
-  patchAirlineDetails: async (id, data) => {
-    const response = await api.patch(`/admin/bookings/${id}/airline-details`, data);
-    return response.data;
-  },
   patchPaymentAuthorization: async (id, data) => {
     const response = await api.patch(`/admin/bookings/${id}/payment-authorization`, data);
     return response.data;
@@ -288,8 +284,16 @@ export const adminAPI = {
     const response = await api.post('/admin/itineraries/parse', { text });
     return response.data;
   },
-  createBooking: async (data) => {
-    const response = await api.post('/admin/bookings', data);
+  createBooking: async (data, options = {}) => {
+    const response = await api.post('/admin/bookings', data, options);
+    return response.data;
+  },
+  patchAirlineDetails: async (bookingId, data, options = {}) => {
+    const response = await api.patch(`/admin/bookings/${bookingId}/airline-details`, data, options);
+    return response.data;
+  },
+  getBookingEmailStatus: async (bookingId) => {
+    const response = await api.get(`/admin/bookings/${bookingId}`);
     return response.data;
   },
   /**
@@ -299,39 +303,44 @@ export const adminAPI = {
    *   send_authorization | resend_authorization
    *   send_authorization_email | resend_authorization_email
    *   send_final_ticket_email | resend_final_ticket_email
-   *
-   * Returns: { success, message, requestId, email: { type, recipient, providerMessageId, status, sentAt }, booking }
    */
-  sendEmailAction: async (bookingId, action, extraData = {}) => {
-    const idempotencyKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
+  sendEmailAction: async (bookingId, action, extraData = {}, options = {}) => {
+    const idempotencyKey = extraData.clientRequestId || ((typeof crypto !== 'undefined' && crypto.randomUUID)
       ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
     const response = await api.post(
       `/admin/bookings/${bookingId}/payment-action`,
       { action, clientRequestId: idempotencyKey, ...extraData },
-      { headers: { 'Idempotency-Key': idempotencyKey } }
+      { headers: { 'Idempotency-Key': idempotencyKey }, ...options }
     );
     return response.data;
   },
-  sendBookingRequestEmail: async (bookingId, resend = false) => {
+  sendBookingRequestEmail: async (bookingId, resend = false, options = {}) => {
     return adminAPI.sendEmailAction(
       bookingId,
-      resend ? 'resend_booking_request_email' : 'send_booking_request_email'
+      resend ? 'resend_booking_request_email' : 'send_booking_request_email',
+      {},
+      options
     );
   },
-  sendAuthorizationEmail: async (bookingId, resend = false) => {
+  sendAuthorizationEmail: async (bookingId, resend = false, options = {}) => {
     return adminAPI.sendEmailAction(
       bookingId,
-      resend ? 'resend_authorization' : 'send_authorization'
+      resend ? 'resend_authorization' : 'send_authorization',
+      {},
+      options
     );
   },
-  sendFinalTicketEmail: async (bookingId, resend = false) => {
+  sendFinalTicketEmail: async (bookingId, resend = false, options = {}) => {
     return adminAPI.sendEmailAction(
       bookingId,
-      resend ? 'resend_final_ticket_email' : 'send_final_ticket_email'
+      resend ? 'resend_final_ticket_email' : 'send_final_ticket_email',
+      {},
+      options
     );
   },
 };
+
 
 
 export default api;

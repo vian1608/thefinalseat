@@ -1598,35 +1598,50 @@ function AdminDashboard() {
       setTicketSaving(true);
       setTicketSaveStatus('saving');
 
-      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/airline-details`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${adminToken}`
-        },
-        body: JSON.stringify({
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 15000);
+
+      let payload = null;
+      let isTimeout = false;
+      try {
+        const payloadData = {
           airlineConfirmationNumber: pnr,
+          airlinePnr: pnr,
           airlineName: airlineName,
           airlineCode: ticketForm.airlineCode || '',
           airlineLogoUrl: ticketForm.airlineLogoUrl || '',
           ticketNumber: tkt,
-          ticketIssueDate: issueDateStr
-        })
-      });
-
-      const contentType = res.headers.get('content-type') || '';
-      const rawText = await res.text();
-      let payload = null;
-      if (rawText && contentType.includes('application/json')) {
-        try { payload = JSON.parse(rawText); } catch { payload = null; }
+          ticketIssueDate: issueDateStr,
+          ticketIssuedAt: issueDateStr
+        };
+        // Canonical endpoint PATCH /api/admin/bookings/${selectedBooking.id}/airline-details
+        payload = await adminAPI.patchAirlineDetails(selectedBooking.id, payloadData, { signal: controller.signal });
+        window.clearTimeout(timeoutId);
+      } catch (patchErr) {
+        window.clearTimeout(timeoutId);
+        if (patchErr.name === 'AbortError' || patchErr.message?.includes('15 seconds') || patchErr.code === 'ECONNABORTED') {
+          isTimeout = true;
+        } else {
+          throw patchErr;
+        }
       }
 
-      if (!res.ok || !payload?.success) {
-        const errMsg = payload?.error?.message || payload?.error || payload?.message || `The server returned an invalid response (${res.status}).`;
-        throw new Error(errMsg);
+      let updated = payload?.booking || payload?.data;
+
+      // Handle timeout verification by re-fetching complete booking
+      if (isTimeout && !updated) {
+        setTicketDetailsSuccess('The save request timed out. Verifying whether the ticket details were saved…');
+        const refreshed = await adminAPI.getBookingEmailStatus(selectedBooking.id).catch(() => null);
+        const refBooking = refreshed?.booking || refreshed?.data || refreshed;
+        const refPnr = (refBooking?.airline_confirmation_number || refBooking?.airlineConfirmationNumber || '').toUpperCase();
+        const refTkt = refBooking?.ticket_number || refBooking?.ticketNumber || '';
+        if (refBooking && (refPnr === pnr || refTkt === tkt)) {
+          updated = refBooking;
+        } else {
+          throw new Error('Save timed out and ticket details could not be verified. Please retry.');
+        }
       }
 
-      const updated = payload.booking || payload.data;
       if (updated) {
         setSelectedBooking(prev => ({ ...prev, ...updated }));
         setBookings(prevList => prevList.map(b => b.id === updated.id ? { ...b, ...updated } : b));
@@ -1696,40 +1711,90 @@ function AdminDashboard() {
 
     const emailPromise = (async () => {
       try {
-        const res = await fetch(`/api/admin/bookings/${bookingIdentifier}/payment-action`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${adminToken}`,
-            'Idempotency-Key': clientRequestId
-          },
-          body: JSON.stringify({
-            action: actionName,
-            clientRequestId
-          }),
-          signal: controller.signal
-        });
-
-        window.clearTimeout(timeoutId);
-
-        const contentType = res.headers.get('content-type') || '';
-        const rawBody = await res.text();
         let payload = null;
+        let isTimeout = false;
 
-        if (rawBody && contentType.includes('application/json')) {
-          try { payload = JSON.parse(rawBody); } catch { payload = null; }
+        try {
+          payload = await adminAPI.sendEmailAction(
+            bookingIdentifier,
+            actionName,
+            { clientRequestId },
+            { signal: controller.signal }
+          );
+          window.clearTimeout(timeoutId);
+        } catch (reqErr) {
+          window.clearTimeout(timeoutId);
+          if (reqErr.name === 'AbortError' || reqErr.message?.includes('20 seconds') || reqErr.code === 'ECONNABORTED') {
+            isTimeout = true;
+          } else {
+            const errMsg = reqErr.response?.data?.error?.message || reqErr.response?.data?.message || reqErr.message || 'Email dispatch failed.';
+            if (emailType === 'booking_request') setBookingEmailResult({ status: 'failure', error: errMsg });
+            else if (emailType === 'authorization') setAuthorizationEmailResult({ status: 'failure', error: errMsg });
+            else if (emailType === 'final_ticket') setFinalTicketEmailResult({ status: 'failure', error: errMsg });
+            return { success: false, error: errMsg };
+          }
         }
 
-        if (!res.ok || !payload?.success) {
-          const reqRef = payload?.requestId || `EMAIL-ERR-${res.status}`;
-          const isHtml = rawBody.trim().startsWith('<!DOCTYPE') || rawBody.trim().startsWith('<html');
-          const safeServerText = !isHtml && rawBody ? rawBody.trim().slice(0, 200) : null;
+        // If request timed out, perform 2-second interval polling up to 20s (10 attempts)
+        if (isTimeout) {
+          const timeoutNotice = 'The request is taking longer than expected. Verifying delivery status…';
+          if (emailType === 'booking_request') setBookingEmailResult({ status: 'sending', message: timeoutNotice });
+          else if (emailType === 'authorization') setAuthorizationEmailResult({ status: 'sending', message: timeoutNotice });
+          else if (emailType === 'final_ticket') setFinalTicketEmailResult({ status: 'sending', message: timeoutNotice });
 
-          const errMsg = payload?.error?.message || payload?.message || safeServerText || `The email service returned an invalid response. Reference: ${reqRef}`;
-          throw new Error(errMsg);
+          let verifiedBooking = null;
+          for (let attempt = 1; attempt <= 10; attempt++) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            try {
+              const statusRes = await adminAPI.getBookingEmailStatus(bookingIdentifier);
+              const refB = statusRes?.booking || statusRes?.data || statusRes;
+              if (refB) {
+                const statusField = emailType === 'booking_request'
+                  ? (refB.emailActivity?.bookingRequest?.status || refB.booking_request_email_status)
+                  : (emailType === 'authorization'
+                    ? (refB.emailActivity?.authorization?.status || refB.authorization_email_status)
+                    : (refB.emailActivity?.finalTicket?.status || refB.final_confirmation_email_status));
+
+                const cleanStat = String(statusField || '').toUpperCase();
+                if (['SENT', 'ACCEPTED', 'DELIVERED'].includes(cleanStat)) {
+                  verifiedBooking = refB;
+                  break;
+                } else if (cleanStat === 'FAILED') {
+                  const failErr = refB.booking_request_email_error || refB.authorization_email_error || refB.final_confirmation_email_error || 'Delivery failed.';
+                  if (emailType === 'booking_request') setBookingEmailResult({ status: 'failure', error: failErr });
+                  else if (emailType === 'authorization') setAuthorizationEmailResult({ status: 'failure', error: failErr });
+                  else if (emailType === 'final_ticket') setFinalTicketEmailResult({ status: 'failure', error: failErr });
+                  return { success: false, error: failErr };
+                }
+              }
+            } catch {
+              // continue polling
+            }
+          }
+
+          if (verifiedBooking) {
+            isHydratingRef.current = true;
+            try {
+              setBookings(prevList => prevList.map(b => b.id === verifiedBooking.id ? { ...b, ...verifiedBooking } : b));
+              setSelectedBooking(prev => ({ ...prev, ...verifiedBooking }));
+            } finally {
+              isHydratingRef.current = false;
+            }
+            const successMsg = 'Email delivery verified successfully.';
+            if (emailType === 'booking_request') setBookingEmailResult({ status: 'success', message: successMsg, verified: true });
+            else if (emailType === 'authorization') setAuthorizationEmailResult({ status: 'success', message: successMsg, verified: true });
+            else if (emailType === 'final_ticket') setFinalTicketEmailResult({ status: 'success', message: successMsg, verified: true });
+            return { success: true, message: successMsg, booking: verifiedBooking };
+          } else {
+            const unresolvedMsg = 'Delivery status could not be confirmed. Check the provider log before retrying.';
+            if (emailType === 'booking_request') setBookingEmailResult({ status: 'failure', error: unresolvedMsg });
+            else if (emailType === 'authorization') setAuthorizationEmailResult({ status: 'failure', error: unresolvedMsg });
+            else if (emailType === 'final_ticket') setFinalTicketEmailResult({ status: 'failure', error: unresolvedMsg });
+            return { success: false, error: unresolvedMsg };
+          }
         }
 
-        const updatedBooking = payload.booking || payload.data;
+        const updatedBooking = payload?.booking || payload?.data;
         if (updatedBooking) {
           isHydratingRef.current = true;
           try {
@@ -1740,7 +1805,7 @@ function AdminDashboard() {
           }
         }
 
-        const successMsg = payload.message || 'Email sent cleanly.';
+        const successMsg = payload?.message || 'Email sent cleanly.';
         if (emailType === 'booking_request') setBookingEmailResult({ status: 'success', message: successMsg, verified: true });
         else if (emailType === 'authorization') setAuthorizationEmailResult({ status: 'success', message: successMsg, verified: true });
         else if (emailType === 'final_ticket') setFinalTicketEmailResult({ status: 'success', message: successMsg, verified: true });
@@ -1748,8 +1813,7 @@ function AdminDashboard() {
         return { success: true, message: successMsg, payload };
       } catch (err) {
         window.clearTimeout(timeoutId);
-        const isTimeout = err.name === 'AbortError' || err.message?.includes('20 seconds');
-        const errMsg = isTimeout ? 'The email request timed out. Checking delivery status...' : err.message;
+        const errMsg = err.message || 'Email action failed.';
 
         if (emailType === 'booking_request') setBookingEmailResult({ status: 'failure', error: errMsg });
         else if (emailType === 'authorization') setAuthorizationEmailResult({ status: 'failure', error: errMsg });

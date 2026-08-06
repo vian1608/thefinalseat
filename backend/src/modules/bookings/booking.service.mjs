@@ -39,13 +39,15 @@ export const bookingService = {
     }
     console.log('payload', payload);
 
-    // 1 — Run traveler validations
+    // 1 — Run traveler validations (skip for drafts)
     const passengerList = Array.isArray(payload.passengers)
       ? payload.passengers
       : JSON.parse(payload.passengers || '[]');
 
     const departureDate = payload.flight?.departure?.date || payload.flight?.departureDate || payload.departureDate || '';
-    travellerService.validateTravellers(passengerList, departureDate);
+    if (payload.actionType !== 'create_draft') {
+      travellerService.validateTravellers(passengerList, departureDate);
+    }
 
     // 1.5 — Validate Billing Postal/ZIP Code
     if (payload.billingZip || payload.billingPostalCode) {
@@ -67,6 +69,7 @@ export const bookingService = {
     const payloadWithPassengerName = {
       ...payload,
       customerName: masterPassengerName,
+      status: payload.actionType === 'create_draft' ? 'DRAFT' : (payload.status || 'PENDING'),
       paymentStatus: payload.paymentStatus || 'pending',
       payment_provider: payload.payment_provider || 'whop'
     };
