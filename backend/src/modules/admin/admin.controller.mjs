@@ -488,6 +488,15 @@ export const adminController = {
       if (req.body.ticket_number !== undefined) updatePayload.ticket_number = req.body.ticket_number;
       if (req.body.ticket_issue_date !== undefined) updatePayload.ticket_issue_date = req.body.ticket_issue_date;
 
+      const currentPnr = req.body.airline_pnr !== undefined ? req.body.airline_pnr : (existingBooking.airline_pnr || existingBooking.pnr);
+      const currentTicket = req.body.ticket_number !== undefined ? req.body.ticket_number : existingBooking.ticket_number;
+
+      if (!targetStatus && currentPnr && String(currentPnr).trim().length === 6 && currentTicket && String(currentTicket).trim().length > 0) {
+        if (existingBooking.status !== 'COMPLETED') {
+          updatePayload.status = 'TICKETED';
+        }
+      }
+
       let savedSplits = [];
       if (Array.isArray(req.body.payment_splits)) {
         savedSplits = await bookingRepository.savePaymentSplits(id, req.body.payment_splits);
@@ -1075,7 +1084,10 @@ export const adminController = {
         }
 
         // Update authorization status safely
-        await bookingRepository.updateStatus(booking.id, { authorization_status: 'AWAITING_PASSENGER' });
+        await bookingRepository.updateStatus(booking.id, {
+          status: 'AWAITING_AUTHORIZATION',
+          authorization_status: 'AWAITING_PASSENGER'
+        });
         const updated = await bookingRepository.getCompleteBookingById(booking.id);
         const sentTime = new Date().toISOString();
 
@@ -1084,7 +1096,7 @@ export const adminController = {
           message: `Authorization email dispatched cleanly to ${recipientEmail}`,
           requestId: reqId,
           emailType: 'authorization',
-          status: 'AWAITING_PASSENGER',
+          status: 'AWAITING_AUTHORIZATION',
           email: {
             type: 'authorization',
             recipient: recipientEmail,
@@ -1200,6 +1212,8 @@ export const adminController = {
           });
         }
 
+        // Final ticket delivery marks the workflow COMPLETED
+        await bookingRepository.updateStatus(booking.id, { status: 'COMPLETED' });
         const updated = await bookingRepository.getCompleteBookingById(booking.id);
         const sentTime = new Date().toISOString();
 

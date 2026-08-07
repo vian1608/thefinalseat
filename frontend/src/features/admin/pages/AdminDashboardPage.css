@@ -689,19 +689,61 @@
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
-.status-badge--pending {
+.status-badge--draft {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.status-badge--confirmed {
+  background-color: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #7dd3fc;
+}
+
+.status-badge--awaiting-auth {
   background-color: #fef3c7;
-  color: #d97706;
+  color: #92400e;
+  border: 1px solid #fde68a;
 }
+
+.status-badge--authorized {
+  background-color: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+.status-badge--ready-ticketing {
+  background-color: #f3e8ff;
+  color: #6b21a8;
+  border: 1px solid #d8b4fe;
+}
+
+.status-badge--ticketed {
+  background-color: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+
 .status-badge--completed {
-  background-color: #d1fae5;
-  color: #10b981;
+  background-color: #065f46;
+  color: #ffffff;
+  border: 1px solid #047857;
 }
+
 .status-badge--cancelled {
   background-color: #fee2e2;
-  color: #ef4444;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.status-badge--failed {
+  background-color: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #f87171;
 }
 
 .admin-action-btn {

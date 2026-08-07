@@ -1377,7 +1377,8 @@ export const bookingRepository = {
 
       if (filters.status) {
         let s = filters.status.toUpperCase();
-        if (s === 'CONFIRMED' || s === 'COMPLETED') s = 'DONE';
+        if (s === 'CONFIRMED') s = 'RESERVATION_CONFIRMED';
+        if (s === 'DONE') s = 'COMPLETED';
         query = query.eq('status', s);
       }
       if (filters.email) {

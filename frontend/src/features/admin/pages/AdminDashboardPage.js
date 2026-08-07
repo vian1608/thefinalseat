@@ -83,6 +83,38 @@ const truncateText = (value, length = 12) => {
   return value.length > length ? `${value.slice(0, length)}…` : value;
 };
 
+export const getBookingStatusConfig = (statusInput) => {
+  const status = String(statusInput || '').toUpperCase();
+  switch (status) {
+    case 'DRAFT':
+      return { label: 'Draft', className: 'status-badge--draft', style: { backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' } };
+    case 'RESERVATION_CONFIRMED':
+    case 'CONFIRMED':
+    case 'PENDING':
+      return { label: 'Reservation Confirmed', className: 'status-badge--confirmed', style: { backgroundColor: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc' } };
+    case 'AWAITING_AUTHORIZATION':
+    case 'AWAITING_PASSENGER':
+    case 'REAUTHORIZATION_REQUIRED':
+      return { label: 'Awaiting Authorization', className: 'status-badge--awaiting-auth', style: { backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' } };
+    case 'AUTHORIZED':
+      return { label: 'Authorized', className: 'status-badge--authorized', style: { backgroundColor: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd' } };
+    case 'READY_FOR_TICKETING':
+      return { label: 'Ready for Ticketing', className: 'status-badge--ready-ticketing', style: { backgroundColor: '#f3e8ff', color: '#6b21a8', border: '1px solid #d8b4fe' } };
+    case 'TICKETED':
+      return { label: 'Ticketed', className: 'status-badge--ticketed', style: { backgroundColor: '#dcfce7', color: '#15803d', border: '1px solid #86efac' } };
+    case 'COMPLETED':
+    case 'DONE':
+      return { label: 'Completed', className: 'status-badge--completed', style: { backgroundColor: '#065f46', color: '#ffffff', border: '1px solid #047857' } };
+    case 'CANCELLED':
+    case 'CANCELED':
+      return { label: 'Cancelled', className: 'status-badge--cancelled', style: { backgroundColor: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5' } };
+    case 'FAILED':
+      return { label: 'Failed', className: 'status-badge--failed', style: { backgroundColor: '#fef2f2', color: '#991b1b', border: '1px solid #f87171' } };
+    default:
+      return { label: status || 'Reservation Confirmed', className: 'status-badge--confirmed', style: { backgroundColor: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc' } };
+  }
+};
+
 const normalizeDateOnlyToISO = (dateVal) => {
   if (!dateVal) return '';
   const str = String(dateVal).trim();
@@ -3109,9 +3141,15 @@ function AdminDashboard() {
                     className="admin-select"
                   >
                     <option value="">All Statuses</option>
-                    <option value="PENDING">Pending</option>
-                    <option value="DONE">Confirmed / Done</option>
-                    <option value="FAILED">Failed / Cancelled</option>
+                    <option value="DRAFT">Draft</option>
+                    <option value="RESERVATION_CONFIRMED">Reservation Confirmed</option>
+                    <option value="AWAITING_AUTHORIZATION">Awaiting Authorization</option>
+                    <option value="AUTHORIZED">Authorized</option>
+                    <option value="READY_FOR_TICKETING">Ready for Ticketing</option>
+                    <option value="TICKETED">Ticketed</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="CANCELLED">Cancelled</option>
+                    <option value="FAILED">Failed</option>
                   </select>
                   <button onClick={handleClearFilters} className="admin-secondary-btn">Reset</button>
                   <button
@@ -3198,7 +3236,10 @@ function AdminDashboard() {
                             <input type="checkbox" checked={isChecked} onChange={() => handleToggleSelectOne(booking.id)} />
                             <strong>{booking.confirmation_code || (booking.id ? truncateText(booking.id, 8) : 'N/A')}</strong>
                           </div>
-                          <span className={`status-badge ${statusStr === 'DONE' || statusStr === 'CONFIRMED' ? 'status-badge--completed' : 'status-badge--pending'}`}>{statusStr}</span>
+                          {(() => {
+                            const statusCfg = getBookingStatusConfig(booking.status);
+                            return <span className={`status-badge ${statusCfg.className}`} style={statusCfg.style}>{statusCfg.label}</span>;
+                          })()}
                         </div>
                         <div className="mobile-card-details">
                           <div><strong>Customer:</strong> {booking.passenger_name || 'N/A'}</div>
@@ -3278,8 +3319,7 @@ function AdminDashboard() {
                         {bookings.map((booking) => {
                           const isExpanded = expandedBookingId === booking.id;
                           const isChecked = selectedBookingIds.includes(booking.id);
-                          const statusStr = (booking.status || 'PENDING').toUpperCase();
-                          const badgeClass = statusStr === 'DONE' || statusStr === 'CONFIRMED' ? 'status-badge--completed' : (statusStr === 'PENDING' ? 'status-badge--pending' : 'status-badge--cancelled');
+                          const statusCfg = getBookingStatusConfig(booking.status);
                           
                           const payStatusStr = (booking.payment_status || 'PENDING').toUpperCase();
                           const payBadgeClass = payStatusStr === 'PAID' ? 'status-badge--completed' : (payStatusStr === 'FAILED' ? 'status-badge--cancelled' : 'status-badge--pending');
@@ -3320,7 +3360,7 @@ function AdminDashboard() {
                                 <td className="col-passengers">{booking.passengers_count || booking.travellers?.length || 1}</td>
                                 <td className="col-amount">{formatMoney(booking.customer_price ?? booking.total_amount ?? booking.pricing?.customerTotal, booking.currency || 'USD')}</td>
                                 <td className="col-bstatus">
-                                  <span className={`status-badge ${badgeClass}`}>{statusStr}</span>
+                                  <span className={`status-badge ${statusCfg.className}`} style={statusCfg.style}>{statusCfg.label}</span>
                                 </td>
                                 <td className="col-pstatus">
                                   <span className={`status-badge ${payBadgeClass}`}>
@@ -3782,10 +3822,15 @@ function AdminDashboard() {
                             onChange={(e) => { setNewStatus(e.target.value); setHasUnsavedEdits(true); }} 
                             className="admin-select"
                           >
-                            <option value="PENDING">Pending</option>
-                            <option value="DONE">Done</option>
-                            <option value="FAILED">Failed</option>
+                            <option value="DRAFT">Draft</option>
+                            <option value="RESERVATION_CONFIRMED">Reservation Confirmed</option>
+                            <option value="AWAITING_AUTHORIZATION">Awaiting Authorization</option>
+                            <option value="AUTHORIZED">Authorized</option>
+                            <option value="READY_FOR_TICKETING">Ready for Ticketing</option>
+                            <option value="TICKETED">Ticketed</option>
+                            <option value="COMPLETED">Completed</option>
                             <option value="CANCELLED">Cancelled</option>
+                            <option value="FAILED">Failed</option>
                           </select>
                         </div>
 

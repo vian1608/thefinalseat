@@ -180,4 +180,16 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     assert.doesNotMatch(resendContent, /`msg_\${Date\.now\(\)}`/, 'resend.service.mjs must not contain msg_${Date.now()} fallbacks');
   });
 
+  await t.test('23. Canonical booking status lifecycle separation', () => {
+    const repoPath = path.join(projectRoot, 'backend/src/modules/bookings/booking.repository.mjs');
+    const dashPath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.js');
+    const repoContent = fs.readFileSync(repoPath, 'utf-8');
+    const dashContent = fs.readFileSync(dashPath, 'utf-8');
+
+    assert.doesNotMatch(repoContent, /if\s*\(s\s*===\s*['"]CONFIRMED['"]\s*\|\|\s*s\s*===\s*['"]COMPLETED['"]\)\s*s\s*=\s*['"]DONE['"]/, 'Repository must not map CONFIRMED or COMPLETED to DONE');
+    assert.match(dashContent, /getBookingStatusConfig/, 'AdminDashboardPage must use getBookingStatusConfig for canonical status formatting');
+    assert.match(dashContent, /Reservation Confirmed/, 'AdminDashboardPage must display Reservation Confirmed label');
+    assert.match(dashContent, /Awaiting Authorization/, 'AdminDashboardPage must display Awaiting Authorization label');
+  });
+
 });
