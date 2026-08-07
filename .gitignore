@@ -10,3 +10,8 @@ node_modules
 build
 dist
 .DS_Store
+backend/backups/
+*.sql
+*.jsonl
+the-final-seat-*.json
+urgent.json

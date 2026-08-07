@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import env from './env.mjs';
 
+const isProdMode = (process.env.NODE_ENV || 'development').toLowerCase() === 'production';
+if (isProdMode && (!env.supabaseUrl || !env.supabaseSecretKey || env.supabaseUrl.includes('placeholder') || env.supabaseSecretKey.includes('placeholder'))) {
+  throw new Error('FATAL_CONFIG_ERROR: SUPABASE_URL and SUPABASE_SECRET_KEY environment variables are required in production');
+}
+
 const url = env.supabaseUrl || 'https://placeholder.supabase.co';
 const key = env.supabaseSecretKey || 'placeholder-key';
 

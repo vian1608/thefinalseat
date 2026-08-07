@@ -10,6 +10,11 @@ import bookingValidatorService from '../src/modules/bookings/booking-validator.s
 import { assertDestructiveAllowed } from '../src/config/environment-safety.mjs';
 
 async function runFinalProductionAcceptanceVerification() {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('⛔ BLOCKED: Mutation-oriented acceptance test cannot run in NODE_ENV=production');
+    process.exit(1);
+  }
+
   console.log('================================================================================');
   console.log('  THE FINAL SEAT — FINAL PRODUCTION ACCEPTANCE & HARDENING AUDIT');
   console.log('================================================================================\n');

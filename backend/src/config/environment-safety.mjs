@@ -36,7 +36,8 @@ export function assertDestructiveAllowed(operationName = 'SQL Execution', sqlQue
     'TRUNCATE',
     'DROP COLUMN',
     'DROP DATABASE',
-    'DROP SCHEMA'
+    'DROP SCHEMA',
+    'DELETE FROM'
   ];
 
   const isDestructive = DESTRUCTIVE_KEYWORDS.some(keyword => sqlUpper.includes(keyword));
