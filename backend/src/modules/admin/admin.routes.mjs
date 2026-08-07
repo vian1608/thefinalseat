@@ -31,7 +31,6 @@ router.post('/bookings', authenticate, authorize(['admin']), adminController.cre
 router.post('/bookings/:id/email-preview', authenticate, authorize(['admin']), adminController.emailPreview);
 router.post('/bookings/:id/email-manual-sent', authenticate, authorize(['admin']), adminController.markEmailManuallySent);
 router.get('/bookings/:id', authenticate, authorize(['admin']), adminController.getBookingDetail);
-router.delete('/bookings/:bookingId', authenticate, authorize(['admin']), adminController.deleteBooking);
 router.delete('/bookings/:id', authenticate, authorize(['admin']), adminController.deleteBooking);
 
 // Field-Isolated Section PATCH Endpoints
@@ -65,22 +64,15 @@ router.put('/bookings/:id', authenticate, authorize(['admin']), adminController.
 router.put('/bookings/:id/payment-splits', authenticate, authorize(['admin']), adminController.updatePaymentSplits);
 router.patch('/bookings/:id/payment-splits', authenticate, authorize(['admin']), adminController.updatePaymentSplits);
 // Dedicated payment-authorization endpoint (preferred over payment-splits)
-router.patch('/bookings/:id/payment-authorization', authenticate, authorize(['admin']), adminController.updatePaymentAuthorization);
-
 // Dedicated billing & card reference endpoint — never modifies itinerary or amounts
-router.patch('/bookings/:id/billing-details', authenticate, authorize(['admin']), adminController.updateBillingDetails);
-
 router.put('/bookings/:id/ticket-details', authenticate, authorize(['admin']), adminController.saveTicketDetails);
-router.patch('/bookings/:id/airline-details', authenticate, authorize(['admin']), adminController.saveTicketDetails);
 router.post('/bookings/:id/send-final-ticket', authenticate, authorize(['admin']), adminController.sendFinalTicketEmail);
 router.post('/bookings/:id/resend-admin-email', authenticate, authorize(['admin']), adminController.resendAdminAcknowledgement);
 router.get('/bookings/:id/diagnostic', authenticate, authorize(['admin']), adminController.getBookingDiagnosticData);
 router.post('/bookings/:id/process-authorized', authenticate, authorize(['admin']), adminController.processAuthorizedBooking);
 
-
 router.post('/bookings/:id/itinerary', authenticate, authorize(['admin']), adminController.updateItinerary);
 router.post('/bookings/:id/pricing', authenticate, authorize(['admin']), adminController.updatePricing);
-router.patch('/bookings/:id/pricing', authenticate, authorize(['admin']), adminController.updatePricing);
 router.post('/bookings/:identifier/pricing', authenticate, authorize(['admin']), adminController.updatePricing);
 router.patch('/bookings/:identifier/pricing', authenticate, authorize(['admin']), adminController.updatePricing);
 router.post('/bookings/:id/payment-action', authenticate, authorize(['admin']), adminController.handlePaymentAction);

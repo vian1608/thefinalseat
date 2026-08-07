@@ -15,6 +15,27 @@
 export function normalizeError(err, fallback = 'Something went wrong. Please try again.') {
   if (!err) return fallback;
 
+  // 0. Handle cancellation, timeouts, and network disconnects
+  const errName = String(err?.name || '');
+  const errCode = String(err?.code || '');
+  const errMessage = String(err?.message || '').toLowerCase();
+
+  if (
+    errName === 'CanceledError' ||
+    errName === 'AbortError' ||
+    errCode === 'ERR_CANCELED' ||
+    errCode === 'ECONNABORTED' ||
+    errCode === 'ETIMEDOUT' ||
+    errMessage.includes('canceled') ||
+    errMessage.includes('aborted')
+  ) {
+    return 'The request was canceled or timed out. Please try again.';
+  }
+
+  if (errCode === 'ERR_NETWORK' || errMessage.includes('network error')) {
+    return 'Network connection error. Please check your internet connection and try again.';
+  }
+
   // 1. Axios-style response body with { error: { code, message } }
   const responseError = err?.response?.data?.error;
   if (responseError) {
