@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { parseGdsLine } from '../../utils/gdsItineraryHelper';
+import AdminItineraryHelpModal from './AdminItineraryHelpModal';
 
 export default function AdminItineraryImportModal({
   isOpen,
@@ -10,6 +11,7 @@ export default function AdminItineraryImportModal({
   const currentYear = String(new Date().getFullYear());
   const [tripType, setTripType] = useState('one-way'); // 'one-way' | 'round-trip' | 'multi-city'
   const [step, setStep] = useState('select_type'); // 'select_type' | 'input' | 'preview'
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   // Input states
   const [outboundYear, setOutboundYear] = useState(currentYear);
@@ -158,29 +160,46 @@ export default function AdminItineraryImportModal({
   };
 
   return (
-    <div style={{
-      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px'
-    }}>
+    <>
+      <AdminItineraryHelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
       <div style={{
-        backgroundColor: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '720px',
-        maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)', padding: '24px'
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px'
       }}>
-        {/* Modal Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '14px', marginBottom: '20px' }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-              Import Flight Itinerary from GDS
-            </h3>
-            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-              Paste GDS text lines (Amadeus / Sabre / Apollo) to build itinerary segments
+        <div style={{
+          backgroundColor: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '720px',
+          maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)', padding: '24px'
+        }}>
+          {/* Modal Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '14px', marginBottom: '20px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
+                  Import Flight Itinerary from GDS
+                </h3>
+                <button
+                  type="button"
+                  aria-label="Itinerary import help"
+                  title="Itinerary import help"
+                  onClick={() => setIsHelpOpen(true)}
+                  style={{
+                    background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '50%',
+                    width: '28px', height: '28px', fontWeight: 'bold', cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#1e3a5f', fontSize: '13px'
+                  }}
+                >
+                  ⓘ
+                </button>
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                Paste GDS text lines (Amadeus / Sabre / Apollo) to build itinerary segments
+              </div>
             </div>
+            <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>
+              ✕
+            </button>
           </div>
-          <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>
-            ✕
-          </button>
-        </div>
 
         {errorMsg && (
           <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b', padding: '10px 14px', borderRadius: '6px', fontSize: '13px', marginBottom: '16px' }}>
@@ -427,5 +446,6 @@ export default function AdminItineraryImportModal({
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { adminAPI } from '../../../shared/api/api';
 import AdminItineraryImportModal from '../../../shared/components/admin/AdminItineraryImportModal';
+import AdminItineraryHelpModal from '../../../shared/components/admin/AdminItineraryHelpModal';
 import AdminEmailPreviewModal from '../../../shared/components/admin/AdminEmailPreviewModal';
 import BookingBackupImportModal from '../components/BookingBackupImportModal';
 import ItineraryTimeline from '../../../shared/components/ItineraryTimeline';
@@ -1085,6 +1086,7 @@ function AdminDashboard() {
   const [openOutboundGroup, setOpenOutboundGroup] = useState(true);
   const [openReturnGroup, setOpenReturnGroup] = useState(true);
   const [isImportItineraryModalOpen, setIsImportItineraryModalOpen] = useState(false);
+  const [isItineraryHelpOpen, setIsItineraryHelpOpen] = useState(false);
   const [previewModalState, setPreviewModalState] = useState({ isOpen: false, emailType: 'booking_request' });
   const [isBackupImportModalOpen, setIsBackupImportModalOpen] = useState(false);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
@@ -3885,7 +3887,7 @@ function AdminDashboard() {
                             
                             {/* ITINERARY TOP CONTROL BAR */}
                             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '14px', background: '#f8fafc', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
                                 <button
                                   type="button"
                                   onClick={() => setIsFlightSearchModalOpen(true)}
@@ -3893,13 +3895,28 @@ function AdminDashboard() {
                                 >
                                   <i className="fas fa-search"></i> Search Flights
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setIsImportItineraryModalOpen(true)}
-                                  style={{ background: '#8b1236', color: '#ffffff', border: 'none', padding: '6px 14px', borderRadius: '6px', fontSize: '0.82rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                                >
-                                  <i className="fas fa-file-import"></i> Import Itinerary
-                                </button>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setIsImportItineraryModalOpen(true)}
+                                    style={{ background: '#8b1236', color: '#ffffff', border: 'none', padding: '6px 14px', borderRadius: '6px', fontSize: '0.82rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                  >
+                                    <i className="fas fa-file-import"></i> Import Itinerary
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label="Itinerary import help"
+                                    title="Itinerary import help"
+                                    onClick={() => setIsItineraryHelpOpen(true)}
+                                    style={{
+                                      background: '#ffffff', color: '#1e3a5f', border: '1px solid #cbd5e1', borderRadius: '50%',
+                                      width: '30px', height: '30px', fontWeight: 'bold', cursor: 'pointer',
+                                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px'
+                                    }}
+                                  >
+                                    ⓘ
+                                  </button>
+                                </div>
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -6509,6 +6526,12 @@ function AdminDashboard() {
             }}
           />
         )}
+
+        {/* SHARED ITINERARY HELP MODAL */}
+        <AdminItineraryHelpModal
+          isOpen={isItineraryHelpOpen}
+          onClose={() => setIsItineraryHelpOpen(false)}
+        />
 
         {/* SHARED EMAIL PREVIEW & MANUAL FALLBACK MODAL */}
         {previewModalState.isOpen && selectedBooking?.id && (

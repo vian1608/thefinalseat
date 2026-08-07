@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { adminAPI } from '../../../shared/api/api';
 import { buildGdsStyleReferenceLines, parseGdsLine, CHATGPT_PROMPT_TEMPLATE } from '../../../shared/utils/gdsItineraryHelper';
 import AdminItineraryImportModal from '../../../shared/components/admin/AdminItineraryImportModal';
+import AdminItineraryHelpModal from '../../../shared/components/admin/AdminItineraryHelpModal';
 import ItineraryTimeline from '../../../shared/components/ItineraryTimeline';
 import './AdminDashboardPage.css';
 
@@ -950,7 +951,7 @@ export default function AdminCreateBookingPage() {
                 <button type="button" onClick={() => setIsImportModalOpen(true)} className="admin-primary-btn" style={{ background: '#8b1236' }}>
                   <i className="fas fa-file-import"></i> Import Itinerary
                 </button>
-                <button type="button" onClick={() => setIsGptHelpOpen(true)} title="ChatGPT Itinerary Instructions" style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '50%', width: '32px', height: '32px', fontWeight: 'bold', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                <button type="button" onClick={() => setIsGptHelpOpen(true)} aria-label="Itinerary import help" title="Itinerary import help" style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '50%', width: '32px', height: '32px', fontWeight: 'bold', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#1e3a5f', fontSize: '14px' }}>
                   ⓘ
                 </button>
               </div>
@@ -1561,46 +1562,11 @@ export default function AdminCreateBookingPage() {
 
       {/* ================================================== */}
       {/* CHATGPT PROMPT / INFORMATION MODAL */}
-      {/* ================================================== */}
-      {isGptHelpOpen && (
-        <div className="admin-modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-          <div style={{ background: '#ffffff', borderRadius: '12px', maxWidth: '650px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, color: '#1e3a5f', fontSize: '1.2rem' }}>ⓘ GDS Itinerary Import Guide</h3>
-              <button type="button" onClick={() => setIsGptHelpOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#64748b' }}>×</button>
-            </div>
-
-            <div style={{ fontSize: '0.85rem', color: '#334155', lineHeight: '1.5' }}>
-              <p><strong>How Itinerary Import Works:</strong></p>
-              <ul>
-                <li><strong>One Way:</strong> Paste all outbound lines into the Outbound box.</li>
-                <li><strong>Round Trip:</strong> Paste outbound and return lines into their separate boxes.</li>
-                <li><strong>Multi-City:</strong> Paste each journey into a separate Flight box.</li>
-                <li>Connecting segments remain together inside the relevant journey box.</li>
-                <li>NN1 means requested/unconfirmed status.</li>
-                <li>These lines are formatting aids for the CRM and not live PNR bookings.</li>
-              </ul>
-
-              <div style={{ background: '#0f172a', color: '#38bdf8', padding: '12px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '0.8rem', margin: '14px 0' }}>
-                01 DL 106 Y 15SEP JFKLHR 1930 0745 NN1
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(CHATGPT_PROMPT_TEMPLATE);
-                  setCopyToast('Copied GPT Prompt!');
-                  setTimeout(() => setCopyToast(''), 2000);
-                }}
-                className="admin-primary-btn"
-                style={{ background: '#1e3a5f', width: '100%', marginTop: '10px' }}
-              >
-                <i className="fas fa-copy" style={{ marginRight: '6px' }}></i> {copyToast || 'Copy GPT Prompt for ChatGPT'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* SHARED ITINERARY HELP MODAL */}
+      <AdminItineraryHelpModal
+        isOpen={isGptHelpOpen}
+        onClose={() => setIsGptHelpOpen(false)}
+      />
 
       {/* SHARED ITINERARY IMPORT MODAL */}
       {isImportModalOpen && (

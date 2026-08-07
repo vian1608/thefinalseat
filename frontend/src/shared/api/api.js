@@ -300,12 +300,12 @@ export const adminAPI = {
     const response = await api.get(`/admin/bookings/by-request/${clientRequestId}`);
     return response.data;
   },
-  getEmailPreview: async (bookingId, type) => {
-    const response = await api.post(`/admin/bookings/${bookingId}/email-preview`, { type });
+  getEmailPreview: async (bookingId, type, options = {}) => {
+    const response = await api.post(`/admin/bookings/${bookingId}/email-preview`, { type }, options);
     return response.data;
   },
-  markEmailManuallySent: async (bookingId, type) => {
-    const response = await api.post(`/admin/bookings/${bookingId}/email-manual-sent`, { type });
+  markEmailManuallySent: async (bookingId, type, data = {}) => {
+    const response = await api.post(`/admin/bookings/${bookingId}/email-manual-sent`, { type, ...data });
     return response.data;
   },
   /**

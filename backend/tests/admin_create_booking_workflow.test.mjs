@@ -126,4 +126,33 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     assert.match(fs.readFileSync(dashPagePath, 'utf-8'), /AdminEmailPreviewModal/, 'AdminDashboardPage must import AdminEmailPreviewModal');
   });
 
+  await t.test('17. Frontend API contract in api.js exports all required adminAPI methods', () => {
+    const apiPath = path.join(projectRoot, 'frontend/src/shared/api/api.js');
+    const content = fs.readFileSync(apiPath, 'utf-8');
+    assert.match(content, /getEmailPreview:/, 'api.js must export getEmailPreview in adminAPI');
+    assert.match(content, /markEmailManuallySent:/, 'api.js must export markEmailManuallySent in adminAPI');
+    assert.match(content, /createBooking:/, 'api.js must export createBooking in adminAPI');
+    assert.match(content, /patchItinerary:/, 'api.js must export patchItinerary in adminAPI');
+  });
+
+  await t.test('18. Shared AdminItineraryHelpModal exists and is imported across pages and importer modal', () => {
+    const helpModalPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminItineraryHelpModal.js');
+    const importModalPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminItineraryImportModal.js');
+    const createPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
+    const dashPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.js');
+    assert.ok(fs.existsSync(helpModalPath), 'AdminItineraryHelpModal.js component file must exist');
+    assert.match(fs.readFileSync(importModalPath, 'utf-8'), /AdminItineraryHelpModal/, 'AdminItineraryImportModal must import AdminItineraryHelpModal');
+    assert.match(fs.readFileSync(createPagePath, 'utf-8'), /AdminItineraryHelpModal/, 'AdminCreateBookingPage must import AdminItineraryHelpModal');
+    assert.match(fs.readFileSync(dashPagePath, 'utf-8'), /AdminItineraryHelpModal/, 'AdminDashboardPage must import AdminItineraryHelpModal');
+  });
+
+  await t.test('19. Info icon button ⓘ exists in Dashboard, Create Booking, and Importer header', () => {
+    const importModalPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminItineraryImportModal.js');
+    const createPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
+    const dashPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.js');
+    assert.match(fs.readFileSync(importModalPath, 'utf-8'), /aria-label="Itinerary import help"/, 'Importer header must contain help button');
+    assert.match(fs.readFileSync(createPagePath, 'utf-8'), /aria-label="Itinerary import help"/, 'Create Booking must contain help button');
+    assert.match(fs.readFileSync(dashPagePath, 'utf-8'), /aria-label="Itinerary import help"/, 'Dashboard must contain help button');
+  });
+
 });

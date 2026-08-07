@@ -55,9 +55,21 @@ export const adminController = {
         return res.status(400).json({ success: false, error: { message: `Unsupported email preview type: ${type}` } });
       }
 
+      const previewPayload = {
+        type: type || rendered.type,
+        recipient: rendered.recipient || rendered.to,
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+        missingFields: rendered.missingFields || [],
+        authorizationUrl: rendered.authorizationUrl,
+        authorizationExpiresAt: rendered.authorizationExpiresAt
+      };
+
       return res.json({
         success: true,
-        ...rendered
+        preview: previewPayload,
+        ...previewPayload
       });
     } catch (err) {
       next(err);

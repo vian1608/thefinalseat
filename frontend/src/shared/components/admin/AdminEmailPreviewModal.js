@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import adminAPI from '../../api/api';
+import React, { useState, useEffect, useCallback } from 'react';
+import { adminAPI } from '../../api/api';
 
 export default function AdminEmailPreviewModal({
   isOpen,
@@ -16,6 +16,23 @@ export default function AdminEmailPreviewModal({
   const [confirmManualModal, setConfirmManualModal] = useState(false);
   const [manualSubmitting, setManualSubmitting] = useState(false);
 
+  const fetchPreview = useCallback(async () => {
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      const res = await adminAPI.getEmailPreview(bookingId, emailType);
+      if (res?.success) {
+        setPreviewData(res.preview || res);
+      } else {
+        setErrorMsg(res?.error?.message || res?.message || 'Failed to load email preview.');
+      }
+    } catch (err) {
+      setErrorMsg(err.message || 'Network error fetching preview.');
+    } finally {
+      setLoading(false);
+    }
+  }, [bookingId, emailType]);
+
   useEffect(() => {
     if (isOpen && bookingId) {
       fetchPreview();
@@ -25,24 +42,7 @@ export default function AdminEmailPreviewModal({
       setCopyNotice('');
       setConfirmManualModal(false);
     }
-  }, [isOpen, bookingId, emailType]);
-
-  const fetchPreview = async () => {
-    setLoading(true);
-    setErrorMsg('');
-    try {
-      const res = await adminAPI.getEmailPreview(bookingId, emailType);
-      if (res?.success) {
-        setPreviewData(res);
-      } else {
-        setErrorMsg(res?.error?.message || res?.message || 'Failed to load email preview.');
-      }
-    } catch (err) {
-      setErrorMsg(err.message || 'Network error fetching preview.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [isOpen, bookingId, emailType, fetchPreview]);
 
   if (!isOpen) return null;
 
