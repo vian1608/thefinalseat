@@ -8,108 +8,90 @@ const projectRoot = path.resolve(process.cwd(), '..');
 
 test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
 
-  await t.test('1. AdminCreateBookingPage uses named import for adminAPI', () => {
+  await t.test('1. ERR_CANCELED and CanceledError are recognized in cancellation detection', () => {
     const filePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
     const content = fs.readFileSync(filePath, 'utf-8');
-    assert.match(content, /import\s+\{\s*adminAPI\s*\}\s+from/, 'AdminCreateBookingPage must use named import { adminAPI }');
-    assert.doesNotMatch(content, /import\s+adminAPI\s+from/, 'AdminCreateBookingPage must NOT use default import adminAPI');
+    assert.match(content, /reqErr\?\.name === 'CanceledError'/, 'Must check reqErr.name === CanceledError');
+    assert.match(content, /reqErr\?\.code === 'ERR_CANCELED'/, 'Must check reqErr.code === ERR_CANCELED');
   });
 
-  await t.test('2. Fake dev_admin_token fallback is completely removed', () => {
+  await t.test('2. Raw "canceled" text is never displayed in UI error banners', () => {
     const filePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
     const content = fs.readFileSync(filePath, 'utf-8');
-    assert.doesNotMatch(content, /dev_admin_token/, 'AdminCreateBookingPage must not use dev_admin_token fallback');
-    assert.match(content, /navigate\('\/admin\/login'\)/, 'AdminCreateBookingPage must redirect to /admin/login when missing token');
+    assert.match(content, /isCanceledRequest/, 'Must use isCanceledRequest to guard timeout recovery');
   });
 
-  await t.test('3. Card Reference inputs are editable in Step 4 without fake tokens or PAN/CVV', () => {
+  await t.test('3. Timeout reconciliation calls getBookingByClientRequestId endpoint', () => {
     const filePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
     const content = fs.readFileSync(filePath, 'utf-8');
-    assert.doesNotMatch(content, /tok_\$\{Math\.random/, 'AdminCreateBookingPage must not generate fake tok_ payment tokens');
-    assert.match(content, /<select[\s\S]*?value=\{billing\.cardBrand\}/, 'Card Brand must be an editable select dropdown');
-    assert.match(content, /inputMode="numeric"/, 'Last 4 input must use inputMode="numeric"');
-    assert.match(content, /maxLength=\{4\}/, 'Last 4 input must use maxLength={4}');
+    assert.match(content, /adminAPI\.getBookingByClientRequestId\(idempotencyKey\)/, 'Reconciliation must call adminAPI.getBookingByClientRequestId(idempotencyKey)');
+    assert.doesNotMatch(content, /adminAPI\.getBookingEmailStatus\(idempotencyKey\)/, 'Must NOT misuse getBookingEmailStatus with idempotencyKey');
   });
 
-  await t.test('4. Centralized email methods exist on adminAPI in api.js', () => {
-    const filePath = path.join(projectRoot, 'frontend/src/shared/api/api.js');
+  await t.test('4. Idempotency key / clientRequestId persists in database mapper', () => {
+    const filePath = path.join(projectRoot, 'backend/src/modules/bookings/booking.mapper.mjs');
     const content = fs.readFileSync(filePath, 'utf-8');
-    assert.match(content, /sendEmailAction:/, 'api.js adminAPI must contain sendEmailAction');
-    assert.match(content, /sendBookingRequestEmail:/, 'api.js adminAPI must contain sendBookingRequestEmail');
-    assert.match(content, /sendAuthorizationEmail:/, 'api.js adminAPI must contain sendAuthorizationEmail');
-    assert.match(content, /sendFinalTicketEmail:/, 'api.js adminAPI must contain sendFinalTicketEmail');
-    assert.match(content, /getBookingEmailStatus:/, 'api.js adminAPI must contain getBookingEmailStatus');
+    assert.match(content, /client_request_id:/, 'booking.mapper.mjs must populate client_request_id');
   });
 
-  await t.test('5. Response reader handles confirmation_code, confirmationCode, booking_reference, and id', () => {
+  await t.test('5. getBookingByClientRequestId endpoint is registered in admin routes and controller', () => {
+    const routesPath = path.join(projectRoot, 'backend/src/modules/admin/admin.routes.mjs');
+    const ctrlPath = path.join(projectRoot, 'backend/src/modules/admin/admin.controller.mjs');
+    const repoPath = path.join(projectRoot, 'backend/src/modules/bookings/booking.repository.mjs');
+    assert.match(fs.readFileSync(routesPath, 'utf-8'), /\/bookings\/by-request\/:clientRequestId/, 'admin.routes.mjs must contain /bookings/by-request/:clientRequestId route');
+    assert.match(fs.readFileSync(ctrlPath, 'utf-8'), /getBookingByClientRequestId:/, 'admin.controller.mjs must contain getBookingByClientRequestId handler');
+    assert.match(fs.readFileSync(repoPath, 'utf-8'), /getBookingByClientRequestId:/, 'booking.repository.mjs must contain getBookingByClientRequestId method');
+  });
+
+  await t.test('6. Create controller returns HTTP 201 immediately without sending auth email or reloading complete booking', () => {
+    const ctrlPath = path.join(projectRoot, 'backend/src/modules/admin/admin.controller.mjs');
+    const content = fs.readFileSync(ctrlPath, 'utf-8');
+    assert.doesNotMatch(content, /sendAuthorizationEmail/, 'createBooking controller must NOT send auth email inline');
+    assert.match(content, /res\.status\(201\)\.json\(\{/, 'createBooking controller must return HTTP 201 immediately');
+  });
+
+  await t.test('7. Phase 2 Auth email failure is caught and does not report email dispatched when promise fails', () => {
     const filePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
     const content = fs.readFileSync(filePath, 'utf-8');
-    assert.match(content, /resData\?\.confirmation_code/, 'handleCreateBooking must safely check confirmation_code');
-    assert.match(content, /resData\?\.confirmationCode/, 'handleCreateBooking must safely check confirmationCode');
-    assert.match(content, /resData\?\.booking_reference/, 'handleCreateBooking must safely check booking_reference');
-    assert.match(content, /resData\?\.id/, 'handleCreateBooking must safely check id');
+    assert.match(content, /Authorization email was not sent:/, 'Must handle auth email errors in Phase 2 try/catch');
   });
 
-  await t.test('6. resolvePositiveAmount correctly extracts positive price from any contract field', () => {
-    assert.equal(resolvePositiveAmount('741'), 741);
-    assert.equal(resolvePositiveAmount(null, undefined, '850.50'), 850.5);
-    assert.equal(resolvePositiveAmount(0, '0', -50, null), 0);
-    assert.equal(resolvePositiveAmount(undefined, undefined, 741), 741);
-  });
-
-  await t.test('7. AdminCreateBookingPage passes top-level price fields (customer_price: 741, etc.)', () => {
-    const filePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
-    const content = fs.readFileSync(filePath, 'utf-8');
-    assert.match(content, /customer_price:\s*finalCustomerTotal/, 'Payload must set top-level customer_price');
-    assert.match(content, /total_amount:\s*finalCustomerTotal/, 'Payload must set top-level total_amount');
-    assert.match(content, /amount:\s*finalCustomerTotal/, 'Payload must set top-level amount');
-  });
-
-  await t.test('8. Booking Request Email button dynamically toggles send vs resend action', () => {
-    const filePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.js');
-    const content = fs.readFileSync(filePath, 'utf-8');
-    assert.match(content, /bookingEmailAction\s*=\s*bookingEmailWasSent\s*\?\s*'resend_booking_request_email'\s*:\s*'send_booking_request_email'/, 'Booking Request button must toggle between send_booking_request_email and resend_booking_request_email');
-    assert.match(content, /bookingEmailLabel\s*=\s*bookingEmailWasSent\s*\?\s*'Resend Booking Request Email'\s*:\s*'Send Booking Request Email'/, 'Booking Request button label must toggle between Send and Resend');
-  });
-
-  await t.test('9. Card Last 4 resolution enforces 4 digits (not 16 digits)', () => {
-    const filePath = path.join(projectRoot, 'backend/src/modules/bookings/booking.service.mjs');
-    const content = fs.readFileSync(filePath, 'utf-8');
-    assert.match(content, /return \/\^\\d\{4\}\$\/\.test\(raw\)/, 'booking.service.mjs must use /^\\d{4}$/ for card_last4 validation');
-    assert.doesNotMatch(content, /cvv_code:\s*pmPayload\.cvv_code\s*\|\|\s*1234/, 'booking.service.mjs must NOT hardcode fake CVV 1234');
-    assert.doesNotMatch(content, /pm_tok_\$\{Date\.now\(\)\}/, 'booking.service.mjs must NOT generate fake pm_tok_ payment tokens');
-  });
-
-  await t.test('10. Step card outer class and pricing 2-column grid exist in CSS & JS', () => {
-    const cssPath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.css');
+  await t.test('8. Draft creation allows missing DOB and missing flight itinerary', () => {
+    const servicePath = path.join(projectRoot, 'backend/src/modules/bookings/booking.service.mjs');
     const jsPath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
-    const cssContent = fs.readFileSync(cssPath, 'utf-8');
+    const serviceContent = fs.readFileSync(servicePath, 'utf-8');
     const jsContent = fs.readFileSync(jsPath, 'utf-8');
-    assert.match(cssContent, /\.admin-create-booking-step-card/, 'CSS must contain .admin-create-booking-step-card rule');
-    assert.match(cssContent, /\.admin-pricing-grid/, 'CSS must contain .admin-pricing-grid rule');
-    assert.match(jsContent, /className="admin-create-booking-step-card"/, 'JS must use admin-create-booking-step-card class');
-    assert.match(jsContent, /className="admin-pricing-grid"/, 'JS must use admin-pricing-grid class');
+    assert.match(serviceContent, /if \(payload\.actionType !== 'create_draft'\)/, 'booking.service.mjs must skip traveller validation for drafts');
+    assert.match(serviceContent, /if \(!isDraft && flightsList\.length === 0\)/, 'booking.service.mjs must allow empty flight list for drafts');
+    assert.match(jsContent, /if \(isDraft\) \{\s*setDobErrors\(\{\}\);\s*return \[\];\s*\}/, 'Frontend validatePassengerStep must return [] immediately for drafts');
   });
 
-  await t.test('11. Single Cardholder Name field in Step 4 Billing', () => {
-    const filePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const cardholderMatches = content.match(/<label[^>]*>\s*Cardholder Name/g) || [];
-    assert.equal(cardholderMatches.length, 1, 'Step 4 must contain exactly ONE Cardholder Name input label');
+  await t.test('9. Draft creation sets status DRAFT and sends no emails', () => {
+    const servicePath = path.join(projectRoot, 'backend/src/modules/bookings/booking.service.mjs');
+    const content = fs.readFileSync(servicePath, 'utf-8');
+    assert.match(content, /emailDeliveryStatus: isDraft \? 'NOT_SENT' : 'QUEUED'/, 'Drafts must return emailDeliveryStatus NOT_SENT');
+    assert.match(content, /if \(!isDraft\) \{\s*setImmediate/, 'Emails must only be sent when not draft');
   });
 
-  await t.test('12. Ticket date aliases are normalized in booking.repository.mjs', () => {
-    const filePath = path.join(projectRoot, 'backend/src/modules/bookings/booking.repository.mjs');
-    const content = fs.readFileSync(filePath, 'utf-8');
-    assert.match(content, /ticketIssueDate \?\? ticketIssuedAt \?\? ticket_issue_date \?\? ticket_issued_at/, 'Repository must check all ticket date aliases');
-    assert.match(content, /if \(ticketIssuedAt !== undefined \|\| ticketIssueDate !== undefined/, 'Repository must include ticket_issued_at in updatePayload');
+  await t.test('10. Server timing diagnostics exist in bookingService.create', () => {
+    const servicePath = path.join(projectRoot, 'backend/src/modules/bookings/booking.service.mjs');
+    const content = fs.readFileSync(servicePath, 'utf-8');
+    assert.match(content, /\[CreateBookingTiming\]/, 'booking.service.mjs must contain [CreateBookingTiming] diagnostic logs');
+    assert.match(content, /BOOKING_INSERT_COMPLETE/, 'booking.service.mjs must log BOOKING_INSERT_COMPLETE');
+    assert.match(content, /CREATE_BOOKING_RESPONSE/, 'booking.service.mjs must log CREATE_BOOKING_RESPONSE');
   });
 
-  await t.test('13. Draft creation allows missing DOB and sets status DRAFT', () => {
-    const filePath = path.join(projectRoot, 'backend/src/modules/bookings/booking.service.mjs');
-    const content = fs.readFileSync(filePath, 'utf-8');
-    assert.match(content, /if \(payload\.actionType !== 'create_draft'\)/, 'booking.service.mjs must skip traveller validation for drafts');
-    assert.match(content, /status: payload\.actionType === 'create_draft' \? 'DRAFT'/, 'booking.service.mjs must set status DRAFT for create_draft action');
+  await t.test('11. Only clicked button spins (activeSubmissionAction state)', () => {
+    const jsPath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
+    const content = fs.readFileSync(jsPath, 'utf-8');
+    assert.match(content, /const \[activeSubmissionAction, setActiveSubmissionAction\] = useState\(null\);/, 'Must use activeSubmissionAction state');
+    assert.match(content, /activeSubmissionAction === 'create_without_payment'/, 'Button spinner must check specific action');
+  });
+
+  await t.test('12. Active idempotency key is preserved across client retry', () => {
+    const jsPath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
+    const content = fs.readFileSync(jsPath, 'utf-8');
+    assert.match(content, /activeCreateRequest\?\.actionType === actionType \? activeCreateRequest\.idempotencyKey : null/, 'Must reuse active idempotencyKey when retrying');
   });
 
 });

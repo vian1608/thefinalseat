@@ -22,22 +22,24 @@ const idempotencyCache = new Map();
 
 export const bookingService = {
   create: async (payload) => {
-    // 0 — Idempotency Guard (Prevent Duplicate Submissions)
-    const idempotencyKey = payload.idempotency_key || payload.idempotencyKey;
-    if (idempotencyKey && idempotencyStore.has(idempotencyKey)) {
-      const existingId = idempotencyStore.get(idempotencyKey);
-      const existingComplete = await bookingRepository.getCompleteBookingById(existingId);
-      if (existingComplete) {
-        logger.info(`[Idempotency] Returning existing booking ${existingId} for key ${idempotencyKey}`);
+    const startTime = Date.now();
+    const clientRequestId = payload.clientRequestId || payload.client_request_id || payload.idempotencyKey || payload.idempotency_key;
+
+    logger.info('[CreateBookingTiming]', { requestId: clientRequestId, stage: 'CREATE_BOOKING_START' });
+
+    // 0 — Persistent Idempotency Guard (Prevent Duplicate Submissions)
+    if (clientRequestId) {
+      const existingBooking = await bookingRepository.getBookingByClientRequestId(clientRequestId);
+      if (existingBooking) {
+        logger.info(`[CreateBookingTiming] [Idempotency] Returning existing booking ${existingBooking.id} for clientRequestId ${clientRequestId}`);
         return {
-          booking: existingComplete,
-          id: existingComplete.id,
-          confirmation_code: existingComplete.confirmation_code,
+          booking: existingBooking,
+          id: existingBooking.id,
+          confirmation_code: existingBooking.confirmation_code || existingBooking.confirmationCode,
           idempotentReused: true
         };
       }
     }
-    console.log('payload', payload);
 
     // 1 — Run traveler validations (skip for drafts)
     const passengerList = Array.isArray(payload.passengers)
@@ -66,25 +68,29 @@ export const bookingService = {
 
     // 3 — Generate confirmation code & prepare insert payload
     const confirmationCode = generateConfirmationCode();
+    const isDraft = payload.actionType === 'create_draft';
     const payloadWithPassengerName = {
       ...payload,
       customerName: masterPassengerName,
-      status: payload.actionType === 'create_draft' ? 'DRAFT' : (payload.status || 'PENDING'),
-      paymentStatus: payload.paymentStatus || 'pending',
-      payment_provider: payload.payment_provider || 'whop'
+      status: isDraft ? 'DRAFT' : (payload.status || 'PENDING'),
+      paymentStatus: isDraft ? 'draft' : (payload.paymentStatus || 'pending'),
+      payment_provider: payload.payment_provider || null
     };
 
     let booking = null;
     try {
+      const tStartInsert = Date.now();
       const insertRow = bookingMapper.toDatabaseInsert(confirmationCode, payloadWithPassengerName);
       booking = await bookingRepository.createBookingRecord(insertRow);
 
       if (!booking || !booking.id) {
         throw new Error('Failed to insert booking record.');
       }
+      logger.info('[CreateBookingTiming]', { requestId: clientRequestId, stage: 'BOOKING_INSERT_COMPLETE', durationMs: Date.now() - tStartInsert });
 
       // 4 — Save travellers list
       let travellers = [];
+      const tStartTravellers = Date.now();
       if (passengerList.length > 0) {
         travellers = await bookingRepository.insertTravellers(
           passengerList.map(p => ({
@@ -102,8 +108,10 @@ export const bookingService = {
           }))
         );
       }
+      logger.info('[CreateBookingTiming]', { requestId: clientRequestId, stage: 'TRAVELLERS_INSERT_COMPLETE', durationMs: Date.now() - tStartTravellers });
 
       // 5 — Save primary contact details
+      const tStartContact = Date.now();
       const rawPhone = String(payload.phone || '').trim();
       const countryCode = rawPhone.startsWith('+') ? rawPhone.split(' ')[0] : null;
       const contactRow = {
@@ -113,8 +121,10 @@ export const bookingService = {
         phone_number: rawPhone
       };
       const contacts = await bookingRepository.insertContact(contactRow);
+      logger.info('[CreateBookingTiming]', { requestId: clientRequestId, stage: 'CONTACT_INSERT_COMPLETE', durationMs: Date.now() - tStartContact });
 
-      // 6 — Save flight itineraries (MUST HAVE VALID FLIGHTS OR ROLLBACK)
+      // 6 — Save flight itineraries (MUST HAVE VALID FLIGHTS FOR NON-DRAFTS OR ROLLBACK)
+      const tStartFlights = Date.now();
       const flightsList = [];
       const returnObj = payload.returnFlight || payload.flight?.returnFlight;
       const tripType = returnObj ? 'round-trip' : 'one-way';
@@ -128,15 +138,20 @@ export const bookingService = {
         flightsList.push(...returnRows);
       }
 
-      if (flightsList.length === 0) {
+      if (!isDraft && flightsList.length === 0) {
         const err = new Error(`Booking creation failed: Cannot create booking ${confirmationCode} without flight itinerary segments.`);
         err.code = 'BOOKING_ITINERARY_MISSING';
         throw err;
       }
 
-      const flights = await bookingRepository.insertFlights(flightsList);
+      let flights = [];
+      if (flightsList.length > 0) {
+        flights = await bookingRepository.insertFlights(flightsList);
+      }
+      logger.info('[CreateBookingTiming]', { requestId: clientRequestId, stage: 'FLIGHTS_INSERT_COMPLETE', durationMs: Date.now() - tStartFlights });
 
-      // 7 — Save pending payment record using resolved positive customer price
+      // 7 — Save pending payment record using resolved customer price
+      const tStartPayment = Date.now();
       const resolvedPrice = resolvePositiveAmount(
         payload.customer_price,
         payload.customerPrice,
@@ -153,17 +168,19 @@ export const bookingService = {
 
       const paymentRow = {
         booking_id: booking.id,
-        payment_provider: payload.payment_provider || 'whop',
+        payment_provider: payload.payment_provider || null,
         provider_checkout_id: payload.provider_checkout_id || null,
         provider_payment_id: payload.provider_payment_id || null,
-        payment_amount: resolvedPrice,
+        payment_amount: resolvedPrice || 0,
         currency: (payload.currency || 'USD').toUpperCase(),
-        payment_status: payload.paymentStatus || 'pending',
+        payment_status: isDraft ? 'draft' : (payload.paymentStatus || 'pending'),
         payment_date: new Date().toISOString()
       };
       const payments = await bookingRepository.insertPayment(paymentRow);
+      logger.info('[CreateBookingTiming]', { requestId: clientRequestId, stage: 'PAYMENT_INSERT_COMPLETE', durationMs: Date.now() - tStartPayment });
 
       // 7.5 — Save tokenized payment method metadata (always persist safe billing data)
+      const tStartBilling = Date.now();
       const pmPayload = payload.paymentMethod || payload.payment_method || payload.billingDetails || {};
       const flatPayload = payload;
 
@@ -194,7 +211,7 @@ export const bookingService = {
 
       const billingRecord = {
         booking_id: booking.id,
-        payment_provider: flatPayload.payment_provider || 'card',
+        payment_provider: flatPayload.payment_provider || null,
         provider_payment_method_id:
           pmPayload.paymentToken ||
           pmPayload.paymentMethodToken ||
@@ -228,15 +245,15 @@ export const bookingService = {
         billing_postal_code: pmPayload.postalCode || pmPayload.billingPostalCode || pmPayload.billing_postal_code || flatPayload.billingPostalCode || flatPayload.billingZip || flatPayload.billingDetails?.postalCode || null,
         billing_country: pmPayload.country || pmPayload.billingCountry || pmPayload.billing_country || flatPayload.billingCountry || flatPayload.billingDetails?.country || 'United States',
       };
-      console.log("billingRecord", billingRecord);
 
-      // Always attempt to save billing record when any meaningful field is provided
       const hasBillingData = billingRecord.card_last4 || billingRecord.card_brand || billingRecord.billing_address_line1 || billingRecord.billing_email || billingRecord.billing_city || billingRecord.cardholder_name;
       let savedPaymentMethod = null;
       if (hasBillingData) {
         savedPaymentMethod = await bookingRepository.savePaymentMethodRecord(booking.id, billingRecord);
       }
+      logger.info('[CreateBookingTiming]', { requestId: clientRequestId, stage: 'BILLING_INSERT_COMPLETE', durationMs: Date.now() - tStartBilling });
 
+      const tStartCanonical = Date.now();
       const canonicalBooking = bookingMapper.toCanonicalModel(
         booking,
         travellers,
@@ -245,36 +262,37 @@ export const bookingService = {
         payments,
         savedPaymentMethod || null
       );
+      logger.info('[CreateBookingTiming]', { requestId: clientRequestId, stage: 'CANONICAL_MAPPING_COMPLETE', durationMs: Date.now() - tStartCanonical });
 
       // 8 — Persist idempotency key BEFORE returning so retries are safe
-      if (idempotencyKey && booking?.id) {
-        idempotencyStore.set(idempotencyKey, booking.id);
+      if (clientRequestId && booking?.id) {
+        idempotencyStore.set(clientRequestId, booking.id);
       }
 
-      // 9 — Fire-and-forget: validation + emails triggered AFTER return to avoid Vercel 10s timeout.
-      // Booking is fully committed to DB at this point. Email failure MUST NOT block checkout response.
-      setImmediate(() => {
-        // Light validation check (non-blocking — does not block response)
-        bookingValidatorService.validateCompletedBooking(booking.id).catch(valErr => {
-          logger.error(`[BookingCreate] Non-blocking post-commit validation warning: ${valErr.message}`);
-        });
+      // 9 — Fire-and-forget emails ONLY for non-drafts AFTER return
+      if (!isDraft) {
+        setImmediate(() => {
+          bookingValidatorService.validateCompletedBooking(booking.id).catch(valErr => {
+            logger.error(`[BookingCreate] Non-blocking post-commit validation warning: ${valErr.message}`);
+          });
 
-        // Customer confirmation email (non-blocking)
-        sendBookingConfirmation(canonicalBooking).catch(emailErr => {
-          logger.error(`[BookingCreate] Non-blocking confirmation email error for ${confirmationCode}: ${emailErr.message}`);
-        });
+          sendBookingConfirmation(canonicalBooking).catch(emailErr => {
+            logger.error(`[BookingCreate] Non-blocking confirmation email error for ${confirmationCode}: ${emailErr.message}`);
+          });
 
-        // Internal admin acknowledgement email (non-blocking)
-        sendAdminBookingAcknowledgement(canonicalBooking).catch(adminEmailErr => {
-          logger.error(`[BookingCreate] Non-blocking admin email error for ${confirmationCode}: ${adminEmailErr.message}`);
+          sendAdminBookingAcknowledgement(canonicalBooking).catch(adminEmailErr => {
+            logger.error(`[BookingCreate] Non-blocking admin email error for ${confirmationCode}: ${adminEmailErr.message}`);
+          });
         });
-      });
+      }
+
+      logger.info('[CreateBookingTiming]', { requestId: clientRequestId, stage: 'CREATE_BOOKING_RESPONSE', totalDurationMs: Date.now() - startTime });
 
       return {
         ...canonicalBooking,
-        emailDeliveryStatus: 'QUEUED',
-        emailDelivery: { success: true, status: 'QUEUED', message: 'Confirmation email queued for delivery.' },
-        adminEmailDelivery: { success: true, status: 'QUEUED' }
+        emailDeliveryStatus: isDraft ? 'NOT_SENT' : 'QUEUED',
+        emailDelivery: { success: true, status: isDraft ? 'NOT_SENT' : 'QUEUED', message: isDraft ? 'Draft created; no email sent.' : 'Confirmation email queued for delivery.' },
+        adminEmailDelivery: { success: true, status: isDraft ? 'NOT_SENT' : 'QUEUED' }
       };
     } catch (err) {
       logger.error(`[AtomicBookingCreate] Rollback triggered for code ${confirmationCode}: ${err.message}`);

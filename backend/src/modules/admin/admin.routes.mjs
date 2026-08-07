@@ -26,6 +26,7 @@ router.post('/bookings/bulk-delete', authenticate, authorize(['admin']), adminCo
 router.post('/bookings/import-backup', authenticate, authorize(['admin']), adminController.importBookingBackup);
 
 router.get('/bookings', authenticate, authorize(['admin']), adminController.getBookings);
+router.get('/bookings/by-request/:clientRequestId', authenticate, authorize(['admin']), adminController.getBookingByClientRequestId);
 router.post('/bookings', authenticate, authorize(['admin']), adminController.createBooking);
 router.get('/bookings/:id', authenticate, authorize(['admin']), adminController.getBookingDetail);
 router.delete('/bookings/:bookingId', authenticate, authorize(['admin']), adminController.deleteBooking);

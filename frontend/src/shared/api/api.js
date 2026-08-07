@@ -296,6 +296,10 @@ export const adminAPI = {
     const response = await api.get(`/admin/bookings/${bookingId}`);
     return response.data;
   },
+  getBookingByClientRequestId: async (clientRequestId) => {
+    const response = await api.get(`/admin/bookings/by-request/${clientRequestId}`);
+    return response.data;
+  },
   /**
    * Centralized admin email action.
    * Supported actions:

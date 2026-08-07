@@ -178,6 +178,7 @@ export default function AdminCreateBookingPage() {
 
   // Navigation Feedback & Isolated Action Submission State
   const [activeSubmissionAction, setActiveSubmissionAction] = useState(null);
+  const [activeCreateRequest, setActiveCreateRequest] = useState(null); // { actionType, idempotencyKey }
   const isSubmitting = activeSubmissionAction !== null;
   const [dobErrors, setDobErrors] = useState({});
   const [errorMsg, setErrorMsg] = useState('');
@@ -473,6 +474,10 @@ export default function AdminCreateBookingPage() {
 
   // Dedicated Step Validation Functions
   const validatePassengerStep = (isDraft = false) => {
+    if (isDraft) {
+      setDobErrors({});
+      return [];
+    }
     const errs = [];
     const newDobErrs = {};
     if (!contactInfo.email || !contactInfo.email.includes('@')) {
@@ -481,14 +486,12 @@ export default function AdminCreateBookingPage() {
     if (passengers.length === 0 || !passengers[0].firstName || !passengers[0].lastName) {
       errs.push('Please enter primary passenger First and Last Name in Step 1.');
     }
-    if (!isDraft) {
-      passengers.forEach((p, idx) => {
-        if (!p.dateOfBirth) {
-          errs.push(`Passenger #${idx + 1} (${p.firstName || 'Passenger'}): Date of birth is required.`);
-          newDobErrs[p.id || idx] = 'Date of birth is required.';
-        }
-      });
-    }
+    passengers.forEach((p, idx) => {
+      if (!p.dateOfBirth) {
+        errs.push(`Passenger #${idx + 1} (${p.firstName || 'Passenger'}): Date of birth is required.`);
+        newDobErrs[p.id || idx] = 'Date of birth is required.';
+      }
+    });
     setDobErrors(newDobErrs);
     return errs;
   };
@@ -525,32 +528,6 @@ export default function AdminCreateBookingPage() {
       return errs;
     }
     return validateBilling();
-  };
-
-  const handleStepNext = (targetStep) => {
-    setErrorMsg('');
-    if (targetStep > currentStep) {
-      if (currentStep === 1) {
-        const passErrs = validatePassengerStep(false);
-        if (passErrs.length > 0) {
-          setErrorMsg(passErrs.join(' | '));
-          return;
-        }
-      } else if (currentStep === 2) {
-        const itinErrs = validateItineraryStep();
-        if (itinErrs.length > 0) {
-          setErrorMsg(itinErrs.join(' | '));
-          return;
-        }
-      } else if (currentStep === 3) {
-        const priceErrs = validatePricingStep();
-        if (priceErrs.length > 0) {
-          setErrorMsg(priceErrs.join(' | '));
-          return;
-        }
-      }
-    }
-    setCurrentStep(targetStep);
   };
 
   // ----------------------------------------------------
@@ -605,15 +582,14 @@ export default function AdminCreateBookingPage() {
     // Calculate canonical customer total
     const overrideText = String(pricing.finalCustomerTotal ?? '').trim();
     const hasOverride = overrideText !== '';
-
     const calculatedAmount = Number.parseFloat(calculatedTotal);
     const overrideAmount = Number.parseFloat(overrideText);
-
     const finalCustomerTotal = hasOverride ? overrideAmount : calculatedAmount;
 
-    if (!Number.isFinite(finalCustomerTotal) || finalCustomerTotal <= 0) {
+    if (!isDraft && (!Number.isFinite(finalCustomerTotal) || finalCustomerTotal <= 0)) {
       setErrorMsg('Final Customer Total must be a valid amount greater than zero.');
       setCurrentStep(3);
+      setActiveSubmissionAction(null);
       return;
     }
 
@@ -626,25 +602,30 @@ export default function AdminCreateBookingPage() {
     setErrorMsg('');
     setSuccessMsg('');
 
-    const idempotencyKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    // Reuse active idempotency key if retrying the same action, otherwise generate new
+    let idempotencyKey = activeCreateRequest?.actionType === actionType ? activeCreateRequest.idempotencyKey : null;
+    if (!idempotencyKey) {
+      idempotencyKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      setActiveCreateRequest({ actionType, idempotencyKey });
+    }
 
     try {
       const payload = {
         actionType,
         clientRequestId: idempotencyKey,
-        customerName: `${passengers[0].firstName} ${passengers[0].lastName}`.trim(),
+        customerName: `${passengers[0]?.firstName || ''} ${passengers[0]?.lastName || ''}`.trim() || 'Valued Passenger',
         email: contactInfo.email,
         phone: contactInfo.phone,
 
         // TOP-LEVEL CANONICAL PRICE CONTRACT
-        customer_price: finalCustomerTotal,
-        customerPrice: finalCustomerTotal,
-        total_amount: finalCustomerTotal,
-        totalAmount: finalCustomerTotal,
-        amount: finalCustomerTotal,
-        price: finalCustomerTotal,
+        customer_price: finalCustomerTotal || 0,
+        customerPrice: finalCustomerTotal || 0,
+        total_amount: finalCustomerTotal || 0,
+        totalAmount: finalCustomerTotal || 0,
+        amount: finalCustomerTotal || 0,
+        price: finalCustomerTotal || 0,
         currency: (pricing.currency || 'USD').toUpperCase(),
 
         supplier_price: supplierTotal,
@@ -672,8 +653,8 @@ export default function AdminCreateBookingPage() {
           outbound: outboundSegments,
           return: returnSegments,
           multiCity: multiCityJourneysState,
-          price: finalCustomerTotal,
-          totalPrice: finalCustomerTotal
+          price: finalCustomerTotal || 0,
+          totalPrice: finalCustomerTotal || 0
         },
         pricing: {
           supplierCost: Number.parseFloat(pricing.supplierCost) || 0,
@@ -683,10 +664,10 @@ export default function AdminCreateBookingPage() {
           markup: Number.parseFloat(pricing.markup) || 0,
           discount: Number.parseFloat(pricing.discount) || 0,
           currency: (pricing.currency || 'USD').toUpperCase(),
-          totalPrice: finalCustomerTotal,
-          finalCustomerTotal: finalCustomerTotal,
-          customerTotal: finalCustomerTotal,
-          calculatedTotal: calculatedAmount,
+          totalPrice: finalCustomerTotal || 0,
+          finalCustomerTotal: finalCustomerTotal || 0,
+          customerTotal: finalCustomerTotal || 0,
+          calculatedTotal: calculatedAmount || 0,
           priceOverrideReason: pricing.priceOverrideReason || ''
         },
         billingDetails: {
@@ -708,7 +689,7 @@ export default function AdminCreateBookingPage() {
       };
 
       const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 30000);
+      const timeoutId = window.setTimeout(() => controller.abort(), 45000);
 
       let res = null;
       try {
@@ -716,39 +697,65 @@ export default function AdminCreateBookingPage() {
         window.clearTimeout(timeoutId);
       } catch (reqErr) {
         window.clearTimeout(timeoutId);
-        if (reqErr.name === 'AbortError' || reqErr.message?.includes('30 seconds') || reqErr.code === 'ECONNABORTED') {
-          // Reconcile via GET status
-          setSuccessMsg('The request timed out. Verifying whether the booking was created…');
-          const reconciledRes = await adminAPI.getBookingEmailStatus(idempotencyKey).catch(() => null);
-          if (reconciledRes?.booking || reconciledRes?.id) {
-            res = reconciledRes;
+
+        const isCanceledRequest =
+          reqErr?.name === 'CanceledError' ||
+          reqErr?.name === 'AbortError' ||
+          reqErr?.code === 'ERR_CANCELED' ||
+          reqErr?.code === 'ECONNABORTED' ||
+          reqErr?.message === 'canceled';
+
+        if (isCanceledRequest) {
+          setSuccessMsg('The booking request took too long. Verifying whether it was created…');
+          const reconRes = await adminAPI.getBookingByClientRequestId(idempotencyKey).catch(() => null);
+          if (reconRes?.found && (reconRes?.booking || reconRes?.data)) {
+            res = { success: true, booking: reconRes.booking || reconRes.data };
           } else {
-            throw new Error('Booking creation request timed out. Please refresh the dashboard or retry with the same request.');
+            setErrorMsg('The server did not confirm creation. No booking was found for this request.');
+            setActiveSubmissionAction(null);
+            return;
           }
         } else {
           throw reqErr;
         }
       }
 
-      // Read booking reference safely from multiple possible response shapes
+      // Read booking reference safely from normalized response shape
       const resData = res?.data ?? res;
-      const bookingRef =
-        resData?.confirmation_code ||
-        resData?.confirmationCode ||
-        resData?.booking_reference ||
-        resData?.bookingCode ||
-        resData?.bookingId ||
-        resData?.id ||
-        'TFS-NEW';
-      const createdBookingId = resData?.id || res?.id || resData?.bookingId;
+      const createdBooking = res?.booking || resData?.booking || resData;
+      const createdBookingId = createdBooking?.id;
 
-      if (res?.success || resData?.success || res?.id || resData?.id || res?.bookingCode || resData?.confirmation_code) {
+      if (!createdBookingId && (res?.success || resData?.success)) {
+        setErrorMsg('BOOKING_RESPONSE_INVALID: Server created a booking but did not return its database ID.');
+        setActiveSubmissionAction(null);
+        return;
+      }
+
+      const bookingRef =
+        createdBooking?.confirmation_code ||
+        createdBooking?.confirmationCode ||
+        createdBooking?.booking_reference ||
+        createdBookingId ||
+        'TFS-NEW';
+
+      if (res?.success || resData?.success || createdBookingId) {
+        setActiveCreateRequest(null);
+
         if (actionType === 'create_and_send_auth' && createdBookingId) {
-          setSuccessMsg(`Booking ${bookingRef} created! Phase 2: Sending Authorization Email…`);
-          await adminAPI.sendAuthorizationEmail(createdBookingId, false).catch(authErr => {
-            console.error('Phase 2 Auth Email error:', authErr);
-          });
-          setSuccessMsg(`Booking ${bookingRef} created and Authorization Email dispatched! Navigating to dashboard…`);
+          setSuccessMsg(`Booking ${bookingRef} created successfully! Phase 2: Sending Authorization Email…`);
+          try {
+            const authResult = await adminAPI.sendAuthorizationEmail(createdBookingId, false);
+            if (authResult?.success) {
+              setSuccessMsg(`Booking ${bookingRef} created and authorization email sent.`);
+            } else {
+              throw new Error(authResult?.error?.message || authResult?.message || 'Authorization email dispatch failed.');
+            }
+          } catch (authErr) {
+            setSuccessMsg(`Booking ${bookingRef} was created successfully.`);
+            setErrorMsg(`Authorization email was not sent: ${authErr.message || authErr}`);
+          }
+        } else if (actionType === 'create_draft') {
+          setSuccessMsg(`Draft booking saved successfully! Reference: ${bookingRef}. Navigating to dashboard…`);
         } else {
           setSuccessMsg(`Booking created! Reference: ${bookingRef}. Navigating to dashboard…`);
         }

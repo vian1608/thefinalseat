@@ -19,24 +19,41 @@ export const adminController = {
       const payload = req.body;
       const result = await bookingService.create(payload);
 
-      const bookingId = result?.booking?.id || result?.id;
-      const finalBooking = await adminService.getCompleteBookingById(bookingId);
+      const booking = result?.booking || result;
 
-      const actionType = payload.actionType || 'create_draft';
-      if (actionType === 'create_and_send_auth' && bookingId) {
-        await passengerAuthorizationService.sendAuthorizationEmail(bookingId).catch(err => {
-          logger.error(`[createBooking] Send auth email failed: ${err.message}`);
-        });
-      } else if (actionType === 'create_and_process_payment' && bookingId) {
-        await adminService.updatePaymentStatus(bookingId, 'paid').catch(err => {
-          logger.error(`[createBooking] Process payment failed: ${err.message}`);
+      return res.status(201).json({
+        success: true,
+        message: 'New booking created successfully.',
+        data: booking,
+        booking
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getBookingByClientRequestId: async (req, res, next) => {
+    try {
+      const { clientRequestId } = req.params;
+      if (!clientRequestId) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'clientRequestId parameter is required' }
         });
       }
 
-      res.status(201).json({
+      const booking = await bookingRepository.getBookingByClientRequestId(clientRequestId);
+      if (booking) {
+        return res.json({
+          success: true,
+          found: true,
+          booking
+        });
+      }
+
+      return res.json({
         success: true,
-        message: 'New booking created successfully.',
-        data: finalBooking || result?.booking || result
+        found: false
       });
     } catch (err) {
       next(err);

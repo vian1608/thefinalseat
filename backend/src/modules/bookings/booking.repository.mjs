@@ -16,8 +16,38 @@ const paymentMethodsMemoryStore = new Map();
 const emailDeliveriesMemoryStore = new Map();
 
 
-export const bookingRepository = {
+  getBookingByClientRequestId: async (clientRequestId) => {
+    if (!clientRequestId) return null;
 
+    // Check memory store first for immediate response
+    for (const [id, rec] of bookingsMemoryStore.entries()) {
+      if (
+        rec.client_request_id === clientRequestId ||
+        rec.clientRequestId === clientRequestId ||
+        rec.idempotency_key === clientRequestId ||
+        rec.idempotencyKey === clientRequestId
+      ) {
+        return await bookingRepository.getCompleteBookingById(rec.id || id);
+      }
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .or(`client_request_id.eq.${clientRequestId},idempotency_key.eq.${clientRequestId}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (data?.id) {
+        return await bookingRepository.getCompleteBookingById(data.id);
+      }
+    } catch (err) {
+      logger.warn(`[getBookingByClientRequestId] Query warning: ${err.message}`);
+    }
+
+    return null;
+  },
 
   createBookingRecord: async (dbRow) => {
     const isProduction = (process.env.NODE_ENV || 'development') === 'production';
@@ -33,6 +63,13 @@ export const bookingRepository = {
       .select()
       .single();
 
+    if (data?.id) {
+      bookingsMemoryStore.set(data.id, data);
+      if (data.confirmation_code) bookingsMemoryStore.set(data.confirmation_code, data);
+      if (data.client_request_id) bookingsMemoryStore.set(data.client_request_id, data);
+      return data;
+    }
+
     if (error) {
       // Resilience fallback for schema cache delays on remote database: insert established core columns
       const coreRow = {
@@ -45,6 +82,7 @@ export const bookingRepository = {
         passenger_name: dbRow.passenger_name,
         email: dbRow.email,
         phone: dbRow.phone,
+        client_request_id: dbRow.client_request_id || null,
       };
       const { data: coreData, error: coreError } = await supabase
         .from('bookings')
@@ -59,6 +97,7 @@ export const bookingRepository = {
         bookingsMemoryStore.set(fallbackId, fallbackRecord);
         if (dbRow.id) bookingsMemoryStore.set(dbRow.id, fallbackRecord);
         if (fallbackRecord.confirmation_code) bookingsMemoryStore.set(fallbackRecord.confirmation_code, fallbackRecord);
+        if (fallbackRecord.client_request_id) bookingsMemoryStore.set(fallbackRecord.client_request_id, fallbackRecord);
         await bookingRepository.recordAuditLog({
           bookingId: fallbackId,
           action: 'BOOKING_CREATED',
@@ -71,6 +110,7 @@ export const bookingRepository = {
       if (coreData) {
         if (coreData.id) bookingsMemoryStore.set(coreData.id, coreData);
         if (coreData.confirmation_code) bookingsMemoryStore.set(coreData.confirmation_code, coreData);
+        if (coreData.client_request_id) bookingsMemoryStore.set(coreData.client_request_id, coreData);
       }
       await bookingRepository.recordAuditLog({
         bookingId: coreData.id || dbRow.id,

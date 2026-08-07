@@ -37,7 +37,7 @@ export const bookingMapper = {
       rawCustomerPrice
     );
 
-    if (rawCustomerPrice <= 0) {
+    if (payload.actionType !== 'create_draft' && rawCustomerPrice <= 0) {
       const err = new Error(`INVALID_BOOKING_PRICE: Customer total reservation price must be greater than zero. Received: ${rawCustomerPrice}`);
       err.code = 'INVALID_BOOKING_PRICE';
       throw err;
@@ -46,6 +46,8 @@ export const bookingMapper = {
     const isMock = !!payload.isMock;
     const discountPercent = isMock ? 0 : (parseFloat(payload.discount_percent) || 10);
     const discountAmount = isMock ? 0 : (parseFloat(payload.discount_amount) || Math.max(0, rawSupplierPrice - rawCustomerPrice));
+
+    const clientReqId = payload.clientRequestId || payload.client_request_id || payload.idempotencyKey || payload.idempotency_key || null;
 
     return {
       confirmation_code: bookingReference,
@@ -62,6 +64,7 @@ export const bookingMapper = {
       email: payload.email,
       phone: payload.phone,
       original_api_price: rawSupplierPrice,
+      client_request_id: clientReqId,
     };
   },
 
