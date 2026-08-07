@@ -230,8 +230,8 @@ export default function SeniorTravelPage() {
       const rawResponse = await inquiryAPI.submitConsulting(payload);
       const result = rawResponse?.data ?? rawResponse;
 
-      if (result?.success || result?.emailed || result?.leadId || result?.messageId || result?.id) {
-        const ref = result?.leadId || result?.messageId || result?.id || result?.bookingCode || '';
+      if (result?.success === true && result?.leadId) {
+        const ref = result.leadId;
         setBookingRef(ref);
         setSubmitStatus('success');
         setSubmitMessage('');

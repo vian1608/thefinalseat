@@ -164,20 +164,24 @@ async function sendViaSmtp({ recipients, subject, textBody, htmlBody, replyTo })
 }
 
 export const saveInquiryToFile = async (inquiry) => {
-  const record = { ...inquiry, receivedAt: new Date().toISOString() };
-  await fs.mkdir(path.dirname(INQUIRIES_FILE), { recursive: true });
-  await fs.appendFile(INQUIRIES_FILE, `${JSON.stringify(record)}\n`, 'utf8');
-  return record;
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      const record = { ...inquiry, receivedAt: new Date().toISOString() };
+      await fs.mkdir(path.dirname(INQUIRIES_FILE), { recursive: true });
+      await fs.appendFile(INQUIRIES_FILE, `${JSON.stringify(record)}\n`, 'utf8');
+    } catch (_) {}
+  }
+  return inquiry;
 };
 
 export const sendConsultingInquiry = async (inquiry) => {
   const recipients = getInquiryRecipients();
-  const isFlights = inquiry.serviceType === 'flights';
+  const isAirInquiry = ['flights', 'senior-travel'].includes(inquiry.serviceType);
   const isPayment = inquiry.serviceType === 'consulting-payment';
 
   const subjectLabel = isPayment
     ? 'Secure Consulting Payment'
-    : isFlights
+    : isAirInquiry
       ? 'Air Travel Assistance'
       : 'Amtrak / Rail Travel Assistance';
 
@@ -207,7 +211,7 @@ export const sendConsultingInquiry = async (inquiry) => {
     ].join('\n');
   } else {
     const lines = [
-      `NEW ${isFlights ? 'AIR' : 'RAIL'} TRAVEL ASSISTANCE INQUIRY`,
+      `NEW ${isAirInquiry ? 'AIR' : 'RAIL'} TRAVEL ASSISTANCE INQUIRY`,
       `The Final Seat LLC`,
       ``,
       `CONTACT`,
@@ -222,15 +226,15 @@ export const sendConsultingInquiry = async (inquiry) => {
       `Destination: ${inquiry.destination}`,
     ];
 
-    if (isFlights) {
+    if (isAirInquiry) {
       lines.push(
         `Trip type: ${inquiry.tripType || 'Not specified'}`,
         `Departure date: ${inquiry.travelDate || 'Flexible'}`,
       );
-      if (inquiry.tripType === 'roundtrip') {
+      if (inquiry.tripType === 'roundtrip' || inquiry.tripType === 'round-trip') {
         lines.push(`Return date: ${inquiry.returnDate || 'Flexible'}`);
       }
-      lines.push(`Preferred cabin: ${inquiry.cabinClass || 'Not specified'}`);
+      lines.push(`Preferred cabin: ${inquiry.cabinClass || inquiry.cabin || 'Not specified'}`);
     } else {
       lines.push(`Preferred travel date: ${inquiry.travelDate || 'Flexible'}`);
     }
@@ -243,15 +247,13 @@ export const sendConsultingInquiry = async (inquiry) => {
       inquiry.notes || 'None',
       ``,
       `Submitted: ${new Date().toLocaleString()}`,
-      `Source: ${isFlights ? 'Flights landing page' : 'Amtrak / Rail landing page'}`,
+      `Source: ${inquiry.serviceType === 'senior-travel' ? 'Senior Travel Assistance' : (isAirInquiry ? 'Flights landing page' : 'Amtrak / Rail landing page')}`,
     );
     textBody = lines.join('\n');
   }
 
   const htmlBody = textBody.replace(/\n/g, '<br>');
   const subject = `${subjectLabel} — ${inquiry.name}`;
-
-  await saveInquiryToFile(inquiry);
 
   const payload = {
     recipients,

@@ -11,16 +11,19 @@ class AppErrorBoundary extends Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    const correlationId = `ERR-ADM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-    this.setState({ correlationId, errorInfo });
+    const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+    const isAdmin = pathname.startsWith('/admin');
+    const prefix = isAdmin ? 'ERR-ADM' : 'ERR-APP';
+    const correlationId = `${prefix}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    this.setState({ correlationId, errorInfo, pathname });
 
-    console.error('ADMIN_DASHBOARD_FATAL_ERROR', {
+    console.error(isAdmin ? 'ADMIN_DASHBOARD_FATAL_ERROR' : 'PUBLIC_PAGE_FATAL_ERROR', {
       referenceId: correlationId,
       errorName: error?.name,
       errorMessage: error?.message || String(error),
       stack: error?.stack,
       componentStack: errorInfo?.componentStack,
-      pathname: typeof window !== 'undefined' ? window.location.pathname : '',
+      pathname,
       productionCommit: process.env.REACT_APP_VERCEL_GIT_COMMIT_SHA || 'unknown'
     });
     console.error('[AppErrorBoundary Caught Fatal Exception]:', error, errorInfo);
@@ -41,12 +44,17 @@ class AppErrorBoundary extends Component {
         ? (rawError?.message || JSON.stringify(rawError)) 
         : String(rawError || 'An unexpected rendering error occurred');
 
-      const correlationId = this.state.correlationId || `ERR-ADM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      const pathname = typeof window !== 'undefined' ? window.location.pathname : (this.state.pathname || '');
+      const isAdmin = pathname.startsWith('/admin');
+      const prefix = isAdmin ? 'ERR-ADM' : 'ERR-APP';
+      const correlationId = this.state.correlationId || `${prefix}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
       const isDev = process.env.NODE_ENV === 'development';
       const isMinifiedJsError = rawMessage.includes('before initialization') || rawMessage.includes('Cannot access') || rawMessage.includes('ReferenceError') || rawMessage.includes('TypeError');
       
-      let userFriendlyMessage = 'Unable to load the admin dashboard. Please reload or contact support.';
+      let userFriendlyMessage = isAdmin
+        ? 'Unable to load the admin dashboard. Please reload or contact support.'
+        : 'Something went wrong while loading this page. Please reload and try again.';
       if (isDev && !isMinifiedJsError) {
         userFriendlyMessage = rawMessage;
       }

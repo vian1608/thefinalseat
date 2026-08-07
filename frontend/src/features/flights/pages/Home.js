@@ -17,6 +17,7 @@ import { SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
 import EmailInput from '../../../shared/components/EmailInput';
 import InternationalPhoneInput from '../../../shared/components/InternationalPhoneInput';
 import { trackLeadConversion } from '../../../shared/utils/analytics';
+import { normalizeError } from '../../../shared/utils/normalizeError';
 import CarSearchForm from '../../cars/components/CarSearchForm';
 import './Home.css';
 
@@ -32,6 +33,7 @@ const initialFormData = {
   passengers: '1',
   cabinClass: 'economy',
   notes: '',
+  smsOptIn: false,
 };
 
 const initialSearchData = {
@@ -196,47 +198,64 @@ function Home() {
     navigate(`/search?${params.toString()}`);
   };
 
-  const handleSearchSchedules = (e) => {
-    e.preventDefault();
-    if (!formData.origin || !formData.destination || !formData.travelDate) {
-      setSubmitStatus('error');
-      setSubmitMessage('Please fill in Origin, Destination, and Departure Date to search flight schedules.');
-      return;
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  const validateInquiry = () => {
+    const errors = {};
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!formData.name?.trim()) {
+      errors.name = 'Full name is required.';
     }
-
-    if (formData.origin && formData.destination && formData.origin === formData.destination) {
-      setSubmitStatus('error');
-      setSubmitMessage('Origin and destination airports cannot be the same.');
-      return;
+    if (!formData.email?.trim()) {
+      errors.email = 'Email is required.';
+    } else if (!emailPattern.test(formData.email.trim())) {
+      errors.email = 'Please provide a valid email address.';
     }
-
-    const searchParams = {
-      from: formData.origin,
-      to: formData.destination,
-      departure: formData.travelDate,
-      returnDate: formData.tripType === 'roundtrip' ? formData.returnDate : undefined,
-      passengers: formData.passengers || '1',
-      travelClass: formData.cabinClass?.toUpperCase() || 'ECONOMY',
-    };
-
-    sessionStorage.setItem('searchParams', JSON.stringify(searchParams));
-    sessionStorage.setItem('searchType', formData.tripType);
-    
-    navigate('/search', { state: { searchParams, searchType: formData.tripType } });
+    if (!formData.origin?.trim()) {
+      errors.origin = 'Origin airport is required.';
+    }
+    if (!formData.destination?.trim()) {
+      errors.destination = 'Destination airport is required.';
+    }
+    if (formData.origin && formData.destination && formData.origin.trim() === formData.destination.trim()) {
+      errors.destination = 'Origin and destination airports cannot be the same.';
+    }
+    if (!formData.travelDate) {
+      errors.travelDate = 'Departure date is required.';
+    }
+    if (formData.tripType === 'roundtrip') {
+      if (!formData.returnDate) {
+        errors.returnDate = 'Return date is required for round-trip flights.';
+      } else if (formData.travelDate && new Date(formData.returnDate) < new Date(formData.travelDate)) {
+        errors.returnDate = 'Return date must be on or after the departure date.';
+      }
+    }
+    return errors;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (formData.origin && formData.destination && formData.origin === formData.destination) {
+    if (submitStatus === 'submitting') return;
+
+    const errors = validateInquiry();
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       setSubmitStatus('error');
-      setSubmitMessage('Origin and destination airports cannot be the same.');
+      setSubmitMessage('Please correct the highlighted fields below.');
+      const firstKey = Object.keys(errors)[0];
+      const targetElement = document.getElementById(`flight-${firstKey}`) || document.getElementById(firstKey);
+      if (targetElement) {
+        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetElement.focus?.();
+      }
       return;
     }
 
+    setFieldErrors({});
     setSubmitStatus('submitting');
     setSubmitMessage('');
 
-    console.info('[Lead] Submitting');
     try {
       const rawResponse = await inquiryAPI.submitConsulting({
         serviceType: 'flights',
@@ -244,18 +263,17 @@ function Home() {
       });
       const result = rawResponse?.data ?? rawResponse;
 
-      if (result?.success || result?.emailed || result?.leadId || result?.messageId) {
-        console.info('[Lead] Backend save confirmed', { leadId: result?.leadId || result?.messageId || result?.id });
+      if (result?.success === true && result?.leadId) {
+        console.info('[Lead] Backend save confirmed', { leadId: result.leadId });
         setSubmitStatus('success');
         setSubmitMessage(
-          result.message ||
-            'Thank you. Your inquiry was submitted and our team will contact you shortly.'
+          `✓ Request submitted successfully. Reference: ${result.leadId}. Our travel team will contact you shortly.`
         );
         setFormData(initialFormData);
 
         // Fire Google Ads Lead Conversion tracking event
         trackLeadConversion({
-          leadId: result?.leadId || result?.messageId || result?.id,
+          leadId: result.leadId,
           value: 1.0,
           currency: 'USD',
         });
@@ -264,22 +282,7 @@ function Home() {
       }
     } catch (error) {
       setSubmitStatus('error');
-      if (error.response?.data?.error) {
-        setSubmitMessage(error.response.data.error);
-      } else if (error.code === 'ERR_NETWORK' || !error.response) {
-        const isLocal =
-          window.location.hostname === 'localhost' ||
-          window.location.hostname === '127.0.0.1';
-        setSubmitMessage(
-          isLocal
-            ? 'Unable to reach the server. Start the backend on port 5001 (cd backend && npm run dev), restart the frontend, then try again.'
-            : 'Unable to reach our servers. Hard-refresh the page (Cmd+Shift+R) and try again, or email support@thefinalseat.com.'
-        );
-      } else {
-        setSubmitMessage(
-          'Unable to submit right now. Please call us or email support@thefinalseat.com.'
-        );
-      }
+      setSubmitMessage(normalizeError(error, 'Unable to submit your request right now. Please try again.'));
     }
   };
 
@@ -656,11 +659,11 @@ function Home() {
                           />
                         </div>
                         <div className="flights-form__group">
-                          <label htmlFor="flight-travel-class">Cabin class</label>
+                          <label htmlFor="flight-cabin-class">Cabin class</label>
                           <CustomSelect
-                            id="flight-travel-class"
-                            value={formData.travelClass}
-                            onChange={(val) => handleChange('travelClass', val)}
+                            id="flight-cabin-class"
+                            value={formData.cabinClass}
+                            onChange={(val) => handleChange('cabinClass', val)}
                             options={[
                               { value: 'economy', label: 'Economy' },
                               { value: 'premium', label: 'Premium Economy' },
@@ -680,6 +683,7 @@ function Home() {
                             minDate={new Date().toISOString().split('T')[0]}
                             required
                           />
+                          {fieldErrors.travelDate && <span className="field-error-text" style={{ color: '#dc2626', fontSize: '0.8rem', marginTop: '0.25rem', display: 'block' }}>{fieldErrors.travelDate}</span>}
                         </div>
                         {formData.tripType === 'roundtrip' && (
                           <div className="flights-form__group">
@@ -690,6 +694,7 @@ function Home() {
                               onChange={(val) => handleChange('returnDate', val)}
                               minDate={formData.travelDate || new Date().toISOString().split('T')[0]}
                             />
+                            {fieldErrors.returnDate && <span className="field-error-text" style={{ color: '#dc2626', fontSize: '0.8rem', marginTop: '0.25rem', display: 'block' }}>{fieldErrors.returnDate}</span>}
                           </div>
                         )}
                       </div>
@@ -713,7 +718,6 @@ function Home() {
                             name="smsOptIn" 
                             checked={formData.smsOptIn}
                             onChange={(e) => handleChange('smsOptIn', e.target.checked)}
-                            required 
                             style={{ width: '16px', height: '16px', marginTop: '3px', cursor: 'pointer', accentColor: '#8b1538' }}
                           />
                           <label htmlFor="smsOptIn" style={{ fontSize: '0.78rem', color: '#475569', lineHeight: '1.4', cursor: 'pointer', fontWeight: '500', userSelect: 'none' }}>
@@ -722,22 +726,18 @@ function Home() {
                         </div>
                       </div>
                       
-                      <div style={{ display: 'flex', gap: '0.75rem' }}>
+                      <div style={{ width: '100%' }}>
                         <button
                           type="submit"
-                          className="flights-btn flights-btn--cta"
-                          style={{ flex: 1 }}
+                          className="flights-btn flights-btn--cta inquiry-submit-button"
+                          style={{ width: '100%', fontSize: '1.1rem', padding: '1rem', display: 'block' }}
                           disabled={submitStatus === 'submitting'}
                         >
-                          {submitStatus === 'submitting' ? 'Submitting…' : 'Request Callback'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleSearchSchedules}
-                          className="flights-btn"
-                          style={{ flex: 1, backgroundColor: '#0f172a', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
-                        >
-                          Search Flights
+                          {submitStatus === 'submitting' ? (
+                            <><i className="fas fa-circle-notch fa-spin"></i> Submitting Request…</>
+                          ) : (
+                            'Submit Request'
+                          )}
                         </button>
                       </div>
                       {submitMessage && (
