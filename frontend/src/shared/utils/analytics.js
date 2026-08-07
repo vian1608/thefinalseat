@@ -18,101 +18,128 @@ const firedConversions = new Set();
  * send_to: AW-18364862445/mIOvCMHyndocEO2fhrVE
  * value: 1.0
  * currency: USD
+ * transaction_id: <stable unique lead id>
  *
  * Guaranteed safety:
  * - Gracefully handles missing gtag or ad blockers
- * - Deduplicates by bookingReference/leadId (firedConversions Set + sessionStorage)
+ * - Deduplicates by leadId (firedConversions Set + sessionStorage)
  * - Zero PII transmitted: no name, email, phone, card data, passport
  */
-export function trackGoogleAdsLeadConversion({
-  bookingReference,
-  leadId,
-  value = 1.0,
-  currency = 'USD',
-} = {}) {
-  const ref = bookingReference || leadId;
-  const normalizedReference = String(ref || '').trim();
-
+export function trackGoogleAdsLeadConversion(options = {}, secondaryArg = null) {
   if (typeof window === 'undefined') {
     return false;
   }
 
-  // Ensure window.dataLayer and window.gtag are available
+  // Support both object arguments { leadId, value, currency } and positional arguments (source, leadId)
+  let leadId = null;
+  let value = 1.0;
+  let currency = 'USD';
+
+  if (typeof options === 'string') {
+    leadId = secondaryArg || options;
+  } else if (typeof options === 'object' && options !== null) {
+    leadId = options.leadId || options.bookingReference || options.id || options.transaction_id || null;
+    if (options.value !== undefined) value = options.value;
+    if (options.currency) currency = options.currency;
+  }
+
+  const normalizedLeadId = leadId ? String(leadId).trim() : null;
+  const isDev = process.env.NODE_ENV === 'development';
+
+  // Require stable leadId for real production conversion
+  if (!normalizedLeadId) {
+    if (isDev) {
+      console.warn('[GoogleAds] Conversion blocked: stable leadId is required to prevent invalid tracking.');
+    }
+    return false;
+  }
+
+  // Ensure window.dataLayer and window.gtag are available safely
   window.dataLayer = window.dataLayer || [];
+
   if (typeof window.gtag !== 'function') {
     window.gtag = function () {
       window.dataLayer.push(arguments);
     };
+    if (isDev) {
+      console.info('[GoogleAds] gtag unavailable');
+    }
+  } else if (isDev) {
+    console.info('[GoogleAds] tag ready');
   }
 
-  // In-memory deduplication (firedConversions)
-  const dedupeKey = normalizedReference ? `lead_${normalizedReference}` : `lead_session_${Date.now()}`;
-  if (normalizedReference && firedConversions.has(dedupeKey)) {
-    console.info('[Google Ads] Duplicate conversion suppressed for leadId:', normalizedReference);
+  // Deduplication check: in-memory Set + sessionStorage
+  const dedupeKey = `lead_${normalizedLeadId}`;
+  const sessionStorageKey = `google-ads-lead-${normalizedLeadId}`;
+
+  let alreadyFiredInSession = false;
+  try {
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(sessionStorageKey)) {
+      alreadyFiredInSession = true;
+    }
+  } catch (_) {
+    // sessionStorage unavailable — ignore
+  }
+
+  if (firedConversions.has(dedupeKey) || alreadyFiredInSession) {
+    if (isDev) {
+      console.info('[GoogleAds] duplicate suppressed', { leadId: normalizedLeadId });
+    }
     return false;
   }
 
-  // Session storage deduplication
+  // Mark as fired before dispatching
+  firedConversions.add(dedupeKey);
   try {
-    if (normalizedReference && typeof sessionStorage !== 'undefined') {
-      const trackingKey = `google-ads-lead-${normalizedReference}`;
-      if (sessionStorage.getItem(trackingKey)) {
-        return false;
-      }
-      sessionStorage.setItem(trackingKey, 'sent');
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(sessionStorageKey, 'sent');
     }
-  } catch (_) {
-    // sessionStorage not available (SSR / test env) — proceed without it
+  } catch (_) {}
+
+  const numericValue = Number.isFinite(Number(value)) ? Number(value) : 1.0;
+  const currencyStr = String(currency || 'USD').toUpperCase();
+
+  if (isDev) {
+    console.info('[GoogleAds] lead conversion requested', {
+      leadId: normalizedLeadId,
+      destination: GOOGLE_ADS_LEAD_DESTINATION,
+      value: numericValue,
+      currency: currencyStr,
+    });
   }
 
-  firedConversions.add(dedupeKey);
-
-  // Log Google Ads conversion triggered (non-PII only)
-  console.info('Google Ads conversion triggered', {
-    destination: GOOGLE_ADS_LEAD_DESTINATION,
-    bookingReference: normalizedReference,
-    sendTo: GOOGLE_ADS_LEAD_DESTINATION,
-    value: typeof value === 'number' ? value : 1.0,
-    currency: currency || 'USD',
-  });
-
+  // Payload containing ZERO PII
   const payload = {
     send_to: GOOGLE_ADS_LEAD_DESTINATION,
-    value: Number.isFinite(Number(value)) ? Number(value) : 1.0,
-    currency: String(currency || 'USD').toUpperCase(),
+    value: numericValue,
+    currency: currencyStr,
+    transaction_id: normalizedLeadId,
     event_timeout: 2000,
   };
 
-  if (normalizedReference) {
-    payload.transaction_id = normalizedReference;
-  }
-
   try {
     window.gtag('event', 'conversion', payload);
-    // Log Google Ads conversion sent
-    console.info('Google Ads conversion sent: AW-18364862445/mIOvCMHyndocEO2fhrVE');
+    if (isDev) {
+      console.info('[GoogleAds] lead conversion sent', {
+        leadId: normalizedLeadId,
+        destination: GOOGLE_ADS_LEAD_DESTINATION,
+        value: numericValue,
+        currency: currencyStr,
+      });
+    }
     return true;
   } catch (err) {
-    console.warn('[Google Ads] Failed to dispatch lead conversion:', err.message);
+    if (isDev) {
+      console.warn('[GoogleAds] Failed to dispatch lead conversion:', err.message);
+    }
     return false;
   }
 }
 
 export { trackGoogleAdsLeadConversion as trackLeadOnce };
 
-/**
- * Wrapper: accepts string or object params.
- * Guaranteed safety: gracefully handles missing gtag, ad blockers, and deduplicates lead IDs.
- */
 export const trackLeadConversion = (params = {}, secondaryArg = null) => {
-  if (typeof params === 'string') {
-    return trackGoogleAdsLeadConversion({
-      leadId: secondaryArg || null,
-      value: 1.0,
-      currency: 'USD',
-    });
-  }
-  return trackGoogleAdsLeadConversion(params);
+  return trackGoogleAdsLeadConversion(params, secondaryArg);
 };
 
 export const trackEvent = (eventName, payload = {}) => {
