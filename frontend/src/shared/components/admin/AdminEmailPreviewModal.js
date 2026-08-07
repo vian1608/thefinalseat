@@ -19,8 +19,13 @@ export default function AdminEmailPreviewModal({
   const fetchPreview = useCallback(async () => {
     setLoading(true);
     setErrorMsg('');
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 15000);
+
     try {
-      const res = await adminAPI.getEmailPreview(bookingId, emailType);
+      const res = await adminAPI.getEmailPreview(bookingId, emailType, { signal: controller.signal });
+      window.clearTimeout(timeoutId);
+
       if (res?.success) {
         setPreviewData(res.preview || res);
       } else {
@@ -28,11 +33,16 @@ export default function AdminEmailPreviewModal({
         setErrorMsg(apiErr?.code ? `${apiErr.code}: ${apiErr.message}` : (res?.message || 'Failed to load email preview.'));
       }
     } catch (err) {
-      const apiErr = err?.response?.data?.error;
-      if (apiErr?.code && apiErr?.message) {
-        setErrorMsg(`${apiErr.code}: ${apiErr.message}`);
+      window.clearTimeout(timeoutId);
+      if (err?.name === 'AbortError' || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.code === 'ECONNABORTED') {
+        setErrorMsg('EMAIL_PREVIEW_TIMEOUT: The email preview took too long to generate.');
       } else {
-        setErrorMsg(err.message || 'Network error fetching preview.');
+        const apiErr = err?.response?.data?.error;
+        if (apiErr?.code && apiErr?.message) {
+          setErrorMsg(`${apiErr.code}: ${apiErr.message}`);
+        } else {
+          setErrorMsg(err.message || 'Network error fetching preview.');
+        }
       }
     } finally {
       setLoading(false);

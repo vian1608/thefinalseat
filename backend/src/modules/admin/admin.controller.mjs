@@ -103,7 +103,7 @@ export const adminController = {
       const { type, emailType } = req.body || {};
       const targetType = type || emailType || 'booking_request';
 
-      const booking = await adminService.getCompleteBookingById(id);
+      const booking = await bookingRepository.getCompleteBookingById(id);
       if (!booking) {
         return res.status(404).json({ success: false, error: { message: 'Booking not found' } });
       }

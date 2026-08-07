@@ -5,6 +5,7 @@ import Handlebars from 'handlebars';
 import { buildCanonicalItinerary } from '../../shared/utils/airline-lookup.mjs';
 import passengerAuthorizationService from '../authorizations/passenger-authorization.service.mjs';
 import bookingRepository from '../bookings/booking.repository.mjs';
+import { renderEmailItineraryHtml, renderEmailItineraryText } from './email-itinerary-renderer.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = path.join(__dirname, '../../integrations/resend/templates');
@@ -49,6 +50,9 @@ export const emailRendererService = {
     const outSeg = outboundSegs[0] || {};
     const retSeg = returnSegs[0] || null;
 
+    const itineraryHtml = renderEmailItineraryHtml(itinerary);
+    const itineraryText = renderEmailItineraryText(itinerary);
+
     const templatePath = path.join(TEMPLATES_DIR, 'booking-confirmation.html');
     let templateSource = await fs.readFile(templatePath, 'utf8').catch(() => null);
 
@@ -59,6 +63,10 @@ export const emailRendererService = {
           <p>Dear <strong>{{passengerFirstName}}</strong>,</p>
           <p>Thank you for submitting your booking request with <strong>The Final Seat</strong>. Your confirmation code is <strong>{{confirmationCode}}</strong>.</p>
           <p>Total Estimated Customer Price: <strong>{{currencySymbol}}{{amountPaid}} {{currency}}</strong></p>
+          <hr />
+          <div style="margin: 16px 0;">
+            {{{itineraryHtml}}}
+          </div>
           <hr />
           <p style="font-size: 12px; color: #64748b;">Support: support@thefinalseat.com | (888) 780-8855 | www.thefinalseat.com</p>
         </div>
@@ -82,21 +90,23 @@ export const emailRendererService = {
       paymentMethod: 'Card Authorization Pending',
       paymentDate: bookingDate,
       passengerCount: (booking.travellers?.length || 1).toString(),
-      outboundRoute: outSeg ? `${outSeg.departureAirport} → ${outSeg.arrivalAirport}` : 'Outbound Flight',
-      outboundAirline: outSeg.carrierName || outSeg.carrierCode || 'Commercial Airline',
-      outboundFlightNo: outSeg.flightNumber || 'N/A',
-      outboundCabin: outSeg.cabin || 'Economy',
+      outboundRoute: outSeg.originCode && outSeg.destinationCode ? `${outSeg.originCode} → ${outSeg.destinationCode}` : 'Outbound Flight',
+      outboundAirline: outSeg.airlineName || (outSeg.carrierCode ? `${outSeg.carrierCode} Airlines` : 'Commercial Airline'),
+      outboundFlightNo: outSeg.carrierCode && outSeg.flightNumber ? `${outSeg.carrierCode} ${outSeg.flightNumber}` : (outSeg.flightNumber || 'N/A'),
+      outboundCabin: outSeg.cabinClass || 'Economy',
       outboundDepDate: outSeg.departureDate || '',
       outboundDepTime: outSeg.departureTime || '',
       outboundArrTime: outSeg.arrivalTime || '',
       hasReturn: !!retSeg,
-      returnRoute: retSeg ? `${retSeg.departureAirport} → ${retSeg.arrivalAirport}` : '',
-      returnAirline: retSeg ? (retSeg.carrierName || retSeg.carrierCode || 'Commercial Airline') : '',
-      returnFlightNo: retSeg ? (retSeg.flightNumber || 'N/A') : '',
-      returnCabin: retSeg ? (retSeg.cabin || 'Economy') : '',
+      returnRoute: retSeg && retSeg.originCode ? `${retSeg.originCode} → ${retSeg.destinationCode}` : '',
+      returnAirline: retSeg ? (retSeg.airlineName || (retSeg.carrierCode ? `${retSeg.carrierCode} Airlines` : 'Commercial Airline')) : '',
+      returnFlightNo: retSeg ? (retSeg.carrierCode && retSeg.flightNumber ? `${retSeg.carrierCode} ${retSeg.flightNumber}` : (retSeg.flightNumber || 'N/A')) : '',
+      returnCabin: retSeg ? (retSeg.cabinClass || 'Economy') : '',
       returnDepDate: retSeg ? (retSeg.departureDate || '') : '',
       returnDepTime: retSeg ? (retSeg.departureTime || '') : '',
       returnArrTime: retSeg ? (retSeg.arrivalTime || '') : '',
+      itineraryHtml,
+      itineraryText,
       supportEmail: 'support@thefinalseat.com',
       supportPhone: '(888) 780-8855',
       websiteUrl: 'https://www.thefinalseat.com'
@@ -115,8 +125,7 @@ Confirmation Code: ${confirmationCode}
 Customer Total: ${currencySymbol}${customerTotal} ${currency}
 
 Itinerary Summary:
-${outboundSegs.map(s => `${s.carrierCode || ''} ${s.flightNumber || ''}: ${s.departureAirport} -> ${s.arrivalAirport} on ${s.departureDate}`).join('\n')}
-${returnSegs.map(s => `${s.carrierCode || ''} ${s.flightNumber || ''}: ${s.departureAirport} -> ${s.arrivalAirport} on ${s.departureDate}`).join('\n')}
+${itineraryText}
 
 For support, contact support@thefinalseat.com or call (888) 780-8855.
 www.thefinalseat.com

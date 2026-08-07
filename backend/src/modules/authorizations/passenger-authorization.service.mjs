@@ -39,9 +39,27 @@ export const passengerAuthorizationService = {
    * Create single-use 24-hour authorization token and snapshot
    */
   createAuthorizationToken: async (bookingInput, vaultData = {}) => {
-    const rawId = typeof bookingInput === 'object' ? (bookingInput.id || bookingInput.booking_id || bookingInput.confirmation_code) : bookingInput;
-    const completeBooking = await bookingRepository.getCompleteBookingById(rawId) || (typeof bookingInput === 'object' ? bookingInput : null);
+    const isObj = typeof bookingInput === 'object' && bookingInput !== null;
+    const rawId = isObj ? (bookingInput.id || bookingInput.booking_id || bookingInput.confirmation_code) : bookingInput;
+
+    const completeBooking = (isObj && bookingInput.id && (bookingInput.itinerary_segments || bookingInput.outbound_segments || bookingInput.flights || bookingInput.passengers || bookingInput.travellers))
+      ? bookingInput
+      : ((await bookingRepository.getCompleteBookingById(rawId).catch(() => null)) || (isObj ? bookingInput : null));
+
     if (!completeBooking) throw new Error('Booking not found');
+
+    // Reuse unexpired token if available to avoid DB write churn on preview
+    if (completeBooking.authorization_token && completeBooking.authorization_expires_at) {
+      const existingExpMs = new Date(completeBooking.authorization_expires_at).getTime();
+      if (!isNaN(existingExpMs) && existingExpMs > Date.now() + 5 * 60 * 1000) {
+        return {
+          token: completeBooking.authorization_token,
+          bookingId: completeBooking.id,
+          expiresAt: completeBooking.authorization_expires_at,
+          authorizationUrl: `https://www.thefinalseat.com/authorize/${completeBooking.authorization_token}`
+        };
+      }
+    }
 
     const bookingId = completeBooking.id;
     const expiresAtMs = Date.now() + 24 * 60 * 60 * 1000;

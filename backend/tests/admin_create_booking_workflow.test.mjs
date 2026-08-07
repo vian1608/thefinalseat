@@ -192,4 +192,45 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     assert.match(dashContent, /Awaiting Authorization/, 'AdminDashboardPage must display Awaiting Authorization label');
   });
 
+  await t.test('24. Shared Email Itinerary Renderer produces real itinerary HTML/Text without Commercial Airline placeholders', async () => {
+    const { renderEmailItineraryHtml, renderEmailItineraryText } = await import('../src/modules/emails/email-itinerary-renderer.mjs');
+    const mockItinerary = {
+      outbound: [
+        {
+          airlineName: 'Delta Air Lines',
+          carrierCode: 'DL',
+          flightNumber: '106',
+          originCode: 'JFK',
+          destinationCode: 'LHR',
+          departureDate: '2026-09-15',
+          departureTime: '19:30',
+          arrivalDate: '2026-09-16',
+          arrivalTime: '07:45',
+          cabinClass: 'Economy'
+        }
+      ]
+    };
+
+    const html = renderEmailItineraryHtml(mockItinerary);
+    const text = renderEmailItineraryText(mockItinerary);
+
+    assert.match(html, /Delta Air Lines/, 'HTML itinerary must render real airline name');
+    assert.match(html, /DL 106/, 'HTML itinerary must render real flight number');
+    assert.match(html, /JFK/, 'HTML itinerary must render origin code');
+    assert.match(html, /LHR/, 'HTML itinerary must render destination code');
+    assert.doesNotMatch(html, /Commercial Airline/, 'HTML itinerary must not contain Commercial Airline fallback');
+    assert.doesNotMatch(html, /\(\)\s*→\s*\(\)/, 'HTML itinerary must not contain () -> () empty route fallback');
+
+    assert.match(text, /Delta Air Lines DL 106/, 'Text itinerary must contain airline and flight number');
+    assert.match(text, /JFK.*-> LHR/, 'Text itinerary must contain route');
+  });
+
+  await t.test('25. AdminDashboardPage Authorization card & Quick Actions use sendAdminBookingEmail', () => {
+    const dashPath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.js');
+    const dashContent = fs.readFileSync(dashPath, 'utf-8');
+
+    assert.doesNotMatch(dashContent, /handlePaymentActionSubmit\(['"]send_authorization['"]\)/, 'Authorization card and Quick Actions must NOT use handlePaymentActionSubmit for email sending');
+    assert.match(dashContent, /sendAdminBookingEmail\(\{\s*emailType:\s*['"]authorization['"]/, 'Authorization email trigger must call sendAdminBookingEmail');
+  });
+
 });

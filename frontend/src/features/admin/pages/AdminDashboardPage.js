@@ -1743,7 +1743,7 @@ function AdminDashboard() {
     const clientRequestId = window.crypto?.randomUUID ? window.crypto.randomUUID() : `email_${Date.now()}_${Math.random()}`;
 
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 20000);
+    const timeoutId = window.setTimeout(() => controller.abort(), 35000);
 
     const emailPromise = (async () => {
       try {
@@ -1760,10 +1760,18 @@ function AdminDashboard() {
           window.clearTimeout(timeoutId);
         } catch (reqErr) {
           window.clearTimeout(timeoutId);
-          if (reqErr.name === 'AbortError' || reqErr.message?.includes('20 seconds') || reqErr.code === 'ECONNABORTED') {
+          const isCanceledOrTimeout =
+            reqErr?.name === 'CanceledError' ||
+            reqErr?.name === 'AbortError' ||
+            reqErr?.code === 'ERR_CANCELED' ||
+            reqErr?.code === 'ECONNABORTED' ||
+            reqErr?.message === 'canceled';
+
+          if (isCanceledOrTimeout) {
             isTimeout = true;
           } else {
-            const errMsg = reqErr.response?.data?.error?.message || reqErr.response?.data?.message || reqErr.message || 'Email dispatch failed.';
+            const apiErr = reqErr.response?.data?.error;
+            const errMsg = apiErr?.code ? `${apiErr.code}: ${apiErr.message}` : (reqErr.response?.data?.message || reqErr.message || 'Email dispatch failed.');
             if (emailType === 'booking_request') setBookingEmailResult({ status: 'failure', error: errMsg });
             else if (emailType === 'authorization') setAuthorizationEmailResult({ status: 'failure', error: errMsg });
             else if (emailType === 'final_ticket') setFinalTicketEmailResult({ status: 'failure', error: errMsg });
@@ -2966,14 +2974,14 @@ function AdminDashboard() {
                   <div style={{ position: 'absolute', right: 0, top: '36px', width: '220px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', zIndex: 90, padding: '6px 0' }}>
                     <button
                       type="button"
-                      onClick={() => { setShowThreeDotMenu(false); handlePaymentActionSubmit('send_authorization'); }}
+                      onClick={() => { setShowThreeDotMenu(false); sendAdminBookingEmail({ emailType: 'authorization', actionName: 'send_authorization' }); }}
                       style={{ width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: '0.8rem', color: '#1e293b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
                     >
                       <i className="fas fa-paper-plane" style={{ color: '#2563eb' }}></i> Send Authorization
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setShowThreeDotMenu(false); handleSendFinalTicketEmail(); }}
+                      onClick={() => { setShowThreeDotMenu(false); sendAdminBookingEmail({ emailType: 'final_ticket', actionName: 'send_final_ticket_email' }); }}
                       style={{ width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: '0.8rem', color: '#1e293b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
                     >
                       <i className="fas fa-envelope-open-text" style={{ color: '#16a34a' }}></i> Send Final Ticket Email
@@ -3472,14 +3480,14 @@ function AdminDashboard() {
                               <div style={{ position: 'absolute', right: 0, top: '36px', width: '220px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', zIndex: 90, padding: '6px 0' }}>
                                 <button
                                   type="button"
-                                  onClick={() => { setShowThreeDotMenu(false); handlePaymentActionSubmit('send_authorization'); }}
+                                  onClick={() => { setShowThreeDotMenu(false); sendAdminBookingEmail({ emailType: 'authorization', actionName: 'send_authorization' }); }}
                                   style={{ width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: '0.8rem', color: '#1e293b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
                                 >
                                   <i className="fas fa-paper-plane" style={{ color: '#2563eb' }}></i> Send Authorization
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => { setShowThreeDotMenu(false); handleSendFinalTicketEmail(); }}
+                                  onClick={() => { setShowThreeDotMenu(false); sendAdminBookingEmail({ emailType: 'final_ticket', actionName: 'send_final_ticket_email' }); }}
                                   style={{ width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', fontSize: '0.8rem', color: '#1e293b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
                                 >
                                   <i className="fas fa-envelope-open-text" style={{ color: '#16a34a' }}></i> Send Final Ticket Email
@@ -5662,6 +5670,22 @@ function AdminDashboard() {
                                   {errorMsg && <div style={{ color: '#dc2626', gridColumn: '1 / -1' }}><strong>Error:</strong> {errorMsg}</div>}
                                 </div>
 
+                                {authorizationEmailResult.status === 'sending' && (
+                                  <div style={{ fontSize: '0.78rem', color: '#0369a1', backgroundColor: '#e0f2fe', padding: '6px 10px', borderRadius: '4px', marginTop: '8px', marginBottom: '8px' }}>
+                                    <i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i> Sending Authorization Email…
+                                  </div>
+                                )}
+                                {authorizationEmailResult.status === 'success' && (
+                                  <div style={{ fontSize: '0.78rem', color: '#166534', backgroundColor: '#dcfce7', padding: '6px 10px', borderRadius: '4px', marginTop: '8px', marginBottom: '8px' }}>
+                                    <i className="fas fa-check-circle" style={{ marginRight: '6px' }}></i> {authorizationEmailResult.message || 'Authorization email sent successfully.'}
+                                  </div>
+                                )}
+                                {authorizationEmailResult.status === 'failure' && (
+                                  <div style={{ fontSize: '0.78rem', color: '#991b1b', backgroundColor: '#fee2e2', padding: '6px 10px', borderRadius: '4px', marginTop: '8px', marginBottom: '8px' }}>
+                                    <i className="fas fa-exclamation-circle" style={{ marginRight: '6px' }}></i> {authorizationEmailResult.error || 'Failed to send authorization email.'}
+                                  </div>
+                                )}
+
                                 {isAuthCompleted && computedStatus === 'NOT_SENT' && (
                                   <div style={{ background: '#fffbe6', color: '#b45309', border: '1px solid #ffe58f', borderRadius: '6px', padding: '6px 8px', fontSize: '0.75rem', fontStyle: 'italic', marginBottom: '8px' }}>
                                     Authorization completed, but email delivery record is unavailable.
@@ -5681,11 +5705,23 @@ function AdminDashboard() {
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => handlePaymentActionSubmit(['SENT', 'ACCEPTED', 'DELIVERED'].includes(computedStatus) ? 'resend_authorization' : 'send_authorization')}
-                                      className="admin-primary-btn"
-                                      style={{ background: '#8B1236', fontSize: '0.78rem', height: '34px' }}
+                                      onClick={() => sendAdminBookingEmail({
+                                        emailType: 'authorization',
+                                        actionName: ['SENT', 'ACCEPTED', 'DELIVERED', 'MANUALLY_SENT'].includes(computedStatus)
+                                          ? 'resend_authorization'
+                                          : 'send_authorization'
+                                      })}
+                                      disabled={authorizationEmailSending}
+                                      aria-busy={authorizationEmailSending}
+                                      className={['SENT', 'ACCEPTED', 'DELIVERED', 'MANUALLY_SENT'].includes(computedStatus) ? "admin-secondary-btn" : "admin-primary-btn"}
+                                      style={{
+                                        background: ['SENT', 'ACCEPTED', 'DELIVERED', 'MANUALLY_SENT'].includes(computedStatus) ? '#f1f5f9' : '#8B1236',
+                                        fontSize: '0.78rem',
+                                        height: '34px'
+                                      }}
                                     >
-                                      <i className="fas fa-paper-plane" style={{ marginRight: '4px' }}></i> {['SENT', 'ACCEPTED', 'DELIVERED'].includes(computedStatus) ? 'Resend Auth Email' : 'Send Auth Email'}
+                                      <i className={`fas ${authorizationEmailSending ? 'fa-spinner fa-spin' : (['SENT', 'ACCEPTED', 'DELIVERED', 'MANUALLY_SENT'].includes(computedStatus) ? 'fa-redo' : 'fa-paper-plane')}`} style={{ marginRight: '4px' }}></i>
+                                      {authorizationEmailSending ? 'Sending…' : (authorizationEmailResult.status === 'failure' ? 'Retry Auth Email' : (['SENT', 'ACCEPTED', 'DELIVERED', 'MANUALLY_SENT'].includes(computedStatus) ? 'Resend Auth Email' : 'Send Auth Email'))}
                                     </button>
                                   </div>
 
