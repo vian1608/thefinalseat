@@ -211,6 +211,7 @@ export const passengerAuthorizationService = {
     const cardLast4 = /^\d{4}$/.test(rawLast4) ? rawLast4 : null;
 
     const completeBooking = await bookingRepository.getCompleteBookingById(booking.id || booking.booking_id) || booking;
+    const currencyStr = (authRecord.currency || completeBooking.currency || 'USD').toUpperCase();
     const splits = authRecord.quote_snapshot?.splits || completeBooking.paymentSplits || completeBooking.payment_splits || [];
     const itinerary = buildCanonicalItinerary(completeBooking);
     const outboundSegs = itinerary.outbound || [];
@@ -362,6 +363,7 @@ Email: support@thefinalseat.com | Call: ${env.supportPhoneDisplay}
       try {
         const response = await fetch('https://api.resend.com/emails', {
           method: 'POST',
+          signal: AbortSignal.timeout(10000),
           headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             from: env.resendFrom || 'The Final Seat <support@thefinalseat.com>',
