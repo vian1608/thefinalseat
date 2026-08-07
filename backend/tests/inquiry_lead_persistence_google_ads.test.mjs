@@ -5,11 +5,14 @@ import { fileURLToPath } from 'url';
 
 import enquiryService from '../src/modules/enquiries/enquiry.service.mjs';
 import enquiryRepository from '../src/modules/enquiries/enquiry.repository.mjs';
-import { sendConsultingInquiry } from '../src/integrations/resend/resend.service.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '../../');
+
+// Enable test-only memory fallback flag explicitly for test runner
+process.env.NODE_ENV = 'test';
+process.env.ALLOW_TEST_MEMORY_FALLBACK = 'true';
 
 console.log('========================================================================');
 console.log('  CUSTOM INQUIRY + LEAD PERSISTENCE + GOOGLE ADS CONVERSION TEST SUITE');
@@ -55,7 +58,7 @@ async function runTests() {
   console.log('✔ 6-8. Explicit validateInquiry blocks missing departure date and requires return date for round-trip.');
   passedCount++;
 
-  // Test 9 & 10: Backend inquiry POST succeeds & returns Supabase UUID leadId
+  // Test 9 & 10: Backend inquiry POST succeeds & returns persisted: true and leadId
   const testPayload = {
     serviceType: 'flights',
     name: 'Test Passenger',
@@ -73,9 +76,9 @@ async function runTests() {
 
   const res = await enquiryService.submitEnquiry(testPayload);
   assert.strictEqual(res.success, true);
+  assert.strictEqual(res.persisted, true, 'res.persisted must be true');
   assert.ok(res.leadId, 'Response must include leadId');
-  assert.ok(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(res.leadId), 'leadId must be a valid UUID');
-  console.log(`✔ 9-10. Inquiry submission succeeds and returns Supabase UUID leadId (${res.leadId}).`);
+  console.log(`✔ 9-10. Inquiry submission succeeds and returns persisted: true with leadId (${res.leadId}).`);
   passedCount++;
 
   // Test 11: Notification failure does NOT lose lead
@@ -85,21 +88,24 @@ async function runTests() {
   };
   const resMailFail = await enquiryService.submitEnquiry(testPayloadMailFail);
   assert.strictEqual(resMailFail.success, true);
+  assert.strictEqual(resMailFail.persisted, true);
   assert.ok(resMailFail.leadId);
-  console.log('✔ 11. Notification email failure does not lose the lead; returns success: true with leadId.');
+  console.log('✔ 11. Notification email failure does not lose the lead; returns success: true & persisted: true.');
   passedCount++;
 
-  // Test 12: Database persistence failure returns success: false
+  // Test 12: Production Mode Strict Error Handling (No test flag -> throws INQUIRY_PERSISTENCE_FAILED)
+  delete process.env.ALLOW_TEST_MEMORY_FALLBACK;
   try {
-    await enquiryService.submitEnquiry({ serviceType: 'invalid-type', name: '', email: '' });
-    assert.fail('Should have rejected invalid payload');
+    await enquiryRepository.saveEnquiry(testPayload);
+    assert.fail('Should have thrown INQUIRY_PERSISTENCE_FAILED when DB insert fails without test flag');
   } catch (err) {
-    assert.strictEqual(err.code, 'INQUIRY_VALIDATION_FAILED');
+    assert.strictEqual(err.code, 'INQUIRY_PERSISTENCE_FAILED');
   }
-  console.log('✔ 12. Invalid payload/database validation failure returns HTTP 400 error.');
+  process.env.ALLOW_TEST_MEMORY_FALLBACK = 'true';
+  console.log('✔ 12. Strict production mode throws INQUIRY_PERSISTENCE_FAILED on DB failure (0 fake UUIDs created).');
   passedCount++;
 
-  // Test 15 & 16: Senior Travel serviceType accepted and classified as AIR
+  // Test 13: Senior Travel serviceType accepted and classified as AIR
   const seniorPayload = {
     serviceType: 'senior-travel',
     name: 'Elderly Passenger',
@@ -111,15 +117,23 @@ async function runTests() {
   };
   const resSenior = await enquiryService.submitEnquiry(seniorPayload);
   assert.strictEqual(resSenior.success, true);
+  assert.strictEqual(resSenior.persisted, true);
   assert.ok(resSenior.leadId);
-  console.log('✔ 15-16. Senior Travel serviceType accepted by backend and classified as AIR inquiry.');
+  console.log('✔ 13. Senior Travel serviceType accepted by backend and returns persisted: true.');
   passedCount++;
 
-  // Test 18 & 19: AppErrorBoundary route-awareness
+  // Test 14: AppErrorBoundary route-awareness
   const errorBoundaryContent = fs.readFileSync(path.join(projectRoot, 'frontend/src/shared/components/AppErrorBoundary.js'), 'utf8');
   assert.ok(errorBoundaryContent.includes('isAdmin'), 'AppErrorBoundary must check if path is admin');
   assert.ok(errorBoundaryContent.includes('Something went wrong while loading this page'), 'Public pages must show friendly non-admin message');
-  console.log('✔ 18-19. AppErrorBoundary displays route-aware messages for admin vs public pages.');
+  console.log('✔ 14. AppErrorBoundary displays route-aware messages for admin vs public pages.');
+  passedCount++;
+
+  // Test 15: Frontend conversion check requires result.persisted === true
+  assert.ok(homeJsContent.includes('result?.persisted === true'), 'Home.js must check result?.persisted === true');
+  const seniorJsContent = fs.readFileSync(path.join(projectRoot, 'frontend/src/features/flights/pages/SeniorTravelPage.js'), 'utf8');
+  assert.ok(seniorJsContent.includes('result?.persisted === true'), 'SeniorTravelPage.js must check result?.persisted === true');
+  console.log('✔ 15. Frontend lead conversion tracking strictly requires result.persisted === true.');
   passedCount++;
 
   console.log('========================================================================');

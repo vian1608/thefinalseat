@@ -205,8 +205,13 @@ export default function SeniorTravelPage() {
     }
 
     try {
+      const clientRequestId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
       const payload = {
         serviceType: 'senior-travel',
+        clientRequestId,
         name: form.name.trim(),
         email: form.email.trim(),
         phone: form.phone.trim(),
@@ -230,7 +235,7 @@ export default function SeniorTravelPage() {
       const rawResponse = await inquiryAPI.submitConsulting(payload);
       const result = rawResponse?.data ?? rawResponse;
 
-      if (result?.success === true && result?.leadId) {
+      if (result?.success === true && result?.persisted === true && result?.leadId) {
         const ref = result.leadId;
         setBookingRef(ref);
         setSubmitStatus('success');

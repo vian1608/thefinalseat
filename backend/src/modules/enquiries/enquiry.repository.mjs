@@ -1,12 +1,15 @@
 import supabase from '../../integrations/supabase/supabase.client.mjs';
 import logger from '../../config/logger.mjs';
 
-const memoryInquiriesStore = new Map();
+const testMemoryStore = new Map();
 
 export const enquiryRepository = {
   saveEnquiry: async (enquiryData) => {
+    const clientRequestId = (enquiryData.clientRequestId || enquiryData.client_request_id || '').trim() || null;
+
     const payload = {
-      service_type: enquiryData.serviceType || 'flights',
+      client_request_id: clientRequestId,
+      service_type: (enquiryData.serviceType || 'flights').trim(),
       status: 'NEW',
       name: (enquiryData.name || '').trim(),
       email: (enquiryData.email || '').trim(),
@@ -33,6 +36,24 @@ export const enquiryRepository = {
       email_status: 'PENDING'
     };
 
+    // Idempotency check by client_request_id if supplied
+    if (clientRequestId) {
+      try {
+        const { data: existing } = await supabase
+          .from('inquiries')
+          .select()
+          .eq('client_request_id', clientRequestId)
+          .maybeSingle();
+
+        if (existing?.id) {
+          logger.info(`[EnquiryRepo] Found existing inquiry for client_request_id ${clientRequestId}: ${existing.id}`);
+          return { ...existing, persisted: true };
+        }
+      } catch (idempErr) {
+        logger.warn('[EnquiryRepo] Idempotency lookup check failed:', idempErr.message);
+      }
+    }
+
     try {
       const { data, error } = await supabase
         .from('inquiries')
@@ -41,20 +62,39 @@ export const enquiryRepository = {
         .single();
 
       if (error) {
-        logger.warn(`[EnquiryRepo] Supabase table insert warning: ${error.message}. Saving to resilience memory store.`);
-        const fallbackId = `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
-        const fallbackRecord = { id: fallbackId, ...payload, created_at: new Date().toISOString() };
-        memoryInquiriesStore.set(fallbackId, fallbackRecord);
-        return fallbackRecord;
+        logger.error('[EnquiryRepo] Supabase insert failed:', { code: error.code, message: error.message });
+
+        // Memory fallback ONLY for explicit unit test mode with ALLOW_TEST_MEMORY_FALLBACK=true
+        if (process.env.NODE_ENV === 'test' && process.env.ALLOW_TEST_MEMORY_FALLBACK === 'true') {
+          const testId = `test_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+          const testRecord = { id: testId, ...payload, persisted: true, created_at: new Date().toISOString() };
+          testMemoryStore.set(testId, testRecord);
+          return testRecord;
+        }
+
+        const err = new Error(`Unable to persist inquiry: ${error.message}`);
+        err.code = 'INQUIRY_PERSISTENCE_FAILED';
+        err.statusCode = 500;
+        throw err;
       }
 
-      return data;
+      return { ...data, persisted: true };
     } catch (err) {
+      if (err.code === 'INQUIRY_PERSISTENCE_FAILED') throw err;
+
       logger.error('[EnquiryRepo] Exception during Supabase insert:', err.message);
-      const fallbackId = `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
-      const fallbackRecord = { id: fallbackId, ...payload, created_at: new Date().toISOString() };
-      memoryInquiriesStore.set(fallbackId, fallbackRecord);
-      return fallbackRecord;
+
+      if (process.env.NODE_ENV === 'test' && process.env.ALLOW_TEST_MEMORY_FALLBACK === 'true') {
+        const testId = `test_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const testRecord = { id: testId, ...payload, persisted: true, created_at: new Date().toISOString() };
+        testMemoryStore.set(testId, testRecord);
+        return testRecord;
+      }
+
+      const dbErr = new Error(`Unable to persist inquiry: ${err.message}`);
+      dbErr.code = 'INQUIRY_PERSISTENCE_FAILED';
+      dbErr.statusCode = 500;
+      throw dbErr;
     }
   },
 

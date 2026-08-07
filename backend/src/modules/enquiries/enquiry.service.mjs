@@ -48,8 +48,8 @@ export const enquiryService = {
     }
 
     const leadId = savedRecord?.id;
-    if (!leadId) {
-      const error = new Error('Lead ID generation failed');
+    if (!leadId || savedRecord?.persisted !== true) {
+      const error = new Error('Lead persistence verification failed');
       error.code = 'INQUIRY_PERSISTENCE_FAILED';
       error.statusCode = 500;
       throw error;
@@ -79,6 +79,7 @@ export const enquiryService = {
 
     return {
       success: true,
+      persisted: true,
       leadId,
       emailed,
       messageId: emailResult?.messageId || null,

@@ -256,14 +256,19 @@ function Home() {
     setSubmitStatus('submitting');
     setSubmitMessage('');
 
+    const clientRequestId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
     try {
       const rawResponse = await inquiryAPI.submitConsulting({
         serviceType: 'flights',
+        clientRequestId,
         ...formData,
       });
       const result = rawResponse?.data ?? rawResponse;
 
-      if (result?.success === true && result?.leadId) {
+      if (result?.success === true && result?.persisted === true && result?.leadId) {
         console.info('[Lead] Backend save confirmed', { leadId: result.leadId });
         setSubmitStatus('success');
         setSubmitMessage(
