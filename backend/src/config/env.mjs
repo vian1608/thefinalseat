@@ -48,12 +48,26 @@ export const env = {
   get serpapiApiKey() { return process.env.SERPAPI_API_KEY || ''; },
 
   // JWT
-  get jwtSecret() { return process.env.JWT_SECRET || 'your-secret-key-change-this-in-production'; },
+  get jwtSecret() {
+    const val = process.env.JWT_SECRET;
+    const isProd = (process.env.NODE_ENV || 'development').toLowerCase() === 'production';
+    if (isProd && (!val || val === 'your-secret-key-change-this-in-production')) {
+      throw new Error('FATAL_CONFIG_ERROR: JWT_SECRET environment variable is missing or insecure in production');
+    }
+    return val || 'your-secret-key-change-this-in-production';
+  },
   get jwtExpiresIn() { return process.env.JWT_EXPIRES_IN || '7d'; },
 
   // Admin
   get adminEmail() { return process.env.ADMIN_EMAIL || 'admin@thefinalseat.com'; },
-  get adminPassword() { return process.env.ADMIN_PASSWORD || 'admin123'; },
+  get adminPassword() {
+    const val = process.env.ADMIN_PASSWORD;
+    const isProd = (process.env.NODE_ENV || 'development').toLowerCase() === 'production';
+    if (isProd && (!val || val === 'admin123')) {
+      throw new Error('FATAL_CONFIG_ERROR: ADMIN_PASSWORD environment variable is missing or insecure in production');
+    }
+    return val || 'admin123';
+  },
 
   // PayPal
   get paypalClientId() { return process.env.PAYPAL_CLIENT_ID || ''; },
