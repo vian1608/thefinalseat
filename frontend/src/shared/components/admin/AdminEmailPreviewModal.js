@@ -24,10 +24,16 @@ export default function AdminEmailPreviewModal({
       if (res?.success) {
         setPreviewData(res.preview || res);
       } else {
-        setErrorMsg(res?.error?.message || res?.message || 'Failed to load email preview.');
+        const apiErr = res?.error;
+        setErrorMsg(apiErr?.code ? `${apiErr.code}: ${apiErr.message}` : (res?.message || 'Failed to load email preview.'));
       }
     } catch (err) {
-      setErrorMsg(err.message || 'Network error fetching preview.');
+      const apiErr = err?.response?.data?.error;
+      if (apiErr?.code && apiErr?.message) {
+        setErrorMsg(`${apiErr.code}: ${apiErr.message}`);
+      } else {
+        setErrorMsg(err.message || 'Network error fetching preview.');
+      }
     } finally {
       setLoading(false);
     }
@@ -179,8 +185,26 @@ export default function AdminEmailPreviewModal({
           )}
 
           {errorMsg && (
-            <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b', padding: '12px', borderRadius: '6px', fontSize: '13px' }}>
-              ⚠️ {errorMsg}
+            <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b', padding: '14px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
+              <div style={{ fontWeight: 800, marginBottom: '6px', fontSize: '14px' }}>⚠️ Email Preview Generation Failed</div>
+              <div>{errorMsg}</div>
+              <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={fetchPreview}
+                  disabled={loading}
+                  style={{ padding: '6px 14px', backgroundColor: '#991b1b', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}
+                >
+                  {loading ? 'Retrying...' : '🔄 Retry Preview'}
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  style={{ padding: '6px 14px', backgroundColor: '#ffffff', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', fontSize: '12px' }}
+                >
+                  Close
+                </button>
+              </div>
             </div>
           )}
 
@@ -301,34 +325,86 @@ export default function AdminEmailPreviewModal({
         )}
 
         {/* Footer Toolbar */}
-        <div style={{ padding: '14px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button onClick={handleCopySubject} style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
-              📋 Copy Subject
-            </button>
-            <button onClick={handleCopyText} style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
-              📄 Copy Plain Text
-            </button>
-            <button onClick={handleCopyFormattedEmail} style={{ padding: '6px 12px', border: '1px solid #8b1236', borderRadius: '6px', backgroundColor: '#fff5f7', color: '#8b1236', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
-              ✉️ Copy Formatted Email
-            </button>
-            <button onClick={handleOpenEmailApp} style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
-              ↗️ Open in Email App
-            </button>
-          </div>
+        {(() => {
+          const previewUnavailable = loading || !previewData;
+          return (
+            <div style={{ padding: '14px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  disabled={previewUnavailable}
+                  onClick={handleCopySubject}
+                  style={{
+                    padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px',
+                    backgroundColor: previewUnavailable ? '#f1f5f9' : '#ffffff',
+                    color: previewUnavailable ? '#94a3b8' : '#334155',
+                    fontSize: '12px', fontWeight: 600, cursor: previewUnavailable ? 'not-allowed' : 'pointer', opacity: previewUnavailable ? 0.6 : 1
+                  }}
+                >
+                  📋 Copy Subject
+                </button>
+                <button
+                  type="button"
+                  disabled={previewUnavailable}
+                  onClick={handleCopyText}
+                  style={{
+                    padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px',
+                    backgroundColor: previewUnavailable ? '#f1f5f9' : '#ffffff',
+                    color: previewUnavailable ? '#94a3b8' : '#334155',
+                    fontSize: '12px', fontWeight: 600, cursor: previewUnavailable ? 'not-allowed' : 'pointer', opacity: previewUnavailable ? 0.6 : 1
+                  }}
+                >
+                  📄 Copy Plain Text
+                </button>
+                <button
+                  type="button"
+                  disabled={previewUnavailable}
+                  onClick={handleCopyFormattedEmail}
+                  style={{
+                    padding: '6px 12px', border: '1px solid #8b1236', borderRadius: '6px',
+                    backgroundColor: previewUnavailable ? '#f1f5f9' : '#fff5f7',
+                    color: previewUnavailable ? '#94a3b8' : '#8b1236',
+                    fontSize: '12px', fontWeight: 700, cursor: previewUnavailable ? 'not-allowed' : 'pointer', opacity: previewUnavailable ? 0.6 : 1
+                  }}
+                >
+                  ✉️ Copy Formatted Email
+                </button>
+                <button
+                  type="button"
+                  disabled={previewUnavailable}
+                  onClick={handleOpenEmailApp}
+                  style={{
+                    padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px',
+                    backgroundColor: previewUnavailable ? '#f1f5f9' : '#ffffff',
+                    color: previewUnavailable ? '#94a3b8' : '#334155',
+                    fontSize: '12px', fontWeight: 600, cursor: previewUnavailable ? 'not-allowed' : 'pointer', opacity: previewUnavailable ? 0.6 : 1
+                  }}
+                >
+                  ↗️ Open in Email App
+                </button>
+              </div>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => setConfirmManualModal(true)}
-              style={{ padding: '6px 14px', border: '1px solid #d97706', borderRadius: '6px', backgroundColor: '#fef3c7', color: '#92400e', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
-            >
-              Mark as Manually Sent
-            </button>
-            <button onClick={onClose} style={{ padding: '6px 16px', border: 'none', borderRadius: '6px', backgroundColor: '#475569', color: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
-              Close
-            </button>
-          </div>
-        </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  disabled={previewUnavailable}
+                  onClick={() => setConfirmManualModal(true)}
+                  style={{
+                    padding: '6px 14px', border: '1px solid #d97706', borderRadius: '6px',
+                    backgroundColor: previewUnavailable ? '#f1f5f9' : '#fef3c7',
+                    color: previewUnavailable ? '#94a3b8' : '#92400e',
+                    fontSize: '12px', fontWeight: 700, cursor: previewUnavailable ? 'not-allowed' : 'pointer', opacity: previewUnavailable ? 0.6 : 1
+                  }}
+                >
+                  Mark as Manually Sent
+                </button>
+                <button onClick={onClose} style={{ padding: '6px 16px', border: 'none', borderRadius: '6px', backgroundColor: '#475569', color: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
+                  Close
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

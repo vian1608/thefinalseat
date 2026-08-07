@@ -37,33 +37,54 @@ export const adminController = {
   emailPreview: async (req, res, next) => {
     try {
       const { id } = req.params;
-      const { type } = req.body || {};
+      const rawType = (req.body || {}).type || (req.query || {}).type;
+      const type = String(rawType || '').trim().toLowerCase().replace(/-/g, '_');
 
-      const booking = await adminService.getCompleteBookingById(id);
+      let booking = null;
+      try {
+        booking = await bookingRepository.getCompleteBookingById(id);
+      } catch (err) {
+        return res.status(500).json({
+          success: false,
+          error: { code: 'BOOKING_LOAD_FAILED', message: `Could not load booking details: ${err.message}` }
+        });
+      }
+
       if (!booking) {
-        return res.status(404).json({ success: false, error: { message: 'Booking not found' } });
+        return res.status(404).json({ success: false, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found' } });
       }
 
       let rendered = null;
-      if (type === 'booking_request') {
-        rendered = await emailRendererService.renderBookingRequestEmail(booking);
-      } else if (type === 'authorization') {
-        rendered = await emailRendererService.renderAuthorizationEmail(booking);
-      } else if (type === 'final_ticket') {
-        rendered = await emailRendererService.renderFinalTicketEmail(booking);
-      } else {
-        return res.status(400).json({ success: false, error: { message: `Unsupported email preview type: ${type}` } });
+      try {
+        if (type === 'booking_request') {
+          rendered = await emailRendererService.renderBookingRequestEmail(booking);
+        } else if (type === 'authorization') {
+          rendered = await emailRendererService.renderAuthorizationEmail(booking);
+        } else if (type === 'final_ticket') {
+          rendered = await emailRendererService.renderFinalTicketEmail(booking);
+        } else {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'INVALID_PREVIEW_TYPE', message: `Unsupported email preview type: ${rawType}` }
+          });
+        }
+      } catch (err) {
+        const errCode = type === 'authorization' ? 'AUTHORIZATION_PREVIEW_FAILED' : 'EMAIL_TEMPLATE_RENDER_FAILED';
+        return res.status(500).json({
+          success: false,
+          error: { code: errCode, message: err.message || 'Email template rendering failed' }
+        });
       }
 
       const previewPayload = {
         type: type || rendered.type,
-        recipient: rendered.recipient || rendered.to,
+        recipient: rendered.recipient || rendered.to || booking.email || booking.contacts?.[0]?.email || 'N/A',
         subject: rendered.subject,
         html: rendered.html,
         text: rendered.text,
         missingFields: rendered.missingFields || [],
-        authorizationUrl: rendered.authorizationUrl,
-        authorizationExpiresAt: rendered.authorizationExpiresAt
+        authorizationUrl: rendered.authorizationUrl || null,
+        authorizationExpiresAt: rendered.authorizationExpiresAt || null
       };
 
       return res.json({
@@ -1004,6 +1025,16 @@ export const adminController = {
       const reqId = req.headers['idempotency-key'] || req.body?.clientRequestId || `EMAIL-${Date.now()}`;
 
       if (['send_authorization', 'resend_authorization', 'send_authorization_email', 'resend_authorization_email'].includes(action)) {
+        const recipientEmail = booking.email || booking.contacts?.[0]?.email || booking.travellers?.[0]?.email;
+        if (!recipientEmail || !recipientEmail.includes('@')) {
+          return res.status(400).json({
+            success: false,
+            requestId: reqId,
+            emailType: 'authorization',
+            error: { code: 'EMAIL_RECIPIENT_MISSING', message: 'No valid recipient email address exists on this booking.' }
+          });
+        }
+
         // Verify integer cents financial consistency before sending authorization email
         const bCents = Math.round(Number(booking.customer_price || booking.total_amount || 0) * 100);
         const splits = booking.payment_splits || booking.paymentSplits || [];
@@ -1033,12 +1064,19 @@ export const adminController = {
           });
         }
 
-        // Update status to AWAITING_PASSENGER only after provider success
-        await bookingRepository.updateStatus(booking.id, 'AWAITING_PASSENGER', adminEmail, 'Authorization email sent');
-        const updated = await adminService.getCompleteBookingById(booking.id);
+        const providerMsgId = emailRes.providerMessageId || emailRes.emailId || emailRes.id || null;
+        if (!providerMsgId) {
+          return res.status(502).json({
+            success: false,
+            requestId: reqId,
+            emailType: 'authorization',
+            error: { code: 'EMAIL_PROVIDER_ID_MISSING', message: 'Provider did not return a message identifier.' }
+          });
+        }
 
-        const recipientEmail = booking.email || booking.contacts?.[0]?.email || 'customer@example.com';
-        const providerMsgId = emailRes.emailId || emailRes.providerId || emailRes.id || `prov_${Date.now()}`;
+        // Update authorization status safely
+        await bookingRepository.updateStatus(booking.id, { authorization_status: 'AWAITING_PASSENGER' });
+        const updated = await bookingRepository.getCompleteBookingById(booking.id);
         const sentTime = new Date().toISOString();
 
         return res.json({
@@ -1065,6 +1103,16 @@ export const adminController = {
       }
 
       if (['send_booking_request_email', 'resend_booking_request_email'].includes(action)) {
+        const recipientEmail = booking.email || booking.contacts?.[0]?.email || booking.travellers?.[0]?.email;
+        if (!recipientEmail || !recipientEmail.includes('@')) {
+          return res.status(400).json({
+            success: false,
+            requestId: reqId,
+            emailType: 'booking_request',
+            error: { code: 'EMAIL_RECIPIENT_MISSING', message: 'No valid recipient email address exists on this booking.' }
+          });
+        }
+
         const emailRes = await sendBookingRequestReceivedEmail(booking.id, { force: true });
         if (!emailRes.success) {
           return res.status(400).json({
@@ -1074,9 +1122,18 @@ export const adminController = {
             error: { code: 'EMAIL_DISPATCH_FAILED', message: emailRes.error || 'Booking request email failed to send.' }
           });
         }
-        const updated = await adminService.getCompleteBookingById(booking.id);
-        const recipientEmail = booking.email || booking.contacts?.[0]?.email || 'customer@example.com';
-        const providerMsgId = emailRes.emailId || emailRes.providerId || emailRes.id || `prov_${Date.now()}`;
+
+        const providerMsgId = emailRes.providerMessageId || emailRes.emailId || emailRes.id || null;
+        if (!providerMsgId) {
+          return res.status(502).json({
+            success: false,
+            requestId: reqId,
+            emailType: 'booking_request',
+            error: { code: 'EMAIL_PROVIDER_ID_MISSING', message: 'Provider did not return a message identifier.' }
+          });
+        }
+
+        const updated = await bookingRepository.getCompleteBookingById(booking.id);
         const sentTime = new Date().toISOString();
 
         return res.json({
@@ -1102,6 +1159,27 @@ export const adminController = {
       }
 
       if (['send_final_ticket_email', 'resend_final_ticket_email'].includes(action)) {
+        const recipientEmail = booking.final_confirmation_email_recipient || booking.email || booking.contacts?.[0]?.email || booking.travellers?.[0]?.email;
+        if (!recipientEmail || !recipientEmail.includes('@')) {
+          return res.status(400).json({
+            success: false,
+            requestId: reqId,
+            emailType: 'final_ticket',
+            error: { code: 'EMAIL_RECIPIENT_MISSING', message: 'No valid recipient email address exists on this booking.' }
+          });
+        }
+
+        // Validate PNR format
+        const pnr = String(booking.pnr || booking.pnr_code || booking.ticketDetails?.pnr || '').trim().toUpperCase();
+        if (!pnr || pnr.length !== 6) {
+          return res.status(400).json({
+            success: false,
+            requestId: reqId,
+            emailType: 'final_ticket',
+            error: { code: 'INVALID_PNR', message: 'Valid 6-character PNR code is required before sending final ticket email.' }
+          });
+        }
+
         const ticketRes = await sendFinalTicketEmail(booking);
         if (!ticketRes.success) {
           return res.status(400).json({
@@ -1111,9 +1189,18 @@ export const adminController = {
             error: { code: 'TICKET_EMAIL_FAILED', message: ticketRes.error || 'Final ticket email failed to send.' }
           });
         }
-        const updated = await adminService.getCompleteBookingById(booking.id);
-        const recipientEmail = updated.final_confirmation_email_recipient || booking.email || 'customer@example.com';
-        const providerMsgId = ticketRes.emailId || ticketRes.providerId || ticketRes.id || `prov_${Date.now()}`;
+
+        const providerMsgId = ticketRes.providerMessageId || ticketRes.emailId || ticketRes.id || null;
+        if (!providerMsgId) {
+          return res.status(502).json({
+            success: false,
+            requestId: reqId,
+            emailType: 'final_ticket',
+            error: { code: 'EMAIL_PROVIDER_ID_MISSING', message: 'Provider did not return a message identifier.' }
+          });
+        }
+
+        const updated = await bookingRepository.getCompleteBookingById(booking.id);
         const sentTime = new Date().toISOString();
 
         return res.json({

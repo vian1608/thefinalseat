@@ -155,4 +155,29 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     assert.match(fs.readFileSync(dashPagePath, 'utf-8'), /aria-label="Itinerary import help"/, 'Dashboard must contain help button');
   });
 
+  await t.test('20. adminService exports getCompleteBookingById and all controller-called methods', async () => {
+    const { adminService } = await import('../src/modules/admin/admin.service.mjs');
+    assert.strictEqual(typeof adminService.getCompleteBookingById, 'function', 'adminService.getCompleteBookingById must be a function');
+    assert.strictEqual(typeof adminService.getBookingDetails, 'function', 'adminService.getBookingDetails must be a function');
+    assert.strictEqual(typeof adminService.getAllBookings, 'function', 'adminService.getAllBookings must be a function');
+    assert.strictEqual(typeof adminService.updateBooking, 'function', 'adminService.updateBooking must be a function');
+  });
+
+  await t.test('21. bookingRepository.updateStatus is never invoked with invalid positional arguments in controllers', () => {
+    const ctrlPath = path.join(projectRoot, 'backend/src/modules/admin/admin.controller.mjs');
+    const content = fs.readFileSync(ctrlPath, 'utf-8');
+    assert.doesNotMatch(content, /bookingRepository\.updateStatus\([^)]+,\s*['"][A-Z_]+['"]\s*,\s*adminEmail/, 'Controllers must not call updateStatus with 4 positional arguments');
+  });
+
+  await t.test('22. Email dispatch does not contain fake provider ID fallbacks or placeholder emails', () => {
+    const ctrlPath = path.join(projectRoot, 'backend/src/modules/admin/admin.controller.mjs');
+    const resendPath = path.join(projectRoot, 'backend/src/integrations/resend/resend.service.mjs');
+    const ctrlContent = fs.readFileSync(ctrlPath, 'utf-8');
+    const resendContent = fs.readFileSync(resendPath, 'utf-8');
+
+    assert.doesNotMatch(ctrlContent, /`prov_\${Date\.now\(\)}`/, 'admin.controller.mjs must not contain prov_${Date.now()} fallbacks');
+    assert.doesNotMatch(ctrlContent, /customer@example\.com/, 'admin.controller.mjs must not contain customer@example.com fallbacks');
+    assert.doesNotMatch(resendContent, /`msg_\${Date\.now\(\)}`/, 'resend.service.mjs must not contain msg_${Date.now()} fallbacks');
+  });
+
 });

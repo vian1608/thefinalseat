@@ -29,6 +29,10 @@ export const adminService = {
     return bookingService.getDetailsByCodeOrId(id);
   },
 
+  getCompleteBookingById: async (id) => {
+    return bookingRepository.getCompleteBookingById(id);
+  },
+
   updateBooking: async (id, updateFields) => {
     return bookingRepository.updateStatus(id, updateFields);
   },

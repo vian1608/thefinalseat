@@ -794,7 +794,16 @@ Support: ${env.supportPhoneDisplay} | support@thefinalseat.com
       replyTo: 'support@thefinalseat.com'
     });
 
-    const emailId = result?.messageId || `msg_${Date.now()}`;
+    const emailId = result?.messageId || result?.id || null;
+    if (!emailId) {
+      const errMsg = env.resendApiKey ? 'EMAIL_PROVIDER_ID_MISSING: Resend did not return a message ID' : 'EMAIL_PROVIDER_NOT_CONFIGURED: Resend API Key is missing';
+      await bookingRepository.updateBookingStatus(bookingId, {
+        booking_request_email_status: 'FAILED',
+        booking_request_email_error: errMsg
+      });
+      return { success: false, error: errMsg };
+    }
+
     const sentAt = new Date().toISOString();
 
     await bookingRepository.updateBookingStatus(bookingId, {
@@ -807,7 +816,7 @@ Support: ${env.supportPhoneDisplay} | support@thefinalseat.com
 
     logger.info(`[Email Log] bookingId=${bookingId} confirmationCode=${confirmationCode} emailType=booking_request recipient=${customerEmail} providerMessageId=${emailId} result=success`);
 
-    return { success: true, emailId };
+    return { success: true, emailId, providerMessageId: emailId };
   } catch (err) {
     const errorMsg = err.message || 'Email dispatch failed';
     logger.error(`[Email Log] bookingId=${bookingId} emailType=booking_request result=failed error=${errorMsg}`);
@@ -996,7 +1005,16 @@ Support 24/7: ${env.supportPhoneDisplay} | support@thefinalseat.com
       replyTo: 'support@thefinalseat.com'
     });
 
-    const emailId = result?.messageId || `msg_${Date.now()}`;
+    const emailId = result?.messageId || result?.id || null;
+    if (!emailId) {
+      const errMsg = env.resendApiKey ? 'EMAIL_PROVIDER_ID_MISSING: Resend did not return a message ID' : 'EMAIL_PROVIDER_NOT_CONFIGURED: Resend API Key is missing';
+      await bookingRepository.updateBookingStatus(bookingId, {
+        authorization_email_status: 'FAILED',
+        authorization_email_error: errMsg
+      });
+      return { success: false, error: errMsg };
+    }
+
     const sentAt = new Date().toISOString();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
@@ -1021,7 +1039,7 @@ Support 24/7: ${env.supportPhoneDisplay} | support@thefinalseat.com
 
     logger.info(`[Email Log] bookingId=${bookingId} confirmationCode=${confirmationCode} emailType=authorization recipient=${customerEmail} providerMessageId=${emailId} result=success`);
 
-    return { success: true, emailId, authUrl };
+    return { success: true, emailId, providerMessageId: emailId, authUrl };
   } catch (err) {
     const errorMsg = err.message || 'Authorization email dispatch failed';
     logger.error(`[Email Log] bookingId=${bookingId} emailType=authorization result=failed error=${errorMsg}`);
@@ -1429,7 +1447,7 @@ Thank you for choosing The Final Seat! Have a wonderful trip.
 </html>
     `.trim();
 
-    let emailMessageId = `ticket_log_${Date.now()}`;
+    let emailMessageId = null;
     if (env.resendApiKey?.trim()) {
       const result = await sendViaResend({
         recipients: [customerEmail],
@@ -1438,7 +1456,16 @@ Thank you for choosing The Final Seat! Have a wonderful trip.
         htmlBody,
         replyTo: 'support@thefinalseat.com'
       });
-      if (result?.messageId) emailMessageId = result.messageId;
+      emailMessageId = result?.messageId || result?.id || null;
+    }
+
+    if (!emailMessageId) {
+      const errMsg = env.resendApiKey?.trim() ? 'EMAIL_PROVIDER_ID_MISSING: Resend did not return a message ID' : 'EMAIL_PROVIDER_NOT_CONFIGURED: Resend API Key is missing';
+      await bookingRepository.updateBookingStatus(booking.id, {
+        final_confirmation_email_status: 'FAILED',
+        final_confirmation_email_error: errMsg
+      });
+      return { success: false, error: errMsg };
     }
 
     const sentAt = new Date().toISOString();
