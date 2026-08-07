@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminAPI } from '../../../shared/api/api';
 import { buildGdsStyleReferenceLines, parseGdsLine, CHATGPT_PROMPT_TEMPLATE } from '../../../shared/utils/gdsItineraryHelper';
+import AdminItineraryImportModal from '../../../shared/components/admin/AdminItineraryImportModal';
 import ItineraryTimeline from '../../../shared/components/ItineraryTimeline';
 import './AdminDashboardPage.css';
 
@@ -1157,7 +1158,7 @@ export default function AdminCreateBookingPage() {
               </p>
               <div className="drawer-grid-3col">
                 <div className="drawer-form-field">
-                  <label style={{ fontWeight: 700 }}>Card Brand</label>
+                  <label style={{ fontWeight: 700 }}>Card Brand <span className="required-marker">*</span></label>
                   <select
                     value={billing.cardBrand}
                     onChange={e => setBilling({ ...billing, cardBrand: e.target.value })}
@@ -1170,7 +1171,7 @@ export default function AdminCreateBookingPage() {
                   </select>
                 </div>
                 <div className="drawer-form-field">
-                  <label style={{ fontWeight: 700 }}>Last 4 Digits</label>
+                  <label style={{ fontWeight: 700 }}>Last 4 Digits <span className="required-marker">*</span></label>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -1181,7 +1182,7 @@ export default function AdminCreateBookingPage() {
                   />
                 </div>
                 <div className="drawer-form-field">
-                  <label style={{ fontWeight: 700 }}>Expiry Month</label>
+                  <label style={{ fontWeight: 700 }}>Expiry Month <span className="required-marker">*</span></label>
                   <select
                     value={billing.expMonth}
                     onChange={e => setBilling({ ...billing, expMonth: e.target.value })}
@@ -1193,7 +1194,7 @@ export default function AdminCreateBookingPage() {
                   </select>
                 </div>
                 <div className="drawer-form-field">
-                  <label style={{ fontWeight: 700 }}>Expiry Year</label>
+                  <label style={{ fontWeight: 700 }}>Expiry Year <span className="required-marker">*</span></label>
                   <select
                     value={billing.expYear}
                     onChange={e => setBilling({ ...billing, expYear: e.target.value })}
@@ -1599,6 +1600,23 @@ export default function AdminCreateBookingPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* SHARED ITINERARY IMPORT MODAL */}
+      {isImportModalOpen && (
+        <AdminItineraryImportModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          existingItineraryHasData={outboundSegments.length > 0 || returnSegments.length > 0}
+          onConfirmImport={(importData) => {
+            if (importData) {
+              setTripType(importData.tripType || 'one-way');
+              setOutboundSegments(importData.outboundSegments || []);
+              setReturnSegments(importData.returnSegments || []);
+              setMultiCityJourneysState(importData.multiCityJourneys || []);
+            }
+          }}
+        />
       )}
     </div>
   );

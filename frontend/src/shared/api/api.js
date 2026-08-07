@@ -300,6 +300,14 @@ export const adminAPI = {
     const response = await api.get(`/admin/bookings/by-request/${clientRequestId}`);
     return response.data;
   },
+  getEmailPreview: async (bookingId, type) => {
+    const response = await api.post(`/admin/bookings/${bookingId}/email-preview`, { type });
+    return response.data;
+  },
+  markEmailManuallySent: async (bookingId, type) => {
+    const response = await api.post(`/admin/bookings/${bookingId}/email-manual-sent`, { type });
+    return response.data;
+  },
   /**
    * Centralized admin email action.
    * Supported actions:

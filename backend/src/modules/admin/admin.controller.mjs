@@ -13,6 +13,8 @@ import authRepository from '../auth/auth.repository.mjs';
 import env from '../../config/env.mjs';
 import { parseGdsItineraryText } from '../../shared/utils/gds-itinerary-parser.mjs';
 
+import { emailRendererService } from '../emails/email-renderer.service.mjs';
+
 export const adminController = {
   createBooking: async (req, res, next) => {
     try {
@@ -26,6 +28,78 @@ export const adminController = {
         message: 'New booking created successfully.',
         data: booking,
         booking
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  emailPreview: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const { type } = req.body || {};
+
+      const booking = await adminService.getCompleteBookingById(id);
+      if (!booking) {
+        return res.status(404).json({ success: false, error: { message: 'Booking not found' } });
+      }
+
+      let rendered = null;
+      if (type === 'booking_request') {
+        rendered = await emailRendererService.renderBookingRequestEmail(booking);
+      } else if (type === 'authorization') {
+        rendered = await emailRendererService.renderAuthorizationEmail(booking);
+      } else if (type === 'final_ticket') {
+        rendered = await emailRendererService.renderFinalTicketEmail(booking);
+      } else {
+        return res.status(400).json({ success: false, error: { message: `Unsupported email preview type: ${type}` } });
+      }
+
+      return res.json({
+        success: true,
+        ...rendered
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  markEmailManuallySent: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const { type, emailType } = req.body || {};
+      const targetType = type || emailType || 'booking_request';
+
+      const booking = await adminService.getCompleteBookingById(id);
+      if (!booking) {
+        return res.status(404).json({ success: false, error: { message: 'Booking not found' } });
+      }
+
+      const timestamp = new Date().toISOString();
+      const adminIdentity = req.user?.email || 'admin';
+
+      const updatePayload = {
+        manual_sent_at: timestamp,
+        manual_sent_by: adminIdentity,
+        provider_message_id: null
+      };
+
+      if (targetType === 'booking_request') {
+        updatePayload.booking_request_email_status = 'MANUALLY_SENT';
+      } else if (targetType === 'authorization') {
+        updatePayload.authorization_email_status = 'MANUALLY_SENT';
+      } else if (targetType === 'final_ticket') {
+        updatePayload.final_ticket_email_status = 'MANUALLY_SENT';
+      }
+
+      await bookingRepository.updateBookingStatus(id, updatePayload);
+
+      return res.json({
+        success: true,
+        message: 'Email marked as manually sent successfully.',
+        status: 'MANUALLY_SENT',
+        manual_sent_at: timestamp,
+        manual_sent_by: adminIdentity
       });
     } catch (err) {
       next(err);

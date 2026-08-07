@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { adminAPI } from '../../../shared/api/api';
-import GdsItineraryImportModal from '../components/GdsItineraryImportModal';
+import AdminItineraryImportModal from '../../../shared/components/admin/AdminItineraryImportModal';
+import AdminEmailPreviewModal from '../../../shared/components/admin/AdminEmailPreviewModal';
 import BookingBackupImportModal from '../components/BookingBackupImportModal';
 import ItineraryTimeline from '../../../shared/components/ItineraryTimeline';
 import './AdminDashboardPage.css';
@@ -1084,6 +1085,7 @@ function AdminDashboard() {
   const [openOutboundGroup, setOpenOutboundGroup] = useState(true);
   const [openReturnGroup, setOpenReturnGroup] = useState(true);
   const [isImportItineraryModalOpen, setIsImportItineraryModalOpen] = useState(false);
+  const [previewModalState, setPreviewModalState] = useState({ isOpen: false, emailType: 'booking_request' });
   const [isBackupImportModalOpen, setIsBackupImportModalOpen] = useState(false);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
   const [bulkDeletePassword, setBulkDeletePassword] = useState('');
@@ -5534,23 +5536,31 @@ function AdminDashboard() {
                                   </div>
                                 )}
 
-                                <button
-                                  type="button"
-                                  onClick={() => sendAdminBookingEmail({ emailType: 'booking_request', actionName: bookingEmailAction })}
-                                  disabled={bookingEmailSending}
-                                  aria-busy={bookingEmailSending}
-                                  className={bookingEmailWasSent ? "admin-secondary-btn" : "admin-primary-btn"}
-                                  style={{
-                                    width: '100%',
-                                    background: bookingEmailWasSent ? '#f1f5f9' : '#1e3a5f',
-                                    fontSize: '0.78rem',
-                                    height: '34px',
-                                    marginTop: '10px'
-                                  }}
-                                >
-                                  <i className={`fas ${bookingEmailSending ? 'fa-spinner fa-spin' : (bookingEmailWasSent ? 'fa-redo' : 'fa-paper-plane')}`} style={{ marginRight: '4px' }}></i>
-                                  {bookingEmailSending ? 'Sending Booking Request Email…' : (bookingEmailResult.status === 'failure' ? 'Retry Booking Request Email' : bookingEmailLabel)}
-                                </button>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '10px' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewModalState({ isOpen: true, emailType: 'booking_request' })}
+                                    className="admin-secondary-btn"
+                                    style={{ fontSize: '0.78rem', height: '34px' }}
+                                  >
+                                    <i className="fas fa-eye" style={{ marginRight: '4px' }}></i> Preview Email
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => sendAdminBookingEmail({ emailType: 'booking_request', actionName: bookingEmailAction })}
+                                    disabled={bookingEmailSending}
+                                    aria-busy={bookingEmailSending}
+                                    className={bookingEmailWasSent ? "admin-secondary-btn" : "admin-primary-btn"}
+                                    style={{
+                                      background: bookingEmailWasSent ? '#f1f5f9' : '#1e3a5f',
+                                      fontSize: '0.78rem',
+                                      height: '34px'
+                                    }}
+                                  >
+                                    <i className={`fas ${bookingEmailSending ? 'fa-spinner fa-spin' : (bookingEmailWasSent ? 'fa-redo' : 'fa-paper-plane')}`} style={{ marginRight: '4px' }}></i>
+                                    {bookingEmailSending ? 'Sending…' : (bookingEmailResult.status === 'failure' ? 'Retry Email' : bookingEmailLabel)}
+                                  </button>
+                                </div>
                               </div>
                             );
                           })()}
@@ -5568,9 +5578,7 @@ function AdminDashboard() {
                             let computedStatus = 'NOT_SENT';
                             if (rawStatus && rawStatus !== 'NOT_SENT') {
                               computedStatus = rawStatus;
-                            } else if (providerId) {
-                              computedStatus = 'SENT';
-                            } else if (sentAt) {
+                            } else if (providerId || sentAt) {
                               computedStatus = 'SENT';
                             }
 
@@ -5580,7 +5588,7 @@ function AdminDashboard() {
                               <div className="email-activity-card">
                                 <div className="email-card-header">
                                   <strong className="email-card-title">Authorization Email</strong>
-                                  <span className={`status-badge status-badge--${['SENT', 'ACCEPTED', 'DELIVERED'].includes(computedStatus) ? 'done' : (computedStatus === 'FAILED' ? 'failed' : 'pending')}`}>
+                                  <span className={`status-badge status-badge--${['SENT', 'ACCEPTED', 'DELIVERED', 'MANUALLY_SENT'].includes(computedStatus) ? 'done' : (computedStatus === 'FAILED' ? 'failed' : 'pending')}`}>
                                     {computedStatus}
                                   </span>
                                 </div>
@@ -5600,42 +5608,28 @@ function AdminDashboard() {
 
                                 {/* Authorization State-based Actions */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                  {isAuthCompleted ? (
-                                    <>
-                                      <div style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', padding: '6px', borderRadius: '6px', fontWeight: '700', textAlign: 'center', fontSize: '0.78rem' }}>
-                                        ✓ Authorization Completed ({selectedBooking.authorization_status || 'AUTHORIZED'})
-                                      </div>
-                                      <button type="button" onClick={() => handleDownloadEvidence(selectedBooking.id)} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
-                                        <i className="fas fa-file-pdf" style={{ marginRight: '4px', color: '#8B1236' }}></i> Download Authorization Evidence (PDF)
-                                      </button>
-                                    </>
-                                  ) : (selectedBooking.status === 'EXPIRED' || computedStatus === 'EXPIRED') ? (
-                                    <>
-                                      <button type="button" onClick={() => handlePaymentActionSubmit('send_authorization')} className="admin-primary-btn" style={{ background: '#b45309', width: '100%', fontSize: '0.78rem', height: '34px' }}>
-                                        <i className="fas fa-paper-plane" style={{ marginRight: '4px' }}></i> Send New Authorization Email
-                                      </button>
-                                    </>
-                                  ) : (computedStatus === 'SENT' || computedStatus === 'ACCEPTED' || ['AWAITING_AUTH', 'AWAITING_AUTHORIZATION', 'REAUTHORIZATION_REQUIRED'].includes(selectedBooking.status)) ? (
-                                    <>
-                                      <button type="button" onClick={() => handlePaymentActionSubmit('resend_authorization')} className="admin-primary-btn" style={{ background: '#b45309', width: '100%', fontSize: '0.78rem', height: '34px' }}>
-                                        <i className="fas fa-sync" style={{ marginRight: '4px' }}></i> Resend Authorization Email
-                                      </button>
-                                      {selectedBooking.authorization_token && (
-                                        <button type="button" onClick={() => {
-                                          const link = `https://www.thefinalseat.com/authorize/${selectedBooking.authorization_token}`;
-                                          navigator.clipboard.writeText(link);
-                                          alert(`Authorization link copied to clipboard:\n${link}`);
-                                        }} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
-                                          <i className="fas fa-copy" style={{ marginRight: '4px' }}></i> Copy Authorization Link
-                                        </button>
-                                      )}
-                                      <button type="button" onClick={() => handleDownloadEvidence(selectedBooking.id)} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
-                                        <i className="fas fa-file-pdf" style={{ marginRight: '4px', color: '#8B1236' }}></i> Download Authorization Evidence (PDF)
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <button type="button" onClick={() => handlePaymentActionSubmit('send_authorization')} className="admin-primary-btn" style={{ background: '#8B1236', width: '100%', fontSize: '0.78rem', height: '34px' }}>
-                                      <i className="fas fa-paper-plane" style={{ marginRight: '4px' }}></i> Send Authorization Email
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewModalState({ isOpen: true, emailType: 'authorization' })}
+                                      className="admin-secondary-btn"
+                                      style={{ fontSize: '0.78rem', height: '34px' }}
+                                    >
+                                      <i className="fas fa-eye" style={{ marginRight: '4px' }}></i> Preview Email
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePaymentActionSubmit(['SENT', 'ACCEPTED', 'DELIVERED'].includes(computedStatus) ? 'resend_authorization' : 'send_authorization')}
+                                      className="admin-primary-btn"
+                                      style={{ background: '#8B1236', fontSize: '0.78rem', height: '34px' }}
+                                    >
+                                      <i className="fas fa-paper-plane" style={{ marginRight: '4px' }}></i> {['SENT', 'ACCEPTED', 'DELIVERED'].includes(computedStatus) ? 'Resend Auth Email' : 'Send Auth Email'}
+                                    </button>
+                                  </div>
+
+                                  {isAuthCompleted && (
+                                    <button type="button" onClick={() => handleDownloadEvidence(selectedBooking.id)} className="admin-secondary-btn" style={{ width: '100%', fontSize: '0.78rem', height: '32px' }}>
+                                      <i className="fas fa-file-pdf" style={{ marginRight: '4px', color: '#8B1236' }}></i> Download Authorization Evidence (PDF)
                                     </button>
                                   )}
                                 </div>
@@ -5647,8 +5641,6 @@ function AdminDashboard() {
                           {(() => {
                             const pnrVal = (selectedBooking?.airline_confirmation_number || selectedBooking?.airlineConfirmationNumber || selectedBooking?.airline_pnr || '').trim().toUpperCase();
                             const isPnrValid = /^[A-Z0-9]{6}$/.test(pnrVal);
-                            // Check all possible segment sources: itinerary.outbound from getCompleteBookingById,
-                            // outbound_segments (mapped from flights table fallback), or raw flights array
                             const outboundSegCount = (
                               selectedBooking?.itinerary?.outbound?.length ||
                               selectedBooking?.outbound_segments?.length ||
@@ -5658,12 +5650,13 @@ function AdminDashboard() {
                             const hasItinerary = outboundSegCount > 0;
                             const recipientEmail = selectedBooking?.email || selectedBooking?.contacts?.[0]?.email || selectedBooking?.travellers?.[0]?.email || '';
                             const canSendFinalEmail = isPnrValid && hasItinerary && recipientEmail.includes('@');
+                            const isSent = ['SENT', 'ACCEPTED', 'DELIVERED', 'MANUALLY_SENT'].includes(selectedBooking.final_confirmation_email_status);
 
                             return (
                               <div className="email-activity-card">
                                 <div className="email-card-header">
                                   <strong className="email-card-title">Final Ticket Email</strong>
-                                  <span className={`status-badge status-badge--${(selectedBooking.final_confirmation_email_status || 'NOT_SENT') === 'SENT' ? 'done' : ((selectedBooking.final_confirmation_email_status || 'NOT_SENT') === 'FAILED' ? 'failed' : 'pending')}`}>
+                                  <span className={`status-badge status-badge--${isSent ? 'done' : ((selectedBooking.final_confirmation_email_status || 'NOT_SENT') === 'FAILED' ? 'failed' : 'pending')}`}>
                                     {selectedBooking.final_confirmation_email_status || 'NOT_SENT'}
                                   </span>
                                 </div>
@@ -5674,7 +5667,6 @@ function AdminDashboard() {
                                   {selectedBooking.final_confirmation_email_error && <div style={{ color: '#dc2626', gridColumn: '1 / -1' }}><strong>Error:</strong> {selectedBooking.final_confirmation_email_error}</div>}
                                 </div>
 
-                                {/* Inline success / error feedback (replaces alert()) */}
                                 {finalTicketEmailSuccess && (
                                   <div style={{ background: '#dcfce7', border: '1px solid #16a34a', borderRadius: '6px', padding: '8px 10px', fontSize: '0.78rem', color: '#15803d', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <i className="fas fa-check-circle"></i> {finalTicketEmailSuccess}
@@ -5686,32 +5678,35 @@ function AdminDashboard() {
                                   </div>
                                 )}
 
-                                {(() => {
-                                  const isSent = selectedBooking.final_confirmation_email_status === 'SENT';
-                                  return (
-                                    <button
-                                      type="button"
-                                      onClick={() => sendAdminBookingEmail({ emailType: 'final_ticket', actionName: isSent ? 'resend_final_ticket_email' : 'send_final_ticket_email' })}
-                                      disabled={!canSendFinalEmail || finalTicketEmailSending}
-                                      aria-busy={finalTicketEmailSending}
-                                      className={isSent ? "admin-secondary-btn" : "admin-primary-btn"}
-                                      style={{
-                                        width: '100%',
-                                        background: !canSendFinalEmail ? '#cbd5e1' : (isSent ? '#f1f5f9' : '#047857'),
-                                        color: !canSendFinalEmail ? '#64748b' : undefined,
-                                        fontSize: '0.78rem',
-                                        height: '34px',
-                                        marginTop: '10px',
-                                        cursor: !canSendFinalEmail ? 'not-allowed' : 'pointer'
-                                      }}
-                                    >
-                                      <i className={`fas ${finalTicketEmailSending ? 'fa-spinner fa-spin' : (isSent ? 'fa-redo' : 'fa-ticket-alt')}`} style={{ marginRight: '4px' }}></i>
-                                      {finalTicketEmailSending ? 'Sending Final Ticket Email…' : (finalTicketEmailResult.status === 'failure' ? 'Retry Final Ticket Email' : (isSent ? 'Resend Final Ticket Email' : 'Send Final Ticket Email'))}
-                                    </button>
-                                  );
-                                })()}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '10px' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewModalState({ isOpen: true, emailType: 'final_ticket' })}
+                                    className="admin-secondary-btn"
+                                    style={{ fontSize: '0.78rem', height: '34px' }}
+                                  >
+                                    <i className="fas fa-eye" style={{ marginRight: '4px' }}></i> Preview Email
+                                  </button>
 
-                                {/* Blocking reason hints */}
+                                  <button
+                                    type="button"
+                                    onClick={() => sendAdminBookingEmail({ emailType: 'final_ticket', actionName: isSent ? 'resend_final_ticket_email' : 'send_final_ticket_email' })}
+                                    disabled={!canSendFinalEmail || finalTicketEmailSending}
+                                    aria-busy={finalTicketEmailSending}
+                                    className={isSent ? "admin-secondary-btn" : "admin-primary-btn"}
+                                    style={{
+                                      background: !canSendFinalEmail ? '#cbd5e1' : (isSent ? '#f1f5f9' : '#047857'),
+                                      color: !canSendFinalEmail ? '#64748b' : undefined,
+                                      fontSize: '0.78rem',
+                                      height: '34px',
+                                      cursor: !canSendFinalEmail ? 'not-allowed' : 'pointer'
+                                    }}
+                                  >
+                                    <i className={`fas ${finalTicketEmailSending ? 'fa-spinner fa-spin' : (isSent ? 'fa-redo' : 'fa-ticket-alt')}`} style={{ marginRight: '4px' }}></i>
+                                    {finalTicketEmailSending ? 'Sending…' : (isSent ? 'Resend Ticket Email' : 'Send Ticket Email')}
+                                  </button>
+                                </div>
+
                                 {!isPnrValid && (
                                   <div style={{ color: '#b45309', fontSize: '0.72rem', marginTop: '6px', fontStyle: 'italic' }}>
                                     ⚠ No valid 6-character PNR saved. Add in Airline Ticket Details above.
@@ -5720,7 +5715,7 @@ function AdminDashboard() {
                                 {!hasItinerary && (
                                   <div style={{ marginTop: '6px' }}>
                                     <div style={{ color: '#b45309', fontSize: '0.72rem', fontStyle: 'italic', marginBottom: '4px' }}>
-                                      ⚠ No itinerary segments found ({outboundSegCount} outbound segments). Complete and save the itinerary before sending.
+                                      ⚠ No itinerary segments found. Complete and save the itinerary before sending.
                                     </div>
                                     <button
                                       type="button"
@@ -5729,11 +5724,6 @@ function AdminDashboard() {
                                     >
                                       <i className="fas fa-route" style={{ marginRight: '4px' }}></i>Complete Itinerary
                                     </button>
-                                  </div>
-                                )}
-                                {hasItinerary && !recipientEmail.includes('@') && (
-                                  <div style={{ color: '#b45309', fontSize: '0.72rem', marginTop: '6px', fontStyle: 'italic' }}>
-                                    ⚠ No valid recipient email found for this booking.
                                   </div>
                                 )}
                               </div>
@@ -6492,13 +6482,46 @@ function AdminDashboard() {
           </div>
         )}
 
-        {/* GDS ITINERARY IMPORT MODAL */}
+        {/* SHARED ITINERARY IMPORT MODAL */}
         {isImportItineraryModalOpen && selectedBooking?.id && (
-          <GdsItineraryImportModal
+          <AdminItineraryImportModal
             isOpen={isImportItineraryModalOpen}
             onClose={() => setIsImportItineraryModalOpen(false)}
-            bookingId={selectedBooking?.id}
-            onItineraryImported={handleItineraryImported}
+            existingItineraryHasData={(selectedBooking?.itinerary?.outbound?.length || selectedBooking?.flights?.length || 0) > 0}
+            onConfirmImport={async (importData) => {
+              setIsImportItineraryModalOpen(false);
+              if (importData && importData.allSegments) {
+                try {
+                  const res = await adminAPI.patchItinerary(selectedBooking.id, {
+                    tripType: importData.tripType,
+                    segments: importData.allSegments
+                  });
+                  if (res?.success || res?.booking) {
+                    handleItineraryImported(res.booking || res);
+                  } else {
+                    const fresh = await adminAPI.getBookingById(selectedBooking.id);
+                    if (fresh) handleSelectBooking(fresh);
+                  }
+                } catch (err) {
+                  console.error('Failed to save imported itinerary:', err);
+                }
+              }
+            }}
+          />
+        )}
+
+        {/* SHARED EMAIL PREVIEW & MANUAL FALLBACK MODAL */}
+        {previewModalState.isOpen && selectedBooking?.id && (
+          <AdminEmailPreviewModal
+            isOpen={previewModalState.isOpen}
+            onClose={() => setPreviewModalState({ isOpen: false, emailType: 'booking_request' })}
+            bookingId={selectedBooking.id}
+            emailType={previewModalState.emailType}
+            onMarkManuallySentSuccess={() => {
+              adminAPI.getBookingById(selectedBooking.id).then(fresh => {
+                if (fresh) handleSelectBooking(fresh);
+              }).catch(() => {});
+            }}
           />
         )}
 

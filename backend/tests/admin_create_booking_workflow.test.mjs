@@ -94,4 +94,36 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     assert.match(content, /activeCreateRequest\?\.actionType === actionType \? activeCreateRequest\.idempotencyKey : null/, 'Must reuse active idempotencyKey when retrying');
   });
 
+  await t.test('13. Email preview endpoint is registered and uses emailRendererService without Resend', () => {
+    const routesPath = path.join(projectRoot, 'backend/src/modules/admin/admin.routes.mjs');
+    const ctrlPath = path.join(projectRoot, 'backend/src/modules/admin/admin.controller.mjs');
+    const rendererPath = path.join(projectRoot, 'backend/src/modules/emails/email-renderer.service.mjs');
+    assert.match(fs.readFileSync(routesPath, 'utf-8'), /\/bookings\/:id\/email-preview/, 'Routes must contain /bookings/:id/email-preview');
+    assert.match(fs.readFileSync(ctrlPath, 'utf-8'), /emailPreview:/, 'Controller must contain emailPreview method');
+    assert.ok(fs.existsSync(rendererPath), 'email-renderer.service.mjs must exist');
+  });
+
+  await t.test('14. Email manual sent endpoint is registered', () => {
+    const routesPath = path.join(projectRoot, 'backend/src/modules/admin/admin.routes.mjs');
+    const ctrlPath = path.join(projectRoot, 'backend/src/modules/admin/admin.controller.mjs');
+    assert.match(fs.readFileSync(routesPath, 'utf-8'), /\/bookings\/:id\/email-manual-sent/, 'Routes must contain /bookings/:id/email-manual-sent');
+    assert.match(fs.readFileSync(ctrlPath, 'utf-8'), /markEmailManuallySent:/, 'Controller must contain markEmailManuallySent method');
+  });
+
+  await t.test('15. AdminItineraryImportModal shared component exists and is imported by both AdminCreateBookingPage and AdminDashboardPage', () => {
+    const modalPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminItineraryImportModal.js');
+    const createPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
+    const dashPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.js');
+    assert.ok(fs.existsSync(modalPath), 'AdminItineraryImportModal.js component file must exist');
+    assert.match(fs.readFileSync(createPagePath, 'utf-8'), /AdminItineraryImportModal/, 'AdminCreateBookingPage must import AdminItineraryImportModal');
+    assert.match(fs.readFileSync(dashPagePath, 'utf-8'), /AdminItineraryImportModal/, 'AdminDashboardPage must import AdminItineraryImportModal');
+  });
+
+  await t.test('16. AdminEmailPreviewModal shared component exists and is imported in AdminDashboardPage', () => {
+    const modalPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminEmailPreviewModal.js');
+    const dashPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.js');
+    assert.ok(fs.existsSync(modalPath), 'AdminEmailPreviewModal.js component file must exist');
+    assert.match(fs.readFileSync(dashPagePath, 'utf-8'), /AdminEmailPreviewModal/, 'AdminDashboardPage must import AdminEmailPreviewModal');
+  });
+
 });
