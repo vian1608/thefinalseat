@@ -16,6 +16,7 @@ const paymentMethodsMemoryStore = new Map();
 const emailDeliveriesMemoryStore = new Map();
 
 
+export const bookingRepository = {
   getBookingByClientRequestId: async (clientRequestId) => {
     if (!clientRequestId) return null;
 
@@ -57,17 +58,21 @@ const emailDeliveriesMemoryStore = new Map();
       throw err;
     }
 
+    const clientReqId = dbRow.client_request_id || dbRow.clientRequestId || null;
+    const { client_request_id, ...cleanDbRow } = dbRow;
+
     const { data, error } = await supabase
       .from('bookings')
-      .insert(dbRow)
+      .insert(cleanDbRow)
       .select()
       .single();
 
     if (data?.id) {
-      bookingsMemoryStore.set(data.id, data);
-      if (data.confirmation_code) bookingsMemoryStore.set(data.confirmation_code, data);
-      if (data.client_request_id) bookingsMemoryStore.set(data.client_request_id, data);
-      return data;
+      const fullRecord = { ...data, client_request_id: clientReqId };
+      bookingsMemoryStore.set(data.id, fullRecord);
+      if (data.confirmation_code) bookingsMemoryStore.set(data.confirmation_code, fullRecord);
+      if (clientReqId) bookingsMemoryStore.set(clientReqId, fullRecord);
+      return fullRecord;
     }
 
     if (error) {
@@ -82,7 +87,6 @@ const emailDeliveriesMemoryStore = new Map();
         passenger_name: dbRow.passenger_name,
         email: dbRow.email,
         phone: dbRow.phone,
-        client_request_id: dbRow.client_request_id || null,
       };
       const { data: coreData, error: coreError } = await supabase
         .from('bookings')
@@ -93,11 +97,11 @@ const emailDeliveriesMemoryStore = new Map();
       if (coreError) {
         logger.warn(`createBookingRecord Supabase notice: ${coreError.message}. Storing in resilience memory store.`);
         const fallbackId = dbRow.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `bk_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`);
-        const fallbackRecord = { id: fallbackId, created_at: new Date().toISOString(), ...dbRow };
+        const fallbackRecord = { id: fallbackId, created_at: new Date().toISOString(), ...dbRow, client_request_id: clientReqId };
         bookingsMemoryStore.set(fallbackId, fallbackRecord);
         if (dbRow.id) bookingsMemoryStore.set(dbRow.id, fallbackRecord);
         if (fallbackRecord.confirmation_code) bookingsMemoryStore.set(fallbackRecord.confirmation_code, fallbackRecord);
-        if (fallbackRecord.client_request_id) bookingsMemoryStore.set(fallbackRecord.client_request_id, fallbackRecord);
+        if (clientReqId) bookingsMemoryStore.set(clientReqId, fallbackRecord);
         await bookingRepository.recordAuditLog({
           bookingId: fallbackId,
           action: 'BOOKING_CREATED',
@@ -108,9 +112,11 @@ const emailDeliveriesMemoryStore = new Map();
         return fallbackRecord;
       }
       if (coreData) {
-        if (coreData.id) bookingsMemoryStore.set(coreData.id, coreData);
-        if (coreData.confirmation_code) bookingsMemoryStore.set(coreData.confirmation_code, coreData);
-        if (coreData.client_request_id) bookingsMemoryStore.set(coreData.client_request_id, coreData);
+        const fullRecord = { ...coreData, client_request_id: clientReqId };
+        if (coreData.id) bookingsMemoryStore.set(coreData.id, fullRecord);
+        if (coreData.confirmation_code) bookingsMemoryStore.set(coreData.confirmation_code, fullRecord);
+        if (clientReqId) bookingsMemoryStore.set(clientReqId, fullRecord);
+        return fullRecord;
       }
       await bookingRepository.recordAuditLog({
         bookingId: coreData.id || dbRow.id,

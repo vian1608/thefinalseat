@@ -126,16 +126,27 @@ export const bookingService = {
       // 6 — Save flight itineraries (MUST HAVE VALID FLIGHTS FOR NON-DRAFTS OR ROLLBACK)
       const tStartFlights = Date.now();
       const flightsList = [];
-      const returnObj = payload.returnFlight || payload.flight?.returnFlight;
+      const returnObj = payload.returnFlight || payload.flight?.return || payload.flight?.returnSegments || payload.flight?.returnFlight;
       const tripType = returnObj ? 'round-trip' : 'one-way';
 
-      if (payload.flight) {
-        const outboundRows = itineraryMapper.toDatabaseRows(booking.id, payload.flight, 'outbound', tripType);
-        flightsList.push(...outboundRows);
+      if (Array.isArray(payload.flight?.outbound) && payload.flight.outbound.length > 0) {
+        for (const seg of payload.flight.outbound) {
+          const rows = itineraryMapper.toDatabaseRows(booking.id, seg, 'outbound', tripType);
+          flightsList.push(...rows);
+        }
+      } else if (payload.flight) {
+        const rows = itineraryMapper.toDatabaseRows(booking.id, payload.flight, 'outbound', tripType);
+        flightsList.push(...rows);
       }
-      if (returnObj) {
-        const returnRows = itineraryMapper.toDatabaseRows(booking.id, returnObj, 'return', tripType);
-        flightsList.push(...returnRows);
+
+      if (Array.isArray(returnObj)) {
+        for (const seg of returnObj) {
+          const rows = itineraryMapper.toDatabaseRows(booking.id, seg, 'return', tripType);
+          flightsList.push(...rows);
+        }
+      } else if (returnObj) {
+        const rows = itineraryMapper.toDatabaseRows(booking.id, returnObj, 'return', tripType);
+        flightsList.push(...rows);
       }
 
       if (!isDraft && flightsList.length === 0) {
