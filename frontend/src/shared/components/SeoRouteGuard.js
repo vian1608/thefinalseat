@@ -1,6 +1,7 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useLocation } from 'react-router-dom';
+import routesData from '../data/routesData.json';
 
 const CANONICAL_ORIGIN = 'https://www.thefinalseat.com';
 
@@ -23,12 +24,11 @@ const INDEXABLE_EXACT = new Set([
   '/train-boston-to-nyc',
 ]);
 
-const INDEXABLE_PREFIXES = [
-  '/routes/',
-  '/book/',
-  '/changes/',
-  '/cancellation/',
-];
+const VALID_ROUTE_PATHS = new Set(
+  routesData
+    .filter((route) => route?.slug)
+    .map((route) => `/routes/${route.slug}`)
+);
 
 const CANONICAL_ALIASES = {
   '/senior-travel': '/senior-travel/flight-deals',
@@ -45,13 +45,21 @@ const normalizePath = (pathname) => {
   return pathname.replace(/\/+$/, '') || '/';
 };
 
+function isIndexablePath(pathname) {
+  if (INDEXABLE_EXACT.has(pathname)) return true;
+  if (VALID_ROUTE_PATHS.has(pathname)) return true;
+
+  // Airline action pages are intentionally noindex for now. They share a
+  // heavily templated structure and should only be opened to indexing after
+  // they contain enough airline-specific, independently useful content.
+  return false;
+}
+
 export default function SeoRouteGuard() {
   const { pathname } = useLocation();
   const normalizedPath = normalizePath(pathname);
   const canonicalPath = CANONICAL_ALIASES[normalizedPath] || normalizedPath;
-  const indexable =
-    INDEXABLE_EXACT.has(canonicalPath) ||
-    INDEXABLE_PREFIXES.some((prefix) => canonicalPath.startsWith(prefix));
+  const indexable = isIndexablePath(canonicalPath);
 
   const canonicalUrl = `${CANONICAL_ORIGIN}${canonicalPath === '/' ? '/' : canonicalPath}`;
   const robotsValue = indexable
