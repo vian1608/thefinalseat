@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import routesData from '../data/routesData.json';
 
 const CANONICAL_ORIGIN = 'https://www.thefinalseat.com';
 
@@ -23,12 +24,9 @@ const INDEXABLE_EXACT = new Set([
   '/train-boston-to-nyc',
 ]);
 
-const INDEXABLE_PREFIXES = [
-  '/routes/',
-  '/book/',
-  '/changes/',
-  '/cancellation/',
-];
+const VALID_ROUTE_PATHS = new Set(
+  routesData.filter((route) => route?.slug).map((route) => `/routes/${route.slug}`)
+);
 
 const CANONICAL_ALIASES = {
   '/senior-travel': '/senior-travel/flight-deals',
@@ -45,13 +43,35 @@ const normalizePath = (pathname) => {
   return pathname.replace(/\/+$/, '') || '/';
 };
 
+function isIndexablePath(pathname) {
+  return INDEXABLE_EXACT.has(pathname) || VALID_ROUTE_PATHS.has(pathname);
+}
+
 export default function SeoRouteGuard() {
-  const { pathname } = useLocation();
-  const normalizedPath = normalizePath(pathname);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const normalizedPath = normalizePath(location.pathname);
   const canonicalPath = CANONICAL_ALIASES[normalizedPath] || normalizedPath;
-  const indexable =
-    INDEXABLE_EXACT.has(canonicalPath) ||
-    INDEXABLE_PREFIXES.some((prefix) => canonicalPath.startsWith(prefix));
+  const indexable = isIndexablePath(canonicalPath);
+
+  useEffect(() => {
+    if (normalizedPath !== '/search') return;
+    const params = new URLSearchParams(location.search);
+    let changed = false;
+
+    if (params.get('return') && !params.get('returnDate')) {
+      params.set('returnDate', params.get('return'));
+      changed = true;
+    }
+    if (params.get('cabin') && !params.get('travelClass')) {
+      params.set('travelClass', params.get('cabin'));
+      changed = true;
+    }
+
+    if (changed) {
+      navigate({ pathname: '/search', search: `?${params.toString()}` }, { replace: true });
+    }
+  }, [location.search, navigate, normalizedPath]);
 
   const canonicalUrl = `${CANONICAL_ORIGIN}${canonicalPath === '/' ? '/' : canonicalPath}`;
   const robotsValue = indexable

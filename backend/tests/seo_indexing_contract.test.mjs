@@ -12,16 +12,16 @@ const robots = read('frontend', 'public', 'robots.txt');
 const indexHtml = read('frontend', 'public', 'index.html');
 const app = read('frontend', 'src', 'app', 'App.js');
 const seoGuard = read('frontend', 'src', 'shared', 'components', 'SeoRouteGuard.js');
+const routeDispatcher = read('frontend', 'src', 'features', 'flights', 'pages', 'RouteDispatcher.js');
+const airlineAction = read('frontend', 'src', 'features', 'flights', 'pages', 'AirlineActionPage.js');
 const vercel = read('vercel.json');
 
-// Canonical host must be consistent everywhere Google is explicitly instructed.
 assert.match(sitemap, /https:\/\/www\.thefinalseat\.com\//);
 assert.doesNotMatch(sitemap, /<loc>https:\/\/thefinalseat\.com/);
 assert.match(robots, /Sitemap: https:\/\/www\.thefinalseat\.com\/sitemap\.xml/);
 assert.match(indexHtml, /<link rel="canonical" href="https:\/\/www\.thefinalseat\.com\/"/);
 assert.match(seoGuard, /https:\/\/www\.thefinalseat\.com/);
 
-// Sitemap must contain only public, canonical landing/content pages.
 const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
 const sitemapPaths = locs.map((url) => new URL(url).pathname.replace(/\/+$/, '') || '/');
 const privatePaths = [
@@ -38,28 +38,35 @@ assert.ok(locs.length >= 20, 'Sitemap should expose the core SEO landing/content
 assert.equal(new Set(locs).size, locs.length, 'Sitemap contains duplicate URLs.');
 assert.ok(locs.every((url) => url.startsWith('https://www.thefinalseat.com/')), 'Every sitemap URL must use the canonical www HTTPS origin.');
 
-// noindex must remain crawlable so Google can actually see the directive.
 assert.doesNotMatch(robots, /Disallow: \/search/);
 assert.doesNotMatch(robots, /Disallow: \/booking/);
 assert.match(robots, /Disallow: \/admin\//);
 assert.match(robots, /Disallow: \/api\//);
 
-// SPA must not redirect every bad URL to the homepage (soft-404 pattern).
 assert.match(app, /import SeoRouteGuard/);
 assert.match(app, /import NotFoundPage/);
 assert.match(app, /<Route path="\*" element={<NotFoundPage \/>} \/>/);
 assert.doesNotMatch(app, /<Route path="\*" element={<Navigate to="\/" replace \/>} \/>/);
 assert.match(seoGuard, /noindex, nofollow, noarchive/);
 assert.match(seoGuard, /INDEXABLE_EXACT/);
-assert.match(seoGuard, /INDEXABLE_PREFIXES/);
+assert.match(seoGuard, /VALID_ROUTE_PATHS/);
+assert.match(seoGuard, /routesData/);
+assert.doesNotMatch(seoGuard, /INDEXABLE_PREFIXES/);
+assert.doesNotMatch(seoGuard, /startsWith\('\/book\/'\)/);
+assert.doesNotMatch(seoGuard, /startsWith\('\/changes\/'\)/);
+assert.doesNotMatch(seoGuard, /startsWith\('\/cancellation\/'\)/);
 
-// Homepage must provide crawl/index signals and entity structured data.
+assert.match(routeDispatcher, /NotFoundPage/);
+assert.doesNotMatch(routeDispatcher, /Navigate to="\/"/);
+assert.match(airlineAction, /airlinesData/);
+assert.match(airlineAction, /if \(!config \|\| !airline\)/);
+assert.match(airlineAction, /<NotFoundPage \/>/);
+
 assert.match(indexHtml, /name="google-site-verification"/);
 assert.match(indexHtml, /name="robots" content="index, follow/);
 assert.match(indexHtml, /"@type": "TravelAgency"/);
 assert.match(indexHtml, /"@type": "WebSite"/);
 
-// Edge configuration must consolidate the hostname and protect private pages.
 const vercelConfig = JSON.parse(vercel);
 const canonicalHostRedirect = (vercelConfig.redirects || []).find((rule) =>
   Array.isArray(rule.has) && rule.has.some((condition) => condition.type === 'host' && condition.value === 'thefinalseat.com')
@@ -73,4 +80,4 @@ const noindexHeaderRules = (vercelConfig.headers || []).filter((rule) =>
 );
 assert.ok(noindexHeaderRules.length >= 10, 'Expected private admin/transaction routes to have X-Robots-Tag noindex protection.');
 
-console.log(`SEO indexing contract passed (${locs.length} canonical sitemap URLs).`);
+console.log(`SEO indexing contract passed (${locs.length} canonical sitemap URLs; catalog-backed dynamic routes only).`);
