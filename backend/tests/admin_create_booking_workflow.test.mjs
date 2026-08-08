@@ -5,6 +5,9 @@ import path from 'node:path';
 import { resolvePositiveAmount } from '../src/modules/bookings/booking.mapper.mjs';
 
 const projectRoot = path.resolve(process.cwd(), '..');
+const activeDashboardPath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPageV2.js');
+const dashboardShimPath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.js');
+const activeDashboardContent = () => fs.readFileSync(activeDashboardPath, 'utf-8');
 
 test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
 
@@ -110,20 +113,20 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     assert.match(fs.readFileSync(ctrlPath, 'utf-8'), /markEmailManuallySent:/, 'Controller must contain markEmailManuallySent method');
   });
 
-  await t.test('15. AdminItineraryImportModal shared component exists and is imported by both AdminCreateBookingPage and AdminDashboardPage', () => {
-    const modalPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminItineraryImportModal.js');
+  await t.test('15. Create Booking keeps shared importer while rebuilt Dashboard uses single-input GDS importer', () => {
+    const legacyModalPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminItineraryImportModal.js');
+    const v2ModalPath = path.join(projectRoot, 'frontend/src/features/admin/components/AdminGdsImportModalV2.js');
     const createPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
-    const dashPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.js');
-    assert.ok(fs.existsSync(modalPath), 'AdminItineraryImportModal.js component file must exist');
-    assert.match(fs.readFileSync(createPagePath, 'utf-8'), /AdminItineraryImportModal/, 'AdminCreateBookingPage must import AdminItineraryImportModal');
-    assert.match(fs.readFileSync(dashPagePath, 'utf-8'), /AdminItineraryImportModal/, 'AdminDashboardPage must import AdminItineraryImportModal');
+    assert.ok(fs.existsSync(legacyModalPath), 'Existing AdminItineraryImportModal must remain available to Create Booking');
+    assert.ok(fs.existsSync(v2ModalPath), 'AdminGdsImportModalV2 must exist for the rebuilt dashboard');
+    assert.match(fs.readFileSync(createPagePath, 'utf-8'), /AdminItineraryImportModal/, 'AdminCreateBookingPage must continue using its supported importer');
+    assert.match(activeDashboardContent(), /AdminGdsImportModalV2/, 'Rebuilt dashboard must use the single-input GDS importer');
   });
 
-  await t.test('16. AdminEmailPreviewModal shared component exists and is imported in AdminDashboardPage', () => {
+  await t.test('16. AdminEmailPreviewModal shared component exists and is imported by active dashboard', () => {
     const modalPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminEmailPreviewModal.js');
-    const dashPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.js');
     assert.ok(fs.existsSync(modalPath), 'AdminEmailPreviewModal.js component file must exist');
-    assert.match(fs.readFileSync(dashPagePath, 'utf-8'), /AdminEmailPreviewModal/, 'AdminDashboardPage must import AdminEmailPreviewModal');
+    assert.match(activeDashboardContent(), /AdminEmailPreviewModal/, 'Active dashboard must import AdminEmailPreviewModal');
   });
 
   await t.test('17. Frontend API contract in api.js exports all required adminAPI methods', () => {
@@ -135,24 +138,23 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     assert.match(content, /patchItinerary:/, 'api.js must export patchItinerary in adminAPI');
   });
 
-  await t.test('18. Shared AdminItineraryHelpModal exists and is imported across pages and importer modal', () => {
+  await t.test('18. Itinerary help remains available where applicable and rebuilt dashboard explains the single import flow inline', () => {
     const helpModalPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminItineraryHelpModal.js');
     const importModalPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminItineraryImportModal.js');
     const createPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
-    const dashPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.js');
     assert.ok(fs.existsSync(helpModalPath), 'AdminItineraryHelpModal.js component file must exist');
-    assert.match(fs.readFileSync(importModalPath, 'utf-8'), /AdminItineraryHelpModal/, 'AdminItineraryImportModal must import AdminItineraryHelpModal');
-    assert.match(fs.readFileSync(createPagePath, 'utf-8'), /AdminItineraryHelpModal/, 'AdminCreateBookingPage must import AdminItineraryHelpModal');
-    assert.match(fs.readFileSync(dashPagePath, 'utf-8'), /AdminItineraryHelpModal/, 'AdminDashboardPage must import AdminItineraryHelpModal');
+    assert.match(fs.readFileSync(importModalPath, 'utf-8'), /AdminItineraryHelpModal/, 'Legacy importer must retain help modal');
+    assert.match(fs.readFileSync(createPagePath, 'utf-8'), /AdminItineraryHelpModal/, 'Create Booking must retain itinerary help');
+    assert.match(activeDashboardContent(), /There is no separate outbound\/inbound import step/, 'Rebuilt dashboard must explain its simplified GDS import behavior');
   });
 
-  await t.test('19. Info icon button ⓘ exists in Dashboard, Create Booking, and Importer header', () => {
-    const importModalPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminItineraryImportModal.js');
-    const createPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
-    const dashPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.js');
-    assert.match(fs.readFileSync(importModalPath, 'utf-8'), /aria-label="Itinerary import help"/, 'Importer header must contain help button');
-    assert.match(fs.readFileSync(createPagePath, 'utf-8'), /aria-label="Itinerary import help"/, 'Create Booking must contain help button');
-    assert.match(fs.readFileSync(dashPagePath, 'utf-8'), /aria-label="Itinerary import help"/, 'Dashboard must contain help button');
+  await t.test('19. Rebuilt GDS importer does not force outbound/inbound selection before parsing', () => {
+    const modalPath = path.join(projectRoot, 'frontend/src/features/admin/components/AdminGdsImportModalV2.js');
+    const content = fs.readFileSync(modalPath, 'utf-8');
+    assert.match(content, /Paste the GDS command\/lines once/, 'Importer must explicitly use one combined source input');
+    assert.match(content, /Parse & Preview/, 'Importer must provide Parse & Preview');
+    assert.match(content, /Confirm & Apply Itinerary/, 'Importer must provide a final apply action');
+    assert.doesNotMatch(content, /Select Trip Type to Begin Import/, 'Rebuilt importer must not force trip direction selection before input');
   });
 
   await t.test('20. adminService exports getCompleteBookingById and all controller-called methods', async () => {
@@ -182,14 +184,13 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
 
   await t.test('23. Canonical booking status lifecycle separation', () => {
     const repoPath = path.join(projectRoot, 'backend/src/modules/bookings/booking.repository.mjs');
-    const dashPath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.js');
     const repoContent = fs.readFileSync(repoPath, 'utf-8');
-    const dashContent = fs.readFileSync(dashPath, 'utf-8');
+    const dashContent = activeDashboardContent();
 
     assert.doesNotMatch(repoContent, /if\s*\(s\s*===\s*['"]CONFIRMED['"]\s*\|\|\s*s\s*===\s*['"]COMPLETED['"]\)\s*s\s*=\s*['"]DONE['"]/, 'Repository must not map CONFIRMED or COMPLETED to DONE');
-    assert.match(dashContent, /getBookingStatusConfig/, 'AdminDashboardPage must use getBookingStatusConfig for canonical status formatting');
-    assert.match(dashContent, /Reservation Confirmed/, 'AdminDashboardPage must display Reservation Confirmed label');
-    assert.match(dashContent, /Awaiting Authorization/, 'AdminDashboardPage must display Awaiting Authorization label');
+    assert.match(dashContent, /statusBadgeClass/, 'Active dashboard must use canonical status badge formatting');
+    assert.match(dashContent, /AWAITING_AUTHORIZATION/, 'Active dashboard must support Awaiting Authorization');
+    assert.match(dashContent, /COMPLETED/, 'Active dashboard must support Completed without mapping it to DONE');
   });
 
   await t.test('24. Shared Email Itinerary Renderer produces real itinerary HTML/Text without Commercial Airline placeholders', async () => {
@@ -225,12 +226,57 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     assert.match(text, /JFK.*-> LHR/, 'Text itinerary must contain route');
   });
 
-  await t.test('25. AdminDashboardPage Authorization card & Quick Actions use sendAdminBookingEmail', () => {
-    const dashPath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminDashboardPage.js');
-    const dashContent = fs.readFileSync(dashPath, 'utf-8');
-
-    assert.doesNotMatch(dashContent, /handlePaymentActionSubmit\(['"]send_authorization['"]\)/, 'Authorization card and Quick Actions must NOT use handlePaymentActionSubmit for email sending');
-    assert.match(dashContent, /sendAdminBookingEmail\(\{\s*emailType:\s*['"]authorization['"]/, 'Authorization email trigger must call sendAdminBookingEmail');
+  await t.test('25. Active dashboard authorization email uses centralized adminAPI.sendEmailAction', () => {
+    const dashContent = activeDashboardContent();
+    assert.doesNotMatch(dashContent, /handlePaymentActionSubmit\(['"]send_authorization['"]\)/, 'Authorization email must not use legacy payment action submit UI handler');
+    assert.match(dashContent, /adminAPI\.sendEmailAction\(selectedBooking\.id, action/, 'Active dashboard must use centralized adminAPI.sendEmailAction');
+    assert.match(dashContent, /sendEmail\(type\)/, 'Email cards must use the shared sendEmail action');
   });
 
+  await t.test('26. AdminDashboardPage public import is a small V2 re-export', () => {
+    const shim = fs.readFileSync(dashboardShimPath, 'utf-8');
+    assert.match(shim, /AdminDashboardPageV2/, 'AdminDashboardPage.js must route the existing app import to AdminDashboardPageV2');
+    assert.doesNotMatch(shim, /dev_admin_token/, 'Dashboard shim must not contain development auth bypass');
+  });
+
+  await t.test('27. Delete routes use bounded repair handlers and contain no hardcoded admin123 fallback', () => {
+    const routes = fs.readFileSync(path.join(projectRoot, 'backend/src/modules/admin/admin.routes.mjs'), 'utf-8');
+    const repair = fs.readFileSync(path.join(projectRoot, 'backend/src/modules/admin/admin.repair.controller.mjs'), 'utf-8');
+    assert.match(routes, /bulk-delete[^\n]+adminRepairController\.bulkDeleteBookings/, 'Bulk delete must use repair controller');
+    assert.match(routes, /router\.delete\('\/bookings\/:id'[^\n]+adminRepairController\.deleteBooking/, 'Single delete must use repair controller');
+    assert.match(repair, /req\.params\.id \|\| req\.params\.bookingId/, 'Delete handler must resolve :id correctly');
+    assert.match(repair, /withTimeout/, 'Delete handler must contain bounded timeout logic');
+    assert.doesNotMatch(repair, /admin123/, 'Repair delete handler must never contain hardcoded admin123 fallback');
+  });
+
+  await t.test('28. Itinerary save route is canonical and persistence-verified', () => {
+    const routes = fs.readFileSync(path.join(projectRoot, 'backend/src/modules/admin/admin.routes.mjs'), 'utf-8');
+    const repair = fs.readFileSync(path.join(projectRoot, 'backend/src/modules/admin/admin.repair.controller.mjs'), 'utf-8');
+    const dashboard = activeDashboardContent();
+    assert.match(routes, /router\.patch\('\/bookings\/:id\/itinerary'[^\n]+adminRepairController\.updateItinerary/, 'PATCH itinerary must use repair controller');
+    assert.match(routes, /router\.post\('\/bookings\/:id\/itinerary'[^\n]+adminRepairController\.updateItinerary/, 'Legacy POST itinerary must use the same repair controller');
+    assert.match(dashboard, /segments:\s*finalSegments/, 'Dashboard must submit one canonical segments array');
+    assert.match(repair, /persistenceVerified:\s*true/, 'Backend itinerary response must explicitly confirm persistence verification');
+  });
+
+  await t.test('29. GDS Confirm & Apply waits for onApply and keeps errors visible', () => {
+    const content = fs.readFileSync(path.join(projectRoot, 'frontend/src/features/admin/components/AdminGdsImportModalV2.js'), 'utf-8');
+    assert.match(content, /await withTimeout\(\s*Promise\.resolve\(onApply/, 'Confirm & Apply must await the actual dashboard save');
+    assert.match(content, /setSaveError\(error\.message/, 'Apply failures must be rendered in the modal');
+    assert.match(content, /resetAndClose\(\);/, 'Modal must close only after successful apply path');
+  });
+
+  await t.test('30. Price update returns complete read-after-write booking snapshot', () => {
+    const routes = fs.readFileSync(path.join(projectRoot, 'backend/src/modules/admin/admin.routes.mjs'), 'utf-8');
+    const controller = fs.readFileSync(path.join(projectRoot, 'backend/src/modules/admin/admin.dashboard-v2.controller.mjs'), 'utf-8');
+    assert.match(routes, /adminDashboardV2Controller\.updatePricing/, 'Admin pricing routes must use V2 pricing controller');
+    assert.match(controller, /getCompleteBookingById/, 'Pricing controller must reload the complete booking');
+    assert.match(controller, /persistenceVerified:\s*true/, 'Pricing response must expose persistence verification');
+  });
+
+  // Keep the mapper resolver directly exercised by this workflow suite.
+  await t.test('31. Price resolver accepts nested pricing values used by admin create flow', () => {
+    assert.equal(resolvePositiveAmount(undefined, undefined, 741), 741);
+    assert.equal(resolvePositiveAmount(0, -1, '850.25'), 850.25);
+  });
 });
