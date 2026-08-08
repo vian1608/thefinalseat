@@ -1,6 +1,7 @@
 import express from 'express';
 import adminController from './admin.controller.mjs';
 import adminRepairController from './admin.repair.controller.mjs';
+import adminDashboardV2Controller from './admin.dashboard-v2.controller.mjs';
 import authenticate from '../../middleware/authenticate.mjs';
 import authorize from '../../middleware/authorize.mjs';
 import rateLimit from '../../middleware/rate-limit.mjs';
@@ -39,7 +40,7 @@ router.patch('/bookings/:id/status', authenticate, authorize(['admin']), booking
 router.patch('/bookings/:id/passenger-details', authenticate, authorize(['admin']), adminController.updatePassengerDetails);
 router.patch('/bookings/:id/contact-details', authenticate, authorize(['admin']), adminController.updateContactDetails);
 router.patch('/bookings/:id/itinerary', authenticate, authorize(['admin']), adminRepairController.updateItinerary);
-router.patch('/bookings/:id/pricing', authenticate, authorize(['admin']), adminController.updatePricing);
+router.patch('/bookings/:id/pricing', authenticate, authorize(['admin']), adminDashboardV2Controller.updatePricing);
 router.patch('/bookings/:id/airline-details', authenticate, authorize(['admin']), adminController.saveTicketDetails);
 router.patch('/bookings/:id/authorization', authenticate, authorize(['admin']), adminController.updateAuthorizationSettings);
 router.patch('/bookings/:id/authorization-settings', authenticate, authorize(['admin']), adminController.updateAuthorizationSettings);
@@ -73,9 +74,10 @@ router.post('/bookings/:id/process-authorized', authenticate, authorize(['admin'
 // now use the same validated, persistence-verified implementation.
 router.post('/bookings/:id/itinerary', authenticate, authorize(['admin']), adminRepairController.updateItinerary);
 
-router.post('/bookings/:id/pricing', authenticate, authorize(['admin']), adminController.updatePricing);
-router.post('/bookings/:identifier/pricing', authenticate, authorize(['admin']), adminController.updatePricing);
-router.patch('/bookings/:identifier/pricing', authenticate, authorize(['admin']), adminController.updatePricing);
+// Keep legacy pricing verbs compatible, but return a full verified booking snapshot.
+router.post('/bookings/:id/pricing', authenticate, authorize(['admin']), adminDashboardV2Controller.updatePricing);
+router.post('/bookings/:identifier/pricing', authenticate, authorize(['admin']), adminDashboardV2Controller.updatePricing);
+router.patch('/bookings/:identifier/pricing', authenticate, authorize(['admin']), adminDashboardV2Controller.updatePricing);
 router.post('/bookings/:id/payment-action', authenticate, authorize(['admin']), adminController.handlePaymentAction);
 router.get('/bookings/:id/authorization-evidence', authenticate, authorize(['admin']), passengerAuthorizationController.getEvidenceExport);
 router.get('/bookings/:id/authorization-pdf', authenticate, authorize(['admin']), adminController.downloadAuthorizationPdf);
