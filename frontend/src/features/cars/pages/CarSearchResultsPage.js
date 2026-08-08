@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import CarSearchForm from '../components/CarSearchForm';
 import CarResultCard from '../components/CarResultCard';
 import { carAPI } from '../../../shared/api/api';
+import { normalizeError } from '../../../shared/utils/normalizeError';
 import './CarSearchResultsPage.css';
 
 const CATEGORY_OPTIONS = ['Small', 'Medium', 'Large', 'Estate', 'SUV', 'Premium', 'Carrier/Van'];
@@ -11,38 +12,62 @@ const TRANSMISSION_OPTIONS = ['Automatic', 'Manual'];
 const MILEAGE_OPTIONS = ['Unlimited', 'Limited'];
 const DEPOT_TYPES = ['In terminal', 'Car rental centre', 'Outside terminal', 'Shuttle bus', 'Meet and greet'];
 
+function futureDate(days) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split('T')[0];
+}
+
+function buildSearchFromUrl(urlParams) {
+  const pickup = urlParams.get('pickup');
+  if (!pickup) return null;
+  const dropoff = urlParams.get('dropoff') || pickup;
+  return {
+    pickupLocation: { airport: pickup },
+    dropoffLocation: { airport: dropoff },
+    pickupText: pickup,
+    dropoffText: dropoff,
+    pickupDate: urlParams.get('pickupDate') || futureDate(7),
+    pickupTime: urlParams.get('pickupTime') || '10:00:00',
+    dropoffDate: urlParams.get('dropoffDate') || futureDate(12),
+    dropoffTime: urlParams.get('dropoffTime') || '10:00:00',
+    driverAge: Number.parseInt(urlParams.get('driverAge') || '30', 10),
+    driverCountry: urlParams.get('driverCountry') || 'us',
+    currency: urlParams.get('currency') || 'USD'
+  };
+}
+
 function CarSearchResultsPage() {
   const location = useLocation();
+  const requestSequence = useRef(0);
 
   const [searchParams, setSearchParams] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [requestId, setRequestId] = useState('');
-
   const [results, setResults] = useState([]);
   const [enrichment, setEnrichment] = useState({});
   const [nextPageToken, setNextPageToken] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
-
   const [showEditSearch, setShowEditSearch] = useState(false);
 
-  // Filter States
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedTransmissions, setSelectedTransmissions] = useState([]);
   const [selectedMileages, setSelectedMileages] = useState([]);
   const [selectedDepotTypes, setSelectedDepotTypes] = useState([]);
   const [airConOnly, setAirConOnly] = useState(false);
+  const [sortBy, setSortBy] = useState('price_asc');
 
-  // Sorting
-  const [sortBy, setSortBy] = useState('price_asc'); // 'price_asc', 'price_desc', 'rating'
+  const fetchCarResults = useCallback(async (paramsObj, { append = false, pageToken = null } = {}) => {
+    if (!paramsObj) return;
+    const sequence = ++requestSequence.current;
 
-  // Parse query parameters and fetch car results
-  const fetchCarResults = useCallback(async (paramsObj, isNextPage = false) => {
-    if (isNextPage) {
+    if (append) {
       setLoadingMore(true);
     } else {
       setLoading(true);
       setErrorMsg('');
+      setRequestId('');
     }
 
     try {
@@ -59,92 +84,63 @@ function CarSearchResultsPage() {
           by: sortBy === 'rating' ? 'review_score' : 'price',
           direction: sortBy === 'price_desc' ? 'descending' : 'ascending'
         },
-        ...(isNextPage && nextPageToken && { next_page: nextPageToken })
+        ...(append && pageToken ? { next_page: pageToken } : {})
       };
 
       const response = await carAPI.search(apiPayload);
-      const data = response?.data || response || {};
+      if (sequence !== requestSequence.current) return;
 
-      const fetchedResults = data.results || [];
+      const data = response?.data || response || {};
+      const fetchedResults = Array.isArray(data.results) ? data.results : [];
       const fetchedEnrichment = data.enrichment || {};
 
-      if (isNextPage) {
-        setResults(prev => [...prev, ...fetchedResults]);
-      } else {
-        setResults(fetchedResults);
-      }
-
-      setEnrichment(prev => ({
-        carsById: { ...(prev.carsById || {}), ...(fetchedEnrichment.carsById || {}) },
-        suppliersById: { ...(prev.suppliersById || {}), ...(fetchedEnrichment.suppliersById || {}) },
-        depotsById: { ...(prev.depotsById || {}), ...(fetchedEnrichment.depotsById || {}) },
-        depotScoresById: { ...(prev.depotScoresById || {}), ...(fetchedEnrichment.depotScoresById || {}) }
+      setResults((previous) => append ? [...previous, ...fetchedResults] : fetchedResults);
+      setEnrichment((previous) => ({
+        carsById: { ...(append ? previous.carsById || {} : {}), ...(fetchedEnrichment.carsById || {}) },
+        suppliersById: { ...(append ? previous.suppliersById || {} : {}), ...(fetchedEnrichment.suppliersById || {}) },
+        depotsById: { ...(append ? previous.depotsById || {} : {}), ...(fetchedEnrichment.depotsById || {}) },
+        depotScoresById: { ...(append ? previous.depotScoresById || {} : {}), ...(fetchedEnrichment.depotScoresById || {}) }
       }));
-
       setNextPageToken(data.metadata?.next_page || null);
     } catch (err) {
-      console.error('Car search error:', err);
-      setErrorMsg(err.response?.data?.error?.message || err.message || 'Car-rental search is temporarily unavailable. Please try again shortly.');
-      setRequestId(err.response?.data?.error?.requestId || '');
+      if (sequence !== requestSequence.current) return;
+      setErrorMsg(normalizeError(err, 'Car-rental search is temporarily unavailable. Please try again shortly.'));
+      setRequestId(err?.response?.data?.error?.requestId || '');
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (sequence === requestSequence.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
-  }, [selectedCategories, selectedTransmissions, selectedMileages, selectedDepotTypes, airConOnly, sortBy, nextPageToken]);
+  }, [selectedCategories, selectedTransmissions, selectedMileages, selectedDepotTypes, airConOnly, sortBy]);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
-    const saved = sessionStorage.getItem('carSearchParams');
+    const fromUrl = buildSearchFromUrl(urlParams);
+    let parsed = fromUrl;
 
-    let parsed = saved ? JSON.parse(saved) : null;
-    if (!parsed && urlParams.get('pickup')) {
-      const pickupVal = urlParams.get('pickup');
-      const dropoffVal = urlParams.get('dropoff') || pickupVal;
-      parsed = {
-        pickupLocation: { airport: pickupVal },
-        dropoffLocation: { airport: dropoffVal },
-        pickupText: pickupVal,
-        dropoffText: dropoffVal,
-        pickupDate: urlParams.get('pickupDate') || '2026-09-10',
-        pickupTime: urlParams.get('pickupTime') || '10:00:00',
-        dropoffDate: urlParams.get('dropoffDate') || '2026-09-15',
-        dropoffTime: urlParams.get('dropoffTime') || '10:00:00',
-        driverAge: parseInt(urlParams.get('driverAge') || '30', 10),
-        currency: urlParams.get('currency') || 'USD'
-      };
+    if (!parsed) {
+      try {
+        const saved = sessionStorage.getItem('carSearchParams');
+        parsed = saved ? JSON.parse(saved) : null;
+      } catch {
+        parsed = null;
+      }
     }
 
-    if (parsed) {
-      setSearchParams(parsed);
-      fetchCarResults(parsed);
-    } else {
+    setSearchParams(parsed);
+    if (!parsed) {
       setLoading(false);
+      setResults([]);
+      setErrorMsg('');
     }
-  }, [location.search, fetchCarResults]);
+  }, [location.search]);
 
-  const handleCategoryToggle = (cat) => {
-    setSelectedCategories(prev =>
-      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
-    );
-  };
-
-  const handleTransmissionToggle = (tr) => {
-    setSelectedTransmissions(prev =>
-      prev.includes(tr) ? prev.filter(t => t !== tr) : [...prev, tr]
-    );
-  };
-
-  const handleMileageToggle = (m) => {
-    setSelectedMileages(prev =>
-      prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]
-    );
-  };
-
-  const handleDepotTypeToggle = (dt) => {
-    setSelectedDepotTypes(prev =>
-      prev.includes(dt) ? prev.filter(d => d !== dt) : [...prev, dt]
-    );
-  };
+  useEffect(() => {
+    if (searchParams) {
+      fetchCarResults(searchParams);
+    }
+  }, [searchParams, fetchCarResults]);
 
   const handleResetFilters = () => {
     setSelectedCategories([]);
@@ -155,6 +151,15 @@ function CarSearchResultsPage() {
     setSortBy('price_asc');
   };
 
+  const toggleListValue = (setter, value) => {
+    setter((previous) => previous.includes(value) ? previous.filter((item) => item !== value) : [...previous, value]);
+  };
+
+  const handleLoadMore = () => {
+    if (!searchParams || !nextPageToken || loadingMore) return;
+    fetchCarResults(searchParams, { append: true, pageToken: nextPageToken });
+  };
+
   return (
     <div className="car-results-page">
       <Helmet>
@@ -162,144 +167,94 @@ function CarSearchResultsPage() {
         <meta name="description" content="Compare car rental options, suppliers, pickup locations, and policies through The Final Seat." />
       </Helmet>
 
-      {/* Header Summary Bar */}
       <section className="car-results-summary-bar">
         <div className="container car-summary-inner">
           <div className="car-summary-info">
             <div className="summary-title-line">
               <i className="fas fa-car" aria-hidden="true" />
-              <h2>
-                Car Rentals in {searchParams?.pickupText || 'Airport Location'}
-              </h2>
+              <h2>Car Rentals in {searchParams?.pickupText || 'Airport Location'}</h2>
             </div>
             <p className="summary-dates-sub">
-              {searchParams?.pickupDate} ({searchParams?.pickupTime?.substring(0, 5)}) — {searchParams?.dropoffDate} ({searchParams?.dropoffTime?.substring(0, 5)})
-              • Driver Age: {searchParams?.driverAge || 30} • Currency: {searchParams?.currency || 'USD'}
+              {searchParams?.pickupDate || '—'} ({searchParams?.pickupTime?.substring(0, 5) || '—'}) — {searchParams?.dropoffDate || '—'} ({searchParams?.dropoffTime?.substring(0, 5) || '—'})
+              {' '}• Driver Age: {searchParams?.driverAge || 30} • Currency: {searchParams?.currency || 'USD'}
             </p>
           </div>
 
-          <button
-            type="button"
-            className="edit-search-toggle-btn"
-            onClick={() => setShowEditSearch(v => !v)}
-          >
+          <button type="button" className="edit-search-toggle-btn" onClick={() => setShowEditSearch((open) => !open)}>
             <i className="fas fa-edit" />
             <span>{showEditSearch ? 'Close Search' : 'Modify Search'}</span>
           </button>
         </div>
       </section>
 
-      {/* Edit Search Form Drawer */}
       {showEditSearch && (
         <section className="car-edit-search-drawer">
-          <div className="container">
-            <CarSearchForm initialValues={searchParams || {}} compact />
-          </div>
+          <div className="container"><CarSearchForm initialValues={searchParams || {}} compact /></div>
         </section>
       )}
 
-      {/* Main Results Container */}
       <div className="container car-results-container">
-        {/* Left Filter Sidebar */}
         <aside className="car-filter-sidebar">
           <div className="filter-header">
             <h3><i className="fas fa-sliders-h" /> Filter Cars</h3>
-            <button type="button" className="reset-filters-btn" onClick={handleResetFilters}>
-              Reset All
-            </button>
+            <button type="button" className="reset-filters-btn" onClick={handleResetFilters}>Reset All</button>
           </div>
 
-          {/* Vehicle Category */}
           <div className="filter-group">
             <h4>Vehicle Category</h4>
-            {CATEGORY_OPTIONS.map(cat => (
-              <label key={cat} className="filter-checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={selectedCategories.includes(cat)}
-                  onChange={() => handleCategoryToggle(cat)}
-                />
-                <span>{cat}</span>
+            {CATEGORY_OPTIONS.map((category) => (
+              <label key={category} className="filter-checkbox-label">
+                <input type="checkbox" checked={selectedCategories.includes(category)} onChange={() => toggleListValue(setSelectedCategories, category)} />
+                <span>{category}</span>
               </label>
             ))}
           </div>
 
-          {/* Transmission */}
           <div className="filter-group">
             <h4>Transmission</h4>
-            {TRANSMISSION_OPTIONS.map(tr => (
-              <label key={tr} className="filter-checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={selectedTransmissions.includes(tr)}
-                  onChange={() => handleTransmissionToggle(tr)}
-                />
-                <span>{tr}</span>
+            {TRANSMISSION_OPTIONS.map((transmission) => (
+              <label key={transmission} className="filter-checkbox-label">
+                <input type="checkbox" checked={selectedTransmissions.includes(transmission)} onChange={() => toggleListValue(setSelectedTransmissions, transmission)} />
+                <span>{transmission}</span>
               </label>
             ))}
           </div>
 
-          {/* Mileage */}
           <div className="filter-group">
             <h4>Mileage</h4>
-            {MILEAGE_OPTIONS.map(m => (
-              <label key={m} className="filter-checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={selectedMileages.includes(m)}
-                  onChange={() => handleMileageToggle(m)}
-                />
-                <span>{m} Mileage</span>
+            {MILEAGE_OPTIONS.map((mileage) => (
+              <label key={mileage} className="filter-checkbox-label">
+                <input type="checkbox" checked={selectedMileages.includes(mileage)} onChange={() => toggleListValue(setSelectedMileages, mileage)} />
+                <span>{mileage} Mileage</span>
               </label>
             ))}
           </div>
 
-          {/* Depot Type */}
           <div className="filter-group">
             <h4>Pickup Location Type</h4>
-            {DEPOT_TYPES.map(dt => (
-              <label key={dt} className="filter-checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={selectedDepotTypes.includes(dt)}
-                  onChange={() => handleDepotTypeToggle(dt)}
-                />
-                <span>{dt}</span>
+            {DEPOT_TYPES.map((depotType) => (
+              <label key={depotType} className="filter-checkbox-label">
+                <input type="checkbox" checked={selectedDepotTypes.includes(depotType)} onChange={() => toggleListValue(setSelectedDepotTypes, depotType)} />
+                <span>{depotType}</span>
               </label>
             ))}
           </div>
 
-          {/* Air Conditioning */}
           <div className="filter-group">
             <h4>Features</h4>
             <label className="filter-checkbox-label">
-              <input
-                type="checkbox"
-                checked={airConOnly}
-                onChange={e => setAirConOnly(e.target.checked)}
-              />
+              <input type="checkbox" checked={airConOnly} onChange={(event) => setAirConOnly(event.target.checked)} />
               <span>Air Conditioning Only</span>
             </label>
           </div>
         </aside>
 
-        {/* Right Car Results Listing */}
         <main className="car-results-main">
-          
-          {/* Controls Bar: Result Count & Sort */}
           <div className="car-controls-bar">
-            <span className="results-count-text">
-              Showing <strong>{results.length}</strong> rental car options
-            </span>
-
+            <span className="results-count-text">Showing <strong>{results.length}</strong> rental car options</span>
             <div className="sort-select-wrapper">
               <label htmlFor="car-sort-select">Sort by:</label>
-              <select
-                id="car-sort-select"
-                className="car-sort-select"
-                value={sortBy}
-                onChange={e => setSortBy(e.target.value)}
-              >
+              <select id="car-sort-select" className="car-sort-select" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
                 <option value="price_asc">Price: Low to High</option>
                 <option value="price_desc">Price: High to Low</option>
                 <option value="rating">Review Score</option>
@@ -307,81 +262,57 @@ function CarSearchResultsPage() {
             </div>
           </div>
 
-          {/* Loading State */}
           {loading && (
-            <div className="car-loading-state">
+            <div className="car-loading-state" aria-live="polite">
               <i className="fas fa-spinner fa-spin car-loading-icon" />
               <h3>Searching available rental cars...</h3>
-              <p>Fetching real-time inventory from Booking.com</p>
+              <p>Fetching current inventory from Booking.com</p>
             </div>
           )}
 
-          {/* Error State */}
           {!loading && errorMsg && (
-            <div className="car-error-state">
+            <div className="car-error-state" role="alert">
               <i className="fas fa-exclamation-triangle" />
               <h3>Search Unavailable</h3>
               <p>{errorMsg}</p>
               {requestId && <span className="error-req-id">Reference ID: {requestId}</span>}
-              <button
-                type="button"
-                className="retry-search-btn"
-                onClick={() => searchParams && fetchCarResults(searchParams)}
-              >
-                Try Again
-              </button>
+              <button type="button" className="retry-search-btn" onClick={() => searchParams && fetchCarResults(searchParams)}>Try Again</button>
             </div>
           )}
 
-          {/* Empty Results State */}
-          {!loading && !errorMsg && results.length === 0 && (
+          {!loading && !errorMsg && !searchParams && (
+            <div className="car-empty-state">
+              <i className="fas fa-search" />
+              <h3>Start a car-rental search</h3>
+              <p>Choose pickup and drop-off details above to compare rental options.</p>
+              <button type="button" className="reset-filters-btn-large" onClick={() => setShowEditSearch(true)}>Enter Search Details</button>
+            </div>
+          )}
+
+          {!loading && !errorMsg && searchParams && results.length === 0 && (
             <div className="car-empty-state">
               <i className="fas fa-car-side" />
               <h3>No rental cars found for these dates and locations</h3>
               <p>Try changing your pickup time, dates, location, or driver age requirement.</p>
-              <button
-                type="button"
-                className="reset-filters-btn-large"
-                onClick={handleResetFilters}
-              >
-                Clear Filters
-              </button>
+              <button type="button" className="reset-filters-btn-large" onClick={handleResetFilters}>Clear Filters</button>
             </div>
           )}
 
-          {/* Result Cards List */}
           {!loading && !errorMsg && results.length > 0 && (
             <div className="car-cards-list">
-              {results.map((carItem, idx) => (
-                <CarResultCard
-                  key={carItem.car_id || carItem.id || idx}
-                  result={carItem}
-                  enrichment={enrichment}
-                />
+              {results.map((carItem, index) => (
+                <CarResultCard key={carItem.car_id || carItem.id || index} result={carItem} enrichment={enrichment} />
               ))}
 
-              {/* Load More Pagination */}
               {nextPageToken && (
                 <div className="load-more-wrapper">
-                  <button
-                    type="button"
-                    className="load-more-btn"
-                    onClick={() => searchParams && fetchCarResults(searchParams, true)}
-                    disabled={loadingMore}
-                  >
-                    {loadingMore ? (
-                      <>
-                        <i className="fas fa-spinner fa-spin" /> Loading More...
-                      </>
-                    ) : (
-                      'Load More Cars'
-                    )}
+                  <button type="button" className="load-more-btn" onClick={handleLoadMore} disabled={loadingMore}>
+                    {loadingMore ? <><i className="fas fa-spinner fa-spin" /> Loading More...</> : 'Load More Cars'}
                   </button>
                 </div>
               )}
             </div>
           )}
-
         </main>
       </div>
     </div>
