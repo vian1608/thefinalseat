@@ -23,6 +23,11 @@ jobs:
         # required by react-scripts. npm install verifies the real dependency
         # graph without making this reliability PR rewrite a 600KB lockfile.
         run: npm install --no-audit --no-fund
+      - name: Test GDS importer normalization
+        working-directory: frontend
+        env:
+          CI: "true"
+        run: npm test -- --watchAll=false gdsImportNormalizer.test.js
       - name: Build frontend
         working-directory: frontend
         env:
