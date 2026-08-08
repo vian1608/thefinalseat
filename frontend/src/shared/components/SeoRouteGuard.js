@@ -4,23 +4,30 @@ import { useLocation } from 'react-router-dom';
 
 const CANONICAL_ORIGIN = 'https://www.thefinalseat.com';
 
-const NOINDEX_EXACT = new Set([
-  '/search',
-  '/payment',
-  '/booking',
-  '/my-bookings',
-  '/signin',
-  '/signup',
-  '/return-flight',
-  '/car-rentals/search',
-  '/car-rentals/results',
+const INDEXABLE_EXACT = new Set([
+  '/',
+  '/car-rentals',
+  '/contact',
+  '/terms',
+  '/privacy-policy',
+  '/refund-policy',
+  '/travel-assistance',
+  '/booking-for-parents',
+  '/urgent-travel',
+  '/senior-travel/flight-deals',
+  '/flight-nyc-to-mia',
+  '/flight-lax-to-jfk',
+  '/train-nyc-to-dc',
+  '/train-dc-to-nyc',
+  '/train-philly-to-nyc',
+  '/train-boston-to-nyc',
 ]);
 
-const NOINDEX_PREFIXES = [
-  '/admin',
-  '/authorize/',
-  '/confirmation/',
-  '/booking-confirmed',
+const INDEXABLE_PREFIXES = [
+  '/routes/',
+  '/book/',
+  '/changes/',
+  '/cancellation/',
 ];
 
 const CANONICAL_ALIASES = {
@@ -29,7 +36,6 @@ const CANONICAL_ALIASES = {
   '/privacypolicy': '/privacy-policy',
   '/refund': '/refund-policy',
   '/refundpolicy': '/refund-policy',
-  '/pay': '/payment',
   '/amtrak': '/car-rentals',
   '/amtrak-assistance': '/car-rentals',
 };
@@ -42,22 +48,22 @@ const normalizePath = (pathname) => {
 export default function SeoRouteGuard() {
   const { pathname } = useLocation();
   const normalizedPath = normalizePath(pathname);
-  const noindex =
-    NOINDEX_EXACT.has(normalizedPath) ||
-    NOINDEX_PREFIXES.some((prefix) => normalizedPath === prefix || normalizedPath.startsWith(prefix));
-
   const canonicalPath = CANONICAL_ALIASES[normalizedPath] || normalizedPath;
+  const indexable =
+    INDEXABLE_EXACT.has(canonicalPath) ||
+    INDEXABLE_PREFIXES.some((prefix) => canonicalPath.startsWith(prefix));
+
   const canonicalUrl = `${CANONICAL_ORIGIN}${canonicalPath === '/' ? '/' : canonicalPath}`;
-  const robotsValue = noindex
-    ? 'noindex, nofollow, noarchive'
-    : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
+  const robotsValue = indexable
+    ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
+    : 'noindex, nofollow, noarchive';
 
   return (
     <Helmet>
       <meta name="robots" content={robotsValue} />
       <meta name="googlebot" content={robotsValue} />
-      {!noindex && <link rel="canonical" href={canonicalUrl} />}
-      {!noindex && <meta property="og:url" content={canonicalUrl} />}
+      {indexable && <link rel="canonical" href={canonicalUrl} />}
+      {indexable && <meta property="og:url" content={canonicalUrl} />}
     </Helmet>
   );
 }
