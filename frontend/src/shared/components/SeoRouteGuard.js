@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import routesData from '../data/routesData.json';
 
 const CANONICAL_ORIGIN = 'https://www.thefinalseat.com';
@@ -25,9 +25,7 @@ const INDEXABLE_EXACT = new Set([
 ]);
 
 const VALID_ROUTE_PATHS = new Set(
-  routesData
-    .filter((route) => route?.slug)
-    .map((route) => `/routes/${route.slug}`)
+  routesData.filter((route) => route?.slug).map((route) => `/routes/${route.slug}`)
 );
 
 const CANONICAL_ALIASES = {
@@ -46,20 +44,34 @@ const normalizePath = (pathname) => {
 };
 
 function isIndexablePath(pathname) {
-  if (INDEXABLE_EXACT.has(pathname)) return true;
-  if (VALID_ROUTE_PATHS.has(pathname)) return true;
-
-  // Airline action pages are intentionally noindex for now. They share a
-  // heavily templated structure and should only be opened to indexing after
-  // they contain enough airline-specific, independently useful content.
-  return false;
+  return INDEXABLE_EXACT.has(pathname) || VALID_ROUTE_PATHS.has(pathname);
 }
 
 export default function SeoRouteGuard() {
-  const { pathname } = useLocation();
-  const normalizedPath = normalizePath(pathname);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const normalizedPath = normalizePath(location.pathname);
   const canonicalPath = CANONICAL_ALIASES[normalizedPath] || normalizedPath;
   const indexable = isIndexablePath(canonicalPath);
+
+  useEffect(() => {
+    if (normalizedPath !== '/search') return;
+    const params = new URLSearchParams(location.search);
+    let changed = false;
+
+    if (params.get('return') && !params.get('returnDate')) {
+      params.set('returnDate', params.get('return'));
+      changed = true;
+    }
+    if (params.get('cabin') && !params.get('travelClass')) {
+      params.set('travelClass', params.get('cabin'));
+      changed = true;
+    }
+
+    if (changed) {
+      navigate({ pathname: '/search', search: `?${params.toString()}` }, { replace: true });
+    }
+  }, [location.search, navigate, normalizedPath]);
 
   const canonicalUrl = `${CANONICAL_ORIGIN}${canonicalPath === '/' ? '/' : canonicalPath}`;
   const robotsValue = indexable
