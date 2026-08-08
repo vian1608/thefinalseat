@@ -111,6 +111,19 @@ function installApiFetchTimeout() {
   };
 }
 
+function normalizeInquiryErrorShape(error) {
+  const url = String(error?.config?.url || '');
+  if (!url.includes('/inquiries/consulting')) return error;
+
+  const responseError = error?.response?.data?.error;
+  if (responseError && typeof responseError === 'object') {
+    const message = responseError.message || error.userMessage || error.message || 'Unable to submit your request right now.';
+    error.response.data.error = String(message);
+    error.userMessage = String(message);
+  }
+  return error;
+}
+
 let installed = false;
 
 export function installSensitiveDataGuards() {
@@ -121,6 +134,13 @@ export function installSensitiveDataGuards() {
     config.data = sanitizeAxiosData(config.data);
     return config;
   });
+
+  // Some legacy landing pages read response.data.error directly. Guarantee
+  // that inquiry failures are always render-safe strings rather than objects.
+  api.interceptors.response.use(
+    (response) => response,
+    (error) => Promise.reject(normalizeInquiryErrorShape(error))
+  );
 
   installApiFetchTimeout();
 
