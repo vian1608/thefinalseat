@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { flightAPI } from '../../../shared/api/api';
+import { normalizeError } from '../../../shared/utils/normalizeError';
 import FlightResultRow, { normalizeFlight } from '../components/FlightResultRow';
 import ModifySearchSummaryBar from '../components/ModifySearchSummaryBar';
 import ModifySearchModal from '../components/ModifySearchModal';
@@ -10,24 +11,42 @@ function ReturnFlightSelection() {
   const navigate = useNavigate();
   const [flights, setFlights] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [searchParams, setSearchParams] = useState(null);
   const [isModifySearchOpen, setIsModifySearchOpen] = useState(false);
-
-  // Accordion Expand State
   const [expandedFlightId, setExpandedFlightId] = useState(null);
 
+  const searchReturnFlights = useCallback(async (params) => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await flightAPI.search(params);
+      setFlights(Array.isArray(response?.data?.flights) ? response.data.flights : []);
+    } catch (err) {
+      setFlights([]);
+      setError(normalizeError(err, 'Unable to load return flights right now. Please retry or modify your search.'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const outboundFlight = JSON.parse(sessionStorage.getItem('selectedFlight') || 'null');
-    const params = JSON.parse(sessionStorage.getItem('searchParams') || '{}');
-    
+    let outboundFlight;
+    let params;
+    try {
+      outboundFlight = JSON.parse(sessionStorage.getItem('selectedFlight') || 'null');
+      params = JSON.parse(sessionStorage.getItem('searchParams') || '{}');
+    } catch {
+      outboundFlight = null;
+      params = {};
+    }
+
     if (!outboundFlight || !params.returnDate) {
       navigate('/');
       return;
     }
 
     setSearchParams(params);
-
-    // Set search return parameter: reverse route
     searchReturnFlights({
       from: params.to,
       to: params.from,
@@ -38,120 +57,96 @@ function ReturnFlightSelection() {
       travelClass: params.travelClass || 'economy',
       currency: params.currency || 'USD'
     });
-  }, [navigate]);
-
-  const searchReturnFlights = async (params) => {
-    try {
-      setLoading(true);
-      const response = await flightAPI.search(params);
-      setFlights(response.data?.flights || []);
-    } catch (err) {
-      console.error('Error searching return flights:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [navigate, searchReturnFlights]);
 
   const handleSelectReturnFlight = (flight) => {
     sessionStorage.setItem('returnFlight', JSON.stringify(flight));
     navigate('/booking');
   };
 
-  const toggleExpandFlight = (flightId) => {
-    setExpandedFlightId(prev => (prev === flightId ? null : flightId));
+  const handleUpdateSearchFromReturn = (updatedParams) => {
+    setIsModifySearchOpen(false);
+    sessionStorage.removeItem('selectedFlight');
+    sessionStorage.removeItem('selectedReturnFlight');
+    sessionStorage.removeItem('returnFlight');
+    sessionStorage.removeItem('bookingDraft');
+
+    const params = new URLSearchParams({
+      from: updatedParams.from,
+      to: updatedParams.to,
+      departure: updatedParams.departure,
+      return: updatedParams.return || '',
+      returnDate: updatedParams.return || '',
+      tripType: updatedParams.tripType,
+      adults: String(updatedParams.adults),
+      children: String(updatedParams.children),
+      infants: String(updatedParams.infants),
+      cabin: updatedParams.cabinClass,
+      travelClass: updatedParams.cabinClass,
+    });
+    navigate(`/search?${params.toString()}`);
   };
 
-  const normalizedFlights = flights
-    .map((f, idx) => normalizeFlight(f, idx))
-    .filter(Boolean);
+  const normalizedFlights = flights.map((flight, index) => normalizeFlight(flight, index)).filter(Boolean);
 
-  // Rendering Loading Skeletons for a modern feel
   if (loading) {
     return (
       <div className="search-results-page">
         <div className="container" style={{ maxWidth: '1000px', margin: '0 auto' }}>
-          <div className="results-toolbar-comparison" style={{ marginBottom: '20px' }}>
-            <div className="skeleton-line-title pulsing"></div>
-          </div>
-
+          <div className="results-toolbar-comparison" style={{ marginBottom: '20px' }}><div className="skeleton-line-title pulsing" /></div>
           <div className="flight-results-rows-container">
-            {[1, 2, 3].map((n) => (
-              <div key={n} className="flight-card skeleton-card">
-                <div className="flight-header skeleton-flex">
-                  <div className="skeleton-circle pulsing"></div>
-                  <div className="skeleton-lines">
-                    <div className="skeleton-line-heading pulsing"></div>
-                    <div className="skeleton-line-sub pulsing"></div>
-                  </div>
-                  <div className="skeleton-price-block pulsing"></div>
-                </div>
-                <div className="flight-details skeleton">
-                  <div className="skeleton-route-bar pulsing"></div>
-                  <div className="skeleton-info-tags pulsing"></div>
-                </div>
-              </div>
-            ))}
+            {[1, 2, 3].map((item) => <div key={item} className="flight-card skeleton-card"><div className="flight-header skeleton-flex"><div className="skeleton-circle pulsing" /><div className="skeleton-lines"><div className="skeleton-line-heading pulsing" /><div className="skeleton-line-sub pulsing" /></div><div className="skeleton-price-block pulsing" /></div><div className="flight-details skeleton"><div className="skeleton-route-bar pulsing" /></div></div>)}
           </div>
         </div>
       </div>
     );
   }
 
-  const handleUpdateSearchFromReturn = (updatedParams) => {
-    setIsModifySearchOpen(false);
-    sessionStorage.removeItem('selectedFlight');
-    sessionStorage.removeItem('selectedReturnFlight');
-    sessionStorage.removeItem('bookingDraft');
-
-    const searchUrl = `/search?from=${encodeURIComponent(updatedParams.from)}&to=${encodeURIComponent(updatedParams.to)}&departure=${encodeURIComponent(updatedParams.departure)}&return=${encodeURIComponent(updatedParams.return || '')}&tripType=${encodeURIComponent(updatedParams.tripType)}&adults=${updatedParams.adults}&children=${updatedParams.children}&infants=${updatedParams.infants}&cabin=${encodeURIComponent(updatedParams.cabinClass)}`;
-    navigate(searchUrl);
-  };
-
   return (
     <div className="search-results-page">
       <div className="container" style={{ maxWidth: '1000px', margin: '0 auto' }}>
-        
-        <ModifySearchSummaryBar
-          searchParams={searchParams || {}}
-          onOpenModifyModal={() => setIsModifySearchOpen(true)}
-        />
+        <ModifySearchSummaryBar searchParams={searchParams || {}} onOpenModifyModal={() => setIsModifySearchOpen(true)} />
 
-        {/* Results Toolbar */}
         <div className="results-toolbar-comparison" style={{ marginBottom: '20px' }}>
           <div className="results-meta-text">
-            <h2 style={{ fontSize: '1.4rem', color: '#1e293b', fontWeight: 700, margin: '0 0 4px 0' }}>Select Return Flight</h2>
-            <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0, fontWeight: 500 }}>
-              Choose your returning flight from {searchParams?.to?.split('(')[0]?.trim()} to {searchParams?.from?.split('(')[0]?.trim()} to complete your round-trip booking
-            </p>
+            <h2 style={{ fontSize: '1.4rem', color: '#1e293b', fontWeight: 700, margin: '0 0 4px' }}>Select Return Flight</h2>
+            <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0, fontWeight: 500 }}>Choose your return flight from {searchParams?.to?.split('(')[0]?.trim()} to {searchParams?.from?.split('(')[0]?.trim()}.</p>
           </div>
         </div>
 
-        {/* Flight results list */}
-        <div className="flight-results-rows-container">
-          {normalizedFlights.length === 0 ? (
-            <div className="no-results-card">
-              <div className="no-results-icon-circle">
-                <i className="fas fa-plane-departure"></i>
-              </div>
-              <h3>No return flights found</h3>
-              <p>No return flights match your outbound selection, date, and routes. Try modifying your travel criteria.</p>
-              <button onClick={() => setIsModifySearchOpen(true)} className="btn-outline-modify">Modify Search</button>
+        {error && (
+          <div className="search-error-card" role="alert" style={{ marginBottom: '1.5rem' }}>
+            <h3>Return Flight Search Failed</h3>
+            <p>{error}</p>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <button type="button" className="btn-primary" onClick={() => searchParams && searchReturnFlights({ from: searchParams.to, to: searchParams.from, departure: searchParams.returnDate, adults: searchParams.adults || 1, children: searchParams.children || 0, infants: searchParams.infants || 0, travelClass: searchParams.travelClass || 'economy', currency: searchParams.currency || 'USD' })}>Retry Search</button>
+              <button type="button" className="btn-outline-modify" onClick={() => setIsModifySearchOpen(true)}>Modify Search</button>
             </div>
-          ) : (
-            normalizedFlights.map((flight) => (
+          </div>
+        )}
+
+        {!error && (
+          <div className="flight-results-rows-container">
+            {normalizedFlights.length === 0 ? (
+              <div className="no-results-card">
+                <div className="no-results-icon-circle"><i className="fas fa-plane-departure" /></div>
+                <h3>No return flights found</h3>
+                <p>No return flights matched this route and date. Try modifying your travel criteria.</p>
+                <button type="button" onClick={() => setIsModifySearchOpen(true)} className="btn-outline-modify">Modify Search</button>
+              </div>
+            ) : normalizedFlights.map((flight) => (
               <FlightResultRow
                 key={flight.id}
                 flight={flight}
                 isExpanded={expandedFlightId === flight.id}
-                onToggleExpand={() => toggleExpandFlight(flight.id)}
+                onToggleExpand={() => setExpandedFlightId((current) => current === flight.id ? null : flight.id)}
                 onSelect={handleSelectReturnFlight}
                 actionLabel="Select Return Flight"
                 travelersCount={parseInt(searchParams?.adults || 1, 10)}
               />
-            ))
-          )}
-        </div>
-
+            ))}
+          </div>
+        )}
       </div>
 
       <ModifySearchModal
