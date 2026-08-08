@@ -132,12 +132,7 @@ function CarRentalsHomePage() {
         </div>
       </section>
 
-      <SeamlessAdvisorySection
-        title="Need Assistance Choosing the Right Rental Vehicle?"
-        subtitle="Our travel specialists can help review airport pickups, child-seat needs, and travel logistics."
-        primaryActionText={`Call Support ${SUPPORT_PHONE_DISPLAY}`}
-        primaryActionHref={SUPPORT_PHONE_HREF}
-      />
+      <SeamlessAdvisorySection variant="flight" />
     </div>
   );
 }
