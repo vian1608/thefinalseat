@@ -22,15 +22,18 @@ assert.match(indexHtml, /<link rel="canonical" href="https:\/\/www\.thefinalseat
 assert.match(seoGuard, /https:\/\/www\.thefinalseat\.com/);
 
 // Sitemap must contain only public, canonical landing/content pages.
-for (const privatePath of [
-  '/admin', '/search', '/payment', '/booking', '/authorize/', '/confirmation/',
+const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
+const sitemapPaths = locs.map((url) => new URL(url).pathname.replace(/\/+$/, '') || '/');
+const privatePaths = [
+  '/admin', '/search', '/payment', '/booking', '/authorize', '/confirmation',
   '/booking-confirmed', '/my-bookings', '/signin', '/signup', '/return-flight',
   '/car-rentals/search', '/car-rentals/results'
-]) {
-  assert.equal(sitemap.includes(`<loc>https://www.thefinalseat.com${privatePath}`), false, `Private path leaked into sitemap: ${privatePath}`);
+];
+for (const privatePath of privatePaths) {
+  const leaked = sitemapPaths.some((pathname) => pathname === privatePath || pathname.startsWith(`${privatePath}/`));
+  assert.equal(leaked, false, `Private path leaked into sitemap: ${privatePath}`);
 }
 
-const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
 assert.ok(locs.length >= 20, 'Sitemap should expose the core SEO landing/content pages.');
 assert.equal(new Set(locs).size, locs.length, 'Sitemap contains duplicate URLs.');
 assert.ok(locs.every((url) => url.startsWith('https://www.thefinalseat.com/')), 'Every sitemap URL must use the canonical www HTTPS origin.');
