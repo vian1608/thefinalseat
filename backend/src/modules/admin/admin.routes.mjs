@@ -3,10 +3,17 @@ import adminController from './admin.controller.mjs';
 import adminRepairController from './admin.repair.controller.mjs';
 import adminDashboardV2Controller from './admin.dashboard-v2.controller.mjs';
 import adminBackupController from './admin.backup.controller.mjs';
+import adminBulkDeleteController from './admin.bulk-delete.controller.mjs';
 import '../bookings/booking.repository.runtime-repair.mjs';
 import authenticate from '../../middleware/authenticate.mjs';
 import authorize from '../../middleware/authorize.mjs';
 import rateLimit from '../../middleware/rate-limit.mjs';
+
+// Keep the long-standing repair-controller route contract while replacing only
+// its delete methods with the optimized batched engine. Existing tests and any
+// internal imports continue to see the same public route handlers.
+adminRepairController.bulkDeleteBookings = adminBulkDeleteController.bulkDeleteBookings;
+adminRepairController.deleteBooking = adminBulkDeleteController.deleteBooking;
 
 const router = express.Router();
 
