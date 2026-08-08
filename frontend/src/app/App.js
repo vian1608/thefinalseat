@@ -4,6 +4,7 @@ import Header from '../shared/components/Header';
 import Footer from '../shared/components/Footer';
 import PageTransition from '../shared/components/PageTransition';
 import ScrollToTop from '../shared/components/ScrollToTop';
+import SeoRouteGuard from '../shared/components/SeoRouteGuard';
 import Home from '../features/flights/pages/Home';
 import SearchResults from '../features/flights/pages/SearchResultsPage';
 import SignIn from '../features/customers/pages/SignInPage';
@@ -16,6 +17,7 @@ import RoundTripConfirmation from '../features/bookings/pages/RoundTripConfirmat
 import ReturnFlightSelection from '../features/flights/pages/ReturnFlightSelectionPage';
 import TermsAndConditions from '../shared/pages/TermsAndConditionsPage';
 import ContactInfo from '../shared/pages/ContactInfoPage';
+import NotFoundPage from '../shared/pages/NotFoundPage';
 import './App.css';
 import PrivacyPolicy from '../shared/pages/PrivacyPolicyPage';
 import RefundPolicy from '../shared/pages/RefundPolicyPage';
@@ -177,7 +179,6 @@ function App() {
                 <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                 <Route path="/refund-policy" element={<RefundPolicy />} />
                 
-                {/* Common Aliases / Shortcuts */}
                 {/* Dedicated Landing Pages */}
                 <Route path="/travel-assistance" element={<TravelAssistance />} />
                 <Route path="/booking-for-parents" element={<BookingForParents />} />
@@ -191,10 +192,11 @@ function App() {
                 <Route path="/refund" element={<Navigate to="/refund-policy" replace />} />
                 <Route path="/refundpolicy" element={<Navigate to="/refund-policy" replace />} />
                 
-                {/* Catch-all 404 Redirect to Home */}
-                <Route path="*" element={<Navigate to="/" replace />} />
+                {/* Unknown client routes render a real not-found experience instead of redirecting to home. */}
+                <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </PageTransition>
+            <SeoRouteGuard />
           </AppErrorBoundary>
         </main>
         <Footer />

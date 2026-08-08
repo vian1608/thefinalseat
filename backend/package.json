@@ -7,8 +7,8 @@
   "scripts": {
     "start": "node src/server.mjs",
     "dev": "nodemon src/server.mjs",
-    "test": "node tests/automated_preproduction_safety_checks.test.mjs && node tests/google_ads_lead_conversion_complete.test.mjs && node tests/admin_create_booking_workflow.test.mjs && node tests/admin_dashboard_button_reliability.test.mjs && node tests/inquiry_lead_persistence_google_ads.test.mjs",
-    "verify:production-ready": "node tests/automated_preproduction_safety_checks.test.mjs && node tests/google_ads_lead_conversion_complete.test.mjs && node tests/admin_create_booking_workflow.test.mjs && node tests/admin_dashboard_button_reliability.test.mjs && node tests/inquiry_lead_persistence_google_ads.test.mjs"
+    "test": "node tests/automated_preproduction_safety_checks.test.mjs && node tests/google_ads_lead_conversion_complete.test.mjs && node tests/admin_create_booking_workflow.test.mjs && node tests/admin_dashboard_button_reliability.test.mjs && node tests/inquiry_lead_persistence_google_ads.test.mjs && node tests/seo_indexing_contract.test.mjs",
+    "verify:production-ready": "node tests/automated_preproduction_safety_checks.test.mjs && node tests/google_ads_lead_conversion_complete.test.mjs && node tests/admin_create_booking_workflow.test.mjs && node tests/admin_dashboard_button_reliability.test.mjs && node tests/inquiry_lead_persistence_google_ads.test.mjs && node tests/seo_indexing_contract.test.mjs"
   },
   "keywords": [
     "flight",
