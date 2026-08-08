@@ -2,6 +2,8 @@ import express from 'express';
 import adminController from './admin.controller.mjs';
 import adminRepairController from './admin.repair.controller.mjs';
 import adminDashboardV2Controller from './admin.dashboard-v2.controller.mjs';
+import adminBackupController from './admin.backup.controller.mjs';
+import '../bookings/booking.repository.runtime-repair.mjs';
 import authenticate from '../../middleware/authenticate.mjs';
 import authorize from '../../middleware/authorize.mjs';
 import rateLimit from '../../middleware/rate-limit.mjs';
@@ -22,7 +24,7 @@ import bookingController from '../bookings/booking.controller.mjs';
 
 // Protected admin endpoints
 // Bulk operations (must be before :id routes to avoid param capture)
-router.post('/bookings/export', authenticate, authorize(['admin']), adminController.exportBookingsBulk);
+router.post('/bookings/export', authenticate, authorize(['admin']), adminBackupController.exportBookingsBulk);
 router.post('/bookings/bulk-delete', authenticate, authorize(['admin']), adminRepairController.bulkDeleteBookings);
 router.post('/bookings/import-backup', authenticate, authorize(['admin']), adminController.importBookingBackup);
 
