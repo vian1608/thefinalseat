@@ -3,6 +3,7 @@ import adminController from './admin.controller.mjs';
 import adminRepairController from './admin.repair.controller.mjs';
 import adminDashboardV2Controller from './admin.dashboard-v2.controller.mjs';
 import adminBackupController from './admin.backup.controller.mjs';
+import adminBulkDeleteController from './admin.bulk-delete.controller.mjs';
 import '../bookings/booking.repository.runtime-repair.mjs';
 import authenticate from '../../middleware/authenticate.mjs';
 import authorize from '../../middleware/authorize.mjs';
@@ -25,7 +26,7 @@ import bookingController from '../bookings/booking.controller.mjs';
 // Protected admin endpoints
 // Bulk operations (must be before :id routes to avoid param capture)
 router.post('/bookings/export', authenticate, authorize(['admin']), adminBackupController.exportBookingsBulk);
-router.post('/bookings/bulk-delete', authenticate, authorize(['admin']), adminRepairController.bulkDeleteBookings);
+router.post('/bookings/bulk-delete', authenticate, authorize(['admin']), adminBulkDeleteController.bulkDeleteBookings);
 router.post('/bookings/import-backup', authenticate, authorize(['admin']), adminController.importBookingBackup);
 
 router.get('/bookings', authenticate, authorize(['admin']), adminController.getBookings);
@@ -34,7 +35,7 @@ router.post('/bookings', authenticate, authorize(['admin']), adminController.cre
 router.post('/bookings/:id/email-preview', authenticate, authorize(['admin']), adminController.emailPreview);
 router.post('/bookings/:id/email-manual-sent', authenticate, authorize(['admin']), adminController.markEmailManuallySent);
 router.get('/bookings/:id', authenticate, authorize(['admin']), adminController.getBookingDetail);
-router.delete('/bookings/:id', authenticate, authorize(['admin']), adminRepairController.deleteBooking);
+router.delete('/bookings/:id', authenticate, authorize(['admin']), adminBulkDeleteController.deleteBooking);
 
 // Field-Isolated Section PATCH Endpoints
 router.patch('/bookings/:id/status-notes', authenticate, authorize(['admin']), adminController.updateStatusNotes);
