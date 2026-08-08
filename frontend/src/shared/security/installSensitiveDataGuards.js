@@ -12,6 +12,8 @@ const FORBIDDEN_KEYS = new Set([
   'security_code',
 ]);
 
+const DEFAULT_FETCH_TIMEOUT_MS = 30000;
+
 function digits(value) {
   return String(value ?? '').replace(/\D/g, '');
 }
@@ -75,10 +77,38 @@ function redactForConsole(value, keyName = '') {
   }
   if (typeof value === 'string') {
     if (FORBIDDEN_KEYS.has(String(keyName).toLowerCase())) return '[REDACTED]';
-    // Defense-in-depth: redact standalone 13-19 digit payment-card-like sequences.
     return value.replace(/\b(?:\d[ -]*?){13,19}\b/g, '[REDACTED CARD]');
   }
   return value;
+}
+
+function isSameOriginApiRequest(input) {
+  if (typeof window === 'undefined') return false;
+  try {
+    const raw = typeof input === 'string' ? input : input?.url;
+    if (!raw) return false;
+    const url = new URL(raw, window.location.origin);
+    return url.origin === window.location.origin && url.pathname.startsWith('/api/');
+  } catch {
+    return false;
+  }
+}
+
+function installApiFetchTimeout() {
+  if (typeof window === 'undefined' || typeof window.fetch !== 'function') return;
+  const originalFetch = window.fetch.bind(window);
+
+  window.fetch = (input, init = {}) => {
+    // Respect explicit caller cancellation/timeout behavior.
+    if (!isSameOriginApiRequest(input) || init.signal) {
+      return originalFetch(input, init);
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), DEFAULT_FETCH_TIMEOUT_MS);
+    return originalFetch(input, { ...init, signal: controller.signal })
+      .finally(() => window.clearTimeout(timer));
+  };
 }
 
 let installed = false;
@@ -91,6 +121,8 @@ export function installSensitiveDataGuards() {
     config.data = sanitizeAxiosData(config.data);
     return config;
   });
+
+  installApiFetchTimeout();
 
   if (process.env.NODE_ENV === 'production' && typeof console !== 'undefined') {
     ['log', 'info', 'debug', 'warn', 'error'].forEach((method) => {
