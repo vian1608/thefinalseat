@@ -7,8 +7,8 @@
   "scripts": {
     "start": "node src/server.mjs",
     "dev": "nodemon src/server.mjs",
-    "test": "node tests/automated_preproduction_safety_checks.test.mjs && node tests/google_ads_lead_conversion_complete.test.mjs && node tests/admin_create_booking_workflow.test.mjs && node tests/admin_dashboard_button_reliability.test.mjs && node tests/admin_booking_detail_route.test.mjs && node tests/booking_confirmation_full_details.test.mjs && node tests/inquiry_lead_persistence_google_ads.test.mjs && node tests/seo_indexing_contract.test.mjs && node tests/full_site_hardening_contract.test.mjs",
-    "verify:production-ready": "node tests/automated_preproduction_safety_checks.test.mjs && node tests/google_ads_lead_conversion_complete.test.mjs && node tests/admin_create_booking_workflow.test.mjs && node tests/admin_dashboard_button_reliability.test.mjs && node tests/admin_booking_detail_route.test.mjs && node tests/booking_confirmation_full_details.test.mjs && node tests/inquiry_lead_persistence_google_ads.test.mjs && node tests/seo_indexing_contract.test.mjs && node tests/full_site_hardening_contract.test.mjs"
+    "test": "node tests/automated_preproduction_safety_checks.test.mjs && node tests/google_ads_lead_conversion_complete.test.mjs && node tests/admin_create_booking_workflow.test.mjs && node tests/admin_dashboard_button_reliability.test.mjs && node tests/admin_booking_detail_route.test.mjs && node tests/booking_confirmation_full_details.test.mjs && node tests/booking_confirmation_template_contract.test.mjs && node tests/inquiry_lead_persistence_google_ads.test.mjs && node tests/seo_indexing_contract.test.mjs && node tests/full_site_hardening_contract.test.mjs",
+    "verify:production-ready": "node tests/automated_preproduction_safety_checks.test.mjs && node tests/google_ads_lead_conversion_complete.test.mjs && node tests/admin_create_booking_workflow.test.mjs && node tests/admin_dashboard_button_reliability.test.mjs && node tests/admin_booking_detail_route.test.mjs && node tests/booking_confirmation_full_details.test.mjs && node tests/booking_confirmation_template_contract.test.mjs && node tests/inquiry_lead_persistence_google_ads.test.mjs && node tests/seo_indexing_contract.test.mjs && node tests/full_site_hardening_contract.test.mjs"
   },
   "keywords": [
     "flight",
@@ -22,7 +22,7 @@
     "@whop/sdk": "^0.0.42",
     "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
+    "cors": "^4.18.2",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "handlebars": "^4.7.9",
