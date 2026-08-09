@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import AdminDashboardPageV2 from './AdminDashboardPageV2';
 
 // Public route wrapper for the rebuilt dashboard. Besides keeping the route/import
 // stable, this provides a last-resort visible error surface for any admin API or
 // asynchronous UI failure that escapes a section-level handler.
 export default function AdminDashboardPage() {
+  const { code } = useParams();
+  const isBookingDetailRoute = Boolean(code);
   const [globalFailure, setGlobalFailure] = useState(null);
 
   useEffect(() => {
@@ -46,6 +49,8 @@ export default function AdminDashboardPage() {
     // the list-level View / Edit button before React's same-tab handler so an admin
     // can keep the booking list open while editing a reservation in a separate tab.
     const onViewEditBooking = event => {
+      if (isBookingDetailRoute) return;
+
       const target = event?.target;
       const button = target instanceof Element ? target.closest('button') : null;
       if (!button || button.textContent?.trim() !== 'View / Edit') return;
@@ -104,10 +109,29 @@ export default function AdminDashboardPage() {
       window.removeEventListener('error', onWindowError);
       document.removeEventListener('click', onViewEditBooking, true);
     };
-  }, []);
+  }, [isBookingDetailRoute]);
 
   return (
-    <>
+    <div className={isBookingDetailRoute ? 'admin-booking-detail-route' : undefined}>
+      {isBookingDetailRoute && (
+        <style>{`
+          /* /admin/bookings/:code is a dedicated booking page, not the dashboard list. */
+          .admin-booking-detail-route .adv2-toolbar,
+          .admin-booking-detail-route .adv2-kpis,
+          .admin-booking-detail-route .adv2-card {
+            display: none !important;
+          }
+
+          .admin-booking-detail-route .adv2-shell {
+            padding-top: 18px;
+          }
+
+          .admin-booking-detail-route .adv2-detail {
+            margin-top: 0;
+          }
+        `}</style>
+      )}
+
       {globalFailure && (
         <div
           role="alert"
@@ -160,6 +184,6 @@ export default function AdminDashboardPage() {
         </div>
       )}
       <AdminDashboardPageV2 />
-    </>
+    </div>
   );
 }
