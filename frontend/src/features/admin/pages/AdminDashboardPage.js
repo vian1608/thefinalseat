@@ -172,7 +172,7 @@ export default function AdminDashboardPage() {
                 onClick={() => window.location.reload()}
                 style={{ border: '1px solid #be123c', background: '#be123c', color: '#fff', borderRadius: '8px', padding: '7px 11px', fontWeight: 700, cursor: 'pointer' }}
               >
-                Refresh Page
+                Refresh Dashboard
               </button>
               <button
                 type="button"
