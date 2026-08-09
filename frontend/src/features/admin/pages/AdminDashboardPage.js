@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import AdminDashboardPageV2 from './AdminDashboardPageV2';
 import AdminBookingWorkspace from '../components/AdminBookingWorkspace';
+import AdminBookingAddressPanel from '../components/AdminBookingAddressPanel';
 
 // Public route wrapper for the rebuilt dashboard. Besides keeping the route/import
 // stable, this provides a last-resort visible error surface for any admin API or
@@ -187,6 +188,7 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
+      {isBookingDetailRoute && <AdminBookingAddressPanel />}
       {isBookingDetailRoute && <AdminBookingWorkspace />}
       <AdminDashboardPageV2 />
     </div>
