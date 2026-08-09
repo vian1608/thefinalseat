@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import AdminDashboardPageV2 from './AdminDashboardPageV2';
+import AdminBookingWorkspace from '../components/AdminBookingWorkspace';
 
 // Public route wrapper for the rebuilt dashboard. Besides keeping the route/import
 // stable, this provides a last-resort visible error surface for any admin API or
@@ -35,7 +36,6 @@ export default function AdminDashboardPage() {
     };
 
     const onWindowError = event => {
-      // Do not expose stack traces or implementation details to the UI.
       setGlobalFailure({
         title: 'Dashboard error',
         message: event?.message || 'An unexpected dashboard error occurred. Refresh and retry.',
@@ -45,9 +45,8 @@ export default function AdminDashboardPage() {
       });
     };
 
-    // Booking rows already expose a direct /admin/bookings/:code route. Intercept
-    // the list-level View / Edit button before React's same-tab handler so an admin
-    // can keep the booking list open while editing a reservation in a separate tab.
+    // Keep the booking list tab open while the selected booking opens in a direct,
+    // dedicated booking-editor route in a second tab.
     const onViewEditBooking = event => {
       if (isBookingDetailRoute) return;
 
@@ -87,9 +86,6 @@ export default function AdminDashboardPage() {
         return;
       }
 
-      // The new same-origin tab is opened synchronously from the user click, so it
-      // receives the current admin sessionStorage snapshot. Remove the opener link
-      // immediately afterwards to prevent cross-tab window control.
       try {
         newTab.opener = null;
         newTab.focus();
@@ -115,19 +111,26 @@ export default function AdminDashboardPage() {
     <div className={isBookingDetailRoute ? 'admin-booking-detail-route' : undefined}>
       {isBookingDetailRoute && (
         <style>{`
-          /* /admin/bookings/:code is a dedicated booking page, not the dashboard list. */
+          /* /admin/bookings/:code is a dedicated booking workspace, not the dashboard list. */
+          .admin-booking-detail-route .adv2-header,
           .admin-booking-detail-route .adv2-toolbar,
           .admin-booking-detail-route .adv2-kpis,
           .admin-booking-detail-route .adv2-card {
             display: none !important;
           }
 
+          .admin-booking-detail-route .adv2-page {
+            min-height: 0;
+            background: transparent;
+          }
+
           .admin-booking-detail-route .adv2-shell {
-            padding-top: 18px;
+            padding-top: 10px;
           }
 
           .admin-booking-detail-route .adv2-detail {
             margin-top: 0;
+            box-shadow: 0 2px 10px rgba(15,39,70,.05);
           }
         `}</style>
       )}
@@ -183,6 +186,8 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       )}
+
+      {isBookingDetailRoute && <AdminBookingWorkspace />}
       <AdminDashboardPageV2 />
     </div>
   );

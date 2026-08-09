@@ -4,6 +4,7 @@ import adminRepairController from './admin.repair.controller.mjs';
 import adminDashboardV2Controller from './admin.dashboard-v2.controller.mjs';
 import adminBackupController from './admin.backup.controller.mjs';
 import adminBulkDeleteController from './admin.bulk-delete.controller.mjs';
+import adminPassengerController from './admin.passenger.controller.mjs';
 import '../bookings/booking.repository.runtime-repair.mjs';
 import authenticate from '../../middleware/authenticate.mjs';
 import authorize from '../../middleware/authorize.mjs';
@@ -46,7 +47,7 @@ router.delete('/bookings/:id', authenticate, authorize(['admin']), adminRepairCo
 // Field-Isolated Section PATCH Endpoints
 router.patch('/bookings/:id/status-notes', authenticate, authorize(['admin']), adminController.updateStatusNotes);
 router.patch('/bookings/:id/status', authenticate, authorize(['admin']), bookingController.updateStatus);
-router.patch('/bookings/:id/passenger-details', authenticate, authorize(['admin']), adminController.updatePassengerDetails);
+router.patch('/bookings/:id/passenger-details', authenticate, authorize(['admin']), adminPassengerController.updatePassengerDetails);
 router.patch('/bookings/:id/contact-details', authenticate, authorize(['admin']), adminController.updateContactDetails);
 router.patch('/bookings/:id/itinerary', authenticate, authorize(['admin']), adminRepairController.updateItinerary);
 router.patch('/bookings/:id/pricing', authenticate, authorize(['admin']), adminDashboardV2Controller.updatePricing);
