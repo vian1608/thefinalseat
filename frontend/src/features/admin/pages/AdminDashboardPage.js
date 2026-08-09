@@ -42,14 +42,67 @@ export default function AdminDashboardPage() {
       });
     };
 
+    // Booking rows already expose a direct /admin/bookings/:code route. Intercept
+    // the list-level View / Edit button before React's same-tab handler so an admin
+    // can keep the booking list open while editing a reservation in a separate tab.
+    const onViewEditBooking = event => {
+      const target = event?.target;
+      const button = target instanceof Element ? target.closest('button') : null;
+      if (!button || button.textContent?.trim() !== 'View / Edit') return;
+
+      const row = button.closest('tr');
+      const reference = row?.querySelector('.adv2-ref')?.textContent?.trim();
+
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+
+      if (!reference) {
+        setGlobalFailure({
+          title: 'Unable to open booking',
+          message: 'The selected row does not contain a booking reference. Refresh the dashboard and try again.',
+          path: null,
+          code: 'BOOKING_REFERENCE_MISSING',
+          at: new Date().toISOString()
+        });
+        return;
+      }
+
+      const bookingUrl = `/admin/bookings/${encodeURIComponent(reference)}`;
+      const newTab = window.open(bookingUrl, '_blank');
+
+      if (!newTab) {
+        setGlobalFailure({
+          title: 'New tab blocked',
+          message: 'Your browser blocked the booking tab. Allow pop-ups for The Final Seat and click View / Edit again.',
+          path: bookingUrl,
+          code: 'ADMIN_BOOKING_TAB_BLOCKED',
+          at: new Date().toISOString()
+        });
+        return;
+      }
+
+      // The new same-origin tab is opened synchronously from the user click, so it
+      // receives the current admin sessionStorage snapshot. Remove the opener link
+      // immediately afterwards to prevent cross-tab window control.
+      try {
+        newTab.opener = null;
+        newTab.focus();
+      } catch {
+        // Opening succeeded; focus/opener hardening is best-effort only.
+      }
+    };
+
     window.addEventListener('admin-api-error', onAdminApiError);
     window.addEventListener('unhandledrejection', onUnhandledRejection);
     window.addEventListener('error', onWindowError);
+    document.addEventListener('click', onViewEditBooking, true);
 
     return () => {
       window.removeEventListener('admin-api-error', onAdminApiError);
       window.removeEventListener('unhandledrejection', onUnhandledRejection);
       window.removeEventListener('error', onWindowError);
+      document.removeEventListener('click', onViewEditBooking, true);
     };
   }, []);
 
