@@ -3,16 +3,22 @@ import { useLocation } from 'react-router-dom';
 
 function PageTransition({ children }) {
   const location = useLocation();
-  const isRail = location.pathname.startsWith('/amtrak');
+  const pathname = location.pathname || '/';
+  const isAdmin = pathname.startsWith('/admin');
+  const isCars = pathname.startsWith('/car-rentals');
+  const isRail = pathname.startsWith('/amtrak') || pathname.startsWith('/train-');
+  const theme = isAdmin ? 'admin' : (isCars ? 'cars' : (isRail ? 'rail' : 'flights'));
 
   useEffect(() => {
-    document.body.classList.remove('theme-flights', 'theme-rail');
-    document.body.classList.add(isRail ? 'theme-rail' : 'theme-flights');
-  }, [isRail]);
+    document.body.classList.remove('theme-flights', 'theme-rail', 'theme-admin', 'theme-cars');
+    document.body.classList.add(`theme-${theme}`);
+  }, [theme]);
 
   return (
-    <div className={`page-transition page-transition--${isRail ? 'rail' : 'flights'}`}>
-      {children}
+    <div className={`page-transition page-transition--${theme}`}>
+      <div className="tfs-route-stage" key={location.key || `${pathname}${location.search}`}>
+        {children}
+      </div>
     </div>
   );
 }
