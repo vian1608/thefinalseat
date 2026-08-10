@@ -146,6 +146,25 @@ function AirportAutocomplete({ label, id, value, onChange, placeholder, excludeC
     requestSerial.current += 1;
   }, []);
 
+  // The homepage used to keep an old IATA validation warning visible even after
+  // both airport fields had been corrected. Keep that message in sync with the
+  // actual resolved field state without suppressing any other form error.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const form = containerRef.current?.closest('form');
+      if (!form) return;
+      const airportFields = [...form.querySelectorAll('.airport-autocomplete-container[data-airport-resolved]')];
+      if (airportFields.length < 2) return;
+      const allResolved = airportFields.every((field) => field.dataset.airportResolved === 'true');
+      form.querySelectorAll('.inquiry-form__message--error').forEach((node) => {
+        if (/valid 3-letter IATA airport codes/i.test(node.textContent || '')) {
+          node.hidden = allResolved;
+        }
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  });
+
   const excluded = normalizeIataCode(excludeCode);
   const groupedSuggestions = useMemo(() => groupAirportSuggestionsByCity(suggestions), [suggestions]);
   const flatSelectableSuggestions = useMemo(
