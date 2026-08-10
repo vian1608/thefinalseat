@@ -13,10 +13,10 @@ const ADMIN_BOOKINGS_PAGE_SIZE = 20;
 // 20 bookings per page, with the backend returning pagination totals for that size.
 if (!adminAPI.__tfsTwentyBookingPages) {
   const originalGetBookings = adminAPI.getBookings.bind(adminAPI);
-  adminAPI.getBookings = (params = {}) => originalGetBookings({
+  adminAPI.getBookings = (params = {}, options = {}) => originalGetBookings({
     ...params,
     pageSize: ADMIN_BOOKINGS_PAGE_SIZE
-  });
+  }, options);
   Object.defineProperty(adminAPI, '__tfsTwentyBookingPages', {
     value: true,
     configurable: false,
@@ -152,34 +152,19 @@ export default function AdminDashboardPage() {
 
       const tableWrap = card.querySelector('.adv2-table-wrap');
       const table = tableWrap?.querySelector('.adv2-table');
-      const headerRow = table?.tHead?.rows?.[0];
       const body = table?.tBodies?.[0];
-      if (!tableWrap || !table || !headerRow || !body) return;
+      if (!tableWrap || !table || !body) return;
 
       tableWrap.classList.add('adv2-bookings-scroll');
       table.setAttribute('data-page-size', String(ADMIN_BOOKINGS_PAGE_SIZE));
       table.setAttribute('aria-label', 'Customer bookings, 20 bookings per page');
 
-      let serialHeader = headerRow.querySelector('.adv2-serial-header');
-      if (!serialHeader) {
-        serialHeader = document.createElement('th');
-        serialHeader.className = 'adv2-serial-header';
-        serialHeader.scope = 'col';
-        serialHeader.textContent = '#';
-        headerRow.insertBefore(serialHeader, headerRow.children[1] || null);
-      }
-
       const pageNumber = currentPage(card);
       Array.from(body.rows).forEach((row, rowIndex) => {
-        let serialCell = row.querySelector('.adv2-serial-cell');
-        if (!serialCell) {
-          serialCell = document.createElement('td');
-          serialCell.className = 'adv2-serial-cell';
-          row.insertBefore(serialCell, row.children[1] || null);
-        }
         const serial = ((pageNumber - 1) * ADMIN_BOOKINGS_PAGE_SIZE) + rowIndex + 1;
-        if (serialCell.textContent !== String(serial)) serialCell.textContent = String(serial);
-        row.dataset.bookingSerial = String(serial);
+        if (row.dataset.bookingSerial !== String(serial)) {
+          row.dataset.bookingSerial = String(serial);
+        }
       });
     };
 
