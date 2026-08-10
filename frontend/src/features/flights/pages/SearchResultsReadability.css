@@ -1,0 +1,274 @@
+.search-results-page {
+  min-height: 70vh;
+  background: #f7f9fc;
+  padding: 30px 0 54px;
+}
+
+.tfs-results-shell {
+  width: min(1280px, calc(100% - 40px));
+  margin: 0 auto;
+}
+
+.tfs-results-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 18px 0 12px;
+  padding: 18px 22px;
+  border: 1px solid #dde5ef;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.tfs-results-context > div {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.tfs-results-context strong {
+  color: #172033;
+  font-size: 1.05rem;
+  letter-spacing: .01em;
+}
+
+.tfs-results-context span {
+  color: #64748b;
+  font-size: .86rem;
+}
+
+.tfs-results-count {
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #53657d !important;
+  font-weight: 750;
+}
+
+.tfs-filter-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 28px;
+  padding: 12px 14px;
+  border: 1px solid #dde5ef;
+  border-radius: 14px;
+  background: #fff;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tfs-filter-strip label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 145px;
+}
+
+.tfs-filter-strip label > span,
+.tfs-results-sort > span {
+  color: #6b778a;
+  font-size: .68rem;
+  font-weight: 750;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.tfs-filter-strip select,
+.tfs-results-sort select {
+  height: 40px;
+  padding: 0 34px 0 12px;
+  border: 1px solid #cdd7e5;
+  border-radius: 9px;
+  background: #fff;
+  color: #29364a;
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.tfs-filter-strip__price {
+  min-width: 210px !important;
+  padding: 0 4px 4px;
+}
+
+.tfs-filter-strip__price input {
+  accent-color: #8b1538;
+  cursor: pointer;
+}
+
+.tfs-filter-reset {
+  flex: 0 0 auto;
+  height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: #f1f5f9;
+  color: #475569;
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.tfs-filter-reset:hover {
+  background: #e8edf4;
+}
+
+.tfs-results-heading-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 0 2px 12px;
+}
+
+.tfs-results-heading-row h2 {
+  margin: 0;
+  color: #26354b;
+  font-size: 1.18rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .025em;
+}
+
+.tfs-results-heading-row p {
+  margin: 5px 0 0;
+  color: #718096;
+  font-size: .8rem;
+}
+
+.tfs-results-sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tfs-results-sort > span {
+  white-space: nowrap;
+}
+
+.tfs-flight-list {
+  display: grid;
+  gap: 11px;
+}
+
+.tfs-results-loading-head,
+.tfs-results-loading-filter,
+.tfs-results-loading-card {
+  border-radius: 14px;
+  background: #e8edf4;
+}
+
+.tfs-results-loading-head {
+  height: 78px;
+  margin-bottom: 18px;
+}
+
+.tfs-results-loading-filter {
+  height: 60px;
+  margin-bottom: 26px;
+}
+
+.tfs-results-loading-card {
+  height: 136px;
+  margin-bottom: 11px;
+}
+
+.tfs-search-error {
+  max-width: 720px;
+  margin: 36px auto;
+  padding: 34px;
+  text-align: center;
+}
+
+.tfs-search-error__icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: #fff0f3;
+  color: #9b153d;
+  font-size: 1.35rem;
+}
+
+.tfs-search-error h2 {
+  margin: 0 0 9px;
+  color: #172033;
+}
+
+.tfs-search-error p {
+  margin: 0 auto 12px;
+  color: #64748b;
+  line-height: 1.55;
+}
+
+.tfs-search-error__help {
+  max-width: 570px;
+  font-size: .82rem;
+}
+
+.tfs-search-error__actions {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+@media (max-width: 900px) {
+  .search-results-page { padding-top: 18px; }
+  .tfs-results-shell { width: min(100% - 24px, 1280px); }
+
+  .tfs-results-context {
+    align-items: flex-start;
+    padding: 15px 16px;
+  }
+
+  .tfs-results-context > div {
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .tfs-filter-strip {
+    margin-left: -2px;
+    margin-right: -2px;
+    padding: 10px;
+  }
+
+  .tfs-filter-strip label { min-width: 132px; }
+  .tfs-filter-strip__price { min-width: 190px !important; }
+}
+
+@media (max-width: 640px) {
+  .search-results-page { padding-bottom: 34px; }
+  .tfs-results-shell { width: calc(100% - 20px); }
+
+  .tfs-results-context {
+    margin-top: 12px;
+    border-radius: 12px;
+  }
+
+  .tfs-results-context strong { font-size: .95rem; }
+  .tfs-results-context span { font-size: .77rem; }
+
+  .tfs-results-heading-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .tfs-results-sort {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .tfs-results-sort select { flex: 1; }
+  .tfs-search-error { padding: 26px 18px; }
+}
