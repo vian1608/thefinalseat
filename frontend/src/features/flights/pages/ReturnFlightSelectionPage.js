@@ -1,22 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { flightAPI } from '../../../shared/api/api';
 import { normalizeError } from '../../../shared/utils/normalizeError';
 import FlightResultRow, { normalizeFlight } from '../components/FlightResultRow';
 import ModifySearchSummaryBar from '../components/ModifySearchSummaryBar';
 import ModifySearchModal from '../components/ModifySearchModal';
+import { canonicalSearchAirport, getAirportDisplayName, normalizeIataCode } from '../utils/airportIdentity';
 import './SearchResultsPage.css';
+import './SearchResultsReadability.css';
 
 const RETURN_SEARCH_TIMEOUT_MS = 25000;
 
-function airportCode(value, fallback = '') {
-  if (!value) return fallback;
-  if (typeof value === 'object') return String(value.code || value.iata || fallback).toUpperCase();
-  const str = String(value).trim();
-  const paren = str.match(/\(([A-Z]{3})\)/i);
-  if (paren) return paren[1].toUpperCase();
-  if (/^[A-Z]{3}$/i.test(str)) return str.toUpperCase();
-  return fallback;
+function matchesRoute(flight, fromCode, toCode) {
+  return normalizeIataCode(flight?.departure?.airport) === fromCode && normalizeIataCode(flight?.arrival?.airport) === toCode;
 }
 
 function ReturnFlightSelection() {
@@ -28,31 +24,50 @@ function ReturnFlightSelection() {
   const [isModifySearchOpen, setIsModifySearchOpen] = useState(false);
   const [expandedFlightId, setExpandedFlightId] = useState(null);
 
-  const searchReturnFlights = useCallback(async (params) => {
+  const fromCode = canonicalSearchAirport(searchParams, 'from');
+  const toCode = canonicalSearchAirport(searchParams, 'to');
+  const returnFromCode = toCode;
+  const returnToCode = fromCode;
+
+  const searchReturnFlights = useCallback(async (params, expectedFrom, expectedTo) => {
     setLoading(true);
     setError('');
+    setFlights([]);
     let timeoutId;
+
     try {
       const response = await Promise.race([
         flightAPI.search(params),
         new Promise((_, reject) => {
-          timeoutId = setTimeout(() => reject(new Error('The return-flight search is taking longer than expected.')), RETURN_SEARCH_TIMEOUT_MS);
-        })
+          timeoutId = setTimeout(
+            () => reject(new Error('The return-flight search is taking longer than expected.')),
+            RETURN_SEARCH_TIMEOUT_MS,
+          );
+        }),
       ]);
-      if (timeoutId) clearTimeout(timeoutId);
-      setFlights(Array.isArray(response?.data?.flights) ? response.data.flights : []);
+
+      const list = Array.isArray(response?.data?.flights) ? response.data.flights : [];
+      const normalized = list.map((flight, index) => normalizeFlight(flight, index)).filter(Boolean);
+      const matched = normalized.filter((flight) => matchesRoute(flight, expectedFrom, expectedTo));
+
+      if (normalized.length > 0 && matched.length === 0) {
+        throw new Error(`The flight provider returned a different route instead of ${expectedFrom} → ${expectedTo}. Those results were blocked.`);
+      }
+
+      setFlights(matched);
     } catch (err) {
-      if (timeoutId) clearTimeout(timeoutId);
       setFlights([]);
       setError(normalizeError(err, 'Unable to load return flights right now. Please retry or modify your search.'));
     } finally {
+      if (timeoutId) clearTimeout(timeoutId);
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    let outboundFlight;
-    let params;
+    let outboundFlight = null;
+    let params = {};
+
     try {
       outboundFlight = JSON.parse(sessionStorage.getItem('selectedFlight') || 'null');
       params = JSON.parse(sessionStorage.getItem('searchParams') || '{}');
@@ -61,115 +76,136 @@ function ReturnFlightSelection() {
       params = {};
     }
 
+    const outboundFrom = canonicalSearchAirport(params, 'from');
+    const outboundTo = canonicalSearchAirport(params, 'to');
     setSearchParams(params);
 
-    if (!outboundFlight || !params.returnDate) {
-      setFlights([]);
+    if (!outboundFlight || !params.returnDate || !outboundFrom || !outboundTo) {
       setLoading(false);
-      setError('We could not find your selected departure flight or return date. Your browser session may have expired. Go back to flight search and choose the departure flight again.');
+      setError('We could not verify your selected departure flight and return-search details. Go back to departure flights and select the outbound flight again.');
+      return;
+    }
+
+    if (!matchesRoute(outboundFlight, outboundFrom, outboundTo)) {
+      setLoading(false);
+      setError(`Your saved departure flight does not match the current ${outboundFrom} → ${outboundTo} search. We stopped here rather than loading the wrong trip.`);
       return;
     }
 
     searchReturnFlights({
-      from: params.to,
-      to: params.from,
+      from: outboundTo,
+      to: outboundFrom,
       departure: params.returnDate,
       adults: params.adults || 1,
       children: params.children || 0,
       infants: params.infants || 0,
-      travelClass: params.travelClass || 'economy',
-      currency: params.currency || 'USD'
-    });
+      travelClass: params.travelClass || params.cabinClass || 'economy',
+      currency: params.currency || 'USD',
+    }, outboundTo, outboundFrom);
   }, [searchReturnFlights]);
 
   const handleSelectReturnFlight = (flight) => {
-    sessionStorage.setItem('returnFlight', JSON.stringify(flight));
-    navigate('/booking');
-  };
-
-  const handleBackToDepartureFlights = () => {
-    const params = searchParams || {};
-    const fromCode = params.fromCode || airportCode(params.fromAirport) || airportCode(params.from);
-    const toCode = params.toCode || airportCode(params.toAirport) || airportCode(params.to);
-
-    sessionStorage.removeItem('selectedFlight');
-    sessionStorage.removeItem('selectedReturnFlight');
-    sessionStorage.removeItem('returnFlight');
-    sessionStorage.removeItem('bookingDraft');
-
-    if (!fromCode || !toCode || !params.departure) {
-      navigate('/');
+    if (!returnFromCode || !returnToCode || !matchesRoute(flight, returnFromCode, returnToCode)) {
+      setError('This return flight no longer matches your trip. Retry the return search before continuing.');
       return;
     }
 
+    sessionStorage.setItem('returnFlight', JSON.stringify(flight));
+    sessionStorage.setItem('selectedReturnFlight', JSON.stringify(flight));
+    navigate('/booking');
+  };
+
+  const buildDepartureSearchUrl = (params = searchParams || {}) => {
+    const departureFrom = canonicalSearchAirport(params, 'from');
+    const departureTo = canonicalSearchAirport(params, 'to');
+    if (!departureFrom || !departureTo || !params.departure) return '/';
+
     const query = new URLSearchParams({
-      from: fromCode,
-      to: toCode,
-      fromDisplay: typeof params.from === 'string' ? params.from : (params.fromAirport?.name || fromCode),
-      toDisplay: typeof params.to === 'string' ? params.to : (params.toAirport?.name || toCode),
+      from: departureFrom,
+      to: departureTo,
+      fromDisplay: params.fromDisplay || getAirportDisplayName(params.from) || departureFrom,
+      toDisplay: params.toDisplay || getAirportDisplayName(params.to) || departureTo,
       departure: params.departure,
       adults: String(params.adults || 1),
       children: String(params.children || 0),
       infants: String(params.infants || 0),
       travelClass: params.travelClass || params.cabinClass || 'economy',
       currency: params.currency || 'USD',
-      tripType: params.tripType || 'roundtrip'
+      tripType: 'roundtrip',
     });
-
     if (params.returnDate) query.set('returnDate', params.returnDate);
-    navigate(`/search?${query.toString()}`);
+    return `/search?${query.toString()}`;
   };
 
-  const handleUpdateSearchFromReturn = (updatedParams) => {
-    setIsModifySearchOpen(false);
+  const handleBackToDepartureFlights = () => {
     sessionStorage.removeItem('selectedFlight');
     sessionStorage.removeItem('selectedReturnFlight');
     sessionStorage.removeItem('returnFlight');
     sessionStorage.removeItem('bookingDraft');
+    navigate(buildDepartureSearchUrl());
+  };
 
-    const params = new URLSearchParams({
-      from: updatedParams.from,
-      to: updatedParams.to,
-      departure: updatedParams.departure,
-      return: updatedParams.return || '',
-      returnDate: updatedParams.return || '',
-      tripType: updatedParams.tripType,
-      adults: String(updatedParams.adults),
-      children: String(updatedParams.children),
-      infants: String(updatedParams.infants),
-      cabin: updatedParams.cabinClass,
-      travelClass: updatedParams.cabinClass,
+  const handleUpdateSearchFromReturn = (updated) => {
+    const updatedFrom = normalizeIataCode(updated.from || updated.origin);
+    const updatedTo = normalizeIataCode(updated.to || updated.destination);
+    if (!updatedFrom || !updatedTo) throw new Error('Please select valid 3-letter origin and destination airport codes.');
+
+    const query = new URLSearchParams({
+      from: updatedFrom,
+      to: updatedTo,
+      fromDisplay: getAirportDisplayName(updated.origin) || updatedFrom,
+      toDisplay: getAirportDisplayName(updated.destination) || updatedTo,
+      departure: updated.departureDate || updated.departure,
+      adults: String(updated.adults || 1),
+      children: String(updated.children || 0),
+      infants: String(updated.infants || 0),
+      travelClass: updated.cabinClass || 'economy',
+      currency: searchParams?.currency || 'USD',
+      tripType: updated.tripType === 'one-way' ? 'oneway' : 'roundtrip',
     });
-    navigate(`/search?${params.toString()}`);
+    if (updated.returnDate || updated.return) query.set('returnDate', updated.returnDate || updated.return);
+
+    sessionStorage.removeItem('selectedFlight');
+    sessionStorage.removeItem('selectedReturnFlight');
+    sessionStorage.removeItem('returnFlight');
+    sessionStorage.removeItem('bookingDraft');
+    navigate(`/search?${query.toString()}`);
   };
 
   const retryReturnSearch = () => {
-    if (!searchParams?.returnDate) return;
+    if (!searchParams?.returnDate || !returnFromCode || !returnToCode) return;
     searchReturnFlights({
-      from: searchParams.to,
-      to: searchParams.from,
+      from: returnFromCode,
+      to: returnToCode,
       departure: searchParams.returnDate,
       adults: searchParams.adults || 1,
       children: searchParams.children || 0,
       infants: searchParams.infants || 0,
       travelClass: searchParams.travelClass || 'economy',
-      currency: searchParams.currency || 'USD'
-    });
+      currency: searchParams.currency || 'USD',
+    }, returnFromCode, returnToCode);
   };
 
-  const normalizedFlights = flights.map((flight, index) => normalizeFlight(flight, index)).filter(Boolean);
+  const normalizedFlights = useMemo(
+    () => flights.map((flight, index) => normalizeFlight(flight, index)).filter(Boolean),
+    [flights],
+  );
 
   if (loading) {
     return (
       <div className="search-results-page">
-        <div className="container" style={{ maxWidth: '1000px', margin: '0 auto' }}>
-          <button type="button" className="btn-outline-modify" onClick={handleBackToDepartureFlights} style={{ marginBottom: '16px' }}>
-            <i className="fas fa-arrow-left" style={{ marginRight: '8px' }} /> Back to departure flights
+        <div className="tfs-results-shell">
+          <button type="button" className="btn-outline-modify" onClick={handleBackToDepartureFlights} style={{ marginBottom: 16 }}>
+            <i className="fas fa-arrow-left" style={{ marginRight: 8 }} /> Back to departure flights
           </button>
-          <div className="results-toolbar-comparison" style={{ marginBottom: '20px' }}><div className="skeleton-line-title pulsing" /></div>
-          <div className="flight-results-rows-container">
-            {[1, 2, 3].map((item) => <div key={item} className="flight-card skeleton-card"><div className="flight-header skeleton-flex"><div className="skeleton-circle pulsing" /><div className="skeleton-lines"><div className="skeleton-line-heading pulsing" /><div className="skeleton-line-sub pulsing" /></div><div className="skeleton-price-block pulsing" /></div><div className="flight-details skeleton"><div className="skeleton-route-bar pulsing" /></div></div>)}
+          <div className="tfs-return-loading-copy" role="status" aria-live="polite">
+            <i className="fas fa-circle-notch fa-spin" />
+            <div>
+              <strong>Finding return flight options</strong>
+              <span>{returnFromCode && returnToCode ? `${returnFromCode} → ${returnToCode}` : 'Preparing your return search'} · checking fares and connections</span>
+            </div>
           </div>
+          {[1, 2, 3].map((item) => <div key={item} className="flight-card skeleton-card tfs-results-loading-card pulsing" />)}
         </div>
       </div>
     );
@@ -177,60 +213,57 @@ function ReturnFlightSelection() {
 
   return (
     <div className="search-results-page">
-      <div className="container" style={{ maxWidth: '1000px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}>
+      <div className="tfs-results-shell">
+        <div className="tfs-return-navigation">
           <button type="button" className="btn-outline-modify" onClick={handleBackToDepartureFlights}>
-            <i className="fas fa-arrow-left" style={{ marginRight: '8px' }} /> Back to departure flights
+            <i className="fas fa-arrow-left" style={{ marginRight: 8 }} /> Back to departure flights
           </button>
-          <span style={{ color: '#64748b', fontSize: '.82rem', fontWeight: 600 }}>Change your outbound flight without restarting the trip.</span>
+          <span>Change your outbound flight without restarting the trip.</span>
         </div>
 
         <ModifySearchSummaryBar searchParams={searchParams || {}} onOpenModifyModal={() => setIsModifySearchOpen(true)} />
 
-        <div className="results-toolbar-comparison" style={{ marginBottom: '20px' }}>
-          <div className="results-meta-text">
-            <h2 style={{ fontSize: '1.4rem', color: '#1e293b', fontWeight: 700, margin: '0 0 4px' }}>Select Return Flight</h2>
-            <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0, fontWeight: 500 }}>Choose your return flight from {searchParams?.to?.split?.('(')?.[0]?.trim?.() || 'your destination'} to {searchParams?.from?.split?.('(')?.[0]?.trim?.() || 'your origin'}.</p>
+        <div className="tfs-results-heading-row tfs-return-heading">
+          <div>
+            <h2>Select return flight</h2>
+            <p>{returnFromCode && returnToCode ? `${returnFromCode} → ${returnToCode}` : 'Return journey'} · compare connection length before selecting.</p>
           </div>
         </div>
 
-        {error && (
-          <div className="search-error-card" role="alert" style={{ marginBottom: '1.5rem' }}>
-            <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: '#fff1f2', color: '#9f1239', display: 'grid', placeItems: 'center', marginBottom: '12px' }}>
-              <i className="fas fa-circle-exclamation" />
-            </div>
+        {error ? (
+          <div className="search-error-card tfs-search-error" role="alert">
+            <div className="tfs-search-error__icon"><i className="fas fa-exclamation-triangle" /></div>
             <h3>Return Flight Search Failed</h3>
             <p>{error}</p>
-            <p style={{ color: '#64748b', fontSize: '.86rem' }}>You are not stuck. You can retry, change the search, or go back and select a different departure flight.</p>
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-              {searchParams?.returnDate && <button type="button" className="btn-primary" onClick={retryReturnSearch}>Retry Search</button>}
+            <p className="tfs-search-error__help">You are not stuck. Retry this exact return route, change the search, or go back and choose another departure flight.</p>
+            <div className="tfs-search-error__actions">
+              {searchParams?.returnDate && returnFromCode && returnToCode && <button type="button" className="btn-primary" onClick={retryReturnSearch}>Retry exact return search</button>}
               <button type="button" className="btn-outline-modify" onClick={handleBackToDepartureFlights}>Back to departure flights</button>
-              <button type="button" className="btn-outline-modify" onClick={() => setIsModifySearchOpen(true)}>Modify Search</button>
+              <button type="button" className="btn-outline-modify" onClick={() => setIsModifySearchOpen(true)}>Modify search</button>
             </div>
           </div>
-        )}
-
-        {!error && (
-          <div className="flight-results-rows-container">
+        ) : (
+          <div className="tfs-flight-list">
             {normalizedFlights.length === 0 ? (
               <div className="no-results-card">
-                <div className="no-results-icon-circle"><i className="fas fa-plane-departure" /></div>
+                <div className="no-results-icon-circle"><i className="fas fa-plane-arrival" /></div>
                 <h3>No return flights found</h3>
-                <p>No return flights matched this route and date. Try modifying your travel criteria or choose a different departure flight.</p>
-                <div style={{ display: 'flex', gap: '.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                  <button type="button" onClick={handleBackToDepartureFlights} className="btn-outline-modify">Back to departure flights</button>
-                  <button type="button" onClick={() => setIsModifySearchOpen(true)} className="btn-outline-modify">Modify Search</button>
+                <p>No return flights matched this exact route and date. Try different criteria or another outbound flight.</p>
+                <div className="tfs-search-error__actions">
+                  <button type="button" className="btn-outline-modify" onClick={handleBackToDepartureFlights}>Back to departure flights</button>
+                  <button type="button" className="btn-outline-modify" onClick={() => setIsModifySearchOpen(true)}>Modify search</button>
                 </div>
               </div>
-            ) : normalizedFlights.map((flight) => (
+            ) : normalizedFlights.map((flight, index) => (
               <FlightResultRow
                 key={flight.id}
                 flight={flight}
+                index={index}
                 isExpanded={expandedFlightId === flight.id}
                 onToggleExpand={() => setExpandedFlightId((current) => current === flight.id ? null : flight.id)}
                 onSelect={handleSelectReturnFlight}
-                actionLabel="Select Return Flight"
-                travelersCount={parseInt(searchParams?.adults || 1, 10)}
+                actionLabel="Select return"
+                travelersCount={(searchParams?.adults || 1) + (searchParams?.children || 0) + (searchParams?.infants || 0)}
               />
             ))}
           </div>
