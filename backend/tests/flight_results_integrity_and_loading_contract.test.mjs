@@ -35,6 +35,8 @@ assert.doesNotMatch(results, /sessionStorage\.getItem\('searchParams'\)/);
 
 assert.match(row, /Per-segment timing was not included/);
 assert.match(row, /layover in/);
+assert.match(row, /tfs-flight-segments/);
+assert.match(row, /tfs-flight-layover/);
 assert.doesNotMatch(row, /'12:00'/);
 assert.doesNotMatch(row, /'11:15'/);
 assert.doesNotMatch(row, /'13:45'/);
@@ -52,6 +54,12 @@ assert.match(routeWaiter, /Preparing return flight options/);
 assert.match(routeWaiter, /Preparing traveler details/);
 assert.match(routeWaiter, /Preparing secure checkout/);
 assert.match(routeWaiter, /Loading reservation confirmation/);
+assert.match(routeWaiter, /LOADING_SELECTOR/);
+assert.match(routeWaiter, /STALL_MS/);
+assert.match(routeWaiter, /This page is taking longer than expected/);
+assert.match(routeWaiter, /Retry page/);
+assert.match(routeWaiter, /Go back/);
+assert.match(routeWaiter, /MutationObserver/);
 assert.doesNotMatch(motionCss, /blur\(7px\)/);
 
 assert.match(flightController, /valid 3-letter IATA airport codes/);
