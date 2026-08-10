@@ -8,6 +8,7 @@ import ModifySearchModal from '../components/ModifySearchModal';
 import { canonicalSearchAirport, getAirportDisplayName, normalizeIataCode } from '../utils/airportIdentity';
 import './SearchResultsPage.css';
 import './SearchResultsReadability.css';
+import './ReturnFlightReadability.css';
 
 const RETURN_SEARCH_TIMEOUT_MS = 25000;
 
@@ -237,7 +238,7 @@ function ReturnFlightSelection() {
             <p>{error}</p>
             <p className="tfs-search-error__help">You are not stuck. Retry this exact return route, change the search, or go back and choose another departure flight.</p>
             <div className="tfs-search-error__actions">
-              {searchParams?.returnDate && returnFromCode && returnToCode && <button type="button" className="btn-primary" onClick={retryReturnSearch}>Retry exact return search</button>}
+              {searchParams?.returnDate && returnFromCode && returnToCode && <button type="button" className="btn-primary" onClick={retryReturnSearch}>Retry Search</button>}
               <button type="button" className="btn-outline-modify" onClick={handleBackToDepartureFlights}>Back to departure flights</button>
               <button type="button" className="btn-outline-modify" onClick={() => setIsModifySearchOpen(true)}>Modify search</button>
             </div>
