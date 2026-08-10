@@ -1,0 +1,57 @@
+.tfs-return-loading-copy {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 4px 0 20px;
+  padding: 18px 20px;
+  border: 1px solid #e0e7f0;
+  border-radius: 14px;
+  background: #fff;
+  color: #8b1538;
+}
+
+.tfs-return-loading-copy > i {
+  font-size: 1.35rem;
+}
+
+.tfs-return-loading-copy > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tfs-return-loading-copy strong {
+  color: #202b3d;
+  font-size: .98rem;
+}
+
+.tfs-return-loading-copy span {
+  color: #64748b;
+  font-size: .8rem;
+  line-height: 1.4;
+}
+
+.tfs-return-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.tfs-return-navigation > span {
+  color: #718096;
+  font-size: .78rem;
+}
+
+.tfs-return-heading {
+  margin-top: 24px;
+}
+
+@media (max-width: 640px) {
+  .tfs-return-navigation {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .tfs-return-navigation > span { line-height: 1.45; }
+}
