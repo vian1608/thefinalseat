@@ -11,14 +11,19 @@ const wrapper = read('frontend/src/features/admin/pages/AdminDashboardPage.js');
 const css = read('frontend/src/features/admin/pages/AdminDashboardEnhancements.css');
 const globalStyles = read('frontend/src/shared/styles/styles.css');
 
-// 20 bookings per backend page, not a visual-only truncation.
+// 20 bookings per backend page, not a visual-only truncation, while preserving
+// the optional request-options argument used by the shared admin API.
 assert.match(wrapper, /ADMIN_BOOKINGS_PAGE_SIZE\s*=\s*20/);
-assert.match(wrapper, /adminAPI\.getBookings\s*=\s*\(params\s*=\s*\{\}\)\s*=>\s*originalGetBookings\(\{[\s\S]*pageSize:\s*ADMIN_BOOKINGS_PAGE_SIZE/);
+assert.match(wrapper, /adminAPI\.getBookings\s*=\s*\(params\s*=\s*\{\},\s*options\s*=\s*\{\}\)\s*=>\s*originalGetBookings\(\{[\s\S]*pageSize:\s*ADMIN_BOOKINGS_PAGE_SIZE[\s\S]*\},\s*options\)/);
 
-// Continuous serial numbering must account for the current page.
+// Continuous serial numbering must account for the current page without adding
+// React-managed table children directly.
 assert.match(wrapper, /\(\(pageNumber\s*-\s*1\)\s*\*\s*ADMIN_BOOKINGS_PAGE_SIZE\)\s*\+\s*rowIndex\s*\+\s*1/);
-assert.match(wrapper, /adv2-serial-header/);
-assert.match(wrapper, /adv2-serial-cell/);
+assert.match(wrapper, /row\.dataset\.bookingSerial\s*=\s*String\(serial\)/);
+assert.doesNotMatch(wrapper, /document\.createElement\(['"]td['"]\)/);
+assert.doesNotMatch(wrapper, /document\.createElement\(['"]th['"]\)/);
+assert.match(css, /tbody tr::before[\s\S]*content:\s*attr\(data-booking-serial\)/);
+assert.match(css, /thead tr::before[\s\S]*content:\s*'#'/);
 
 // Table is scroll-bounded to about 15 rows while the page still carries 20.
 assert.match(css, /adv2-bookings-scroll[\s\S]*15\s*\*\s*var\(--adv2-booking-row-height\)/);
