@@ -1,17 +1,37 @@
-/* Booking flow layout corrections.
-   Keep one canonical itinerary presentation at the top of /booking and let each
-   journey use the full available width for readability. */
+/* Approved booking page – OPTION 1
+   One full-width itinerary, one full-width form column, no duplicate sidebar. */
+
+/* Use one consistent content width from itinerary through payment. */
+.booking-itinerary-top-panel__inner,
+.container.booking-main-container {
+  width: 100% !important;
+  max-width: 1180px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: 2rem !important;
+  padding-right: 2rem !important;
+  box-sizing: border-box !important;
+}
 
 .booking-itinerary-top-panel__inner {
   position: relative !important;
+  padding-top: 3.25rem !important;
+}
+
+/* Back sits with the itinerary controls, not above the hero. */
+.tfs-customer-back-wrap--booking {
+  left: 2rem !important;
+  right: auto !important;
+  top: 0 !important;
 }
 
 .booking-itinerary-top-panel__title {
-  min-height: 40px !important;
-  padding-right: 7rem !important;
-  margin-bottom: 0.85rem !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 0 1rem !important;
 }
 
+/* Option 1: outbound then return, each full width. */
 .booking-itinerary-top-grid,
 .booking-itinerary-top-grid--single,
 .booking-itinerary-top-grid--roundtrip {
@@ -19,6 +39,7 @@
   grid-template-columns: minmax(0, 1fr) !important;
   gap: 1rem !important;
   align-items: stretch !important;
+  width: 100% !important;
 }
 
 .booking-itinerary-top-grid > .itin-card {
@@ -27,44 +48,98 @@
   min-width: 0 !important;
 }
 
+/* Keep the compact total-price card at the top-right, matching Option 1. */
 .booking-itinerary-top-grid > .booking-itinerary-pricing-summary {
-  width: 100% !important;
-  max-width: none !important;
-  min-width: 0 !important;
-  display: grid !important;
-  grid-template-columns: repeat(4, minmax(0, max-content)) !important;
-  align-items: center !important;
-  justify-content: start !important;
-  column-gap: 1rem !important;
-  row-gap: 0.35rem !important;
+  position: absolute !important;
+  top: 0 !important;
+  right: 2rem !important;
+  width: auto !important;
+  min-width: 190px !important;
+  max-width: 240px !important;
+  display: block !important;
+  padding: 0.7rem 0.9rem !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07) !important;
+  z-index: 5 !important;
 }
 
-/* The top itinerary already contains the customer price. The old checkout
-   sidebar repeated Pricing Breakdown and kept an irrelevant Modify Search
-   action at the bottom of the page, so remove that duplicate surface. */
-.booking-sidebar,
-.mobile-summary-toggle {
+.booking-itinerary-pricing-summary__discounted {
+  font-size: 1.35rem !important;
+  margin-bottom: 0.3rem !important;
+}
+
+/* CRITICAL: these are the real classes used by BookingPage.js.
+   The previous patch targeted obsolete class names, which is why the second
+   itinerary remained and the form stayed narrow. */
+.booking-summary-sidebar,
+.mobile-summary-toggle-bar {
   display: none !important;
 }
 
-.booking-checkout-layout {
+.container.booking-main-container {
+  padding-top: 1.25rem !important;
+  padding-bottom: 3rem !important;
+}
+
+.booking-layout {
+  display: block !important;
+  width: 100% !important;
+  max-width: none !important;
   grid-template-columns: minmax(0, 1fr) !important;
 }
 
+.booking-form-area {
+  display: block !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+}
+
+.booking-form-area > form,
+.booking-form-area > form > * {
+  width: 100% !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+}
+
+/* Prevent any legacy two-column checkout/sidebar rule from narrowing the form. */
+.booking-checkout-layout,
 .booking-main-content {
   width: 100% !important;
   max-width: none !important;
+  grid-template-columns: minmax(0, 1fr) !important;
 }
 
 @media (max-width: 768px) {
-  .booking-itinerary-top-grid > .booking-itinerary-pricing-summary {
-    grid-template-columns: 1fr 1fr !important;
-    width: 100% !important;
+  .booking-itinerary-top-panel__inner,
+  .container.booking-main-container {
+    max-width: 100% !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
   }
 
-  .booking-itinerary-top-panel__title {
-    min-height: 40px !important;
-    padding-right: 6rem !important;
+  .booking-itinerary-top-panel__inner {
+    padding-top: 3.1rem !important;
+  }
+
+  .tfs-customer-back-wrap--booking {
+    left: 1rem !important;
+    top: 0 !important;
+  }
+
+  /* On smaller screens the price becomes part of the normal flow and sits
+     before the itinerary cards so nothing overlaps. */
+  .booking-itinerary-top-grid > .booking-itinerary-pricing-summary {
+    position: static !important;
+    order: -1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, max-content)) !important;
+    gap: 0.35rem 1rem !important;
+    align-items: center !important;
   }
 }
 

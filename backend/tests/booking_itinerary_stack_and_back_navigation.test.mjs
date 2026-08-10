@@ -15,9 +15,21 @@ const transition = read('frontend/src/shared/components/PageTransition.js');
 const backButton = read('frontend/src/shared/components/CustomerBackButton.js');
 
 assert.match(booking, /YOUR SELECTED ITINERARY/);
+
+// Approved Option 1: one full-width itinerary column, then one equally-wide form column.
 assert.match(overrides, /booking-itinerary-top-grid--roundtrip[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
-assert.match(overrides, /\.booking-sidebar,[\s\S]*\.mobile-summary-toggle[\s\S]*display:\s*none\s*!important/);
-assert.match(overrides, /booking-checkout-layout[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+assert.match(overrides, /\.booking-itinerary-top-panel__inner,[\s\S]*\.container\.booking-main-container[\s\S]*max-width:\s*1180px\s*!important/);
+assert.match(overrides, /\.booking-layout[\s\S]*display:\s*block\s*!important[\s\S]*width:\s*100%\s*!important/);
+assert.match(overrides, /\.booking-form-area[\s\S]*width:\s*100%\s*!important[\s\S]*max-width:\s*none\s*!important/);
+
+// The actual sidebar classes used by BookingPage must be hidden so there is no
+// second itinerary, second pricing breakdown, or Modify Search block.
+assert.match(overrides, /\.booking-summary-sidebar,[\s\S]*\.mobile-summary-toggle-bar[\s\S]*display:\s*none\s*!important/);
+assert.doesNotMatch(overrides, /\.booking-sidebar,[\s\S]*\.mobile-summary-toggle\s*\{/);
+
+// Price stays compact in the itinerary header on desktop.
+assert.match(overrides, /booking-itinerary-pricing-summary[\s\S]*position:\s*absolute\s*!important[\s\S]*right:\s*2rem\s*!important/);
+
 assert.match(itinerary, /Return Flight Route Timeline/);
 assert.match(itinerary, /Outbound Flight Route Timeline/);
 
