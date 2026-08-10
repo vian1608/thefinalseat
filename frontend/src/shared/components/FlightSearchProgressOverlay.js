@@ -4,6 +4,7 @@ import './FlightSearchProgressOverlay.css';
 
 const MIN_VISIBLE_MS = 1200;
 const FINISH_FADE_MS = 520;
+const SEARCH_STALL_MS = 30000;
 
 function routeFromSearch(search = '') {
   const params = new URLSearchParams(search);
@@ -27,12 +28,14 @@ export default function FlightSearchProgressOverlay() {
   const [visible, setVisible] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [takingTooLong, setTakingTooLong] = useState(false);
 
   const activeRef = useRef(false);
   const startedAtRef = useRef(0);
   const sawLoadingSurfaceRef = useRef(false);
   const finishTimerRef = useRef(null);
   const hideTimerRef = useRef(null);
+  const stallTimerRef = useRef(null);
 
   const route = useMemo(() => routeFromSearch(location.search), [location.search]);
   const isSearchRoute = location.pathname === '/search';
@@ -40,8 +43,17 @@ export default function FlightSearchProgressOverlay() {
   const clearTimers = useCallback(() => {
     if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
     finishTimerRef.current = null;
     hideTimerRef.current = null;
+    stallTimerRef.current = null;
+  }, []);
+
+  const armStallTimer = useCallback(() => {
+    if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
+    stallTimerRef.current = setTimeout(() => {
+      if (activeRef.current) setTakingTooLong(true);
+    }, SEARCH_STALL_MS);
   }, []);
 
   const start = useCallback(() => {
@@ -50,16 +62,24 @@ export default function FlightSearchProgressOverlay() {
     startedAtRef.current = Date.now();
     sawLoadingSurfaceRef.current = false;
     setFinishing(false);
+    setTakingTooLong(false);
     setProgress(0);
     setVisible(true);
+    armStallTimer();
 
     requestAnimationFrame(() => {
       requestAnimationFrame(() => setProgress(4));
     });
-  }, [clearTimers]);
+  }, [clearTimers, armStallTimer]);
 
   const finish = useCallback(() => {
     if (!activeRef.current) return;
+    if (stallTimerRef.current) {
+      clearTimeout(stallTimerRef.current);
+      stallTimerRef.current = null;
+    }
+    setTakingTooLong(false);
+
     const elapsed = Date.now() - startedAtRef.current;
     const remaining = Math.max(0, MIN_VISIBLE_MS - elapsed);
 
@@ -82,10 +102,10 @@ export default function FlightSearchProgressOverlay() {
     sawLoadingSurfaceRef.current = false;
     setVisible(false);
     setFinishing(false);
+    setTakingTooLong(false);
     setProgress(0);
   }, [clearTimers]);
 
-  // Route changes into /search always trigger the customer progress experience.
   useEffect(() => {
     if (!isSearchRoute) {
       cancel();
@@ -94,9 +114,6 @@ export default function FlightSearchProgressOverlay() {
     start();
   }, [isSearchRoute, location.search, start, cancel]);
 
-  // SearchResultsPage already exposes skeletons while its real API request is active.
-  // Observe those existing loading surfaces so 100% is reached only after the request
-  // actually leaves its loading state, without inventing a fake fixed-duration search.
   useEffect(() => {
     if (!isSearchRoute || typeof MutationObserver === 'undefined') return undefined;
 
@@ -123,10 +140,8 @@ export default function FlightSearchProgressOverlay() {
     return () => observer.disconnect();
   }, [isSearchRoute, start, finish]);
 
-  // Progress moves quickly at first, then deliberately waits below 100 until the
-  // real search loading surface disappears.
   useEffect(() => {
-    if (!visible || finishing) return undefined;
+    if (!visible || finishing || takingTooLong) return undefined;
 
     const timer = setInterval(() => {
       setProgress(current => {
@@ -142,7 +157,7 @@ export default function FlightSearchProgressOverlay() {
     }, 120);
 
     return () => clearInterval(timer);
-  }, [visible, finishing]);
+  }, [visible, finishing, takingTooLong]);
 
   useEffect(() => () => clearTimers(), [clearTimers]);
 
@@ -151,17 +166,22 @@ export default function FlightSearchProgressOverlay() {
   const roundedProgress = Math.min(100, Math.round(progress));
   const routeLabel = route.from && route.to ? `${route.from} → ${route.to}` : 'Finding your flights';
 
+  const keepWaiting = () => {
+    setTakingTooLong(false);
+    armStallTimer();
+  };
+
   return (
     <div
       className={`tfs-flight-search-overlay ${finishing ? 'tfs-flight-search-overlay--finishing' : ''}`}
-      role="status"
-      aria-live="polite"
-      aria-label={`Flight search ${roundedProgress} percent complete`}
+      role={takingTooLong ? 'alert' : 'status'}
+      aria-live={takingTooLong ? 'assertive' : 'polite'}
+      aria-label={takingTooLong ? 'Flight search is taking longer than expected' : `Flight search ${roundedProgress} percent complete`}
     >
       <div className="tfs-flight-search-glow tfs-flight-search-glow--one" aria-hidden="true" />
       <div className="tfs-flight-search-glow tfs-flight-search-glow--two" aria-hidden="true" />
 
-      <div className="tfs-flight-search-card">
+      <div className={`tfs-flight-search-card ${takingTooLong ? 'tfs-flight-search-card--recovery' : ''}`}>
         <div className="tfs-flight-search-brand">
           <span className="tfs-flight-search-brand__mark" aria-hidden="true">✦</span>
           <span>The Final Seat</span>
@@ -174,7 +194,7 @@ export default function FlightSearchProgressOverlay() {
         >
           <div className="tfs-flight-search-ring__inside">
             <strong>{roundedProgress}%</strong>
-            <span>SEARCHING</span>
+            <span>{takingTooLong ? 'WAITING' : 'SEARCHING'}</span>
           </div>
         </div>
 
@@ -187,7 +207,7 @@ export default function FlightSearchProgressOverlay() {
           <span className="tfs-flight-search-route__code">{route.to || 'TO'}</span>
         </div>
 
-        <h2>{messageForProgress(roundedProgress)}</h2>
+        <h2>{takingTooLong ? 'This search is taking longer than expected' : messageForProgress(roundedProgress)}</h2>
         <p className="tfs-flight-search-route-label">{routeLabel}</p>
 
         <div className="tfs-flight-search-progress" aria-hidden="true">
@@ -201,7 +221,24 @@ export default function FlightSearchProgressOverlay() {
           <span className={progress >= 96 ? 'is-active' : ''}>Ready</span>
         </div>
 
-        <small>We’re checking your search and preparing the results page.</small>
+        {takingTooLong ? (
+          <div className="tfs-flight-search-recovery">
+            <p>The flight provider has not finished responding yet. You are not stuck — choose an option below.</p>
+            <div className="tfs-flight-search-recovery__actions">
+              <button type="button" className="tfs-flight-search-retry" onClick={() => window.location.reload()}>
+                Retry search
+              </button>
+              <button type="button" className="tfs-flight-search-wait" onClick={keepWaiting}>
+                Keep waiting
+              </button>
+              <button type="button" className="tfs-flight-search-back" onClick={() => { window.location.href = '/'; }}>
+                Change search
+              </button>
+            </div>
+          </div>
+        ) : (
+          <small>We’re checking your search and preparing the results page.</small>
+        )}
       </div>
     </div>
   );
