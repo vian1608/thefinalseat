@@ -79,9 +79,15 @@ function ReturnFlightSelection() {
 
     const outboundFrom = canonicalSearchAirport(params, 'from');
     const outboundTo = canonicalSearchAirport(params, 'to');
-    setSearchParams(params);
+    const canonicalParams = {
+      ...params,
+      fromCode: outboundFrom,
+      toCode: outboundTo,
+      returnDate: params.returnDate,
+    };
+    setSearchParams(canonicalParams);
 
-    if (!outboundFlight || !params.returnDate || !outboundFrom || !outboundTo) {
+    if (!outboundFlight || !canonicalParams.returnDate || !outboundFrom || !outboundTo) {
       setLoading(false);
       setError('We could not verify your selected departure flight and return-search details. Go back to departure flights and select the outbound flight again.');
       return;
@@ -93,15 +99,17 @@ function ReturnFlightSelection() {
       return;
     }
 
+    sessionStorage.setItem('searchParams', JSON.stringify(canonicalParams));
+
     searchReturnFlights({
       from: outboundTo,
       to: outboundFrom,
-      departure: params.returnDate,
-      adults: params.adults || 1,
-      children: params.children || 0,
-      infants: params.infants || 0,
-      travelClass: params.travelClass || params.cabinClass || 'economy',
-      currency: params.currency || 'USD',
+      departure: canonicalParams.returnDate,
+      adults: canonicalParams.adults || 1,
+      children: canonicalParams.children || 0,
+      infants: canonicalParams.infants || 0,
+      travelClass: canonicalParams.travelClass || canonicalParams.cabinClass || 'economy',
+      currency: canonicalParams.currency || 'USD',
     }, outboundTo, outboundFrom);
   }, [searchReturnFlights]);
 
