@@ -327,7 +327,7 @@ function TravelDatePicker({ id, value, onChange, label, placeholder = 'MM/DD/YYY
         <input
           ref={inputRef}
           type="text"
-          inputMode="numeric"
+          inputMode={useIsoInput ? 'text' : 'numeric'}
           id={id}
           value={inputValue}
           onChange={handleInputChange}
