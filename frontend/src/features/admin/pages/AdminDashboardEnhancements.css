@@ -73,18 +73,46 @@
   min-height: var(--adv2-booking-row-height);
 }
 
-.adv2-serial-header,
-.adv2-serial-cell {
+/* React-safe serial column. The wrapper only sets data-booking-serial on each
+   existing <tr>; generated table cells render visually without inserting or
+   reordering React-managed <td> elements. */
+.adv2-bookings-scroll .adv2-table thead tr::before,
+.adv2-bookings-scroll .adv2-table tbody tr::before {
+  display: table-cell;
   width: 54px;
   min-width: 54px;
   max-width: 54px;
-  text-align: center !important;
+  padding: 10px 11px;
+  text-align: center;
+  vertical-align: middle;
+  border-bottom: 1px solid #edf1f6;
   font-variant-numeric: tabular-nums;
 }
 
-.adv2-serial-cell {
-  color: #5d6d82;
+.adv2-bookings-scroll .adv2-table thead tr::before {
+  content: '#';
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: #f7f9fc;
+  color: #5b6b80;
+  text-transform: uppercase;
+  letter-spacing: .35px;
+  font-size: 10px;
   font-weight: 800;
+  box-shadow: 0 1px 0 #dfe6ef;
+}
+
+.adv2-bookings-scroll .adv2-table tbody tr::before {
+  content: attr(data-booking-serial);
+  color: #5d6d82;
+  font-size: 12px;
+  font-weight: 800;
+  background: #fff;
+}
+
+.adv2-bookings-scroll .adv2-table tbody tr:hover::before {
+  background: #fbfcfe;
 }
 
 /* Pagination remains outside the scroller so it is always reachable and does
