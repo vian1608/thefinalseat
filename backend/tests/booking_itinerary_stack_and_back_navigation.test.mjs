@@ -7,6 +7,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
+const appEntry = read('frontend/src/index.js');
 const booking = read('frontend/src/features/bookings/pages/BookingPage.js');
 const overrides = read('frontend/src/shared/styles/BookingFlowOverrides.css');
 const itinerary = read('frontend/src/features/bookings/components/ItineraryCard.js');
@@ -15,6 +16,11 @@ const transition = read('frontend/src/shared/components/PageTransition.js');
 const backButton = read('frontend/src/shared/components/CustomerBackButton.js');
 
 assert.match(booking, /YOUR SELECTED ITINERARY/);
+
+// The approved booking layout only works if its override stylesheet is loaded.
+// Guard the app entry import so desktop cannot silently fall back to the legacy
+// outbound | return | price three-column layout.
+assert.match(appEntry, /import ['"]\.\/shared\/styles\/BookingFlowOverrides\.css['"]/);
 
 // Approved Option 1: one full-width itinerary column, then one equally-wide form column.
 assert.match(overrides, /booking-itinerary-top-grid--roundtrip[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
