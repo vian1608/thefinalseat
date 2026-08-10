@@ -199,7 +199,7 @@ function ReturnFlightSelection() {
             <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: '#fff1f2', color: '#9f1239', display: 'grid', placeItems: 'center', marginBottom: '12px' }}>
               <i className="fas fa-circle-exclamation" />
             </div>
-            <h3>Return Flight Search Needs Attention</h3>
+            <h3>Return Flight Search Failed</h3>
             <p>{error}</p>
             <p style={{ color: '#64748b', fontSize: '.86rem' }}>You are not stuck. You can retry, change the search, or go back and select a different departure flight.</p>
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
