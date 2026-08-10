@@ -21,8 +21,8 @@ assert.match(itinerary, /Return Flight Route Timeline/);
 assert.match(itinerary, /Outbound Flight Route Timeline/);
 assert.match(transition, /<CustomerBackButton\s*\/>/);
 assert.match(backButton, /navigate\(-1\)/);
+assert.match(backButton, /pathname === '\/' \|\| pathname\.startsWith\('\/admin'\)/);
 assert.match(backButton, /\/return-flight/);
 assert.match(backButton, /\/booking/);
-assert.doesNotMatch(backButton, /pathname\.startsWith\('\/admin'\).*return null;[\s\S]*navigate\(-1\)/);
 
 console.log('booking itinerary stack + customer back navigation contract: PASS');
