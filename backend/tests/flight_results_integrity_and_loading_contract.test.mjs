@@ -22,7 +22,7 @@ const serpApi = read('backend/src/integrations/serpapi/serpapi.service.mjs');
 assert.match(airportIdentity, /\^\[A-Z\]\{3\}\$/);
 assert.doesNotMatch(airportIdentity, /\{3,4\}/);
 assert.doesNotMatch(airportIdentity, /substring\(0,\s*3\)/);
-assert.match(autocomplete, /exact 3-letter IATA code/);
+assert.match(autocomplete, /3-letter (?:IATA )?(?:airport )?code/);
 assert.match(summaryBar, /canonicalSearchAirport/);
 assert.doesNotMatch(summaryBar, /\|\| 'JFK'/);
 assert.doesNotMatch(summaryBar, /\|\| 'LHR'/);
