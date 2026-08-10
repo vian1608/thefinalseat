@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import AirportAutocomplete, { formatAirportLabel } from './AirportAutocomplete';
 import TravelDatePicker from './TravelDatePicker';
 import './ModifySearchModal.css';
+
+const UPDATE_TIMEOUT_MS = 12000;
 
 function extractIataCode(val) {
   if (!val) return '';
@@ -90,24 +93,29 @@ function ModifySearchModal({
 
   const dialogRef = useRef(null);
 
-  // Prevent background body scrolling when modal is open
+  const closeModal = () => {
+    setIsSubmitting(false);
+    setShowCheckoutWarning(false);
+    if (onClose) onClose();
+  };
+
+  // Prevent background body scrolling when modal is open. The modal itself is
+  // portalled to document.body so page transforms can never trap the backdrop.
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+    if (isOpen) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = '';
+
     return () => {
       document.body.style.overflow = '';
     };
   }, [isOpen]);
 
-  // Sync state when modal opens or initialSearch changes
+  // Sync state when modal opens or initialSearch changes.
   useEffect(() => {
     if (isOpen) {
       const depD = resolveDepartureDate(initialSearch);
       const retD = resolveReturnDate(initialSearch);
-      const isRound = (initialSearch.tripType === 'round-trip') || !!retD;
+      const isRound = (initialSearch.tripType === 'round-trip') || (initialSearch.tripType === 'roundtrip') || !!retD;
       setTripType(isRound ? 'round-trip' : 'one-way');
       setOrigin(resolveOriginVal(initialSearch));
       setDestination(resolveDestVal(initialSearch));
@@ -116,22 +124,22 @@ function ModifySearchModal({
       setAdults(parseInt(initialSearch.adults || 1, 10));
       setChildren(parseInt(initialSearch.children || 0, 10));
       setInfants(parseInt(initialSearch.infants || 0, 10));
-      setCabinClass(initialSearch.cabinClass || initialSearch.cabin || 'Economy');
+      setCabinClass(initialSearch.cabinClass || initialSearch.travelClass || initialSearch.cabin || 'Economy');
       setFormError('');
       setIsSubmitting(false);
       setShowCheckoutWarning(false);
     }
   }, [isOpen, initialSearch]);
 
-  // Handle ESC key press
+  // Handle ESC key press.
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
+      if (e.key === 'Escape' && isOpen) closeModal();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  // closeModal intentionally uses current props/state and is safe for this listener.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -168,6 +176,10 @@ function ModifySearchModal({
       setFormError('Please select a return date for round trip.');
       return false;
     }
+    if (tripType === 'round-trip' && departureDate && returnDate && returnDate < departureDate) {
+      setFormError('Return date must be on or after the departure date.');
+      return false;
+    }
     if (adults < 1) {
       setFormError('At least 1 adult passenger is required.');
       return false;
@@ -181,7 +193,7 @@ function ModifySearchModal({
 
   const handleFormSubmit = (e) => {
     if (e) e.preventDefault();
-    if (!validateSearchForm()) return;
+    if (isSubmitting || !validateSearchForm()) return;
 
     if (isCheckoutPage && !showCheckoutWarning) {
       setShowCheckoutWarning(true);
@@ -191,7 +203,8 @@ function ModifySearchModal({
     proceedWithUpdate();
   };
 
-  const proceedWithUpdate = () => {
+  const proceedWithUpdate = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
     setFormError('');
 
@@ -212,121 +225,91 @@ function ModifySearchModal({
       cabin: cabinClass
     };
 
-    if (onUpdateSearch) {
-      onUpdateSearch(updatedParams);
+    let timerId;
+    try {
+      if (!onUpdateSearch) throw new Error('Search update is not available on this page.');
+
+      await Promise.race([
+        Promise.resolve().then(() => onUpdateSearch(updatedParams)),
+        new Promise((_, reject) => {
+          timerId = setTimeout(() => reject(new Error('The search update is taking longer than expected.')), UPDATE_TIMEOUT_MS);
+        })
+      ]);
+
+      if (timerId) clearTimeout(timerId);
+      closeModal();
+    } catch (error) {
+      if (timerId) clearTimeout(timerId);
+      setIsSubmitting(false);
+      setFormError(`${error?.message || 'We could not update your search.'} Please try again, or close this window and continue with your current search.`);
     }
   };
 
-  return (
-    <div className="modify-search-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+  const modal = (
+    <div className="modify-search-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
       <div className="modify-search-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="modify-search-title">
-        
-        {/* Fixed Header */}
         <div className="modify-search-dialog__header">
           <h2 id="modify-search-title">
             <i className="fas fa-edit"></i> Modify Flight Search
           </h2>
-          <button type="button" className="close-btn" onClick={onClose} aria-label="Close modal">
+          <button type="button" className="close-btn" onClick={closeModal} aria-label="Close modal">
             &times;
           </button>
         </div>
 
-        {/* Scrollable Form Body */}
         <div className="modify-search-dialog__body">
           {showCheckoutWarning ? (
             <div className="checkout-warning-box">
-              <div className="warning-icon">
-                <i className="fas fa-exclamation-triangle"></i>
-              </div>
+              <div className="warning-icon"><i className="fas fa-exclamation-triangle"></i></div>
               <h3>Change Your Search?</h3>
-              <p>
-                Changing your search will remove the currently selected flights and reset checkout details. Continue?
-              </p>
+              <p>Changing your search will remove the currently selected flights and reset checkout details. Continue?</p>
+              {formError && (
+                <div className="modify-search-error" role="alert">
+                  <i className="fas fa-exclamation-circle"></i> {formError}
+                </div>
+              )}
               <div className="warning-actions">
-                <button
-                  type="button"
-                  className="btn-warn btn-warn--continue"
-                  onClick={proceedWithUpdate}
-                  disabled={isSubmitting}
-                >
+                <button type="button" className="btn-warn btn-warn--continue" onClick={proceedWithUpdate} disabled={isSubmitting}>
                   {isSubmitting ? 'Updating Search...' : 'Continue & Update Search'}
                 </button>
-                <button
-                  type="button"
-                  className="btn-warn btn-warn--stay"
-                  onClick={() => setShowCheckoutWarning(false)}
-                >
+                <button type="button" className="btn-warn btn-warn--stay" onClick={() => { setShowCheckoutWarning(false); setIsSubmitting(false); }}>
                   Stay on This Page
                 </button>
               </div>
             </div>
           ) : (
             <form id="modify-search-form" onSubmit={handleFormSubmit} className="modify-search-form">
-              
               {formError && (
-                <div className="modify-search-error">
+                <div className="modify-search-error" role="alert">
                   <i className="fas fa-exclamation-circle"></i> {formError}
                 </div>
               )}
 
-              {/* Trip Type Selector */}
               <div className="form-group-trip-type">
                 <label className="radio-label">
-                  <input
-                    type="radio"
-                    name="modalTripType"
-                    value="round-trip"
-                    checked={tripType === 'round-trip'}
-                    onChange={() => setTripType('round-trip')}
-                  />
+                  <input type="radio" name="modalTripType" value="round-trip" checked={tripType === 'round-trip'} onChange={() => setTripType('round-trip')} />
                   <span>Round Trip</span>
                 </label>
                 <label className="radio-label">
-                  <input
-                    type="radio"
-                    name="modalTripType"
-                    value="one-way"
-                    checked={tripType === 'one-way'}
-                    onChange={() => setTripType('one-way')}
-                  />
+                  <input type="radio" name="modalTripType" value="one-way" checked={tripType === 'one-way'} onChange={() => setTripType('one-way')} />
                   <span>One Way</span>
                 </label>
               </div>
 
-              {/* Airports Route Row */}
               <div className="modify-search-route">
                 <div className="form-col">
-                  <AirportAutocomplete
-                    label="From"
-                    id="modal-origin-airport"
-                    value={origin}
-                    onChange={(obj) => setOrigin(obj)}
-                    placeholder="City or Airport Code"
-                  />
+                  <AirportAutocomplete label="From" id="modal-origin-airport" value={origin} onChange={(obj) => setOrigin(obj)} placeholder="City or Airport Code" />
                 </div>
 
-                <button
-                  type="button"
-                  className="swap-airports-button"
-                  onClick={handleSwapAirports}
-                  title="Swap Origin and Destination Airports"
-                  aria-label="Swap Origin and Destination Airports"
-                >
+                <button type="button" className="swap-airports-button" onClick={handleSwapAirports} title="Swap Origin and Destination Airports" aria-label="Swap Origin and Destination Airports">
                   <i className="fas fa-exchange-alt"></i>
                 </button>
 
                 <div className="form-col">
-                  <AirportAutocomplete
-                    label="To"
-                    id="modal-destination-airport"
-                    value={destination}
-                    onChange={(obj) => setDestination(obj)}
-                    placeholder="City or Airport Code"
-                  />
+                  <AirportAutocomplete label="To" id="modal-destination-airport" value={destination} onChange={(obj) => setDestination(obj)} placeholder="City or Airport Code" />
                 </div>
               </div>
 
-              {/* Dates Row */}
               <div className="form-row-dates" style={{ marginTop: '1.25rem' }}>
                 <div className="form-col">
                   <label className="form-label-title">Departure Date</label>
@@ -334,9 +317,7 @@ function ModifySearchModal({
                     value={departureDate}
                     onChange={(newDate) => {
                       setDepartureDate(newDate);
-                      if (newDate && returnDate && newDate > returnDate) {
-                        setReturnDate(newDate);
-                      }
+                      if (newDate && returnDate && newDate > returnDate) setReturnDate(newDate);
                     }}
                     placeholder="MM/DD/YYYY"
                     minDate={new Date().toISOString().split('T')[0]}
@@ -346,86 +327,42 @@ function ModifySearchModal({
                 {tripType === 'round-trip' && (
                   <div className="form-col">
                     <label className="form-label-title">Return Date</label>
-                    <TravelDatePicker
-                      value={returnDate}
-                      onChange={setReturnDate}
-                      placeholder="MM/DD/YYYY"
-                      minDate={departureDate || new Date().toISOString().split('T')[0]}
-                    />
+                    <TravelDatePicker value={returnDate} onChange={setReturnDate} placeholder="MM/DD/YYYY" minDate={departureDate || new Date().toISOString().split('T')[0]} />
                   </div>
                 )}
               </div>
 
-              {/* Passengers & Cabin Row */}
               <div className="form-row-passengers" style={{ marginTop: '1.25rem' }}>
                 <div className="form-col">
                   <label className="form-label-title">Adults (12+)</label>
                   <div className="counter-controls">
-                    <button
-                      type="button"
-                      onClick={() => setAdults(Math.max(1, adults - 1))}
-                      disabled={adults <= 1}
-                    >
-                      -
-                    </button>
+                    <button type="button" onClick={() => setAdults(Math.max(1, adults - 1))} disabled={adults <= 1}>-</button>
                     <span>{adults}</span>
-                    <button
-                      type="button"
-                      onClick={() => setAdults(Math.min(9, adults + 1))}
-                    >
-                      +
-                    </button>
+                    <button type="button" onClick={() => setAdults(Math.min(9, adults + 1))}>+</button>
                   </div>
                 </div>
 
                 <div className="form-col">
                   <label className="form-label-title">Children (2-11)</label>
                   <div className="counter-controls">
-                    <button
-                      type="button"
-                      onClick={() => setChildren(Math.max(0, children - 1))}
-                      disabled={children <= 0}
-                    >
-                      -
-                    </button>
+                    <button type="button" onClick={() => setChildren(Math.max(0, children - 1))} disabled={children <= 0}>-</button>
                     <span>{children}</span>
-                    <button
-                      type="button"
-                      onClick={() => setChildren(Math.min(8, children + 1))}
-                    >
-                      +
-                    </button>
+                    <button type="button" onClick={() => setChildren(Math.min(8, children + 1))}>+</button>
                   </div>
                 </div>
 
                 <div className="form-col">
                   <label className="form-label-title">Infants (&lt;2)</label>
                   <div className="counter-controls">
-                    <button
-                      type="button"
-                      onClick={() => setInfants(Math.max(0, infants - 1))}
-                      disabled={infants <= 0}
-                    >
-                      -
-                    </button>
+                    <button type="button" onClick={() => setInfants(Math.max(0, infants - 1))} disabled={infants <= 0}>-</button>
                     <span>{infants}</span>
-                    <button
-                      type="button"
-                      onClick={() => setInfants(Math.min(adults, infants + 1))}
-                      disabled={infants >= adults}
-                    >
-                      +
-                    </button>
+                    <button type="button" onClick={() => setInfants(Math.min(adults, infants + 1))} disabled={infants >= adults}>+</button>
                   </div>
                 </div>
 
                 <div className="form-col">
                   <label className="form-label-title">Cabin Class</label>
-                  <select
-                    value={cabinClass}
-                    onChange={(e) => setCabinClass(e.target.value)}
-                    className="cabin-select"
-                  >
+                  <select value={cabinClass} onChange={(e) => setCabinClass(e.target.value)} className="cabin-select">
                     <option value="Economy">Economy</option>
                     <option value="Premium Economy">Premium Economy</option>
                     <option value="Business">Business</option>
@@ -433,42 +370,25 @@ function ModifySearchModal({
                   </select>
                 </div>
               </div>
-
             </form>
           )}
         </div>
 
-        {/* Fixed Footer */}
         <div className="modify-search-dialog__footer">
-          <button
-            type="button"
-            className="btn-cancel-search"
-            onClick={onClose}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn-update-search"
-            onClick={handleFormSubmit}
-            disabled={isSubmitting}
-          >
+          <button type="button" className="btn-cancel-search" onClick={closeModal}>Cancel</button>
+          <button type="button" className="btn-update-search" onClick={handleFormSubmit} disabled={isSubmitting}>
             {isSubmitting ? (
-              <>
-                <i className="fas fa-circle-notch fa-spin"></i> Updating...
-              </>
+              <><i className="fas fa-circle-notch fa-spin"></i> Updating...</>
             ) : (
-              <>
-                <i className="fas fa-search"></i> Update Search
-              </>
+              <><i className="fas fa-search"></i> Update Search</>
             )}
           </button>
         </div>
-
       </div>
     </div>
   );
+
+  return createPortal(modal, document.body);
 }
 
 export default ModifySearchModal;
