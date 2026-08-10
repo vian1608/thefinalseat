@@ -1,6 +1,16 @@
 /* Booking flow layout corrections.
-   Keep a single itinerary presentation at the top of /booking and let each journey
-   use the full available width for readability. */
+   Keep one canonical itinerary presentation at the top of /booking and let each
+   journey use the full available width for readability. */
+
+.booking-itinerary-top-panel__inner {
+  position: relative !important;
+}
+
+.booking-itinerary-top-panel__title {
+  min-height: 40px !important;
+  padding-right: 7rem !important;
+  margin-bottom: 0.85rem !important;
+}
 
 .booking-itinerary-top-grid,
 .booking-itinerary-top-grid--single,
@@ -29,22 +39,32 @@
   row-gap: 0.35rem !important;
 }
 
-/* The lower sticky summary used to repeat both itinerary cards and the
-   "Your Selected Itinerary" heading. Keep only its pricing/checkout summary. */
-.summary-sticky-card > .itin-card,
-.summary-sticky-card .summary-card-title {
+/* The top itinerary already contains the customer price. The old checkout
+   sidebar repeated Pricing Breakdown and kept an irrelevant Modify Search
+   action at the bottom of the page, so remove that duplicate surface. */
+.booking-sidebar,
+.mobile-summary-toggle {
   display: none !important;
 }
 
-.summary-sticky-card > div:first-child {
-  justify-content: flex-end !important;
-  margin-bottom: 0.75rem !important;
+.booking-checkout-layout {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.booking-main-content {
+  width: 100% !important;
+  max-width: none !important;
 }
 
 @media (max-width: 768px) {
   .booking-itinerary-top-grid > .booking-itinerary-pricing-summary {
     grid-template-columns: 1fr 1fr !important;
     width: 100% !important;
+  }
+
+  .booking-itinerary-top-panel__title {
+    min-height: 40px !important;
+    padding-right: 6rem !important;
   }
 }
 
