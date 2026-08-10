@@ -1,0 +1,55 @@
+/* Booking flow layout corrections.
+   Keep a single itinerary presentation at the top of /booking and let each journey
+   use the full available width for readability. */
+
+.booking-itinerary-top-grid,
+.booking-itinerary-top-grid--single,
+.booking-itinerary-top-grid--roundtrip {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 1rem !important;
+  align-items: stretch !important;
+}
+
+.booking-itinerary-top-grid > .itin-card {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+
+.booking-itinerary-top-grid > .booking-itinerary-pricing-summary {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, max-content)) !important;
+  align-items: center !important;
+  justify-content: start !important;
+  column-gap: 1rem !important;
+  row-gap: 0.35rem !important;
+}
+
+/* The lower sticky summary used to repeat both itinerary cards and the
+   "Your Selected Itinerary" heading. Keep only its pricing/checkout summary. */
+.summary-sticky-card > .itin-card,
+.summary-sticky-card .summary-card-title {
+  display: none !important;
+}
+
+.summary-sticky-card > div:first-child {
+  justify-content: flex-end !important;
+  margin-bottom: 0.75rem !important;
+}
+
+@media (max-width: 768px) {
+  .booking-itinerary-top-grid > .booking-itinerary-pricing-summary {
+    grid-template-columns: 1fr 1fr !important;
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .booking-itinerary-top-grid > .booking-itinerary-pricing-summary {
+    grid-template-columns: 1fr !important;
+  }
+}

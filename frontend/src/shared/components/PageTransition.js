@@ -2,7 +2,9 @@ import React, { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import FlightSearchProgressOverlay from './FlightSearchProgressOverlay';
 import CustomerRouteLoadingOverlay from './CustomerRouteLoadingOverlay';
+import CustomerBackButton from './CustomerBackButton';
 import '../styles/CustomerMotionEnhancements.css';
+import '../styles/BookingFlowOverrides.css';
 
 function PageTransition({ children }) {
   const location = useLocation();
@@ -21,6 +23,7 @@ function PageTransition({ children }) {
     <div className={`page-transition page-transition--${theme}`}>
       {!isAdmin && <FlightSearchProgressOverlay />}
       {!isAdmin && pathname !== '/search' && <CustomerRouteLoadingOverlay />}
+      {!isAdmin && <CustomerBackButton />}
       <div className="tfs-route-stage" key={location.key || `${pathname}${location.search}`}>
         {children}
       </div>

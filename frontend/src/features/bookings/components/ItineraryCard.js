@@ -60,19 +60,22 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
     }
   ];
 
+  const journeyTitle = /^return/i.test(label || '')
+    ? 'Return Flight Route Timeline'
+    : /^outbound/i.test(label || '')
+      ? 'Outbound Flight Route Timeline'
+      : 'Flight Route Timeline';
+
   return (
     <div className={`itin-card ${expanded ? 'itin-card--expanded' : ''}`}>
-      {/* Badge */}
       <span className="itin-badge" style={{ backgroundColor: labelColor || '#1e3a5f' }}>
         {label}
       </span>
 
-      {/* VISUAL ITINERARY TIMELINE ROUTE */}
       <div style={{ padding: '12px 14px 0 14px' }}>
-        <ItineraryTimeline segments={timelineSegments} />
+        <ItineraryTimeline segments={timelineSegments} title={journeyTitle} />
       </div>
 
-      {/* Summary row */}
       <div
         className="itin-summary-row"
         role="button"
@@ -84,7 +87,6 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(prev => !prev); }
         }}
       >
-        {/* Left: logo + airline */}
         <div className="itin-col-carrier">
           <CardAirlineLogo logoUrl={flight.airline_logo} name={airline} />
           <div className="itin-carrier-text">
@@ -93,7 +95,6 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
           </div>
         </div>
 
-        {/* Center: times + airports */}
         <div className="itin-col-route">
           <div className="itin-times">
             <span className="itin-time">{depTime}</span>
@@ -107,7 +108,6 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
           </div>
         </div>
 
-        {/* Right: duration, stops, chevron */}
         <div className="itin-col-meta">
           <span className="itin-duration">{duration}</span>
           <span className={`itin-stops ${stops === 0 ? 'itin-stops--nonstop' : ''}`}>{stopsLabel}</span>
@@ -116,12 +116,9 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
         <i className={`fas fa-chevron-down itin-chevron ${expanded ? 'itin-chevron--rotated' : ''}`}></i>
       </div>
 
-      {/* Expanded details */}
       {expanded && (
         <div id={cardId} className="itin-details">
           <div className="itin-details-grid">
-
-            {/* If multiple segments exist */}
             {segments ? (
               <div className="itin-segments-list">
                 {segments.map((seg, sIdx) => (
@@ -144,7 +141,6 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
               </div>
             ) : (
               <>
-                {/* Departure */}
                 <div className="itin-detail-point">
                   <div className="itin-detail-dot"></div>
                   <div>
@@ -154,7 +150,6 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
                   </div>
                 </div>
 
-                {/* Segment info */}
                 <div className="itin-segment-bar">
                   <div className="itin-segment-line"></div>
                   <div className="itin-segment-info">
@@ -165,7 +160,6 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
                   </div>
                 </div>
 
-                {/* Layovers */}
                 {layovers.map((layover, idx) => (
                   <div key={idx} className="itin-layover-block">
                     <div className="itin-layover-dot"></div>
@@ -178,7 +172,6 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
                   </div>
                 ))}
 
-                {/* Arrival */}
                 <div className="itin-detail-point">
                   <div className="itin-detail-dot itin-detail-dot--end"></div>
                   <div>
@@ -189,7 +182,6 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
                 </div>
               </>
             )}
-
           </div>
         </div>
       )}

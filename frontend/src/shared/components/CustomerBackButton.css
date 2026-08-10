@@ -1,0 +1,58 @@
+.tfs-customer-back-wrap {
+  width: min(1260px, calc(100% - 2rem));
+  margin: 0.8rem auto 0;
+  position: relative;
+  z-index: 20;
+}
+
+.tfs-customer-back {
+  appearance: none;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(255, 255, 255, 0.94);
+  color: #334155;
+  min-height: 40px;
+  padding: 0.55rem 0.9rem;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.07);
+  backdrop-filter: blur(10px);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.tfs-customer-back:hover {
+  transform: translateY(-1px);
+  border-color: rgba(139, 21, 56, 0.35);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+  background: #fff;
+}
+
+.tfs-customer-back:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.tfs-customer-back:focus-visible {
+  outline: 3px solid rgba(139, 21, 56, 0.18);
+  outline-offset: 2px;
+}
+
+.tfs-customer-back i {
+  color: #8b1538;
+}
+
+@media (max-width: 640px) {
+  .tfs-customer-back-wrap {
+    width: calc(100% - 1.25rem);
+    margin-top: 0.6rem;
+  }
+
+  .tfs-customer-back {
+    min-height: 42px;
+    padding-inline: 0.8rem;
+  }
+}
