@@ -4,6 +4,7 @@ import './index.css';
 import './shared/styles/ProductionSafetyOverrides.css';
 import './shared/styles/ModernInteractionSystem.css';
 import './shared/styles/ModernDetailsMotion.css';
+import './shared/styles/BookingFlowOverrides.css';
 import App from './app/App';
 import { HelmetProvider } from 'react-helmet-async';
 import { installSensitiveDataGuards } from './shared/security/installSensitiveDataGuards';
