@@ -25,67 +25,180 @@ function AirlineLogoBox({ carrierCode, airlineName }) {
   );
 }
 
+const cleanCode = (value) => {
+  const text = String(value || '').trim().toUpperCase();
+  const match = text.match(/(?:^|\()([A-Z]{3})(?:\)|$)/);
+  return match?.[1] || (/^[A-Z]{3}$/.test(text) ? text : '');
+};
+
+const airportFor = (segment = {}, side = 'departure') => {
+  const isDeparture = side === 'departure';
+  const nested = isDeparture ? segment.departure : segment.arrival;
+  const alternateNested = isDeparture ? segment.origin : segment.destination;
+  const candidates = isDeparture
+    ? [
+        segment.origin_airport,
+        segment.origin_code,
+        segment.originCode,
+        segment.departureAirport,
+        segment.departure_airport,
+        nested?.airport,
+        nested?.airportCode,
+        nested?.iataCode,
+        nested?.iata,
+        nested?.code,
+        alternateNested?.airport,
+        alternateNested?.airportCode,
+        alternateNested?.iataCode,
+        alternateNested?.code,
+      ]
+    : [
+        segment.destination_airport,
+        segment.destination_code,
+        segment.destinationCode,
+        segment.arrivalAirport,
+        segment.arrival_airport,
+        nested?.airport,
+        nested?.airportCode,
+        nested?.iataCode,
+        nested?.iata,
+        nested?.code,
+        alternateNested?.airport,
+        alternateNested?.airportCode,
+        alternateNested?.iataCode,
+        alternateNested?.code,
+      ];
+
+  for (const candidate of candidates) {
+    const code = cleanCode(candidate);
+    if (code) return code;
+  }
+  return '';
+};
+
+const timeFor = (segment = {}, side = 'departure') => {
+  const nested = side === 'departure' ? segment.departure : segment.arrival;
+  return String(
+    (side === 'departure'
+      ? (segment.departure_time || segment.departureTime)
+      : (segment.arrival_time || segment.arrivalTime)) ||
+    nested?.time ||
+    nested?.localTime ||
+    ''
+  ).trim();
+};
+
+const dateFor = (segment = {}, side = 'departure') => {
+  const nested = side === 'departure' ? segment.departure : segment.arrival;
+  return String(
+    (side === 'departure'
+      ? (segment.departure_date || segment.departureDate || segment.departureAt)
+      : (segment.arrival_date || segment.arrivalDate || segment.arrivalAt)) ||
+    nested?.date ||
+    nested?.localDate ||
+    ''
+  ).trim();
+};
+
+const cityFor = (segment = {}, side = 'departure') => {
+  const nested = side === 'departure' ? segment.departure : segment.arrival;
+  const alternateNested = side === 'departure' ? segment.origin : segment.destination;
+  return String(
+    (side === 'departure'
+      ? (segment.origin_city || segment.originCity || segment.departureCity)
+      : (segment.destination_city || segment.destinationCity || segment.arrivalCity)) ||
+    nested?.city ||
+    nested?.cityName ||
+    alternateNested?.city ||
+    alternateNested?.cityName ||
+    ''
+  ).trim();
+};
+
+const carrierFor = (segment = {}) => String(
+  segment.carrier_code ||
+  segment.marketing_carrier_code ||
+  segment.carrierCode ||
+  segment.marketingCarrierCode ||
+  segment.airlineCode ||
+  segment.airline?.code ||
+  ''
+).trim().toUpperCase();
+
+const flightNumberFor = (segment = {}) => String(
+  segment.flight_number || segment.flightNumber || segment.number || ''
+).trim();
+
 export default function ItineraryTimeline({ segments = [], title = '', variant = 'web' }) {
   if (!Array.isArray(segments) || segments.length === 0) return null;
 
-  const firstSeg = segments[0];
-  const lastSeg = segments[segments.length - 1];
+  const normalizedSegments = segments.map((segment) => ({
+    ...segment,
+    origin_airport: airportFor(segment, 'departure'),
+    destination_airport: airportFor(segment, 'arrival'),
+    origin_city: cityFor(segment, 'departure'),
+    destination_city: cityFor(segment, 'arrival'),
+    departure_time: timeFor(segment, 'departure'),
+    arrival_time: timeFor(segment, 'arrival'),
+    departure_date: dateFor(segment, 'departure'),
+    arrival_date: dateFor(segment, 'arrival'),
+    carrier_code: carrierFor(segment),
+    flight_number: flightNumberFor(segment),
+  }));
 
-  const overallDepDate = firstSeg.departure_date || firstSeg.departureDate || firstSeg.departureAt || '';
-  const overallArrDate = lastSeg.arrival_date || lastSeg.arrivalDate || lastSeg.arrivalAt || '';
+  const firstSeg = normalizedSegments[0];
+  const lastSeg = normalizedSegments[normalizedSegments.length - 1];
+
+  const overallDepDate = firstSeg.departure_date || '';
+  const overallArrDate = lastSeg.arrival_date || '';
   const arrivalLabel = getArrivalDayShiftLabel(overallDepDate, overallArrDate);
 
-  // Multi-carrier vs single carrier determination
-  const uniqueCarriers = Array.from(new Set(segments.map(s => (s.carrier_code || s.marketing_carrier_code || s.carrierCode || '').trim().toUpperCase()).filter(Boolean)));
+  const uniqueCarriers = Array.from(new Set(normalizedSegments.map(s => s.carrier_code).filter(Boolean)));
   const isMultiCarrier = uniqueCarriers.length > 1;
   const primaryCarrierCode = uniqueCarriers[0] || 'FLT';
-  const primaryAirlineName = isMultiCarrier ? 'Multiple Airlines' : resolveAirlineName(primaryCarrierCode, firstSeg.carrier_name || firstSeg.airlineName);
+  const primaryAirlineName = isMultiCarrier ? 'Multiple Airlines' : resolveAirlineName(primaryCarrierCode, firstSeg.carrier_name || firstSeg.airlineName || firstSeg.airline);
 
-  // Build nodes: 0 = origin of seg[0], 1..N-1 = dest of seg[i-1] (connections), N = dest of seg[last]
   const nodes = [];
 
-  // Origin node (Endpoint)
   nodes.push({
     type: 'origin',
     isEndpoint: true,
-    airportCode: firstSeg.origin_airport || firstSeg.origin_code || firstSeg.originCode || firstSeg.departureAirport || 'ORIG',
-    cityName: firstSeg.origin_city || firstSeg.originCity || '',
-    time: firstSeg.departure_time || firstSeg.departureTime || '',
+    airportCode: firstSeg.origin_airport || '---',
+    cityName: firstSeg.origin_city || '',
+    time: firstSeg.departure_time || '',
     date: overallDepDate,
     label: 'DEPARTURE',
     labelStyle: { color: '#8b1236', fontWeight: '800' }
   });
 
-  // Intermediate connection nodes
-  for (let i = 0; i < segments.length - 1; i++) {
-    const segArr = segments[i];
-    const segNextDep = segments[i + 1];
+  for (let i = 0; i < normalizedSegments.length - 1; i++) {
+    const segArr = normalizedSegments[i];
+    const segNextDep = normalizedSegments[i + 1];
 
-    const arrDate = segArr.arrival_date || segArr.arrivalDate || '';
-    const arrTime = segArr.arrival_time || segArr.arrivalTime || '';
-    const depDate = segNextDep.departure_date || segNextDep.departureDate || '';
-    const depTime = segNextDep.departure_time || segNextDep.departureTime || '';
+    const arrDate = segArr.arrival_date || '';
+    const arrTime = segArr.arrival_time || '';
+    const depDate = segNextDep.departure_date || '';
+    const depTime = segNextDep.departure_time || '';
 
     const layoverText = calculateLayoverDuration(arrDate, arrTime, depDate, depTime);
 
     nodes.push({
       type: 'connection',
       isEndpoint: false,
-      airportCode: segArr.destination_airport || segArr.destination_code || segArr.destinationCode || segArr.arrivalAirport || 'CONN',
-      cityName: segArr.destination_city || segArr.destinationCity || '',
+      airportCode: segArr.destination_airport || segNextDep.origin_airport || '---',
+      cityName: segArr.destination_city || segNextDep.origin_city || '',
       time: arrTime,
-      label: layoverText.toUpperCase(),
+      label: layoverText ? layoverText.toUpperCase() : 'CONNECTION',
       labelStyle: { color: '#0369a1', fontWeight: '700' }
     });
   }
 
-  // Final destination node (Endpoint)
   nodes.push({
     type: 'destination',
     isEndpoint: true,
-    airportCode: lastSeg.destination_airport || lastSeg.destination_code || lastSeg.destinationCode || lastSeg.arrivalAirport || 'DEST',
-    cityName: lastSeg.destination_city || lastSeg.destinationCity || '',
-    time: lastSeg.arrival_time || lastSeg.arrivalTime || '',
+    airportCode: lastSeg.destination_airport || '---',
+    cityName: lastSeg.destination_city || '',
+    time: lastSeg.arrival_time || '',
     date: overallArrDate,
     label: arrivalLabel,
     labelStyle: {
@@ -94,11 +207,10 @@ export default function ItineraryTimeline({ segments = [], title = '', variant =
     }
   });
 
-  const headingTitle = title || (segments.length > 1 ? 'Outbound Flight Route Timeline' : 'Flight Route Timeline');
+  const headingTitle = title || (normalizedSegments.length > 1 ? 'Flight Route Timeline' : 'Flight Route Timeline');
 
   return (
     <div className="itinerary-timeline-container" style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '20px', marginBottom: '20px', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
-      {/* JOURNEY HEADING WITH LEFT-SIDE AIRLINE LOGO */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '18px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
         <AirlineLogoBox carrierCode={primaryCarrierCode} airlineName={primaryAirlineName} />
         <div>
@@ -111,24 +223,20 @@ export default function ItineraryTimeline({ segments = [], title = '', variant =
         </div>
       </div>
 
-      {/* TIMELINE HORIZONTAL ROUTE CONTAINER */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', width: '100%' }}>
         {nodes.map((node, idx) => {
-          const segForLeg = segments[idx];
-          const carrier = segForLeg ? (segForLeg.carrier_code || segForLeg.marketing_carrier_code || segForLeg.carrierCode || '') : '';
-          const flightNum = segForLeg ? (segForLeg.flight_number || segForLeg.flightNumber || '') : '';
+          const segForLeg = normalizedSegments[idx];
+          const carrier = segForLeg?.carrier_code || '';
+          const flightNum = segForLeg?.flight_number || '';
           const flightCode = carrier && flightNum ? `${carrier} ${flightNum}` : (carrier || flightNum || '');
 
           return (
-            <React.Fragment key={idx}>
-              {/* NODE ITEM */}
+            <React.Fragment key={`${node.type}-${idx}-${node.airportCode}`}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', minWidth: node.isEndpoint ? '110px' : '75px' }}>
-                {/* TIME ABOVE NODE */}
-                <div style={{ fontSize: node.isEndpoint ? '1.35rem' : '0.9rem', fontWeight: node.isEndpoint ? '800' : '700', color: '#1e293b', lineHeight: 1.2, height: '24px', display: 'flex', alignItems: 'center' }}>
+                <div style={{ fontSize: node.isEndpoint ? '1.35rem' : '0.9rem', fontWeight: node.isEndpoint ? '800' : '700', color: '#1e293b', lineHeight: 1.2, minHeight: '24px', display: 'flex', alignItems: 'center' }}>
                   {node.time}
                 </div>
 
-                {/* AIRPORT NODE DOT & CODE (50% scale for connections) */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: node.isEndpoint ? '6px' : '4px', margin: '6px 0' }}>
                   <div style={{
                     width: node.isEndpoint ? '16px' : '10px',
@@ -139,7 +247,7 @@ export default function ItineraryTimeline({ segments = [], title = '', variant =
                     boxShadow: '0 0 0 2px rgba(0,0,0,0.1)'
                   }} />
                   <span style={{
-                    fontSize: node.isEndpoint ? '2.4rem' : '1.25rem', // ~50% scale for connections
+                    fontSize: node.isEndpoint ? '2.4rem' : '1.25rem',
                     fontWeight: node.isEndpoint ? '800' : '750',
                     color: '#0f172a',
                     lineHeight: 1,
@@ -149,7 +257,6 @@ export default function ItineraryTimeline({ segments = [], title = '', variant =
                   </span>
                 </div>
 
-                {/* LABEL BELOW NODE */}
                 <div style={{ fontSize: node.isEndpoint ? '0.78rem' : '0.68rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '2px', ...node.labelStyle }}>
                   {node.label}
                 </div>
@@ -160,15 +267,14 @@ export default function ItineraryTimeline({ segments = [], title = '', variant =
                 )}
               </div>
 
-              {/* CONNECTING ROUTE LINE WITH LEFT->RIGHT PLANE ICON */}
               {idx < nodes.length - 1 && (
                 <div style={{ flex: 1, minWidth: '90px', margin: '0 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  {/* FLIGHT NUMBER BADGE ABOVE LINE */}
-                  <div className="flight-number-badge" style={{ fontSize: '0.75rem', fontWeight: '700', color: '#334155', background: '#f1f5f9', border: '1px solid #cbd5e1', padding: '3px 10px', borderRadius: '999px', whiteSpace: 'nowrap', marginBottom: '6px' }}>
-                    ✈ {flightCode}
-                  </div>
+                  {flightCode && (
+                    <div className="flight-number-badge" style={{ fontSize: '0.75rem', fontWeight: '700', color: '#334155', background: '#f1f5f9', border: '1px solid #cbd5e1', padding: '3px 10px', borderRadius: '999px', whiteSpace: 'nowrap', marginBottom: '6px' }}>
+                      ✈ {flightCode}
+                    </div>
+                  )}
 
-                  {/* DASHED LINE WITH PLANE FACING LEFT -> RIGHT */}
                   <div style={{ width: '100%', display: 'flex', alignItems: 'center', position: 'relative' }}>
                     <div style={{ flex: 1, borderTop: '2px dashed #94a3b8' }} />
                     <i
@@ -177,7 +283,7 @@ export default function ItineraryTimeline({ segments = [], title = '', variant =
                       style={{
                         color: '#8b1236',
                         fontSize: '0.9rem',
-                        transform: 'rotate(90deg)', // Font Awesome plane naturally points UP; 90deg makes it point LEFT -> RIGHT
+                        transform: 'rotate(90deg)',
                         transformOrigin: 'center',
                         display: 'inline-block',
                         margin: '0 6px'
