@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import FlightSearchProgressOverlay from './FlightSearchProgressOverlay';
+import '../styles/CustomerMotionEnhancements.css';
 
 function PageTransition({ children }) {
   const location = useLocation();
@@ -16,6 +18,7 @@ function PageTransition({ children }) {
 
   return (
     <div className={`page-transition page-transition--${theme}`}>
+      {!isAdmin && <FlightSearchProgressOverlay />}
       <div className="tfs-route-stage" key={location.key || `${pathname}${location.search}`}>
         {children}
       </div>
