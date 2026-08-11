@@ -12,6 +12,8 @@ import SignUp from '../features/customers/pages/SignUpPage';
 import AdminLogin from '../features/admin/pages/AdminLoginPage';
 import AdminDashboard from '../features/admin/pages/AdminDashboardPage';
 import AdminCreateBookingPage from '../features/admin/pages/AdminCreateBookingPage';
+import AdminVouchersPage from '../features/admin/pages/AdminVouchersPage';
+import AdminVoucherShortcut from '../features/admin/components/AdminVoucherShortcut';
 import OneWayConfirmation from '../features/bookings/pages/OneWayConfirmationPage';
 import RoundTripConfirmation from '../features/bookings/pages/RoundTripConfirmationPage';
 import ReturnFlightSelection from '../features/flights/pages/ReturnFlightSelectionPage';
@@ -26,7 +28,7 @@ import FlightRoute from '../features/flights/pages/FlightRoutePage';
 import AirlineActionPage from '../features/flights/pages/AirlineActionPage';
 import ConsultingPayment from '../features/payments/pages/ConsultingPaymentPage';
 import RouteDispatcher from '../features/flights/pages/RouteDispatcher';
-import Booking from '../features/bookings/pages/BookingPage';
+import Booking from '../features/bookings/vouchers/BookingVoucherPage';
 import PaymentSuccess from '../features/bookings/pages/PaymentSuccessPage';
 import MyBookings from '../features/bookings/pages/MyBookingsPage';
 import PassengerAuthorization from '../features/authorizations/pages/PassengerAuthorizationPage';
@@ -44,6 +46,15 @@ import CarSearchResultsPage from '../features/cars/pages/CarSearchResultsPage';
 function LegacyAirlineRedirect() {
   const { airlineSlug } = useParams();
   return <Navigate to={`/book/${airlineSlug}`} replace />;
+}
+
+function AdminDashboardWithVoucherShortcut() {
+  return (
+    <>
+      <AdminDashboard />
+      <AdminVoucherShortcut />
+    </>
+  );
 }
 
 function App() {
@@ -71,7 +82,8 @@ function App() {
                 {/* Admin Routes */}
                 <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
                 <Route path="/admin/login" element={<AdminLogin />} />
-                <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                <Route path="/admin/dashboard" element={<AdminDashboardWithVoucherShortcut />} />
+                <Route path="/admin/vouchers" element={<AdminVouchersPage />} />
                 <Route path="/admin/bookings/new" element={<AdminCreateBookingPage />} />
                 <Route path="/admin/bookings/:code" element={<AdminDashboard />} />
 
