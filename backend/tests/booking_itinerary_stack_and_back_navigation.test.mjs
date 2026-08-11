@@ -10,6 +10,8 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 const appEntry = read('frontend/src/index.js');
 const booking = read('frontend/src/features/bookings/pages/BookingPage.js');
 const overrides = read('frontend/src/shared/styles/BookingFlowOverrides.css');
+const validationUX = read('frontend/src/shared/validation/installBookingValidationUX.js');
+const validationStyles = read('frontend/src/shared/styles/BookingValidationUX.css');
 const itinerary = read('frontend/src/features/bookings/components/ItineraryCard.js');
 const timeline = read('frontend/src/shared/components/ItineraryTimeline.js');
 const transition = read('frontend/src/shared/components/PageTransition.js');
@@ -56,6 +58,21 @@ assert.match(overrides, /Creating your reservation securely\. Please keep this p
 assert.match(overrides, /@keyframes tfs-booking-wait-progress/);
 assert.match(overrides, /@keyframes tfs-booking-wait-shimmer/);
 
+// Validation failures must be actionable. The booking page must load the
+// validation UX enhancer, auto-scroll to the first bad field, focus it, mark it
+// aria-invalid, and render both the field and banner with strong red feedback.
+assert.match(appEntry, /BookingValidationUX\.css/);
+assert.match(appEntry, /installBookingValidationUX/);
+assert.match(validationUX, /scrollIntoView\(\{ behavior: 'smooth', block: 'center'/);
+assert.match(validationUX, /aria-invalid/);
+assert.match(validationUX, /age requirement/);
+assert.match(validationUX, /passengerCard\.querySelector\('\.dob-input'\)/);
+assert.match(validationUX, /\.booking-global-error, \.payment-error-banner/);
+assert.match(validationStyles, /\.booking-page \.booking-global-error/);
+assert.match(validationStyles, /border-left:\s*4px solid #dc2626\s*!important/);
+assert.match(validationStyles, /input\.tfs-validation-error-field/);
+assert.match(validationStyles, /\.passenger-card-block\.tfs-passenger-card-error/);
+
 assert.match(itinerary, /Return Flight Route Timeline/);
 assert.match(itinerary, /Outbound Flight Route Timeline/);
 
@@ -76,4 +93,4 @@ assert.match(backButton, /createPortal\(button, bookingTarget\)/);
 assert.match(backButton, /\/return-flight/);
 assert.match(backButton, /\/booking/);
 
-console.log('booking itinerary stack + passenger separation + submit waiting visuals + customer back navigation contract: PASS');
+console.log('booking itinerary stack + passenger separation + submit waiting visuals + validation scroll + customer back navigation contract: PASS');
