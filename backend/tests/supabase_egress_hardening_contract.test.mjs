@@ -8,11 +8,13 @@ const root = path.resolve(here, '../..');
 const read = relative => fs.readFileSync(path.join(root, relative), 'utf8');
 
 const adminWrapper = read('frontend/src/features/admin/pages/AdminDashboardPage.js');
+const adminDashboardV2 = read('frontend/src/features/admin/pages/AdminDashboardPageV2.js');
 const adminReader = read('backend/src/modules/admin/admin-booking-read.repository.mjs');
 const adminService = read('backend/src/modules/admin/admin.service.mjs');
 const abandonedRepo = read('backend/src/modules/abandoned-bookings/abandoned-booking.repository.mjs');
 const abandonedService = read('backend/src/modules/abandoned-bookings/abandoned-booking.service.mjs');
 const bookingHardening = read('backend/src/modules/bookings/booking.repository.egress-hardening.mjs');
+const bookingConstants = read('backend/src/modules/bookings/booking.constants.mjs');
 const statusHardening = read('backend/src/modules/bookings/booking.service.status-hardening.mjs');
 const bookingRoutes = read('backend/src/modules/bookings/booking.routes.mjs');
 const adminRoutes = read('backend/src/modules/admin/admin.routes.mjs');
@@ -41,6 +43,17 @@ assert.match(adminService, /adminBookingReadRepository\.list/);
 assert.match(adminService, /adminBookingReadRepository\.getDetail/);
 assert.match(adminService, /select\('id,session_key,traveller_info,contact_info,current_step,updated_at'\)/);
 
+// Incomplete checkout data is lazy-loaded only when its tab is actually opened.
+const summaryLoader = adminDashboardV2.match(/const loadSummaryData = useCallback[\s\S]*?\}, \[\]\);/)?.[0] || '';
+assert.ok(summaryLoader, 'loadSummaryData must exist');
+assert.doesNotMatch(summaryLoader, /getAbandonedBookings/);
+assert.match(adminDashboardV2, /const loadAbandoned = useCallback/);
+assert.match(adminDashboardV2, /if \(activeTab === 'abandoned'\) loadAbandoned\(\)/);
+assert.match(adminDashboardV2, /abandonedLoaded/);
+assert.match(adminDashboardV2, /abandonedLoading/);
+assert.doesNotMatch(adminDashboardV2, /TICKETED','COMPLETED','CANCELLED/);
+assert.match(adminDashboardV2, /TICKETED','DONE','CANCELLED/);
+
 // Abandoned checkout uses one compact UPSERT and does not request the written row back.
 assert.match(abandonedRepo, /\.upsert\(/);
 assert.match(abandonedRepo, /onConflict: 'session_key'/);
@@ -63,6 +76,11 @@ assert.match(bookingHardening, /idempotency_key/);
 assert.match(bookingHardening, /email_deliveries/);
 assert.match(bookingHardening, /booking_payment_splits/);
 assert.doesNotMatch(bookingHardening, /booking_itinerary_segments.*select/);
+assert.match(bookingHardening, /INSERT_RETURN_COLUMNS = 'id,confirmation_code,created_at,updated_at'/);
+assert.match(bookingHardening, /normalizeCountryCode/);
+assert.match(bookingHardening, /\^\\\+\\d\{1,4\}\$/);
+assert.match(bookingHardening, /'DRAFT','PENDING'/);
+assert.match(bookingConstants, /'DRAFT'/);
 
 // Payment authorization is not a payment status.
 assert.match(statusHardening, /PENDING.*PROCESSING.*PAID.*FAILED.*REFUNDED/s);
@@ -98,6 +116,8 @@ assert.doesNotMatch(metrics, /logger\.(?:info|warn|error)\([^\n]*body/);
 assert.match(migration, /ux_abandoned_bookings_session_key/);
 assert.match(migration, /client_request_id VARCHAR\(100\)/);
 assert.match(migration, /idempotency_key VARCHAR\(100\)/);
+assert.match(migration, /WHEN 'DRAFT' THEN 'DRAFT'/);
+assert.match(migration, /'DRAFT','PENDING','AWAITING_AUTHORIZATION'/);
 assert.match(migration, /contacts ALTER COLUMN country_code TYPE VARCHAR\(16\)/);
 assert.match(migration, /bookings_payment_status_check/);
 assert.match(migration, /booking_payment_methods/);
