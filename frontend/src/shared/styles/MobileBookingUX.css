@@ -1,0 +1,331 @@
+/* Mobile booking cleanup: remove overlap, compress itinerary summaries, reduce
+   nested padding, make multi-passenger entry manageable, and shorten footer. */
+
+@media (max-width: 640px) {
+  /* Back button gets its own row; never cover the itinerary title. */
+  .booking-itinerary-top-panel__inner {
+    padding-top: 4.6rem !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  .tfs-customer-back-wrap--booking {
+    top: 0.45rem !important;
+    left: 0.75rem !important;
+    right: auto !important;
+  }
+
+  .booking-itinerary-top-panel__title {
+    margin: 0 0 0.7rem !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    font-size: 0.76rem !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Keep the pricing story persuasive without consuming a whole screen. */
+  .tfs-fare-breakdown-root {
+    padding: 0.65rem 0.7rem !important;
+  }
+
+  .tfs-fare-value-story {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 0.45rem !important;
+  }
+
+  .tfs-fare-original-block {
+    grid-column: 1 !important;
+    padding: 0.25rem 0.45rem 0.25rem 0 !important;
+    border-right: 1px solid #dbe8e1 !important;
+    border-bottom: 0 !important;
+  }
+
+  .tfs-fare-savings-block {
+    grid-column: 2 !important;
+    padding: 0.42rem 0.5rem !important;
+  }
+
+  .tfs-fare-final-block,
+  .tfs-fare-final-block--solo {
+    grid-column: 1 / -1 !important;
+    padding: 0.5rem 0 0 !important;
+    border-top: 1px solid #d1fae5 !important;
+  }
+
+  .tfs-fare-details {
+    grid-column: 1 / -1 !important;
+  }
+
+  .tfs-fare-original-total {
+    font-size: 0.92rem !important;
+  }
+
+  .tfs-fare-savings-amount {
+    font-size: 1rem !important;
+  }
+
+  .tfs-fare-total {
+    font-size: 1.12rem !important;
+  }
+
+  .tfs-fare-per-traveler {
+    margin-top: 0.45rem !important;
+    padding-top: 0.45rem !important;
+    font-size: 0.7rem !important;
+  }
+
+  /* Main itinerary remains the source of truth. The lower summary should not
+     repeat the date/time/route and squeeze the airline into a vertical word. */
+  .itin-summary-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto 18px !important;
+    align-items: center !important;
+    gap: 0.55rem !important;
+    padding: 0.7rem 0.75rem !important;
+    position: relative !important;
+  }
+
+  .itin-col-carrier {
+    grid-column: 1 !important;
+    min-width: 0 !important;
+    width: auto !important;
+    flex: none !important;
+    overflow: hidden !important;
+  }
+
+  .itin-carrier-text {
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .itin-airline-name,
+  .itin-flight-num {
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    text-overflow: ellipsis !important;
+    overflow: hidden !important;
+  }
+
+  .itin-col-route {
+    display: none !important;
+  }
+
+  .itin-col-meta {
+    grid-column: 2 !important;
+    align-items: flex-end !important;
+    min-width: max-content !important;
+  }
+
+  .itin-chevron {
+    grid-column: 3 !important;
+    position: static !important;
+    right: auto !important;
+    top: auto !important;
+    transform: none;
+    margin: 0 !important;
+    justify-self: end !important;
+  }
+
+  .itin-chevron--rotated {
+    transform: rotate(180deg) !important;
+  }
+
+  .booking-itinerary-top-grid .itin-card .itinerary-timeline-container {
+    margin-bottom: 8px !important;
+    padding: 10px !important;
+  }
+
+  .booking-itinerary-top-grid > .itin-card {
+    border-radius: 12px !important;
+    margin-bottom: 0.7rem !important;
+  }
+
+  /* Give the actual form more of the phone width. */
+  .container.booking-main-container {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    padding-top: 0.75rem !important;
+  }
+
+  .accordion-section {
+    border-radius: 14px !important;
+    margin-bottom: 0.65rem !important;
+  }
+
+  .accordion-section-header {
+    padding: 0.78rem 0.72rem !important;
+    gap: 0.45rem !important;
+  }
+
+  .accordion-header-left {
+    gap: 0.55rem !important;
+    min-width: 0 !important;
+  }
+
+  .accordion-section-title {
+    font-size: 0.94rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .accordion-section-body--open {
+    padding-top: 0.7rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+
+  /* One passenger at a time on mobile. All fields stay mounted, so React state,
+     validation, saved drafts and submission payloads remain unchanged. */
+  .passenger-card-block {
+    padding: 0.75rem !important;
+    margin: 0 0 0.65rem !important;
+    border-radius: 12px !important;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04) !important;
+  }
+
+  .passenger-card-block + .passenger-card-block {
+    margin-top: 0.65rem !important;
+  }
+
+  .passenger-card-title {
+    margin: -0.75rem -0.75rem 0.75rem !important;
+    padding: 0.68rem 0.72rem !important;
+    min-height: 48px !important;
+    box-sizing: border-box !important;
+    font-size: 0.84rem !important;
+    line-height: 1.2 !important;
+    cursor: pointer !important;
+    user-select: none !important;
+  }
+
+  .passenger-card-title:focus-visible {
+    outline: 2px solid #8b1538 !important;
+    outline-offset: -2px !important;
+  }
+
+  .tfs-pax-mobile-state {
+    margin-left: auto !important;
+    padding: 0.18rem 0.42rem !important;
+    border-radius: 999px !important;
+    background: #fff1f2 !important;
+    color: #9f1239 !important;
+    font-size: 0.62rem !important;
+    font-weight: 800 !important;
+    white-space: nowrap !important;
+  }
+
+  .tfs-pax-complete .tfs-pax-mobile-state {
+    background: #ecfdf5 !important;
+    color: #047857 !important;
+  }
+
+  .tfs-pax-mobile-chevron {
+    flex: 0 0 auto !important;
+    margin-left: 0.25rem !important;
+    color: #64748b !important;
+    font-size: 0.68rem !important;
+    transition: transform 160ms ease !important;
+  }
+
+  .tfs-pax-collapsed {
+    padding: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .tfs-pax-collapsed > :not(.passenger-card-title) {
+    display: none !important;
+  }
+
+  .tfs-pax-collapsed .passenger-card-title {
+    margin: 0 !important;
+    border-bottom: 0 !important;
+  }
+
+  .tfs-pax-collapsed .tfs-pax-mobile-chevron {
+    transform: rotate(-90deg) !important;
+  }
+
+  .passenger-card-block .booking-form-grid,
+  .passenger-card-block .booking-form-grid--3col {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.62rem !important;
+  }
+
+  .passenger-card-block .booking-form-grid[style] {
+    margin-top: 0.62rem !important;
+  }
+
+  .passenger-card-block .booking-form-field,
+  .passenger-card-block input,
+  .passenger-card-block select,
+  .passenger-card-block .custom-select,
+  .passenger-card-block .dob-container,
+  .passenger-card-block .travel-date-picker {
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Compact footer: collapsed sections should not consume another screen. */
+  .footer {
+    padding-top: 0.65rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  .footer-brand {
+    padding: 0.45rem 0 0.55rem !important;
+  }
+
+  .footer-brand h3 {
+    margin-bottom: 0.18rem !important;
+    font-size: 0.92rem !important;
+  }
+
+  .footer-brand p {
+    font-size: 0.72rem !important;
+    line-height: 1.35 !important;
+  }
+
+  .footer-section__toggle {
+    min-height: 40px !important;
+    padding: 0.5rem 0 !important;
+    font-size: 0.82rem !important;
+  }
+
+  .footer-bottom {
+    margin-top: 0.2rem !important;
+    padding-top: 0.5rem !important;
+  }
+
+  .footer-bottom p {
+    font-size: 0.7rem !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .tfs-fare-value-story {
+    grid-template-columns: 1fr !important;
+  }
+
+  .tfs-fare-original-block,
+  .tfs-fare-savings-block,
+  .tfs-fare-final-block,
+  .tfs-fare-final-block--solo,
+  .tfs-fare-details {
+    grid-column: 1 !important;
+  }
+
+  .tfs-fare-original-block {
+    border-right: 0 !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+  }
+
+  .passenger-card-title {
+    font-size: 0.79rem !important;
+  }
+
+  .tfs-pax-mobile-state {
+    font-size: 0.58rem !important;
+  }
+}
