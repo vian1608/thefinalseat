@@ -12,9 +12,11 @@ WHERE a.session_key IS NOT NULL
     OR (COALESCE(a.updated_at, a.created_at) = COALESCE(b.updated_at, b.created_at) AND a.id::text < b.id::text)
   );
 
-CREATE UNIQUE INDEX IF NOT EXISTS ux_abandoned_bookings_session_key
-  ON public.abandoned_bookings(session_key)
-  WHERE session_key IS NOT NULL;
+-- PostgreSQL permits multiple NULLs in a normal UNIQUE index, so this can be a
+-- full index. That lets PostgREST infer ON CONFLICT(session_key) for UPSERT.
+DROP INDEX IF EXISTS public.ux_abandoned_bookings_session_key;
+CREATE UNIQUE INDEX ux_abandoned_bookings_session_key
+  ON public.abandoned_bookings(session_key);
 CREATE INDEX IF NOT EXISTS idx_abandoned_bookings_updated_at
   ON public.abandoned_bookings(updated_at DESC);
 
@@ -36,9 +38,47 @@ CREATE INDEX IF NOT EXISTS idx_bookings_deleted_at ON public.bookings(deleted_at
 ALTER TABLE public.bookings ALTER COLUMN status TYPE VARCHAR(50);
 ALTER TABLE public.bookings ALTER COLUMN payment_status TYPE VARCHAR(50);
 
-UPDATE public.bookings SET status = UPPER(status) WHERE status IS NOT NULL;
-UPDATE public.bookings SET payment_status = UPPER(payment_status) WHERE payment_status IS NOT NULL;
-UPDATE public.payments SET payment_status = UPPER(payment_status) WHERE payment_status IS NOT NULL;
+-- Normalize old values before installing strict constraints. Unknown/legacy
+-- booking states become PENDING; legacy payment AUTHORIZED means PROCESSING,
+-- because passenger authorization belongs to authorization_status instead.
+UPDATE public.bookings
+SET status = CASE UPPER(COALESCE(status, 'PENDING'))
+  WHEN 'PENDING' THEN 'PENDING'
+  WHEN 'AWAITING_AUTHORIZATION' THEN 'AWAITING_AUTHORIZATION'
+  WHEN 'AUTHORIZED' THEN 'AUTHORIZED'
+  WHEN 'REAUTHORIZATION_REQUIRED' THEN 'REAUTHORIZATION_REQUIRED'
+  WHEN 'READY_FOR_TICKETING' THEN 'READY_FOR_TICKETING'
+  WHEN 'TICKETED' THEN 'TICKETED'
+  WHEN 'DONE' THEN 'DONE'
+  WHEN 'COMPLETED' THEN 'DONE'
+  WHEN 'CONFIRMED' THEN 'DONE'
+  WHEN 'FAILED' THEN 'FAILED'
+  WHEN 'CANCELLED' THEN 'CANCELLED'
+  WHEN 'CANCELED' THEN 'CANCELLED'
+  ELSE 'PENDING'
+END;
+
+UPDATE public.bookings
+SET payment_status = CASE UPPER(COALESCE(payment_status, 'PENDING'))
+  WHEN 'PENDING' THEN 'PENDING'
+  WHEN 'PROCESSING' THEN 'PROCESSING'
+  WHEN 'AUTHORIZED' THEN 'PROCESSING'
+  WHEN 'PAID' THEN 'PAID'
+  WHEN 'FAILED' THEN 'FAILED'
+  WHEN 'REFUNDED' THEN 'REFUNDED'
+  ELSE 'PENDING'
+END;
+
+UPDATE public.payments
+SET payment_status = CASE UPPER(COALESCE(payment_status, 'PENDING'))
+  WHEN 'PENDING' THEN 'PENDING'
+  WHEN 'PROCESSING' THEN 'PROCESSING'
+  WHEN 'AUTHORIZED' THEN 'PROCESSING'
+  WHEN 'PAID' THEN 'PAID'
+  WHEN 'FAILED' THEN 'FAILED'
+  WHEN 'REFUNDED' THEN 'REFUNDED'
+  ELSE 'PENDING'
+END;
 
 ALTER TABLE public.bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
 ALTER TABLE public.bookings ADD CONSTRAINT bookings_status_check CHECK (status IN (
