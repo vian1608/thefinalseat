@@ -43,9 +43,18 @@ assert.match(accordion, /otherId !== id && isOpen/);
 assert.match(mobileUx, /tfs-pax-collapsed/);
 assert.match(mobileUx, /openOnly/);
 assert.match(mobileUx, /passengerComplete/);
-assert.match(mobileCss, /\.tfs-pax-collapsed > :not\(\.passenger-card-title\)[\s\S]*display:\s*none\s*!important/);
+assert.match(mobileCss, /\.passenger-card-block\.tfs-pax-collapsed > :not\(\.passenger-card-title\)[\s\S]*display:\s*none\s*!important/);
 assert.match(mobileUx, /tfs-passenger-card-error/);
 assert.match(mobileUx, /if \(errorCard && isMobile\(\)\) openOnly\(errorCard\)/);
+
+// Critical cascade guard: the open passenger grid uses display:grid !important.
+// The collapsed state therefore needs a more-specific rule that appears AFTER
+// the open-grid rule, otherwise the arrow rotates while fields remain visible.
+const openGridRule = mobileCss.indexOf('.passenger-card-block > .booking-form-grid,');
+const collapsedGridRule = mobileCss.indexOf('.passenger-card-block.tfs-pax-collapsed > .booking-form-grid,');
+assert.ok(openGridRule >= 0, 'mobile open passenger grid rule must exist');
+assert.ok(collapsedGridRule > openGridRule, 'collapsed passenger grid rule must appear after open grid rule');
+assert.match(mobileCss, /\.passenger-card-block\.tfs-pax-collapsed > \.booking-form-grid,[\s\S]*display:\s*none\s*!important/);
 
 // The currently open passenger is compacted into sensible two-column rows on
 // phones, while <=360px safely falls back to one column.
