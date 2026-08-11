@@ -22,6 +22,14 @@ const usd = (value) => `$${Number(value || 0).toLocaleString('en-US', {
   maximumFractionDigits: 2,
 })}`;
 
+const toLocalDateTime = (value) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const local = new Date(parsed.getTime() - (parsed.getTimezoneOffset() * 60000));
+  return local.toISOString().slice(0, 16);
+};
+
 function makeCode(amount) {
   const token = Math.random().toString(36).slice(2, 7).toUpperCase();
   const rounded = Math.max(1, Math.round(Number(amount || 0)));
@@ -38,6 +46,7 @@ function statusOf(voucher) {
 export default function AdminVouchersPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
   const [vouchers, setVouchers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -79,30 +88,64 @@ export default function AdminVouchersPage() {
 
   const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
-  const createVoucher = async (event) => {
+  const resetEditor = () => {
+    setEditingId(null);
+    setForm(emptyForm());
+  };
+
+  const editVoucher = (voucher) => {
+    setEditingId(voucher.id);
+    setForm({
+      code: voucher.code || '',
+      discountValue: String(voucher.discount_value ?? 50),
+      minimumBookingAmount: String(voucher.minimum_booking_amount ?? 150),
+      minimumPayablePercent: String(voucher.minimum_payable_percent ?? 60),
+      maxRedemptions: String(voucher.max_redemptions ?? 1),
+      maxRedemptionsPerCustomer: String(voucher.max_redemptions_per_customer ?? 1),
+      assignedEmail: voucher.assigned_email || '',
+      validFrom: toLocalDateTime(voucher.valid_from),
+      validUntil: toLocalDateTime(voucher.valid_until),
+      notes: voucher.notes || '',
+      active: voucher.active !== false,
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setNotice(`Editing ${voucher.code}. Voucher codes stay fixed; rules and amount can be updated.`);
+  };
+
+  const saveVoucher = async (event) => {
     event.preventDefault();
     setSaving(true);
     setError('');
     setNotice('');
     try {
       const payload = {
-        ...form,
-        code: form.code.trim().toUpperCase() || undefined,
         discountValue: Number(form.discountValue),
         minimumBookingAmount: Math.max(150, Number(form.minimumBookingAmount || 150)),
         minimumPayablePercent: Math.max(60, Number(form.minimumPayablePercent || 60)),
         maxRedemptions: Math.max(1, Number(form.maxRedemptions || 1)),
         maxRedemptionsPerCustomer: Math.max(1, Number(form.maxRedemptionsPerCustomer || 1)),
+        assignedEmail: form.assignedEmail.trim() || null,
         validFrom: form.validFrom ? new Date(form.validFrom).toISOString() : null,
         validUntil: form.validUntil ? new Date(form.validUntil).toISOString() : null,
+        notes: form.notes,
+        active: form.active,
       };
-      const response = await adminVoucherAPI.create(payload);
-      const created = response?.data;
-      setNotice(`Voucher ${created?.code || ''} created successfully.`);
-      setForm(emptyForm());
+
+      if (editingId) {
+        await adminVoucherAPI.update(editingId, payload);
+        setNotice(`Voucher ${form.code} updated successfully.`);
+      } else {
+        const response = await adminVoucherAPI.create({
+          ...payload,
+          code: form.code.trim().toUpperCase() || undefined,
+        });
+        setNotice(`Voucher ${response?.data?.code || ''} created successfully.`);
+      }
+
+      resetEditor();
       await loadVouchers();
     } catch (requestError) {
-      setError(requestError?.userMessage || requestError?.response?.data?.error?.message || 'Unable to create voucher.');
+      setError(requestError?.userMessage || requestError?.response?.data?.error?.message || 'Unable to save voucher.');
     } finally {
       setSaving(false);
     }
@@ -112,6 +155,7 @@ export default function AdminVouchersPage() {
     setError('');
     try {
       await adminVoucherAPI.update(voucher.id, { active: !voucher.active });
+      setNotice(`${voucher.code} ${voucher.active ? 'disabled' : 'enabled'}.`);
       await loadVouchers();
     } catch (requestError) {
       setError(requestError?.userMessage || requestError?.response?.data?.error?.message || 'Unable to update voucher.');
@@ -169,18 +213,29 @@ export default function AdminVouchersPage() {
         <section className="admin-voucher-card">
           <div className="admin-voucher-card__heading">
             <div>
-              <p className="admin-vouchers-eyebrow">New voucher</p>
-              <h2>Create Voucher</h2>
+              <p className="admin-vouchers-eyebrow">{editingId ? 'Edit voucher' : 'New voucher'}</p>
+              <h2>{editingId ? `Edit ${form.code}` : 'Create Voucher'}</h2>
             </div>
-            <button type="button" className="admin-code-generator" onClick={() => updateForm('code', makeCode(form.discountValue))}>
-              Generate code
-            </button>
+            <div className="admin-voucher-actions">
+              {!editingId && (
+                <button type="button" className="admin-code-generator" onClick={() => updateForm('code', makeCode(form.discountValue))}>
+                  Generate code
+                </button>
+              )}
+              {editingId && <button type="button" className="admin-code-generator" onClick={resetEditor}>Cancel edit</button>}
+            </div>
           </div>
 
-          <form onSubmit={createVoucher} className="admin-voucher-form">
+          <form onSubmit={saveVoucher} className="admin-voucher-form">
             <label>
               Voucher code
-              <input value={form.code} onChange={(e) => updateForm('code', e.target.value.toUpperCase())} placeholder="Auto-generated if blank" />
+              <input
+                value={form.code}
+                onChange={(e) => updateForm('code', e.target.value.toUpperCase())}
+                placeholder="Auto-generated if blank"
+                disabled={Boolean(editingId)}
+              />
+              {editingId && <small>Codes are kept fixed after creation so old passenger messages remain valid.</small>}
             </label>
             <label>
               Voucher amount (USD)
@@ -212,6 +267,13 @@ export default function AdminVouchersPage() {
               <input type="email" value={form.assignedEmail} onChange={(e) => updateForm('assignedEmail', e.target.value)} placeholder="passenger@example.com" />
             </label>
             <label>
+              Status
+              <select value={form.active ? 'active' : 'disabled'} onChange={(e) => updateForm('active', e.target.value === 'active')}>
+                <option value="active">Active</option>
+                <option value="disabled">Disabled</option>
+              </select>
+            </label>
+            <label>
               Valid from (optional)
               <input type="datetime-local" value={form.validFrom} onChange={(e) => updateForm('validFrom', e.target.value)} />
             </label>
@@ -225,19 +287,19 @@ export default function AdminVouchersPage() {
             </label>
 
             <div className="admin-voucher-example admin-voucher-form__full">
-              <strong>How this voucher would work on a $1,000 ticket</strong>
+              <strong>Easy example: how this voucher works on a $1,000 ticket</strong>
               <div><span>Supplier ticket value</span><b>{usd(example.supplier)}</b></div>
               <div><span>After normal website discount</span><b>{usd(example.websitePrice)}</b></div>
               <div><span>Voucher requested</span><b>−{usd(example.voucher)}</b></div>
               <div><span>{form.minimumPayablePercent || 60}% minimum-payment floor</span><b>{usd(example.floor)}</b></div>
               {example.applied < example.voucher && (
-                <p>The voucher is automatically capped at <strong>{usd(example.applied)}</strong> so the passenger still pays at least {form.minimumPayablePercent || 60}%.</p>
+                <p>The system automatically caps this voucher at <strong>{usd(example.applied)}</strong>. That prevents the passenger payment from falling below {form.minimumPayablePercent || 60}% of the ticket value.</p>
               )}
               <div className="admin-voucher-example__final"><span>Passenger pays</span><b>{usd(example.final)}</b></div>
             </div>
 
             <button type="submit" className="admin-voucher-create" disabled={saving}>
-              {saving ? 'Creating…' : 'Create Voucher'}
+              {saving ? 'Saving…' : (editingId ? 'Save Voucher Changes' : 'Create Voucher')}
             </button>
           </form>
         </section>
@@ -286,6 +348,7 @@ export default function AdminVouchersPage() {
                       </td>
                       <td>
                         <div className="admin-voucher-actions">
+                          <button type="button" onClick={() => editVoucher(voucher)}>Edit</button>
                           <button type="button" onClick={() => openRedemptions(voucher)}>History</button>
                           <button type="button" onClick={() => toggleVoucher(voucher)}>{voucher.active ? 'Disable' : 'Enable'}</button>
                         </div>
