@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { prepareFlightForBooking } from '../../../shared/pricing/bookingPriceContract';
 import './FlightResultRow.css';
 
 function getInitials(name) {
@@ -153,7 +154,9 @@ export function FlightResultRow({
 
   const handleSelect = (event) => {
     event?.stopPropagation?.();
-    if (typeof onSelect === 'function') onSelect(flight);
+    if (typeof onSelect === 'function') {
+      onSelect(prepareFlightForBooking(flight, totalTravelers));
+    }
   };
 
   return (
