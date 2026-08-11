@@ -1,10 +1,14 @@
-name: Admin Dashboard Rebuild CI
+name: Production Safety CI
 
 on:
   pull_request:
     branches: [master]
   push:
-    branches: [fix/admin-dashboard-rebuild-20260808]
+    branches: [master]
+
+concurrency:
+  group: production-safety-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   frontend-build:
@@ -19,9 +23,6 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         working-directory: frontend
-        # The checked-in frontend lockfile predates peer dependencies now
-        # required by react-scripts. npm install verifies the real dependency
-        # graph without making this reliability PR rewrite a 600KB lockfile.
         run: npm install --no-audit --no-fund
       - name: Build frontend
         working-directory: frontend
@@ -42,6 +43,8 @@ jobs:
       - name: Install backend dependencies
         working-directory: backend
         run: npm ci --no-audit --no-fund
-      - name: Run backend tests
+      - name: Run production verification
         working-directory: backend
-        run: npm test
+        env:
+          NODE_ENV: test
+        run: npm run verify:production-ready
