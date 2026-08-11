@@ -76,7 +76,7 @@ function GlobalFailure({ failure, onDismiss }) {
           )}
         </div>
         <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-          <button type="button" onClick={() => window.location.reload()} style={{ border: '1px solid #be123c', background: '#be123c', color: '#fff', borderRadius: '8px', padding: '7px 11px', fontWeight: 700, cursor: 'pointer' }}>Refresh</button>
+          <button type="button" onClick={() => window.location.reload()} style={{ border: '1px solid #be123c', background: '#be123c', color: '#fff', borderRadius: '8px', padding: '7px 11px', fontWeight: 700, cursor: 'pointer' }}>Refresh Dashboard</button>
           <button type="button" onClick={onDismiss} aria-label="Dismiss admin error" style={{ border: '1px solid #fda4af', background: '#fff', color: '#9f1239', borderRadius: '8px', padding: '7px 10px', fontWeight: 700, cursor: 'pointer' }}>Dismiss</button>
         </div>
       </div>
