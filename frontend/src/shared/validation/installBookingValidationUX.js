@@ -1,5 +1,10 @@
 const ERROR_CLASS = 'tfs-validation-error-field';
 const ERROR_WRAPPER_CLASS = 'tfs-validation-error-wrapper';
+const ERROR_BANNER_SELECTOR = '.booking-global-error, .payment-error-banner';
+const VALIDATION_REQUEST_WINDOW_MS = 120000;
+
+let validationRequestedUntil = 0;
+let validationFeedbackApplied = false;
 
 function normalize(value = '') {
   return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -29,6 +34,20 @@ function clearValidationHighlight(root = document) {
   root.querySelectorAll('.tfs-validation-duplicate-error').forEach((element) => {
     element.classList.remove('tfs-validation-duplicate-error');
   });
+}
+
+function armValidationFeedback() {
+  validationRequestedUntil = Date.now() + VALIDATION_REQUEST_WINDOW_MS;
+  validationFeedbackApplied = false;
+}
+
+function isValidationFeedbackArmed() {
+  return !validationFeedbackApplied && Date.now() <= validationRequestedUntil;
+}
+
+function disarmValidationFeedback() {
+  validationRequestedUntil = 0;
+  validationFeedbackApplied = true;
 }
 
 function markInvalid(element) {
@@ -212,14 +231,16 @@ function findBestErrorTarget(page) {
 }
 
 function applyValidationFeedback() {
+  if (!isValidationFeedbackArmed()) return false;
+
   const page = document.querySelector('.booking-page');
-  if (!page) return;
+  if (!page) return false;
 
   clearValidationHighlight(page);
   suppressDuplicateGenericError(page);
 
   const result = findBestErrorTarget(page);
-  if (!result?.target) return;
+  if (!result?.target) return false;
 
   const target = markInvalid(result.target);
   const passengerCard = target?.closest?.('.passenger-card-block');
@@ -227,6 +248,8 @@ function applyValidationFeedback() {
 
   if (result.banner) result.banner.classList.add('tfs-validation-alert-active');
   scrollToInvalid(target);
+  disarmValidationFeedback();
+  return true;
 }
 
 function clearFieldOnEdit(event) {
@@ -241,6 +264,16 @@ function clearFieldOnEdit(event) {
   }
 }
 
+function mutationTouchesErrorBanner(mutation) {
+  const target = mutation.target instanceof Element ? mutation.target : mutation.target?.parentElement;
+  if (target?.matches?.(ERROR_BANNER_SELECTOR) || target?.closest?.(ERROR_BANNER_SELECTOR)) return true;
+
+  return Array.from(mutation.addedNodes || []).some((node) => {
+    if (!(node instanceof Element)) return false;
+    return node.matches?.(ERROR_BANNER_SELECTOR) || node.querySelector?.(ERROR_BANNER_SELECTOR);
+  });
+}
+
 export function installBookingValidationUX() {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
   if (window.__tfsBookingValidationUXInstalled) return;
@@ -253,16 +286,14 @@ export function installBookingValidationUX() {
     const button = event.target.closest?.('.booking-page .amtrak-btn--cta, .booking-page .booking-submit-button');
     if (!button || button.disabled) return;
 
+    armValidationFeedback();
     window.setTimeout(applyValidationFeedback, 90);
     window.setTimeout(applyValidationFeedback, 280);
   }, true);
 
   const observer = new MutationObserver((mutations) => {
-    const relevant = mutations.some((mutation) => {
-      const target = mutation.target instanceof Element ? mutation.target : mutation.target?.parentElement;
-      return target?.closest?.('.booking-global-error, .payment-error-banner, .booking-page');
-    });
-
+    if (!isValidationFeedbackArmed()) return;
+    const relevant = mutations.some(mutationTouchesErrorBanner);
     if (relevant) window.setTimeout(applyValidationFeedback, 80);
   });
 
