@@ -4,7 +4,7 @@ import corsOptions from './config/cors.mjs';
 import rootRouter from './routes/index.mjs';
 import errorHandler from './middleware/error-handler.mjs';
 import notFound from './middleware/not-found.mjs';
-
+import responseMetrics from './middleware/response-metrics.mjs';
 import { autoWriteNoStore } from './middleware/cache-control.middleware.mjs';
 
 const app = express();
@@ -15,6 +15,7 @@ app.set('trust proxy', true);
 // Apply global middlewares
 app.use(cors(corsOptions));
 app.use(autoWriteNoStore);
+app.use(responseMetrics);
 
 // Raw body parser for Whop webhook HMAC signature verification
 app.use('/api/webhooks/whop', express.raw({ type: 'application/json' }));
