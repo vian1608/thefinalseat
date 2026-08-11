@@ -18,6 +18,8 @@ const bookingRoutes = read('backend/src/modules/bookings/booking.routes.mjs');
 const adminRoutes = read('backend/src/modules/admin/admin.routes.mjs');
 const rateLimiter = read('backend/src/middleware/rate-limit.mjs');
 const metrics = read('backend/src/middleware/response-metrics.mjs');
+const requestMetrics = read('backend/src/observability/request-metrics.mjs');
+const supabaseClient = read('backend/src/integrations/supabase/supabase.client.mjs');
 const app = read('backend/src/app.mjs');
 const migration = read('backend/migrations/033_egress_hardening_and_schema_contract.sql');
 const bookingPage = read('frontend/src/features/bookings/pages/BookingPage.js');
@@ -79,10 +81,16 @@ assert.match(rateLimiter, /const buckets = new Map\(\)/);
 assert.doesNotMatch(rateLimiter, /^const cache = new Map/m);
 assert.match(rateLimiter, /requestCounter % 500/);
 
-// Observability catches large payloads / slow APIs without logging response bodies.
+// Observability catches large payloads, slow APIs and database fan-out without logging response bodies.
+assert.match(app, /app\.use\(requestMetricsContext\)/);
 assert.match(app, /app\.use\(responseMetrics\)/);
+assert.match(requestMetrics, /AsyncLocalStorage/);
+assert.match(requestMetrics, /supabaseCalls/);
+assert.match(supabaseClient, /recordSupabaseCall/);
 assert.match(metrics, /API_EGRESS_WARNING/);
 assert.match(metrics, /API_EGRESS_CRITICAL/);
+assert.match(metrics, /SUPABASE_FANOUT_WARNING/);
+assert.match(metrics, /SUPABASE_FANOUT_CRITICAL/);
 assert.match(metrics, /API_SLOW_REQUEST/);
 assert.doesNotMatch(metrics, /logger\.(?:info|warn|error)\([^\n]*body/);
 
