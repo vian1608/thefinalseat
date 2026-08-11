@@ -5,6 +5,7 @@ import { abandonedBookingRouter } from '../abandoned-bookings/abandoned-booking.
 import { normalizeBookingCreateRequest } from './booking-create-normalization.mjs';
 import applyVoucherPricingToBooking from '../vouchers/voucher-booking.middleware.mjs';
 import './booking.repository.egress-hardening.mjs';
+import './booking.service.status-hardening.mjs';
 
 const router = express.Router();
 
