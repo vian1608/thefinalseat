@@ -36,6 +36,15 @@ assert.doesNotMatch(overrides, /\.booking-sidebar,[\s\S]*\.mobile-summary-toggle
 // Price stays compact in the itinerary header on desktop.
 assert.match(overrides, /booking-itinerary-pricing-summary[\s\S]*position:\s*absolute\s*!important[\s\S]*right:\s*2rem\s*!important/);
 
+// Multi-passenger checkout must visually separate each passenger. BookingPage
+// renders passenger-card-block/passenger-card-title, so guard the production
+// selectors rather than the obsolete passenger-entry-block class.
+assert.match(booking, /className="passenger-card-block"/);
+assert.match(booking, /className="passenger-card-title"/);
+assert.match(overrides, /\.passenger-card-block\s*\{[\s\S]*border-left:\s*4px solid #8b1538\s*!important[\s\S]*padding:\s*1\.25rem\s*!important/);
+assert.match(overrides, /\.passenger-card-block \+ \.passenger-card-block\s*\{[\s\S]*margin-top:\s*1\.45rem\s*!important/);
+assert.match(overrides, /\.passenger-card-title\s*\{[\s\S]*background:\s*linear-gradient[\s\S]*border-bottom:\s*1px solid #e2e8f0\s*!important/);
+
 assert.match(itinerary, /Return Flight Route Timeline/);
 assert.match(itinerary, /Outbound Flight Route Timeline/);
 
@@ -56,4 +65,4 @@ assert.match(backButton, /createPortal\(button, bookingTarget\)/);
 assert.match(backButton, /\/return-flight/);
 assert.match(backButton, /\/booking/);
 
-console.log('booking itinerary stack + customer back navigation contract: PASS');
+console.log('booking itinerary stack + passenger separation + customer back navigation contract: PASS');
