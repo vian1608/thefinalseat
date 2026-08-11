@@ -20,6 +20,12 @@ function clearValidationHighlight(root = document) {
   root.querySelectorAll(`.${ERROR_WRAPPER_CLASS}`).forEach((element) => {
     element.classList.remove(ERROR_WRAPPER_CLASS);
   });
+  root.querySelectorAll('.tfs-passenger-card-error').forEach((element) => {
+    element.classList.remove('tfs-passenger-card-error');
+  });
+  root.querySelectorAll('.tfs-validation-alert-active').forEach((element) => {
+    element.classList.remove('tfs-validation-alert-active');
+  });
 }
 
 function markInvalid(element) {
@@ -79,11 +85,11 @@ function firstMissingTravelerField(page) {
   const cards = Array.from(page.querySelectorAll('.passenger-card-block'));
 
   for (const card of cards) {
+    const selects = Array.from(card.querySelectorAll('select'));
     const candidates = [
       card.querySelector('input[placeholder^="First Name"]'),
       card.querySelector('input[placeholder^="Last Name"]'),
-      card.querySelector('select'),
-      Array.from(card.querySelectorAll('select'))[1] || null,
+      selects[1] || null,
       card.querySelector('.dob-input')
     ].filter(Boolean);
 
@@ -92,7 +98,7 @@ function firstMissingTravelerField(page) {
     }
   }
 
-  return cards[0]?.querySelector('input, select') || null;
+  return cards[0]?.querySelector('input[placeholder^="First Name"], input[placeholder^="Last Name"], .dob-input, select') || null;
 }
 
 function firstMissingContactField(page) {
