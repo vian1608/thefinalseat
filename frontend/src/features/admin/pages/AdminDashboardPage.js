@@ -8,9 +8,8 @@ import './AdminDashboardEnhancements.css';
 
 const ADMIN_BOOKINGS_PAGE_SIZE = 20;
 
-// AdminDashboardPageV2 historically asks for 25 records. Keep the existing page
-// implementation stable while enforcing the dashboard contract at the API boundary:
-// 20 bookings per page, with the backend returning pagination totals for that size.
+// Keep the booking list at a bounded page size even though the older dashboard
+// component still asks for 25 rows internally.
 if (!adminAPI.__tfsTwentyBookingPages) {
   const originalGetBookings = adminAPI.getBookings.bind(adminAPI);
   adminAPI.getBookings = (params = {}, options = {}) => originalGetBookings({
@@ -25,9 +24,66 @@ if (!adminAPI.__tfsTwentyBookingPages) {
   });
 }
 
-// Public route wrapper for the rebuilt dashboard. Besides keeping the route/import
-// stable, this provides a last-resort visible error surface for any admin API or
-// asynchronous UI failure that escapes a section-level handler.
+// The booking detail route contains two views that historically requested the
+// same complete booking at mount time. Coalesce only simultaneous identical
+// reads; once the request settles it is removed so saves always get fresh data.
+if (!adminAPI.__tfsBookingDetailRequestDedupe) {
+  const originalGetBookingById = adminAPI.getBookingById.bind(adminAPI);
+  const inFlight = new Map();
+
+  adminAPI.getBookingById = (id, options = {}) => {
+    const key = String(id || '').trim();
+    if (!key || options?.signal) return originalGetBookingById(id, options);
+    if (inFlight.has(key)) return inFlight.get(key);
+
+    const request = Promise.resolve(originalGetBookingById(id, options))
+      .finally(() => inFlight.delete(key));
+    inFlight.set(key, request);
+    return request;
+  };
+
+  Object.defineProperty(adminAPI, '__tfsBookingDetailRequestDedupe', {
+    value: true,
+    configurable: false,
+    enumerable: false,
+    writable: false
+  });
+}
+
+function GlobalFailure({ failure, onDismiss }) {
+  if (!failure) return null;
+  return (
+    <div
+      role="alert"
+      aria-live="assertive"
+      style={{
+        position: 'fixed', top: '14px', left: '50%', transform: 'translateX(-50%)',
+        zIndex: 20000, width: 'min(760px, calc(100vw - 28px))', background: '#fff1f2',
+        color: '#991b1b', border: '1px solid #fecdd3', borderRadius: '12px',
+        boxShadow: '0 16px 45px rgba(15, 23, 42, 0.24)', padding: '14px 16px'
+      }}
+    >
+      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 800, fontSize: '15px', marginBottom: '4px' }}>⚠ {failure.title}</div>
+          <div style={{ fontSize: '13px', lineHeight: 1.45 }}>{failure.message}</div>
+          {(failure.code || failure.path) && (
+            <div style={{ marginTop: '6px', fontSize: '11px', color: '#9f1239', wordBreak: 'break-word' }}>
+              {failure.code ? `Code: ${failure.code}` : ''}
+              {failure.code && failure.path ? ' · ' : ''}
+              {failure.path ? `Request: ${failure.path}` : ''}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+          <button type="button" onClick={() => window.location.reload()} style={{ border: '1px solid #be123c', background: '#be123c', color: '#fff', borderRadius: '8px', padding: '7px 11px', fontWeight: 700, cursor: 'pointer' }}>Refresh</button>
+          <button type="button" onClick={onDismiss} aria-label="Dismiss admin error" style={{ border: '1px solid #fda4af', background: '#fff', color: '#9f1239', borderRadius: '8px', padding: '7px 10px', fontWeight: 700, cursor: 'pointer' }}>Dismiss</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDashboardPage() {
   const { code } = useParams();
   const isBookingDetailRoute = Boolean(code);
@@ -40,79 +96,37 @@ export default function AdminDashboardPage() {
         title: 'Admin action failed',
         message: detail.message || 'The admin request failed. Please retry.',
         path: detail.path || null,
-        code: detail.code || null,
-        at: detail.at || new Date().toISOString()
+        code: detail.code || null
       });
     };
-
     const onUnhandledRejection = event => {
       const reason = event?.reason;
-      const message = reason?.userMessage || reason?.message || 'An unexpected admin action failed.';
       setGlobalFailure({
         title: 'Unexpected admin error',
-        message,
+        message: reason?.userMessage || reason?.message || 'An unexpected admin action failed.',
         path: null,
-        code: reason?.code || 'UNHANDLED_ADMIN_PROMISE',
-        at: new Date().toISOString()
+        code: reason?.code || 'UNHANDLED_ADMIN_PROMISE'
       });
     };
+    const onWindowError = event => setGlobalFailure({
+      title: 'Dashboard error',
+      message: event?.message || 'An unexpected dashboard error occurred. Refresh and retry.',
+      path: null,
+      code: 'ADMIN_UI_ERROR'
+    });
 
-    const onWindowError = event => {
-      setGlobalFailure({
-        title: 'Dashboard error',
-        message: event?.message || 'An unexpected dashboard error occurred. Refresh and retry.',
-        path: null,
-        code: 'ADMIN_UI_ERROR',
-        at: new Date().toISOString()
-      });
-    };
-
-    // Keep the booking list tab open while the selected booking opens in a direct,
-    // dedicated booking-editor route in a second tab.
     const onViewEditBooking = event => {
       if (isBookingDetailRoute) return;
-
-      const target = event?.target;
-      const button = target instanceof Element ? target.closest('button') : null;
+      const button = event.target instanceof Element ? event.target.closest('button') : null;
       if (!button || button.textContent?.trim() !== 'View / Edit') return;
-
-      const row = button.closest('tr');
-      const reference = row?.querySelector('.adv2-ref')?.textContent?.trim();
-
+      const reference = button.closest('tr')?.querySelector('.adv2-ref')?.textContent?.trim();
+      if (!reference) return;
       event.preventDefault();
       event.stopPropagation();
       if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
-
-      if (!reference) {
-        setGlobalFailure({
-          title: 'Unable to open booking',
-          message: 'The selected row does not contain a booking reference. Refresh the dashboard and try again.',
-          path: null,
-          code: 'BOOKING_REFERENCE_MISSING',
-          at: new Date().toISOString()
-        });
-        return;
-      }
-
-      const bookingUrl = `/admin/bookings/${encodeURIComponent(reference)}`;
-      const newTab = window.open(bookingUrl, '_blank');
-
-      if (!newTab) {
-        setGlobalFailure({
-          title: 'New tab blocked',
-          message: 'Your browser blocked the booking tab. Allow pop-ups for The Final Seat and click View / Edit again.',
-          path: bookingUrl,
-          code: 'ADMIN_BOOKING_TAB_BLOCKED',
-          at: new Date().toISOString()
-        });
-        return;
-      }
-
-      try {
-        newTab.opener = null;
-        newTab.focus();
-      } catch {
-        // Opening succeeded; focus/opener hardening is best-effort only.
+      const newTab = window.open(`/admin/bookings/${encodeURIComponent(reference)}`, '_blank');
+      if (newTab) {
+        try { newTab.opener = null; newTab.focus(); } catch { /* best effort */ }
       }
     };
 
@@ -120,7 +134,6 @@ export default function AdminDashboardPage() {
     window.addEventListener('unhandledrejection', onUnhandledRejection);
     window.addEventListener('error', onWindowError);
     document.addEventListener('click', onViewEditBooking, true);
-
     return () => {
       window.removeEventListener('admin-api-error', onAdminApiError);
       window.removeEventListener('unhandledrejection', onUnhandledRejection);
@@ -131,159 +144,46 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     if (isBookingDetailRoute) return undefined;
-
     let frame = 0;
-
-    const findBookingsCard = () => Array.from(document.querySelectorAll('.adv2-card')).find(card => (
-      card.querySelector('.adv2-card__header h2')?.textContent?.trim() === 'Customer Bookings'
-    ));
-
-    const currentPage = card => {
-      const text = card?.querySelector('.adv2-pagination .adv2-muted')?.textContent || '';
-      const match = text.match(/Page\s+(\d+)\s+of/i);
-      const parsed = Number(match?.[1] || 1);
-      return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-    };
-
-    const decorateBookingsTable = () => {
+    const decorate = () => {
       frame = 0;
-      const card = findBookingsCard();
-      if (!card) return;
-
-      const tableWrap = card.querySelector('.adv2-table-wrap');
-      const table = tableWrap?.querySelector('.adv2-table');
+      const card = Array.from(document.querySelectorAll('.adv2-card')).find(node => node.querySelector('.adv2-card__header h2')?.textContent?.trim() === 'Customer Bookings');
+      const table = card?.querySelector('.adv2-table');
       const body = table?.tBodies?.[0];
-      if (!tableWrap || !table || !body) return;
-
-      tableWrap.classList.add('adv2-bookings-scroll');
-      table.setAttribute('data-page-size', String(ADMIN_BOOKINGS_PAGE_SIZE));
-      table.setAttribute('aria-label', 'Customer bookings, 20 bookings per page');
-
-      const pageNumber = currentPage(card);
-      Array.from(body.rows).forEach((row, rowIndex) => {
-        const serial = ((pageNumber - 1) * ADMIN_BOOKINGS_PAGE_SIZE) + rowIndex + 1;
-        if (row.dataset.bookingSerial !== String(serial)) {
-          row.dataset.bookingSerial = String(serial);
-        }
-      });
+      const wrap = card?.querySelector('.adv2-table-wrap');
+      if (!table || !body || !wrap) return;
+      wrap.classList.add('adv2-bookings-scroll');
+      const pageText = card.querySelector('.adv2-pagination .adv2-muted')?.textContent || '';
+      const page = Number(pageText.match(/Page\s+(\d+)\s+of/i)?.[1] || 1);
+      Array.from(body.rows).forEach((row, index) => { row.dataset.bookingSerial = String(((page - 1) * ADMIN_BOOKINGS_PAGE_SIZE) + index + 1); });
     };
-
-    const scheduleDecorate = () => {
-      if (frame) return;
-      frame = window.requestAnimationFrame(decorateBookingsTable);
-    };
-
-    scheduleDecorate();
-    const observer = new MutationObserver(scheduleDecorate);
+    const schedule = () => { if (!frame) frame = window.requestAnimationFrame(decorate); };
+    schedule();
+    const observer = new MutationObserver(schedule);
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-
-    return () => {
-      observer.disconnect();
-      if (frame) window.cancelAnimationFrame(frame);
-    };
+    return () => { observer.disconnect(); if (frame) window.cancelAnimationFrame(frame); };
   }, [isBookingDetailRoute]);
 
   useEffect(() => {
     if (isBookingDetailRoute) return undefined;
-
-    const updateHeaderState = () => {
-      const header = document.querySelector('.adv2-header');
-      if (!header) return;
-      header.classList.toggle('adv2-header--compact', window.scrollY > 36);
-    };
-
-    updateHeaderState();
-    window.addEventListener('scroll', updateHeaderState, { passive: true });
-    window.addEventListener('resize', updateHeaderState, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', updateHeaderState);
-      window.removeEventListener('resize', updateHeaderState);
-    };
+    const updateHeader = () => document.querySelector('.adv2-header')?.classList.toggle('adv2-header--compact', window.scrollY > 36);
+    updateHeader();
+    window.addEventListener('scroll', updateHeader, { passive: true });
+    window.addEventListener('resize', updateHeader, { passive: true });
+    return () => { window.removeEventListener('scroll', updateHeader); window.removeEventListener('resize', updateHeader); };
   }, [isBookingDetailRoute]);
 
   return (
     <div className={isBookingDetailRoute ? 'admin-booking-detail-route' : undefined}>
-      {isBookingDetailRoute && (
-        <style>{`
-          /* /admin/bookings/:code is a dedicated booking workspace, not the dashboard list. */
-          .admin-booking-detail-route .adv2-header,
-          .admin-booking-detail-route .adv2-toolbar,
-          .admin-booking-detail-route .adv2-kpis,
-          .admin-booking-detail-route .adv2-card {
-            display: none !important;
-          }
-
-          .admin-booking-detail-route .adv2-page {
-            min-height: 0;
-            background: transparent;
-          }
-
-          .admin-booking-detail-route .adv2-shell {
-            padding-top: 10px;
-          }
-
-          .admin-booking-detail-route .adv2-detail {
-            margin-top: 0;
-            box-shadow: 0 2px 10px rgba(15,39,70,.05);
-          }
-        `}</style>
+      <GlobalFailure failure={globalFailure} onDismiss={() => setGlobalFailure(null)} />
+      {isBookingDetailRoute ? (
+        <>
+          <AdminBookingAddressPanel />
+          <AdminBookingWorkspace />
+        </>
+      ) : (
+        <AdminDashboardPageV2 />
       )}
-
-      {globalFailure && (
-        <div
-          role="alert"
-          aria-live="assertive"
-          style={{
-            position: 'fixed',
-            top: '14px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 20000,
-            width: 'min(760px, calc(100vw - 28px))',
-            background: '#fff1f2',
-            color: '#991b1b',
-            border: '1px solid #fecdd3',
-            borderRadius: '12px',
-            boxShadow: '0 16px 45px rgba(15, 23, 42, 0.24)',
-            padding: '14px 16px'
-          }}
-        >
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 800, fontSize: '15px', marginBottom: '4px' }}>⚠ {globalFailure.title}</div>
-              <div style={{ fontSize: '13px', lineHeight: 1.45 }}>{globalFailure.message}</div>
-              {(globalFailure.code || globalFailure.path) && (
-                <div style={{ marginTop: '6px', fontSize: '11px', color: '#9f1239', wordBreak: 'break-word' }}>
-                  {globalFailure.code ? `Code: ${globalFailure.code}` : ''}
-                  {globalFailure.code && globalFailure.path ? ' · ' : ''}
-                  {globalFailure.path ? `Request: ${globalFailure.path}` : ''}
-                </div>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                style={{ border: '1px solid #be123c', background: '#be123c', color: '#fff', borderRadius: '8px', padding: '7px 11px', fontWeight: 700, cursor: 'pointer' }}
-              >
-                Refresh Dashboard
-              </button>
-              <button
-                type="button"
-                onClick={() => setGlobalFailure(null)}
-                aria-label="Dismiss admin error"
-                style={{ border: '1px solid #fda4af', background: '#fff', color: '#9f1239', borderRadius: '8px', padding: '7px 10px', fontWeight: 700, cursor: 'pointer' }}
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isBookingDetailRoute && <AdminBookingAddressPanel />}
-      {isBookingDetailRoute && <AdminBookingWorkspace />}
-      <AdminDashboardPageV2 />
     </div>
   );
 }
