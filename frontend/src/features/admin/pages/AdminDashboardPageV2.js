@@ -162,6 +162,8 @@ function AdminDashboardPageV2() {
   const [stats, setStats] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [abandoned, setAbandoned] = useState([]);
+  const [abandonedLoaded, setAbandonedLoaded] = useState(false);
+  const [abandonedLoading, setAbandonedLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ totalPages: 1, totalRecords: 0 });
   const [filters, setFilters] = useState({ reference: '', name: '', email: '', status: '' });
@@ -319,16 +321,28 @@ function AdminDashboardPageV2() {
 
   const loadSummaryData = useCallback(async () => {
     if (!hasAuth()) return;
-    const [statsRes, analyticsRes, abandonedRes] = await Promise.allSettled([
+    const [statsRes, analyticsRes] = await Promise.allSettled([
       withTimeout(adminAPI.getStats(), 12000, 'Dashboard stats'),
-      withTimeout(adminAPI.getAnalytics(30), 12000, 'Analytics'),
-      withTimeout(adminAPI.getAbandonedBookings(), 12000, 'Incomplete checkouts')
+      withTimeout(adminAPI.getAnalytics(30), 12000, 'Analytics')
     ]);
 
     if (statsRes.status === 'fulfilled') setStats(statsRes.value?.data || statsRes.value || null);
     if (analyticsRes.status === 'fulfilled') setAnalytics(analyticsRes.value?.data || analyticsRes.value || null);
-    if (abandonedRes.status === 'fulfilled') setAbandoned(abandonedRes.value?.data || abandonedRes.value || []);
   }, []);
+
+  const loadAbandoned = useCallback(async ({ force = false } = {}) => {
+    if (!hasAuth() || (abandonedLoaded && !force)) return;
+    setAbandonedLoading(true);
+    try {
+      const response = await withTimeout(adminAPI.getAbandonedBookings(), 12000, 'Incomplete checkouts');
+      setAbandoned(response?.data || response || []);
+      setAbandonedLoaded(true);
+    } catch (error) {
+      setListError(errorMessage(error, 'Unable to load incomplete checkouts.'));
+    } finally {
+      setAbandonedLoading(false);
+    }
+  }, [abandonedLoaded]);
 
   useEffect(() => {
     const timer = setTimeout(() => loadBookings(), 250);
@@ -338,11 +352,17 @@ function AdminDashboardPageV2() {
   useEffect(() => { loadSummaryData(); }, [loadSummaryData]);
 
   useEffect(() => {
+    if (activeTab === 'abandoned') loadAbandoned();
+  }, [activeTab, loadAbandoned]);
+
+  useEffect(() => {
     if (code && hasAuth()) loadBookingDetail(code);
   }, [code, loadBookingDetail]);
 
   const refreshAll = async () => {
-    await Promise.all([loadBookings(), loadSummaryData()]);
+    const tasks = [loadBookings(), loadSummaryData()];
+    if (activeTab === 'abandoned') tasks.push(loadAbandoned({ force: true }));
+    await Promise.all(tasks);
     if (selectedBooking?.id) await loadBookingDetail(selectedBooking.id);
   };
 
@@ -703,6 +723,7 @@ function AdminDashboardPageV2() {
       }
       await loadBookings();
       await loadSummaryData();
+      if (activeTab === 'abandoned') await loadAbandoned({ force: true });
     } catch (error) {
       const message = error?.name === 'AbortError'
         ? 'Deletion took too long. The list has been refreshed so you can verify whether the booking was removed.'
@@ -770,7 +791,7 @@ function AdminDashboardPageV2() {
           <div className="adv2-tabs">
             <button className={`adv2-button adv2-button--tab ${activeTab === 'bookings' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('bookings')}>Bookings</button>
             <button className={`adv2-button adv2-button--tab ${activeTab === 'analytics' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('analytics')}>Analytics</button>
-            <button className={`adv2-button adv2-button--tab ${activeTab === 'abandoned' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('abandoned')}>Incomplete Forms ({abandoned.length})</button>
+            <button className={`adv2-button adv2-button--tab ${activeTab === 'abandoned' ? 'active' : ''}`} type="button" onClick={() => setActiveTab('abandoned')}>Incomplete Forms{abandonedLoaded ? ` (${abandoned.length})` : ''}</button>
           </div>
           <span className="adv2-spacer" />
           <button className="adv2-button adv2-button--primary" type="button" onClick={() => navigate('/admin/bookings/new')}>+ Create New Booking</button>
@@ -781,7 +802,7 @@ function AdminDashboardPageV2() {
           <div className="adv2-kpi"><div className="adv2-kpi__label">Total bookings</div><div className="adv2-kpi__value">{pagination.totalRecords ?? bookings.length}</div><div className="adv2-kpi__sub">Supabase records</div></div>
           <div className="adv2-kpi"><div className="adv2-kpi__label">Paid revenue</div><div className="adv2-kpi__value">{money(totalRevenue)}</div><div className="adv2-kpi__sub">Recorded paid bookings</div></div>
           <div className="adv2-kpi"><div className="adv2-kpi__label">Pending</div><div className="adv2-kpi__value">{stats?.pendingCount ?? bookings.filter(item => normalizeStatus(item.status) === 'PENDING').length}</div><div className="adv2-kpi__sub">Booking workflow</div></div>
-          <div className="adv2-kpi"><div className="adv2-kpi__label">Incomplete forms</div><div className="adv2-kpi__value">{abandoned.length}</div><div className="adv2-kpi__sub">Saved checkout sessions</div></div>
+          <div className="adv2-kpi"><div className="adv2-kpi__label">Incomplete forms</div><div className="adv2-kpi__value">{abandonedLoaded ? abandoned.length : '—'}</div><div className="adv2-kpi__sub">Loaded only when opened</div></div>
           <div className="adv2-kpi"><div className="adv2-kpi__label">Visitors</div><div className="adv2-kpi__value">{analytics?.totalVisitors ?? 0}</div><div className="adv2-kpi__sub">Last 30 days</div></div>
           <div className="adv2-kpi"><div className="adv2-kpi__label">Active now</div><div className="adv2-kpi__value">{analytics?.realtimeActiveUsers ?? 0}</div><div className="adv2-kpi__sub">GA4 realtime</div></div>
         </div>
@@ -797,7 +818,7 @@ function AdminDashboardPageV2() {
                   <input className="adv2-search" placeholder="Email" value={filters.email} onChange={event => { setFilters(current => ({ ...current, email: event.target.value })); setPage(1); }} />
                   <select className="adv2-select" value={filters.status} onChange={event => { setFilters(current => ({ ...current, status: event.target.value })); setPage(1); }}>
                     <option value="">All statuses</option>
-                    {['DRAFT','PENDING','AWAITING_AUTHORIZATION','AUTHORIZED','READY_FOR_TICKETING','TICKETED','COMPLETED','CANCELLED','FAILED'].map(status => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}
+                    {['DRAFT','PENDING','AWAITING_AUTHORIZATION','AUTHORIZED','READY_FOR_TICKETING','TICKETED','DONE','CANCELLED','FAILED'].map(status => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}
                   </select>
                   <button className="adv2-button adv2-button--secondary" type="button" onClick={() => { setFilters({ reference: '', name: '', email: '', status: '' }); setPage(1); }}>Reset</button>
                   <button className="adv2-button adv2-button--secondary" type="button" onClick={loadBookings}>Search</button>
@@ -884,7 +905,7 @@ function AdminDashboardPageV2() {
                         <div className="adv2-editor-section__header"><h3>Status & Internal Notes</h3></div>
                         <div className="adv2-editor-section__body">
                           <div className="adv2-grid adv2-grid--2">
-                            <label className="adv2-field"><span>Booking status</span><select value={statusForm.status} onChange={event => setStatusForm(current => ({ ...current, status: event.target.value }))}>{['DRAFT','PENDING','AWAITING_AUTHORIZATION','AUTHORIZED','READY_FOR_TICKETING','TICKETED','COMPLETED','CANCELLED','FAILED'].map(status => <option key={status}>{status}</option>)}</select></label>
+                            <label className="adv2-field"><span>Booking status</span><select value={statusForm.status} onChange={event => setStatusForm(current => ({ ...current, status: event.target.value }))}>{['DRAFT','PENDING','AWAITING_AUTHORIZATION','AUTHORIZED','READY_FOR_TICKETING','TICKETED','DONE','CANCELLED','FAILED'].map(status => <option key={status}>{status}</option>)}</select></label>
                             <label className="adv2-field"><span>Internal notes</span><textarea value={statusForm.notes} onChange={event => setStatusForm(current => ({ ...current, notes: event.target.value }))} /></label>
                           </div>
                           <SectionMessage state={sectionState.status} />
@@ -1073,7 +1094,7 @@ function AdminDashboardPageV2() {
           <section className="adv2-card">
             <div className="adv2-card__header"><h2>Incomplete Passenger Forms</h2></div>
             <div className="adv2-table-wrap">
-              {abandoned.length === 0 ? <div className="adv2-empty">No incomplete checkout sessions.</div> : (
+              {abandonedLoading ? <div className="adv2-loading">Loading incomplete checkout sessions…</div> : abandoned.length === 0 ? <div className="adv2-empty">No incomplete checkout sessions.</div> : (
                 <table className="adv2-table"><thead><tr><th>Session</th><th>Traveller</th><th>Email</th><th>Last step</th><th>Updated</th></tr></thead><tbody>{abandoned.map(item => <tr key={item.id || item.session_key}><td>{item.session_key || item.id}</td><td>{item.traveller_info ? `${item.traveller_info.firstName || ''} ${item.traveller_info.lastName || ''}`.trim() : 'Incomplete'}</td><td>{item.contact_info?.email || 'N/A'}</td><td>{item.current_step || 'passenger_form'}</td><td>{item.updated_at ? new Date(item.updated_at).toLocaleString() : 'N/A'}</td></tr>)}</tbody></table>
               )}
             </div>
@@ -1097,7 +1118,7 @@ function AdminDashboardPageV2() {
         <BookingBackupImportModal
           isOpen={backupImportOpen}
           onClose={() => setBackupImportOpen(false)}
-          onImportComplete={() => { loadBookings(); loadSummaryData(); }}
+          onImportComplete={() => { loadBookings(); loadSummaryData(); if (activeTab === 'abandoned') loadAbandoned({ force: true }); }}
         />
       )}
 
