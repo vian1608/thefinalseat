@@ -49,7 +49,8 @@ function updateCardState(card) {
 
   const complete = passengerComplete(card);
   card.classList.toggle(COMPLETE_CLASS, complete);
-  controls.state.textContent = complete ? 'Done' : 'Required';
+  const label = complete ? 'Done' : 'Required';
+  if (controls.state.textContent !== label) controls.state.textContent = label;
   controls.header.setAttribute('aria-expanded', card.classList.contains(COLLAPSED_CLASS) ? 'false' : 'true');
 }
 
@@ -126,7 +127,12 @@ export function installMobileBookingUX() {
     let errorCard = null;
 
     mutations.forEach((mutation) => {
-      if (mutation.type === 'childList') needsInit = true;
+      if (mutation.type === 'childList') {
+        const target = mutation.target instanceof Element ? mutation.target : mutation.target?.parentElement;
+        if (target?.closest?.('.booking-page') || Array.from(mutation.addedNodes).some((node) => node instanceof Element && (node.matches?.('.booking-page') || node.querySelector?.('.booking-page')))) {
+          needsInit = true;
+        }
+      }
       if (mutation.type === 'attributes') {
         const card = mutation.target.closest?.('.passenger-card-block');
         if (card?.classList.contains('tfs-passenger-card-error')) errorCard = card;
