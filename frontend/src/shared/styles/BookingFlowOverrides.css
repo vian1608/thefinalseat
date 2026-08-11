@@ -48,6 +48,22 @@
   min-width: 0 !important;
 }
 
+/* The blue/red OUTBOUND / RETURN badge already identifies each leg. Hide the
+   duplicate FLT logo + "Flight Route Timeline" + airline header inside the
+   timeline, but only on the customer booking cards. The shared timeline keeps
+   its header everywhere else. */
+.booking-itinerary-top-grid .itin-card .itinerary-timeline-container > div:first-child {
+  display: none !important;
+}
+
+/* Pull the actual SEA → FCO / FCO → AMS → SEA route upward after removing the
+   redundant header so the itinerary card becomes shorter and easier to scan. */
+.booking-itinerary-top-grid .itin-card .itinerary-timeline-container {
+  padding-top: 14px !important;
+  padding-bottom: 16px !important;
+  margin-bottom: 12px !important;
+}
+
 /* Keep the compact total-price card at the top-right, matching Option 1. */
 .booking-itinerary-top-grid > .booking-itinerary-pricing-summary {
   position: absolute !important;
