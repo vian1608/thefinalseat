@@ -5,6 +5,7 @@ import TravelDatePicker from './TravelDatePicker';
 import './ModifySearchModal.css';
 
 const UPDATE_TIMEOUT_MS = 12000;
+const MAX_TRAVELERS = 9;
 
 function extractIataCode(val) {
   if (!val) return '';
@@ -12,6 +13,16 @@ function extractIataCode(val) {
   const str = String(val).toUpperCase();
   const match = str.match(/\b([A-Z]{3,4})\b/);
   return match ? match[1] : (str.length === 3 ? str : '');
+}
+
+function resolveInfantCounts(search = {}) {
+  const legacyTotal = Math.max(0, parseInt(search.infants || 0, 10) || 0);
+  const hasSplitCounts = search.infantsInSeat !== undefined || search.infantsOnLap !== undefined;
+  const infantsInSeat = hasSplitCounts ? Math.max(0, parseInt(search.infantsInSeat || 0, 10) || 0) : 0;
+  const infantsOnLap = hasSplitCounts
+    ? Math.max(0, parseInt(search.infantsOnLap || 0, 10) || 0)
+    : legacyTotal;
+  return { infantsInSeat, infantsOnLap };
 }
 
 function ModifySearchModal({
@@ -76,6 +87,7 @@ function ModifySearchModal({
 
   const initialDepDate = resolveDepartureDate(initialSearch);
   const initialRetDate = resolveReturnDate(initialSearch);
+  const initialInfants = resolveInfantCounts(initialSearch);
 
   const [tripType, setTripType] = useState(initialSearch.tripType || (initialRetDate ? 'round-trip' : 'one-way'));
   const [origin, setOrigin] = useState(resolveOriginVal(initialSearch));
@@ -84,7 +96,8 @@ function ModifySearchModal({
   const [returnDate, setReturnDate] = useState(initialRetDate);
   const [adults, setAdults] = useState(parseInt(initialSearch.adults || 1, 10));
   const [children, setChildren] = useState(parseInt(initialSearch.children || 0, 10));
-  const [infants, setInfants] = useState(parseInt(initialSearch.infants || 0, 10));
+  const [infantsInSeat, setInfantsInSeat] = useState(initialInfants.infantsInSeat);
+  const [infantsOnLap, setInfantsOnLap] = useState(initialInfants.infantsOnLap);
   const [cabinClass, setCabinClass] = useState(initialSearch.cabinClass || initialSearch.cabin || 'Economy');
 
   const [formError, setFormError] = useState('');
@@ -97,6 +110,14 @@ function ModifySearchModal({
     setIsSubmitting(false);
     setShowCheckoutWarning(false);
     if (onClose) onClose();
+  };
+
+  const totalTravelers = adults + children + infantsInSeat + infantsOnLap;
+
+  const decrementAdults = () => {
+    const nextAdults = Math.max(1, adults - 1);
+    setAdults(nextAdults);
+    if (infantsOnLap > nextAdults) setInfantsOnLap(nextAdults);
   };
 
   // Prevent background body scrolling when modal is open. The modal itself is
@@ -115,6 +136,7 @@ function ModifySearchModal({
     if (isOpen) {
       const depD = resolveDepartureDate(initialSearch);
       const retD = resolveReturnDate(initialSearch);
+      const infantCounts = resolveInfantCounts(initialSearch);
       const isRound = (initialSearch.tripType === 'round-trip') || (initialSearch.tripType === 'roundtrip') || !!retD;
       setTripType(isRound ? 'round-trip' : 'one-way');
       setOrigin(resolveOriginVal(initialSearch));
@@ -123,7 +145,8 @@ function ModifySearchModal({
       setReturnDate(retD);
       setAdults(parseInt(initialSearch.adults || 1, 10));
       setChildren(parseInt(initialSearch.children || 0, 10));
-      setInfants(parseInt(initialSearch.infants || 0, 10));
+      setInfantsInSeat(infantCounts.infantsInSeat);
+      setInfantsOnLap(infantCounts.infantsOnLap);
       setCabinClass(initialSearch.cabinClass || initialSearch.travelClass || initialSearch.cabin || 'Economy');
       setFormError('');
       setIsSubmitting(false);
@@ -184,8 +207,12 @@ function ModifySearchModal({
       setFormError('At least 1 adult passenger is required.');
       return false;
     }
-    if (infants > adults) {
-      setFormError('Infants cannot exceed the number of adult passengers.');
+    if (infantsOnLap > adults) {
+      setFormError('Infants on lap cannot exceed the number of adult passengers.');
+      return false;
+    }
+    if (totalTravelers > MAX_TRAVELERS) {
+      setFormError(`A maximum of ${MAX_TRAVELERS} travelers can be searched at once.`);
       return false;
     }
     return true;
@@ -220,7 +247,10 @@ function ModifySearchModal({
       tripType,
       adults,
       children,
-      infants,
+      // `infants` remains the total for backwards-compatible booking forms.
+      infants: infantsInSeat + infantsOnLap,
+      infantsInSeat,
+      infantsOnLap,
       cabinClass,
       cabin: cabinClass
     };
@@ -336,9 +366,9 @@ function ModifySearchModal({
                 <div className="form-col">
                   <label className="form-label-title">Adults (12+)</label>
                   <div className="counter-controls">
-                    <button type="button" onClick={() => setAdults(Math.max(1, adults - 1))} disabled={adults <= 1}>-</button>
+                    <button type="button" onClick={decrementAdults} disabled={adults <= 1}>-</button>
                     <span>{adults}</span>
-                    <button type="button" onClick={() => setAdults(Math.min(9, adults + 1))}>+</button>
+                    <button type="button" onClick={() => setAdults(Math.min(9, adults + 1))} disabled={totalTravelers >= MAX_TRAVELERS}>+</button>
                   </div>
                 </div>
 
@@ -347,16 +377,25 @@ function ModifySearchModal({
                   <div className="counter-controls">
                     <button type="button" onClick={() => setChildren(Math.max(0, children - 1))} disabled={children <= 0}>-</button>
                     <span>{children}</span>
-                    <button type="button" onClick={() => setChildren(Math.min(8, children + 1))}>+</button>
+                    <button type="button" onClick={() => setChildren(Math.min(8, children + 1))} disabled={totalTravelers >= MAX_TRAVELERS}>+</button>
                   </div>
                 </div>
 
                 <div className="form-col">
-                  <label className="form-label-title">Infants (&lt;2)</label>
+                  <label className="form-label-title">Infants in seat (&lt;2)</label>
                   <div className="counter-controls">
-                    <button type="button" onClick={() => setInfants(Math.max(0, infants - 1))} disabled={infants <= 0}>-</button>
-                    <span>{infants}</span>
-                    <button type="button" onClick={() => setInfants(Math.min(adults, infants + 1))} disabled={infants >= adults}>+</button>
+                    <button type="button" onClick={() => setInfantsInSeat(Math.max(0, infantsInSeat - 1))} disabled={infantsInSeat <= 0}>-</button>
+                    <span>{infantsInSeat}</span>
+                    <button type="button" onClick={() => setInfantsInSeat(infantsInSeat + 1)} disabled={totalTravelers >= MAX_TRAVELERS}>+</button>
+                  </div>
+                </div>
+
+                <div className="form-col">
+                  <label className="form-label-title">Infants on lap (&lt;2)</label>
+                  <div className="counter-controls">
+                    <button type="button" onClick={() => setInfantsOnLap(Math.max(0, infantsOnLap - 1))} disabled={infantsOnLap <= 0}>-</button>
+                    <span>{infantsOnLap}</span>
+                    <button type="button" onClick={() => setInfantsOnLap(infantsOnLap + 1)} disabled={infantsOnLap >= adults || totalTravelers >= MAX_TRAVELERS}>+</button>
                   </div>
                 </div>
 
