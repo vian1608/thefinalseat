@@ -1,5 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import './AccordionSection.css';
+
+const MOBILE_ACCORDION_QUERY = '(max-width: 640px)';
+const MOBILE_ACCORDION_EVENT = 'tfs:mobile-accordion-open';
 
 function AccordionSection({ id, stepNumber, title, isOpen, onToggle, isComplete = false, children }) {
   const bodyRef = useRef(null);
@@ -16,7 +19,7 @@ function AccordionSection({ id, stepNumber, title, isOpen, onToggle, isComplete 
 
     updateHeight();
 
-    // Use ResizeObserver to auto-recalculate height when async components (PayPal buttons / Whop embed) load or resize
+    // Use ResizeObserver to auto-recalculate height when async components load or resize.
     let observer = null;
     if (typeof ResizeObserver !== 'undefined') {
       observer = new ResizeObserver(() => {
@@ -30,6 +33,33 @@ function AccordionSection({ id, stepNumber, title, isOpen, onToggle, isComplete 
     };
   }, [isOpen, children]);
 
+  // On phones, opening one major booking section closes the others. This keeps
+  // the checkout short without changing desktop behavior or validation state.
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleMobileAccordionOpen = (event) => {
+      const otherId = event?.detail?.id;
+      const isMobile = window.matchMedia?.(MOBILE_ACCORDION_QUERY)?.matches;
+      if (isMobile && otherId && otherId !== id && isOpen) {
+        onToggle();
+      }
+    };
+
+    window.addEventListener(MOBILE_ACCORDION_EVENT, handleMobileAccordionOpen);
+    return () => window.removeEventListener(MOBILE_ACCORDION_EVENT, handleMobileAccordionOpen);
+  }, [id, isOpen, onToggle]);
+
+  const handleToggle = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      const isMobile = window.matchMedia?.(MOBILE_ACCORDION_QUERY)?.matches;
+      if (isMobile && !isOpen) {
+        window.dispatchEvent(new CustomEvent(MOBILE_ACCORDION_EVENT, { detail: { id } }));
+      }
+    }
+    onToggle();
+  }, [id, isOpen, onToggle]);
+
   const sectionId = `accordion-body-${id}`;
   const headerId = `accordion-header-${id}`;
 
@@ -42,11 +72,11 @@ function AccordionSection({ id, stepNumber, title, isOpen, onToggle, isComplete 
         tabIndex={0}
         aria-expanded={isOpen}
         aria-controls={sectionId}
-        onClick={onToggle}
+        onClick={handleToggle}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            onToggle();
+            handleToggle();
           }
         }}
       >
