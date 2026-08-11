@@ -178,6 +178,31 @@ CREATE TABLE IF NOT EXISTS public.email_deliveries (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Migration 008 used recipient_email/resend_message_id and lacked several of
+-- the canonical columns. Add the complete current contract when that legacy
+-- table already exists instead of relying on CREATE TABLE IF NOT EXISTS.
+ALTER TABLE public.email_deliveries ADD COLUMN IF NOT EXISTS confirmation_code VARCHAR(50);
+ALTER TABLE public.email_deliveries ADD COLUMN IF NOT EXISTS recipient VARCHAR(255);
+ALTER TABLE public.email_deliveries ADD COLUMN IF NOT EXISTS provider VARCHAR(50) DEFAULT 'RESEND';
+ALTER TABLE public.email_deliveries ADD COLUMN IF NOT EXISTS provider_message_id TEXT;
+ALTER TABLE public.email_deliveries ADD COLUMN IF NOT EXISTS error_code TEXT;
+ALTER TABLE public.email_deliveries ADD COLUMN IF NOT EXISTS error_message TEXT;
+ALTER TABLE public.email_deliveries ADD COLUMN IF NOT EXISTS attempt_count INT DEFAULT 1;
+ALTER TABLE public.email_deliveries ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.email_deliveries ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ;
+ALTER TABLE public.email_deliveries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='email_deliveries' AND column_name='recipient_email') THEN
+    EXECUTE 'UPDATE public.email_deliveries SET recipient = COALESCE(recipient, recipient_email) WHERE recipient IS NULL';
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='email_deliveries' AND column_name='resend_message_id') THEN
+    EXECUTE 'UPDATE public.email_deliveries SET provider_message_id = COALESCE(provider_message_id, resend_message_id) WHERE provider_message_id IS NULL';
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_email_deliveries_booking_type ON public.email_deliveries(booking_id,email_type);
 
 CREATE TABLE IF NOT EXISTS public.audit_logs (
