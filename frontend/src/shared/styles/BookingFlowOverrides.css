@@ -111,6 +111,65 @@
   grid-template-columns: minmax(0, 1fr) !important;
 }
 
+/* Passenger forms need clear visual boundaries when several travelers are
+   entered in the same accordion. BookingPage.js uses passenger-card-block and
+   passenger-card-title, so style those real production classes directly. */
+.passenger-card-block {
+  position: relative !important;
+  background: #ffffff !important;
+  border: 1px solid #dbe3ee !important;
+  border-left: 4px solid #8b1538 !important;
+  border-radius: 14px !important;
+  padding: 1.25rem !important;
+  margin: 0 0 1.35rem !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.045) !important;
+  overflow: hidden !important;
+}
+
+.passenger-card-block + .passenger-card-block {
+  margin-top: 1.45rem !important;
+}
+
+.passenger-card-block:last-child {
+  margin-bottom: 0 !important;
+}
+
+.passenger-card-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.6rem !important;
+  margin: -1.25rem -1.25rem 1.2rem !important;
+  padding: 0.8rem 1.15rem !important;
+  background: linear-gradient(90deg, #f8fafc 0%, #fff7f9 100%) !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  color: #172033 !important;
+  font-size: 0.96rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.01em !important;
+}
+
+.passenger-card-title i {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 50% !important;
+  background: #8b1538 !important;
+  color: #ffffff !important;
+  font-size: 0.75rem !important;
+  flex: 0 0 28px !important;
+}
+
+.passenger-card-block .booking-form-grid {
+  column-gap: 1.15rem !important;
+  row-gap: 0.85rem !important;
+}
+
+.passenger-card-block .booking-form-grid + .booking-form-grid {
+  margin-top: 1rem !important;
+}
+
 @media (max-width: 768px) {
   .booking-itinerary-top-panel__inner,
   .container.booking-main-container {
@@ -141,10 +200,34 @@
     gap: 0.35rem 1rem !important;
     align-items: center !important;
   }
+
+  .passenger-card-block {
+    padding: 1rem !important;
+    margin-bottom: 1.1rem !important;
+    border-radius: 12px !important;
+  }
+
+  .passenger-card-block + .passenger-card-block {
+    margin-top: 1.15rem !important;
+  }
+
+  .passenger-card-title {
+    margin: -1rem -1rem 1rem !important;
+    padding: 0.75rem 0.9rem !important;
+    font-size: 0.9rem !important;
+  }
 }
 
 @media (max-width: 520px) {
   .booking-itinerary-top-grid > .booking-itinerary-pricing-summary {
     grid-template-columns: 1fr !important;
+  }
+
+  .passenger-card-block {
+    padding: 0.9rem !important;
+  }
+
+  .passenger-card-title {
+    margin: -0.9rem -0.9rem 0.9rem !important;
   }
 }
