@@ -185,7 +185,11 @@ class SerpApiService {
     try {
       const adults = Number.parseInt(searchParams.adults || 1, 10);
       const children = Number.parseInt(searchParams.children || 0, 10);
-      const infants = Number.parseInt(searchParams.infants || 0, 10);
+      const infantsInSeat = Number.parseInt(searchParams.infantsInSeat || 0, 10);
+      const infantsOnLap = Number.parseInt(
+        searchParams.infantsOnLap ?? searchParams.infants ?? 0,
+        10,
+      );
 
       const params = new URLSearchParams({
         engine: 'google_flights',
@@ -204,7 +208,8 @@ class SerpApiService {
       if (isRoundTrip) params.append('return_date', returnDate);
       if (departureToken) params.append('departure_token', departureToken);
       if (children > 0) params.append('children', children.toString());
-      if (infants > 0) params.append('infants_on_lap', infants.toString());
+      if (infantsInSeat > 0) params.append('infants_in_seat', infantsInSeat.toString());
+      if (infantsOnLap > 0) params.append('infants_on_lap', infantsOnLap.toString());
 
       const response = await fetch(`https://serpapi.com/search.json?${params.toString()}`, {
         signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
