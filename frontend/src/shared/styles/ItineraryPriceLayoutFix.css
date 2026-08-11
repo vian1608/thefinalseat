@@ -1,0 +1,85 @@
+/* Booking itinerary price summary layout fix.
+   Keep the fare summary in the itinerary header row instead of absolutely
+   positioning it over the outbound flight card. */
+
+.booking-itinerary-top-panel__inner {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 240px) !important;
+  column-gap: 1.25rem !important;
+  row-gap: 1rem !important;
+  align-items: start !important;
+}
+
+.booking-itinerary-top-panel__title {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  align-self: center !important;
+  margin: 0 !important;
+}
+
+/* Let the itinerary children participate in the parent grid. This places the
+   price card beside the section title while each flight card remains full width. */
+.booking-itinerary-top-grid,
+.booking-itinerary-top-grid--single,
+.booking-itinerary-top-grid--roundtrip {
+  display: contents !important;
+}
+
+.booking-itinerary-top-grid > .booking-itinerary-pricing-summary {
+  position: static !important;
+  inset: auto !important;
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  justify-self: stretch !important;
+  align-self: start !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  z-index: auto !important;
+}
+
+.booking-itinerary-top-grid > .itin-card {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+/* Tablet/mobile: put the fare summary in normal flow between the section title
+   and the itinerary cards. Nothing overlaps and the summary uses full width. */
+@media (max-width: 768px) {
+  .booking-itinerary-top-panel__inner {
+    grid-template-columns: minmax(0, 1fr) !important;
+    column-gap: 0 !important;
+    row-gap: 0.85rem !important;
+  }
+
+  .booking-itinerary-top-panel__title {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+  }
+
+  .booking-itinerary-top-grid > .booking-itinerary-pricing-summary {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    width: 100% !important;
+    max-width: none !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, max-content)) !important;
+    gap: 0.35rem 1rem !important;
+    align-items: center !important;
+    justify-content: start !important;
+  }
+
+  .booking-itinerary-top-grid > .itin-card {
+    grid-column: 1 !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .booking-itinerary-top-grid > .booking-itinerary-pricing-summary {
+    grid-template-columns: 1fr !important;
+  }
+}
