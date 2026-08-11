@@ -1,15 +1,23 @@
 /* Final mobile itinerary route polish.
    Keeps the compact verification card, aligns trip duration beneath the
-   arrival side, and places the aircraft on the dashed route toward destination. */
+   arrival side, places the aircraft on the dashed route toward destination,
+   and surfaces layover duration without requiring expansion. */
+
+.itin-mobile-arrival-meta {
+  display: none;
+}
 
 @media (max-width: 640px) {
-  /* Use two balanced halves below the route: airline on the departure side,
-     total journey time/stops on the arrival side, then the expand chevron. */
+  /* Mobile card structure:
+     1) date + departure/arrival route
+     2) arrival-side duration/stops/layover directly below FCO/SEA
+     3) airline row + expand chevron */
   .booking-itinerary-top-grid .itin-summary-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 18px !important;
+    grid-template-columns: minmax(0, 1fr) 18px !important;
     grid-template-areas:
-      "route route route"
-      "carrier meta chevron" !important;
+      "route route"
+      "carrier chevron" !important;
+    row-gap: 0.52rem !important;
   }
 
   /* Make the time row a true origin -> destination track. */
@@ -58,8 +66,7 @@
     z-index: 2;
   }
 
-  /* Airport codes sit directly under their corresponding times. The old arrow
-     is redundant now that the plane itself communicates direction. */
+  /* Airport codes sit directly under their corresponding times. */
   .booking-itinerary-top-grid .itin-airports {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
   }
@@ -78,30 +85,75 @@
     justify-self: end !important;
   }
 
-  /* Duration and stop count now belong visually to the arrival half of the card,
-     directly underneath the arrival time/airport instead of floating at far right. */
+  /* Critical mobile hierarchy: arrival time + arrival airport are immediately
+     followed by journey duration/stops/layover on the same right half. */
+  .booking-itinerary-top-grid .itin-mobile-arrival-meta {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    width: 50% !important;
+    margin: 0.42rem 0 0 auto !important;
+    padding: 0 !important;
+    text-align: right !important;
+    gap: 0.08rem !important;
+  }
+
+  .booking-itinerary-top-grid .itin-mobile-arrival-duration {
+    color: #1e293b !important;
+    font-size: 0.78rem !important;
+    font-weight: 850 !important;
+    line-height: 1.15 !important;
+  }
+
+  .booking-itinerary-top-grid .itin-mobile-arrival-stops {
+    color: #64748b !important;
+    font-size: 0.66rem !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+  }
+
+  .booking-itinerary-top-grid .itin-mobile-arrival-stops--nonstop {
+    color: #059669 !important;
+  }
+
+  .booking-itinerary-top-grid .itin-mobile-layover-summary {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 0.25rem !important;
+    margin-top: 0.16rem !important;
+    padding: 0.18rem 0.38rem !important;
+    border-radius: 999px !important;
+    background: #fffbeb !important;
+    color: #92400e !important;
+    font-size: 0.62rem !important;
+    font-weight: 800 !important;
+    line-height: 1.15 !important;
+    white-space: nowrap !important;
+  }
+
+  .booking-itinerary-top-grid .itin-mobile-layover-summary i {
+    font-size: 0.58rem !important;
+  }
+
+  /* The old lower duration/stops block is hidden on mobile because its content
+     now belongs directly beneath the arrival time/airport. */
   .booking-itinerary-top-grid .itin-col-meta {
-    grid-area: meta !important;
+    display: none !important;
+  }
+
+  .booking-itinerary-top-grid .itin-col-carrier {
+    grid-area: carrier !important;
+    grid-column: 1 !important;
+    width: 100% !important;
+    max-width: calc(100% - 24px) !important;
+  }
+
+  .booking-itinerary-top-grid .itin-chevron {
+    grid-area: chevron !important;
     grid-column: 2 !important;
     justify-self: end !important;
     align-self: center !important;
-    align-items: flex-end !important;
-    width: max-content !important;
-    max-width: 100% !important;
-    padding: 0 0.1rem 0 0 !important;
-    text-align: right !important;
-  }
-
-  .booking-itinerary-top-grid .itin-duration {
-    font-size: 0.76rem !important;
-    font-weight: 800 !important;
-    line-height: 1.1 !important;
-  }
-
-  .booking-itinerary-top-grid .itin-stops {
-    margin-top: 0.08rem !important;
-    font-size: 0.64rem !important;
-    line-height: 1.15 !important;
   }
 }
 
@@ -115,5 +167,10 @@
     min-width: 21px;
     height: 18px;
     font-size: 0.72rem;
+  }
+
+  .booking-itinerary-top-grid .itin-mobile-layover-summary {
+    max-width: 100% !important;
+    white-space: normal !important;
   }
 }
