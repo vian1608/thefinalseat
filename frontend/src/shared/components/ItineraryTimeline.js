@@ -31,6 +31,28 @@ const cleanCode = (value) => {
   return match?.[1] || (/^[A-Z]{3}$/.test(text) ? text : '');
 };
 
+const formatTravelDate = (value) => {
+  const text = String(value || '').trim();
+  if (!text) return '';
+
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  let date;
+  if (isoMatch) {
+    date = new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]));
+  } else {
+    date = new Date(text);
+  }
+
+  if (Number.isNaN(date.getTime())) return text;
+
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
 const airportFor = (segment = {}, side = 'departure') => {
   const isDeparture = side === 'departure';
   const nested = isDeparture ? segment.departure : segment.arrival;
@@ -188,6 +210,7 @@ export default function ItineraryTimeline({ segments = [], title = '', variant =
       airportCode: segArr.destination_airport || segNextDep.origin_airport || '---',
       cityName: segArr.destination_city || segNextDep.origin_city || '',
       time: arrTime,
+      date: arrDate || depDate,
       label: layoverText ? layoverText.toUpperCase() : 'CONNECTION',
       labelStyle: { color: '#0369a1', fontWeight: '700' }
     });
@@ -207,7 +230,7 @@ export default function ItineraryTimeline({ segments = [], title = '', variant =
     }
   });
 
-  const headingTitle = title || (normalizedSegments.length > 1 ? 'Flight Route Timeline' : 'Flight Route Timeline');
+  const headingTitle = title || 'Flight Route Timeline';
 
   return (
     <div className="itinerary-timeline-container" style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '20px', marginBottom: '20px', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
@@ -229,10 +252,32 @@ export default function ItineraryTimeline({ segments = [], title = '', variant =
           const carrier = segForLeg?.carrier_code || '';
           const flightNum = segForLeg?.flight_number || '';
           const flightCode = carrier && flightNum ? `${carrier} ${flightNum}` : (carrier || flightNum || '');
+          const formattedDate = formatTravelDate(node.date);
 
           return (
             <React.Fragment key={`${node.type}-${idx}-${node.airportCode}`}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', minWidth: node.isEndpoint ? '110px' : '75px' }}>
+                {formattedDate && (
+                  <div
+                    className="itinerary-node-date"
+                    style={{
+                      marginBottom: '5px',
+                      padding: node.isEndpoint ? '3px 8px' : '2px 6px',
+                      borderRadius: '999px',
+                      background: node.isEndpoint ? '#f1f5f9' : '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      color: '#475569',
+                      fontSize: node.isEndpoint ? '0.72rem' : '0.64rem',
+                      fontWeight: '750',
+                      lineHeight: 1.2,
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    <i className="far fa-calendar-alt" aria-hidden="true" style={{ marginRight: '4px' }} />
+                    {formattedDate}
+                  </div>
+                )}
+
                 <div style={{ fontSize: node.isEndpoint ? '1.35rem' : '0.9rem', fontWeight: node.isEndpoint ? '800' : '700', color: '#1e293b', lineHeight: 1.2, minHeight: '24px', display: 'flex', alignItems: 'center' }}>
                   {node.time}
                 </div>
@@ -283,7 +328,7 @@ export default function ItineraryTimeline({ segments = [], title = '', variant =
                       style={{
                         color: '#8b1236',
                         fontSize: '0.9rem',
-                        transform: 'rotate(90deg)',
+                        transform: 'rotate(0deg)',
                         transformOrigin: 'center',
                         display: 'inline-block',
                         margin: '0 6px'
