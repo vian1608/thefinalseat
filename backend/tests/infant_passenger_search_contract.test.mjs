@@ -14,6 +14,7 @@ const results = read('frontend/src/features/flights/pages/SearchResultsPage.js')
 const returnPage = read('frontend/src/features/flights/pages/ReturnFlightSelectionPage.js');
 const bookingPage = read('frontend/src/features/bookings/pages/BookingPage.js');
 const controller = read('backend/src/modules/flights/flight.controller.mjs');
+const flightService = read('backend/src/modules/flights/flight.service.mjs');
 const provider = read('backend/src/integrations/serpapi/serpapi.service.mjs');
 
 // Every customer-facing flight-search entry point must expose the two distinct
@@ -61,6 +62,15 @@ assert.match(controller, /normalizedInfantsInSeat\s*\+\s*normalizedInfantsOnLap/
 // type instead of sending all infants as lap infants.
 assert.match(provider, /params\.append\('infants_in_seat',\s*infantsInSeat\.toString\(\)\)/);
 assert.match(provider, /params\.append\('infants_on_lap',\s*infantsOnLap\.toString\(\)\)/);
+
+// Preserve the searched mix on every returned itinerary. BookingPage stores the
+// selected flight object, so admin/support can later distinguish a purchased seat
+// from an infant traveling on an adult's lap.
+assert.match(flightService, /passengerMix/);
+assert.match(flightService, /infantsInSeat/);
+assert.match(flightService, /infantsOnLap/);
+assert.match(flightService, /flights:\s*\(results\.flights\s*\|\|\s*\[\]\)\.map/);
+assert.match(bookingPage, /flight:\s*flightObj/);
 
 // Return-flight continuation must preserve the passenger mix so the provider's
 // round-trip token is priced for the same travelers selected on the outbound.
