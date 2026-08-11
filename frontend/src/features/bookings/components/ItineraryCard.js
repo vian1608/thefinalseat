@@ -15,6 +15,27 @@ function CardAirlineLogo({ logoUrl, name }) {
   return <img src={logoUrl} alt={name} className="itin-logo" onError={() => setErr(true)} />;
 }
 
+const formatSummaryDate = (value) => {
+  const text = String(value || '').trim();
+  if (!text) return '';
+
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  let date;
+  if (isoMatch) {
+    date = new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]));
+  } else {
+    date = new Date(text);
+  }
+
+  if (Number.isNaN(date.getTime())) return text;
+
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
 function ItineraryCard({ flight, label, labelColor, isTrain }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -37,6 +58,12 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
   const baggageAllowance = flight.baggageAllowance || 'Standard Baggage Rules Apply';
   const layovers = Array.isArray(flight.layovers) ? flight.layovers : [];
   const segments = Array.isArray(flight.segments) && flight.segments.length > 0 ? flight.segments : null;
+
+  const effectiveDepDate = depDate || segments?.[0]?.departure_date || segments?.[0]?.departureDate || segments?.[0]?.departure?.date || '';
+  const lastSegment = segments?.[segments.length - 1];
+  const effectiveArrDate = arrDate || lastSegment?.arrival_date || lastSegment?.arrivalDate || lastSegment?.arrival?.date || '';
+  const depDateLabel = formatSummaryDate(effectiveDepDate);
+  const arrDateLabel = formatSummaryDate(effectiveArrDate);
 
   const layoverCities = layovers.map(l => l.airportCode || l.airportName).filter(Boolean).join(', ');
   const stopsLabel = stops === 0
@@ -96,6 +123,18 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
         </div>
 
         <div className="itin-col-route">
+          {(depDateLabel || arrDateLabel) && (
+            <div className="itin-dates">
+              <i className="far fa-calendar-alt" aria-hidden="true"></i>
+              <span>{depDateLabel || 'Date unavailable'}</span>
+              {arrDateLabel && arrDateLabel !== depDateLabel && (
+                <>
+                  <span className="itin-date-arrow">→</span>
+                  <span>{arrDateLabel}</span>
+                </>
+              )}
+            </div>
+          )}
           <div className="itin-times">
             <span className="itin-time">{depTime}</span>
             <span className="itin-route-dash">—</span>
