@@ -127,6 +127,8 @@ class SerpApiService {
     const demoAllowed = process.env.DEMO_FLIGHTS === 'true' || !isProduction;
     const fromCode = this.extractAirportCode(searchParams.from);
     const toCode = this.extractAirportCode(searchParams.to);
+    const departureToken = String(searchParams.departureToken || '').trim();
+    const isReturnSelection = Boolean(departureToken);
 
     if (!fromCode || !toCode || fromCode === toCode) {
       const err = new Error('Flight search requires two different valid 3-letter IATA airport codes.');
@@ -134,6 +136,34 @@ class SerpApiService {
       err.status = 400;
       throw err;
     }
+
+    const departureDate = searchParams.departure;
+    const returnDate = searchParams.returnDate;
+    const isRoundTrip = Boolean(returnDate);
+
+    if (isReturnSelection && !isRoundTrip) {
+      const err = new Error('A return date is required to continue the selected round-trip itinerary.');
+      err.code = 'RETURN_DATE_REQUIRED';
+      err.status = 400;
+      throw err;
+    }
+
+    const formatSearchParams = isReturnSelection
+      ? {
+          ...searchParams,
+          from: toCode,
+          to: fromCode,
+          departure: returnDate || departureDate,
+          resultStage: 'return',
+          tripScope: 'roundtrip_total',
+        }
+      : {
+          ...searchParams,
+          from: fromCode,
+          to: toCode,
+          resultStage: isRoundTrip ? 'outbound' : 'oneway',
+          tripScope: isRoundTrip ? 'roundtrip_total' : 'oneway_total',
+        };
 
     if (!this.apiKey) {
       if (isProduction) {
@@ -144,7 +174,7 @@ class SerpApiService {
       }
       if (demoAllowed) {
         console.warn('[SerpAPI] SERPAPI_API_KEY not configured — serving demo flights (non-production only).');
-        return this.getMockFlightOffers({ ...searchParams, from: fromCode, to: toCode });
+        return this.getMockFlightOffers(formatSearchParams);
       }
       const err = new Error('Flight search API key not configured.');
       err.code = 'FLIGHT_SEARCH_UNAVAILABLE';
@@ -153,9 +183,6 @@ class SerpApiService {
     }
 
     try {
-      const departureDate = searchParams.departure;
-      const returnDate = searchParams.returnDate;
-      const isRoundTrip = Boolean(returnDate);
       const adults = Number.parseInt(searchParams.adults || 1, 10);
       const children = Number.parseInt(searchParams.children || 0, 10);
       const infants = Number.parseInt(searchParams.infants || 0, 10);
@@ -175,6 +202,7 @@ class SerpApiService {
       });
 
       if (isRoundTrip) params.append('return_date', returnDate);
+      if (departureToken) params.append('departure_token', departureToken);
       if (children > 0) params.append('children', children.toString());
       if (infants > 0) params.append('infants_on_lap', infants.toString());
 
@@ -184,7 +212,7 @@ class SerpApiService {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'SerpAPI flight search request failed');
 
-      return this.formatSerpFlightOffers(data, { ...searchParams, from: fromCode, to: toCode });
+      return this.formatSerpFlightOffers(data, formatSearchParams);
     } catch (error) {
       if (isProduction) {
         const err = new Error('Live flight search is temporarily unavailable. Please try again shortly.');
@@ -194,7 +222,7 @@ class SerpApiService {
         throw err;
       }
       console.warn('[SerpAPI] Live flight search notice (non-production):', error.message);
-      return this.getMockFlightOffers({ ...searchParams, from: fromCode, to: toCode });
+      return this.getMockFlightOffers(formatSearchParams);
     }
   }
 
@@ -204,6 +232,14 @@ class SerpApiService {
 
     const requestedFrom = this.extractAirportCode(searchParams.from);
     const requestedTo = this.extractAirportCode(searchParams.to);
+    const passengerCount = Math.max(
+      1,
+      Number.parseInt(searchParams.adults || 1, 10)
+        + Number.parseInt(searchParams.children || 0, 10)
+        + Number.parseInt(searchParams.infants || 0, 10),
+    );
+    const tripScope = searchParams.tripScope || (searchParams.returnDate ? 'roundtrip_total' : 'oneway_total');
+    const selectionStage = searchParams.resultStage || (searchParams.returnDate ? 'outbound' : 'oneway');
 
     const formattedFlights = allItineraries.map((itinerary, index) => {
       const supplierSegments = Array.isArray(itinerary.flights) ? itinerary.flights : [];
@@ -280,8 +316,10 @@ class SerpApiService {
       }).filter((segment) => segment.departure.airport && segment.arrival.airport);
 
       return {
-        id: itinerary.booking_token || `serp-flight-${index}`,
+        id: itinerary.booking_token || itinerary.departure_token || `serp-flight-${index}`,
         isMock: false,
+        departureToken: itinerary.departure_token || null,
+        bookingToken: itinerary.booking_token || null,
         price: {
           total: priceCalc.finalPrice,
           originalApiPrice: priceCalc.originalPrice,
@@ -292,6 +330,10 @@ class SerpApiService {
           formatted: priceCalc.formattedFinal,
           formattedOriginal: priceCalc.formattedOriginal,
           formattedDiscount: priceCalc.formattedDiscount,
+          priceScope: 'party_total',
+          passengerCount,
+          tripScope,
+          selectionStage,
         },
         airline: airlineName,
         airline_logo: firstSeg.airline_logo || 'https://www.gstatic.com/flights/airline_logos/70px/airline.png',
@@ -331,7 +373,15 @@ class SerpApiService {
     const toCode = this.extractAirportCode(searchParams.to);
     const departureDate = searchParams.departure || new Date().toISOString().split('T')[0];
     const travelClass = searchParams.travelClass || 'Economy';
-    const passengers = Number.parseInt(searchParams.adults || 1, 10) + Number.parseInt(searchParams.children || 0, 10);
+    const passengerCount = Math.max(
+      1,
+      Number.parseInt(searchParams.adults || 1, 10)
+        + Number.parseInt(searchParams.children || 0, 10)
+        + Number.parseInt(searchParams.infants || 0, 10),
+    );
+    const tripScope = searchParams.tripScope || (searchParams.returnDate ? 'roundtrip_total' : 'oneway_total');
+    const selectionStage = searchParams.resultStage || (searchParams.returnDate ? 'outbound' : 'oneway');
+    const isRoundTripTotal = tripScope === 'roundtrip_total';
 
     const baseAirlines = [
       { name: 'Delta Air Lines', code: 'DL', basePrice: 280, logo: 'https://www.gstatic.com/flights/airline_logos/70px/DL.png' },
@@ -347,15 +397,20 @@ class SerpApiService {
       else if (cabin.includes('premium')) multiplier = 1.8;
       else if (cabin.includes('first')) multiplier = 8;
 
-      const rawPrice = (airline.basePrice + (index * 30)) * multiplier * passengers;
+      const tripMultiplier = isRoundTripTotal ? 2 : 1;
+      const rawPrice = (airline.basePrice + (index * 30)) * multiplier * passengerCount * tripMultiplier;
       const priceCalc = calculateFlightDiscount({ originalPrice: rawPrice, isMock: true, currency: 'USD' });
       const depTimes = ['06:00', '08:45', '13:15', '17:30'];
       const arrTimes = ['09:15', '12:00', '16:30', '20:45'];
       const stops = index === 0 ? 0 : 1;
+      const departureToken = selectionStage === 'outbound' ? `mock-departure-${airline.code}-${index}` : null;
+      const bookingToken = selectionStage === 'return' ? `mock-booking-${airline.code}-${index}` : null;
 
       return {
-        id: `mock-flight-${airline.code}-${index}`,
+        id: bookingToken || departureToken || `mock-flight-${airline.code}-${index}`,
         isMock: true,
+        departureToken,
+        bookingToken,
         price: {
           total: priceCalc.finalPrice,
           originalApiPrice: priceCalc.originalPrice,
@@ -366,6 +421,10 @@ class SerpApiService {
           formatted: priceCalc.formattedFinal,
           formattedOriginal: priceCalc.formattedOriginal,
           formattedDiscount: '$0.00',
+          priceScope: 'party_total',
+          passengerCount,
+          tripScope,
+          selectionStage,
         },
         airline: airline.name,
         airline_logo: airline.logo,
