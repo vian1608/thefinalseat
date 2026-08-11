@@ -6,6 +6,8 @@ import TravelDatePicker from './TravelDatePicker';
 import analytics from '../../../shared/utils/analytics';
 import './FlightSearchPanel.css';
 
+const MAX_TRAVELERS = 9;
+
 function FlightSearchPanel({
   pageId = 'home',
   title = 'Search Flights',
@@ -34,7 +36,8 @@ function FlightSearchPanel({
     tripType: 'roundtrip',
     adults: 1,
     children: 0,
-    infants: 0,
+    infantsInSeat: 0,
+    infantsOnLap: 0,
     travelClass: 'economy',
     currency: 'USD',
     isBookingForSomeoneElse: defaultBookingForSomeoneElse,
@@ -48,11 +51,14 @@ function FlightSearchPanel({
     const fromParam = params.get('from') || '';
     const toParam = params.get('to') || '';
     const depParam = params.get('departure') || params.get('dep') || '';
-    const retParam = params.get('return') || params.get('ret') || '';
+    const retParam = params.get('returnDate') || params.get('return') || params.get('ret') || '';
     const tripParam = params.get('tripType') || params.get('trip') || '';
     const adultsParam = parseInt(params.get('adults'), 10);
     const childrenParam = parseInt(params.get('children'), 10);
-    const infantsParam = parseInt(params.get('infants'), 10);
+    const legacyInfantsParam = parseInt(params.get('infants'), 10);
+    const infantsInSeatParam = parseInt(params.get('infantsInSeat'), 10);
+    const infantsOnLapParam = parseInt(params.get('infantsOnLap'), 10);
+    const hasSplitInfants = params.has('infantsInSeat') || params.has('infantsOnLap');
     const cabinParam = params.get('cabin') || params.get('travelClass') || '';
     const bookingForOtherParam = params.get('bookingForOther') === 'true';
 
@@ -66,7 +72,13 @@ function FlightSearchPanel({
       tripType: tripParam === 'oneway' ? 'oneway' : prev.tripType,
       adults: Number.isInteger(adultsParam) && adultsParam >= 1 ? adultsParam : prev.adults,
       children: Number.isInteger(childrenParam) && childrenParam >= 0 ? childrenParam : prev.children,
-      infants: Number.isInteger(infantsParam) && infantsParam >= 0 ? infantsParam : prev.infants,
+      infantsInSeat: hasSplitInfants && Number.isInteger(infantsInSeatParam) && infantsInSeatParam >= 0
+        ? infantsInSeatParam
+        : 0,
+      // Old links only had `infants`, and that field historically meant lap infants.
+      infantsOnLap: hasSplitInfants
+        ? (Number.isInteger(infantsOnLapParam) && infantsOnLapParam >= 0 ? infantsOnLapParam : 0)
+        : (Number.isInteger(legacyInfantsParam) && legacyInfantsParam >= 0 ? legacyInfantsParam : prev.infantsOnLap),
       travelClass: ['economy', 'premium', 'business', 'first'].includes(cabinParam) ? cabinParam : prev.travelClass,
       isBookingForSomeoneElse: bookingForOtherParam || defaultBookingForSomeoneElse,
     }));
@@ -93,9 +105,9 @@ function FlightSearchPanel({
   // Passenger count modifiers
   const incrementPassenger = (type) => {
     setSearchData((prev) => {
-      const total = prev.adults + prev.children + prev.infants;
-      if (total >= 9) return prev; // Max 9 travelers rule
-      if (type === 'infants' && prev.infants >= prev.adults) return prev; // Infants <= Adults
+      const total = prev.adults + prev.children + prev.infantsInSeat + prev.infantsOnLap;
+      if (total >= MAX_TRAVELERS) return prev;
+      if (type === 'infantsOnLap' && prev.infantsOnLap >= prev.adults) return prev;
       return { ...prev, [type]: prev[type] + 1 };
     });
   };
@@ -105,7 +117,9 @@ function FlightSearchPanel({
       if (type === 'adults' && prev.adults <= 1) return prev;
       if (prev[type] <= 0) return prev;
       const nextState = { ...prev, [type]: prev[type] - 1 };
-      if (nextState.infants > nextState.adults) nextState.infants = nextState.adults;
+      if (type === 'adults' && nextState.infantsOnLap > nextState.adults) {
+        nextState.infantsOnLap = nextState.adults;
+      }
       return nextState;
     });
   };
@@ -143,6 +157,10 @@ function FlightSearchPanel({
       setErrorMessage('At least one adult traveler is required.');
       return false;
     }
+    if (searchData.infantsOnLap > searchData.adults) {
+      setErrorMessage('Infants on lap cannot exceed the number of adult travelers.');
+      return false;
+    }
     return true;
   };
 
@@ -159,9 +177,13 @@ function FlightSearchPanel({
     analytics.trackFlightSearchSubmitted(pageId, searchData);
 
     try {
-      // Save criteria into shared session state
+      const totalInfants = searchData.infantsInSeat + searchData.infantsOnLap;
+
+      // Save criteria into shared session state. `infants` remains the total so
+      // existing booking forms create one traveler form for every infant.
       sessionStorage.setItem('searchParams', JSON.stringify({
         ...searchData,
+        infants: totalInfants,
         searchDate: new Date().toISOString(),
       }));
 
@@ -173,13 +195,15 @@ function FlightSearchPanel({
         tripType: searchData.tripType,
         adults: searchData.adults,
         children: searchData.children,
-        infants: searchData.infants,
+        infants: totalInfants,
+        infantsInSeat: searchData.infantsInSeat,
+        infantsOnLap: searchData.infantsOnLap,
         travelClass: searchData.travelClass,
         currency: searchData.currency,
       });
 
       if (searchData.tripType === 'roundtrip' && searchData.returnDate) {
-        searchQueryParams.set('return', searchData.returnDate);
+        searchQueryParams.set('returnDate', searchData.returnDate);
       }
       if (searchData.airlinePrefill) {
         searchQueryParams.set('airline', searchData.airlinePrefill);
@@ -197,6 +221,8 @@ function FlightSearchPanel({
       setIsSearching(false);
     }
   };
+
+  const totalTravelers = searchData.adults + searchData.children + searchData.infantsInSeat + searchData.infantsOnLap;
 
   return (
     <div className="flight-search-panel-wrapper" id="flight-search-form">
@@ -259,7 +285,7 @@ function FlightSearchPanel({
                   aria-expanded={showPassengerPopup}
                 >
                   <i className="fas fa-user-friends" style={{ color: '#64748b' }}></i>
-                  <span>{searchData.adults + searchData.children + searchData.infants} Traveler(s)</span>
+                  <span>{totalTravelers} Traveler(s)</span>
                   <i className={`fas fa-chevron-${showPassengerPopup ? 'up' : 'down'}`} style={{ fontSize: '0.7rem' }}></i>
                 </button>
 
@@ -273,7 +299,7 @@ function FlightSearchPanel({
                       <div className="passenger-counters">
                         <button type="button" className="counter-btn" onClick={() => decrementPassenger('adults')} disabled={searchData.adults <= 1}>-</button>
                         <span className="counter-value">{searchData.adults}</span>
-                        <button type="button" className="counter-btn" onClick={() => incrementPassenger('adults')}>+</button>
+                        <button type="button" className="counter-btn" onClick={() => incrementPassenger('adults')} disabled={totalTravelers >= MAX_TRAVELERS}>+</button>
                       </div>
                     </div>
                     <div className="passenger-row">
@@ -284,18 +310,29 @@ function FlightSearchPanel({
                       <div className="passenger-counters">
                         <button type="button" className="counter-btn" onClick={() => decrementPassenger('children')} disabled={searchData.children <= 0}>-</button>
                         <span className="counter-value">{searchData.children}</span>
-                        <button type="button" className="counter-btn" onClick={() => incrementPassenger('children')}>+</button>
+                        <button type="button" className="counter-btn" onClick={() => incrementPassenger('children')} disabled={totalTravelers >= MAX_TRAVELERS}>+</button>
                       </div>
                     </div>
                     <div className="passenger-row">
                       <div className="passenger-label">
-                        <span className="passenger-type">Infants</span>
-                        <span className="passenger-age-desc">Under 2 (lap)</span>
+                        <span className="passenger-type">Infants in seat</span>
+                        <span className="passenger-age-desc">Under 2</span>
                       </div>
                       <div className="passenger-counters">
-                        <button type="button" className="counter-btn" onClick={() => decrementPassenger('infants')} disabled={searchData.infants <= 0}>-</button>
-                        <span className="counter-value">{searchData.infants}</span>
-                        <button type="button" className="counter-btn" onClick={() => incrementPassenger('infants')}>+</button>
+                        <button type="button" className="counter-btn" onClick={() => decrementPassenger('infantsInSeat')} disabled={searchData.infantsInSeat <= 0}>-</button>
+                        <span className="counter-value">{searchData.infantsInSeat}</span>
+                        <button type="button" className="counter-btn" onClick={() => incrementPassenger('infantsInSeat')} disabled={totalTravelers >= MAX_TRAVELERS}>+</button>
+                      </div>
+                    </div>
+                    <div className="passenger-row">
+                      <div className="passenger-label">
+                        <span className="passenger-type">Infants on lap</span>
+                        <span className="passenger-age-desc">Under 2</span>
+                      </div>
+                      <div className="passenger-counters">
+                        <button type="button" className="counter-btn" onClick={() => decrementPassenger('infantsOnLap')} disabled={searchData.infantsOnLap <= 0}>-</button>
+                        <span className="counter-value">{searchData.infantsOnLap}</span>
+                        <button type="button" className="counter-btn" onClick={() => incrementPassenger('infantsOnLap')} disabled={searchData.infantsOnLap >= searchData.adults || totalTravelers >= MAX_TRAVELERS}>+</button>
                       </div>
                     </div>
                     <button type="button" className="passenger-popup-close" onClick={() => setShowPassengerPopup(false)}>Done</button>
