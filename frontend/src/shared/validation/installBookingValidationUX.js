@@ -26,6 +26,9 @@ function clearValidationHighlight(root = document) {
   root.querySelectorAll('.tfs-validation-alert-active').forEach((element) => {
     element.classList.remove('tfs-validation-alert-active');
   });
+  root.querySelectorAll('.tfs-validation-duplicate-error').forEach((element) => {
+    element.classList.remove('tfs-validation-duplicate-error');
+  });
 }
 
 function markInvalid(element) {
@@ -170,6 +173,20 @@ function targetFromPaymentMessage(page, message) {
   return null;
 }
 
+function suppressDuplicateGenericError(page) {
+  const globalError = page.querySelector('.booking-global-error');
+  const paymentError = page.querySelector('.payment-error-banner');
+  if (!globalError || !paymentError) return;
+
+  const globalMessage = normalize(globalError.textContent);
+  const paymentMessage = normalize(paymentError.textContent);
+  const isGenericDuplicate = paymentMessage.includes('please fill in all required traveler and contact details above');
+
+  if (globalMessage && isGenericDuplicate) {
+    paymentError.classList.add('tfs-validation-duplicate-error');
+  }
+}
+
 function findBestErrorTarget(page) {
   const globalError = page.querySelector('.booking-global-error');
   const globalMessage = globalError?.textContent?.trim() || '';
@@ -199,6 +216,8 @@ function applyValidationFeedback() {
   if (!page) return;
 
   clearValidationHighlight(page);
+  suppressDuplicateGenericError(page);
+
   const result = findBestErrorTarget(page);
   if (!result?.target) return;
 
