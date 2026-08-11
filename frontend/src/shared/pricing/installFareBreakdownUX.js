@@ -34,6 +34,7 @@ function buildBreakdown(card) {
   const perTravelerFinal = total / travelerCount;
   const perTravelerOriginal = originalTotal / travelerCount;
   const perTravelerSaving = savingTotal / travelerCount;
+  const signature = [total, originalTotal, savingTotal, travelerCount].join('|');
 
   let root = card.querySelector('.tfs-fare-breakdown-root');
   if (!root) {
@@ -41,6 +42,11 @@ function buildBreakdown(card) {
     root.className = 'tfs-fare-breakdown-root';
     card.appendChild(root);
   }
+
+  card.classList.add('tfs-fare-breakdown-ready');
+  if (root.dataset.signature === signature) return;
+
+  const wasOpen = root.querySelector('.tfs-fare-details')?.open || false;
 
   root.innerHTML = `
     <div class="tfs-fare-summary-line">
@@ -92,7 +98,9 @@ function buildBreakdown(card) {
     </details>
   `;
 
-  card.classList.add('tfs-fare-breakdown-ready');
+  root.dataset.signature = signature;
+  const details = root.querySelector('.tfs-fare-details');
+  if (details) details.open = wasOpen;
 }
 
 function enhanceFareBreakdown() {
@@ -104,13 +112,24 @@ export function installFareBreakdownUX() {
   if (window.__tfsFareBreakdownUXInstalled) return;
   window.__tfsFareBreakdownUXInstalled = true;
 
-  const run = () => window.requestAnimationFrame(enhanceFareBreakdown);
+  let scheduled = false;
+  const run = () => {
+    if (scheduled) return;
+    scheduled = true;
+    window.requestAnimationFrame(() => {
+      scheduled = false;
+      enhanceFareBreakdown();
+    });
+  };
+
   run();
 
   const observer = new MutationObserver((mutations) => {
     const relevant = mutations.some((mutation) => {
       const target = mutation.target instanceof Element ? mutation.target : mutation.target?.parentElement;
-      return target?.closest?.('.booking-itinerary-pricing-summary, .booking-itinerary-top-panel, .booking-page');
+      if (!target?.closest?.('.booking-page')) return false;
+      if (target.closest('.tfs-fare-breakdown-root')) return false;
+      return target.closest('.booking-itinerary-pricing-summary, .booking-itinerary-top-panel, .booking-page');
     });
     if (relevant) run();
   });
