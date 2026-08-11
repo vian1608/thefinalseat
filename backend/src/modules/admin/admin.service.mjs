@@ -4,7 +4,6 @@ import bookingService from '../bookings/booking.service.mjs';
 import bookingRepository from '../bookings/booking.repository.mjs';
 import ga4Service from '../../integrations/ga4/ga4.service.mjs';
 import supabase from '../../integrations/supabase/supabase.client.mjs';
-
 import bcrypt from 'bcryptjs';
 
 export const adminService = {
@@ -22,7 +21,6 @@ export const adminService = {
 
     const isEmailValid = cleanEmail === targetAdminEmail;
     let isPasswordValid = false;
-
     if (expectedPassword.startsWith('$2a$') || expectedPassword.startsWith('$2b$')) {
       isPasswordValid = await bcrypt.compare(password, expectedPassword);
     } else {
@@ -36,44 +34,21 @@ export const adminService = {
       throw err;
     }
 
-    const token = jwt.sign(
-      { email: cleanEmail, role: 'admin' },
-      env.jwtSecret,
-      { expiresIn: env.jwtExpiresIn }
-    );
-
-    return {
-      token,
-      admin: { email: cleanEmail }
-    };
+    const token = jwt.sign({ email: cleanEmail, role: 'admin' }, env.jwtSecret, { expiresIn: env.jwtExpiresIn });
+    return { token, admin: { email: cleanEmail } };
   },
 
-  getAllBookings: async (filters) => {
-    return bookingRepository.findAllBookings(filters);
-  },
-
-  getBookingDetails: async (id) => {
-    return bookingService.getDetailsByCodeOrId(id);
-  },
-
-  getCompleteBookingById: async (id) => {
-    return bookingRepository.getCompleteBookingById(id);
-  },
-
-  updateBooking: async (id, updateFields) => {
-    return bookingRepository.updateStatus(id, updateFields);
-  },
-
-  getDashboardStats: async () => {
-    return bookingRepository.getStats();
-  },
+  getAllBookings: async (filters) => bookingRepository.findAllBookings(filters),
+  getBookingDetails: async (id) => bookingService.getDetailsByCodeOrId(id),
+  getCompleteBookingById: async (id) => bookingRepository.getCompleteBookingById(id),
+  updateBooking: async (id, updateFields) => bookingRepository.updateStatus(id, updateFields),
+  getDashboardStats: async () => bookingRepository.getStats(),
 
   getAnalytics: async (days = 30) => {
     const [realtime, summary] = await Promise.all([
       ga4Service.getRealtimeActiveUsers(),
       ga4Service.getAnalyticsSummary(days)
     ]);
-
     return {
       realtimeActiveUsers: realtime.activeUsers || 0,
       liveStatus: realtime.liveStatus,
@@ -91,8 +66,8 @@ export const adminService = {
   getAbandonedBookings: async () => {
     const { data, error } = await supabase
       .from('abandoned_bookings')
-      .select('*')
-      .order('created_at', { ascending: false })
+      .select('id,session_key,traveller_info,contact_info,current_step,updated_at')
+      .order('updated_at', { ascending: false })
       .limit(100);
 
     if (error) {
