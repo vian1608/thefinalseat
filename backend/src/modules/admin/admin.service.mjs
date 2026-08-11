@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import env from '../../config/env.mjs';
-import bookingService from '../bookings/booking.service.mjs';
 import bookingRepository from '../bookings/booking.repository.mjs';
+import adminBookingReadRepository from './admin-booking-read.repository.mjs';
 import ga4Service from '../../integrations/ga4/ga4.service.mjs';
 import supabase from '../../integrations/supabase/supabase.client.mjs';
 import bcrypt from 'bcryptjs';
@@ -38,9 +38,11 @@ export const adminService = {
     return { token, admin: { email: cleanEmail } };
   },
 
-  getAllBookings: async (filters) => bookingRepository.findAllBookings(filters),
-  getBookingDetails: async (id) => bookingService.getDetailsByCodeOrId(id),
-  getCompleteBookingById: async (id) => bookingRepository.getCompleteBookingById(id),
+  // High-volume admin reads intentionally use a purpose-built bounded repository.
+  getAllBookings: async (filters) => adminBookingReadRepository.list(filters),
+  getBookingDetails: async (id) => adminBookingReadRepository.getDetail(id),
+  getCompleteBookingById: async (id) => adminBookingReadRepository.getDetail(id),
+
   updateBooking: async (id, updateFields) => bookingRepository.updateStatus(id, updateFields),
   getDashboardStats: async () => bookingRepository.getStats(),
 
