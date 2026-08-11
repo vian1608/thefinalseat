@@ -9,15 +9,18 @@ import './shared/styles/BookingValidationUX.css';
 import './shared/styles/ItineraryPriceLayoutFix.css';
 import './shared/styles/FareBreakdownUX.css';
 import './shared/styles/ItineraryDirectionFix.css';
+import './shared/styles/MobileBookingUX.css';
 import App from './app/App';
 import { HelmetProvider } from 'react-helmet-async';
 import { installSensitiveDataGuards } from './shared/security/installSensitiveDataGuards';
 import { installBookingValidationUX } from './shared/validation/installBookingValidationUX';
 import { installFareBreakdownUX } from './shared/pricing/installFareBreakdownUX';
+import { installMobileBookingUX } from './shared/mobile/installMobileBookingUX';
 
 installSensitiveDataGuards();
 installBookingValidationUX();
 installFareBreakdownUX();
+installMobileBookingUX();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
