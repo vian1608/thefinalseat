@@ -33,14 +33,37 @@ export default function CustomerBackButton() {
       return undefined;
     }
 
+    let ownedSlot = null;
+
     const locateTarget = () => {
-      setBookingTarget(document.querySelector('.booking-itinerary-top-panel__inner'));
+      const panel = document.querySelector('.booking-itinerary-top-panel__inner');
+      if (!panel) {
+        setBookingTarget(null);
+        return;
+      }
+
+      let slot = panel.querySelector(':scope > .tfs-booking-back-slot');
+      if (!slot) {
+        slot = document.createElement('div');
+        slot.className = 'tfs-booking-back-slot';
+        slot.setAttribute('data-tfs-booking-back-slot', 'true');
+
+        const itineraryTitle = panel.querySelector(':scope > .booking-itinerary-top-panel__title');
+        panel.insertBefore(slot, itineraryTitle || panel.firstChild);
+        ownedSlot = slot;
+      }
+
+      setBookingTarget(slot);
     };
 
     locateTarget();
     const observer = new MutationObserver(locateTarget);
     observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+
+    return () => {
+      observer.disconnect();
+      if (ownedSlot?.isConnected) ownedSlot.remove();
+    };
   }, [isBookingPage]);
 
   if (pathname === '/' || pathname.startsWith('/admin')) return null;
