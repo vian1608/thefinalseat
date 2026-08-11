@@ -17,11 +17,13 @@ import { installSensitiveDataGuards } from './shared/security/installSensitiveDa
 import { installBookingValidationUX } from './shared/validation/installBookingValidationUX';
 import { installFareBreakdownUX } from './shared/pricing/installFareBreakdownUX';
 import { installMobileBookingUX } from './shared/mobile/installMobileBookingUX';
+import { installPrimaryContactSyncUX } from './shared/contact/installPrimaryContactSyncUX';
 
 installSensitiveDataGuards();
 installBookingValidationUX();
 installFareBreakdownUX();
 installMobileBookingUX();
+installPrimaryContactSyncUX();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
