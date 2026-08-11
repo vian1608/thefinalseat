@@ -16,6 +16,19 @@ function matchesRoute(flight, fromCode, toCode) {
   return normalizeIataCode(flight?.departure?.airport) === fromCode && normalizeIataCode(flight?.arrival?.airport) === toCode;
 }
 
+function splitInfantCounts(params = {}) {
+  const infantsInSeat = Math.max(0, Number.parseInt(params.infantsInSeat || 0, 10) || 0);
+  const hasLapValue = params.infantsOnLap !== undefined && params.infantsOnLap !== null;
+  const infantsOnLap = hasLapValue
+    ? Math.max(0, Number.parseInt(params.infantsOnLap || 0, 10) || 0)
+    : Math.max(0, (Number.parseInt(params.infants || 0, 10) || 0) - infantsInSeat);
+  return {
+    infantsInSeat,
+    infantsOnLap,
+    infants: infantsInSeat + infantsOnLap,
+  };
+}
+
 function ReturnFlightSelection() {
   const navigate = useNavigate();
   const [flights, setFlights] = useState([]);
@@ -80,8 +93,10 @@ function ReturnFlightSelection() {
 
     const outboundFrom = canonicalSearchAirport(params, 'from');
     const outboundTo = canonicalSearchAirport(params, 'to');
+    const infantCounts = splitInfantCounts(params);
     const canonicalParams = {
       ...params,
+      ...infantCounts,
       fromCode: outboundFrom,
       toCode: outboundTo,
       returnDate: params.returnDate,
@@ -122,6 +137,8 @@ function ReturnFlightSelection() {
       adults: canonicalParams.adults || 1,
       children: canonicalParams.children || 0,
       infants: canonicalParams.infants || 0,
+      infantsInSeat: canonicalParams.infantsInSeat || 0,
+      infantsOnLap: canonicalParams.infantsOnLap || 0,
       travelClass: canonicalParams.travelClass || canonicalParams.cabinClass || 'economy',
       currency: canonicalParams.currency || 'USD',
     }, outboundTo, outboundFrom);
@@ -142,6 +159,7 @@ function ReturnFlightSelection() {
     const departureFrom = canonicalSearchAirport(params, 'from');
     const departureTo = canonicalSearchAirport(params, 'to');
     if (!departureFrom || !departureTo || !params.departure) return '/';
+    const infantCounts = splitInfantCounts(params);
 
     const query = new URLSearchParams({
       from: departureFrom,
@@ -151,7 +169,9 @@ function ReturnFlightSelection() {
       departure: params.departure,
       adults: String(params.adults || 1),
       children: String(params.children || 0),
-      infants: String(params.infants || 0),
+      infants: String(infantCounts.infants),
+      infantsInSeat: String(infantCounts.infantsInSeat),
+      infantsOnLap: String(infantCounts.infantsOnLap),
       travelClass: params.travelClass || params.cabinClass || 'economy',
       currency: params.currency || 'USD',
       tripType: 'roundtrip',
@@ -172,6 +192,7 @@ function ReturnFlightSelection() {
     const updatedFrom = normalizeIataCode(updated.from || updated.origin);
     const updatedTo = normalizeIataCode(updated.to || updated.destination);
     if (!updatedFrom || !updatedTo) throw new Error('Please select valid 3-letter origin and destination airport codes.');
+    const infantCounts = splitInfantCounts(updated);
 
     const query = new URLSearchParams({
       from: updatedFrom,
@@ -181,7 +202,9 @@ function ReturnFlightSelection() {
       departure: updated.departureDate || updated.departure,
       adults: String(updated.adults || 1),
       children: String(updated.children || 0),
-      infants: String(updated.infants || 0),
+      infants: String(infantCounts.infants),
+      infantsInSeat: String(infantCounts.infantsInSeat),
+      infantsOnLap: String(infantCounts.infantsOnLap),
       travelClass: updated.cabinClass || 'economy',
       currency: searchParams?.currency || 'USD',
       tripType: updated.tripType === 'one-way' ? 'oneway' : 'roundtrip',
@@ -206,6 +229,8 @@ function ReturnFlightSelection() {
       adults: searchParams.adults || 1,
       children: searchParams.children || 0,
       infants: searchParams.infants || 0,
+      infantsInSeat: searchParams.infantsInSeat || 0,
+      infantsOnLap: searchParams.infantsOnLap || 0,
       travelClass: searchParams.travelClass || 'economy',
       currency: searchParams.currency || 'USD',
     }, returnFromCode, returnToCode);
