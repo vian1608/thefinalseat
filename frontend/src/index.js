@@ -8,6 +8,7 @@ import './shared/styles/BookingFlowOverrides.css';
 import './shared/styles/BookingValidationUX.css';
 import './shared/styles/ItineraryPriceLayoutFix.css';
 import './shared/styles/FareBreakdownUX.css';
+import './shared/styles/ItineraryDirectionFix.css';
 import App from './app/App';
 import { HelmetProvider } from 'react-helmet-async';
 import { installSensitiveDataGuards } from './shared/security/installSensitiveDataGuards';
