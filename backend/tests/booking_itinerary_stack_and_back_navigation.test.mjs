@@ -45,6 +45,17 @@ assert.match(overrides, /\.passenger-card-block\s*\{[\s\S]*border-left:\s*4px so
 assert.match(overrides, /\.passenger-card-block \+ \.passenger-card-block\s*\{[\s\S]*margin-top:\s*1\.45rem\s*!important/);
 assert.match(overrides, /\.passenger-card-title\s*\{[\s\S]*background:\s*linear-gradient[\s\S]*border-bottom:\s*1px solid #e2e8f0\s*!important/);
 
+// Checkout CTA must be a full-width branded control, and the existing
+// fa-circle-notch processing state must become a visible waiting panel rather
+// than a tiny browser-default spinner/text line.
+assert.match(booking, /className="amtrak-btn amtrak-btn--cta amtrak-btn--full"/);
+assert.match(booking, /fa-circle-notch fa-spin/);
+assert.match(overrides, /\.amtrak-btn\.amtrak-btn--cta\.amtrak-btn--full\s*\{[\s\S]*width:\s*100%\s*!important[\s\S]*min-height:\s*58px\s*!important[\s\S]*background:\s*linear-gradient/);
+assert.match(overrides, /:has\(\.fa-circle-notch\)[\s\S]*min-height:\s*104px\s*!important[\s\S]*cursor:\s*wait\s*!important/);
+assert.match(overrides, /Creating your reservation securely\. Please keep this page open/);
+assert.match(overrides, /@keyframes tfs-booking-wait-progress/);
+assert.match(overrides, /@keyframes tfs-booking-wait-shimmer/);
+
 assert.match(itinerary, /Return Flight Route Timeline/);
 assert.match(itinerary, /Outbound Flight Route Timeline/);
 
@@ -65,4 +76,4 @@ assert.match(backButton, /createPortal\(button, bookingTarget\)/);
 assert.match(backButton, /\/return-flight/);
 assert.match(backButton, /\/booking/);
 
-console.log('booking itinerary stack + passenger separation + customer back navigation contract: PASS');
+console.log('booking itinerary stack + passenger separation + submit waiting visuals + customer back navigation contract: PASS');
