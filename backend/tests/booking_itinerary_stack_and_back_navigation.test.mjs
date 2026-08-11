@@ -73,8 +73,13 @@ assert.match(validationStyles, /border-left:\s*4px solid #dc2626\s*!important/);
 assert.match(validationStyles, /input\.tfs-validation-error-field/);
 assert.match(validationStyles, /\.passenger-card-block\.tfs-passenger-card-error/);
 
-assert.match(itinerary, /Return Flight Route Timeline/);
-assert.match(itinerary, /Outbound Flight Route Timeline/);
+// The colored OUTBOUND / RETURN card badge already identifies the leg. On the
+// customer booking page, hide only the timeline's duplicate FLT/title/airline
+// header and pull the actual airport route upward. Shared timeline headers stay
+// available elsewhere in the application.
+assert.match(itinerary, /className="itin-badge"/);
+assert.match(overrides, /\.booking-itinerary-top-grid \.itin-card \.itinerary-timeline-container > div:first-child\s*\{[\s\S]*display:\s*none\s*!important/);
+assert.match(overrides, /\.booking-itinerary-top-grid \.itin-card \.itinerary-timeline-container\s*\{[\s\S]*padding-top:\s*14px\s*!important[\s\S]*margin-bottom:\s*12px\s*!important/);
 
 // Supplier segments are not guaranteed to use one schema. The visual timeline
 // must resolve nested departure/arrival objects rather than showing ORIG/CONN/DEST.
@@ -93,4 +98,4 @@ assert.match(backButton, /createPortal\(button, bookingTarget\)/);
 assert.match(backButton, /\/return-flight/);
 assert.match(backButton, /\/booking/);
 
-console.log('booking itinerary stack + passenger separation + submit waiting visuals + validation scroll + customer back navigation contract: PASS');
+console.log('booking itinerary stack + simplified timeline headers + passenger separation + submit waiting visuals + validation scroll + customer back navigation contract: PASS');
