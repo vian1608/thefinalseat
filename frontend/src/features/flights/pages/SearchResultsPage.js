@@ -46,6 +46,47 @@ function getTimePeriod(time) {
   return 'evening';
 }
 
+function parsePassengerCounts(query) {
+  const adults = Math.max(1, Number.parseInt(query.get('adults') || '1', 10) || 1);
+  const children = Math.max(0, Number.parseInt(query.get('children') || '0', 10) || 0);
+  const legacyInfants = Math.max(0, Number.parseInt(query.get('infants') || '0', 10) || 0);
+  const hasSplitInfants = query.has('infantsInSeat') || query.has('infantsOnLap');
+  const infantsInSeat = hasSplitInfants
+    ? Math.max(0, Number.parseInt(query.get('infantsInSeat') || '0', 10) || 0)
+    : 0;
+  const infantsOnLap = hasSplitInfants
+    ? Math.max(0, Number.parseInt(query.get('infantsOnLap') || '0', 10) || 0)
+    : legacyInfants;
+
+  return {
+    adults,
+    children,
+    infantsInSeat,
+    infantsOnLap,
+    // Keep total infants in the legacy field so the existing booking page still
+    // creates a traveler record for every infant.
+    infants: hasSplitInfants ? infantsInSeat + infantsOnLap : legacyInfants,
+  };
+}
+
+function normalizeUpdatedPassengerCounts(updated = {}) {
+  const adults = Math.max(1, Number.parseInt(updated.adults || 1, 10) || 1);
+  const children = Math.max(0, Number.parseInt(updated.children || 0, 10) || 0);
+  const infantsInSeat = Math.max(0, Number.parseInt(updated.infantsInSeat || 0, 10) || 0);
+  const hasLapValue = updated.infantsOnLap !== undefined && updated.infantsOnLap !== null;
+  const infantsOnLap = hasLapValue
+    ? Math.max(0, Number.parseInt(updated.infantsOnLap || 0, 10) || 0)
+    : Math.max(0, (Number.parseInt(updated.infants || 0, 10) || 0) - infantsInSeat);
+
+  return {
+    adults,
+    children,
+    infantsInSeat,
+    infantsOnLap,
+    infants: infantsInSeat + infantsOnLap,
+  };
+}
+
 function parseSearchFromLocation(location) {
   const query = new URLSearchParams(location.search || '');
   const fromCode = normalizeIataCode(query.get('from'));
@@ -70,6 +111,7 @@ function parseSearchFromLocation(location) {
   const currency = query.get('currency') || 'USD';
   const fromDisplay = query.get('fromDisplay') || fromCode;
   const toDisplay = query.get('toDisplay') || toCode;
+  const passengerCounts = parsePassengerCounts(query);
 
   return {
     valid: true,
@@ -82,9 +124,7 @@ function parseSearchFromLocation(location) {
       toDisplay,
       departure,
       returnDate: returnDate || undefined,
-      adults: Math.max(1, Number.parseInt(query.get('adults') || '1', 10) || 1),
-      children: Math.max(0, Number.parseInt(query.get('children') || '0', 10) || 0),
-      infants: Math.max(0, Number.parseInt(query.get('infants') || '0', 10) || 0),
+      ...passengerCounts,
       travelClass,
       cabinClass: travelClass,
       currency,
@@ -133,6 +173,8 @@ function SearchResultsContent() {
         adults: params.adults,
         children: params.children,
         infants: params.infants,
+        infantsInSeat: params.infantsInSeat || 0,
+        infantsOnLap: params.infantsOnLap || 0,
         travelClass: params.travelClass,
         currency: params.currency,
       });
@@ -226,15 +268,18 @@ function SearchResultsContent() {
 
     const fromDisplay = getAirportDisplayName(updated.origin) || fromCode;
     const toDisplay = getAirportDisplayName(updated.destination) || toCode;
+    const passengerCounts = normalizeUpdatedPassengerCounts(updated);
     const query = new URLSearchParams({
       from: fromCode,
       to: toCode,
       fromDisplay,
       toDisplay,
       departure: updated.departureDate || updated.departure,
-      adults: String(updated.adults || 1),
-      children: String(updated.children || 0),
-      infants: String(updated.infants || 0),
+      adults: String(passengerCounts.adults),
+      children: String(passengerCounts.children),
+      infants: String(passengerCounts.infants),
+      infantsInSeat: String(passengerCounts.infantsInSeat),
+      infantsOnLap: String(passengerCounts.infantsOnLap),
       travelClass: updated.cabinClass || updated.travelClass || 'economy',
       currency: searchParams?.currency || 'USD',
       tripType: updated.tripType === 'round-trip' ? 'roundtrip' : (updated.tripType || 'oneway'),
