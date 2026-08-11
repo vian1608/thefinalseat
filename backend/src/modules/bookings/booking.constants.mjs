@@ -1,4 +1,5 @@
 export const BOOKING_STATUSES = [
+  'DRAFT',
   'PENDING',
   'AWAITING_AUTHORIZATION',
   'AUTHORIZED',
@@ -11,6 +12,7 @@ export const BOOKING_STATUSES = [
 ];
 
 export const BOOKING_STATUS = {
+  DRAFT: 'DRAFT',
   PENDING: 'PENDING',
   DONE: 'DONE',
   FAILED: 'FAILED',
