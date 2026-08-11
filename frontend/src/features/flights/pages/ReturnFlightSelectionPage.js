@@ -22,6 +22,7 @@ function ReturnFlightSelection() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchParams, setSearchParams] = useState(null);
+  const [departureToken, setDepartureToken] = useState('');
   const [isModifySearchOpen, setIsModifySearchOpen] = useState(false);
   const [expandedFlightId, setExpandedFlightId] = useState(null);
 
@@ -99,12 +100,25 @@ function ReturnFlightSelection() {
       return;
     }
 
+    const token = String(outboundFlight.departureToken || outboundFlight.departure_token || '').trim();
+    if (!token) {
+      setLoading(false);
+      setError('This departure selection does not contain the supplier round-trip token needed to price the return correctly. Go back and select the outbound flight again so we do not combine unrelated one-way fares.');
+      return;
+    }
+
+    setDepartureToken(token);
     sessionStorage.setItem('searchParams', JSON.stringify(canonicalParams));
 
+    // Continue the SAME Google Flights round-trip quote. Do not run an unrelated
+    // one-way return search: that would add a second fare to a price that already
+    // represents the complete round trip.
     searchReturnFlights({
-      from: outboundTo,
-      to: outboundFrom,
-      departure: canonicalParams.returnDate,
+      from: outboundFrom,
+      to: outboundTo,
+      departure: canonicalParams.departure,
+      returnDate: canonicalParams.returnDate,
+      departureToken: token,
       adults: canonicalParams.adults || 1,
       children: canonicalParams.children || 0,
       infants: canonicalParams.infants || 0,
@@ -182,11 +196,13 @@ function ReturnFlightSelection() {
   };
 
   const retryReturnSearch = () => {
-    if (!searchParams?.returnDate || !returnFromCode || !returnToCode) return;
+    if (!searchParams?.departure || !searchParams?.returnDate || !fromCode || !toCode || !departureToken) return;
     searchReturnFlights({
-      from: returnFromCode,
-      to: returnToCode,
-      departure: searchParams.returnDate,
+      from: fromCode,
+      to: toCode,
+      departure: searchParams.departure,
+      returnDate: searchParams.returnDate,
+      departureToken,
       adults: searchParams.adults || 1,
       children: searchParams.children || 0,
       infants: searchParams.infants || 0,
@@ -246,7 +262,7 @@ function ReturnFlightSelection() {
             <p>{error}</p>
             <p className="tfs-search-error__help">You are not stuck. Retry this exact return route, change the search, or go back and choose another departure flight.</p>
             <div className="tfs-search-error__actions">
-              {searchParams?.returnDate && returnFromCode && returnToCode && <button type="button" className="btn-primary" onClick={retryReturnSearch}>Retry Search</button>}
+              {searchParams?.returnDate && departureToken && <button type="button" className="btn-primary" onClick={retryReturnSearch}>Retry Search</button>}
               <button type="button" className="btn-outline-modify" onClick={handleBackToDepartureFlights}>Back to departure flights</button>
               <button type="button" className="btn-outline-modify" onClick={() => setIsModifySearchOpen(true)}>Modify search</button>
             </div>
