@@ -11,6 +11,7 @@ import voucherService from './voucher.service.mjs';
 export async function applyVoucherPricingToBooking(req, res, next) {
   try {
     const payload = req.body || {};
+    const requestedCode = String(payload.voucher_code || payload.voucherCode || '').trim();
     const passengers = Array.isArray(payload.passengers) ? payload.passengers : [];
     const passengerCount = Math.max(1, passengers.length || Number.parseInt(payload.passengersCount || 1, 10));
     const currency = String(payload.currency || 'USD').toUpperCase();
@@ -38,14 +39,11 @@ export async function applyVoucherPricingToBooking(req, res, next) {
     payload.price_before_voucher = canonicalPricing.customerPrice;
     payload.customer_price = canonicalPricing.customerPrice;
     payload.displayedWebsitePrice = canonicalPricing.customerPrice;
+    payload.total_amount = canonicalPricing.customerPrice;
     payload.voucher_id = null;
     payload.voucher_code = null;
     payload.voucher_discount = 0;
     payload.minimum_payable_floor = null;
-
-    const requestedCode = String(
-      req.body?.voucher_code || req.body?.voucherCode || ''
-    ).trim();
 
     if (requestedCode) {
       const application = await voucherService.validate({
