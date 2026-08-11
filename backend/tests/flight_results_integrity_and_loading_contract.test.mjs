@@ -44,8 +44,13 @@ assert.doesNotMatch(row, /'2h 10m'/);
 assert.doesNotMatch(row, /'2h 45m'/);
 
 assert.match(returnPage, /canonicalSearchAirport/);
-assert.match(returnPage, /from:\s*outboundTo/);
-assert.match(returnPage, /to:\s*outboundFrom/);
+// A SerpAPI/Google Flights departure_token continues the original round-trip
+// search context, so the provider request keeps the original origin/destination.
+// The returned selectable leg is still validated as destination -> origin.
+assert.match(returnPage, /from:\s*outboundFrom/);
+assert.match(returnPage, /to:\s*outboundTo/);
+assert.match(returnPage, /departureToken:\s*token/);
+assert.match(returnPage, /\},\s*outboundTo,\s*outboundFrom\);/);
 assert.match(returnPage, /saved departure flight does not match/);
 assert.match(returnPage, /The flight provider returned a different route/);
 
