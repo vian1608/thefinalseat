@@ -43,8 +43,6 @@ async function run() {
     assert.strictEqual(validatePassportExpiry(passenger.passportExpiry, departureDate).valid, true);
   }
 
-  // The checkout UI historically sends lowercase "pending". The database schema
-  // accepts canonical uppercase payment states, so the API boundary must normalize it.
   const normalized = normalizeBookingCreatePayload({
     status: 'pending',
     paymentStatus: 'pending',
@@ -85,11 +83,13 @@ async function run() {
     'utf8'
   );
   assert.ok(routeSource.includes('normalizeBookingCreateRequest'));
-  assert.ok(routeSource.includes("router.post('/', bookingRateLimiter, normalizeBookingCreateRequest, bookingController.create)"));
+  assert.ok(routeSource.includes('applyVoucherPricingToBooking'));
+  assert.ok(routeSource.includes("router.post('/', bookingRateLimiter, normalizeBookingCreateRequest, applyVoucherPricingToBooking, bookingController.create)"));
 
   console.log('✔ Six-passenger validation passed.');
   console.log('✔ Lowercase checkout statuses normalize to canonical uppercase DB states.');
   console.log('✔ Invalid status values return a 400-class validation error.');
+  console.log('✔ Voucher pricing remains in the booking-create middleware chain.');
 }
 
 run().catch((error) => {
