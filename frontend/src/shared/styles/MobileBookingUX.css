@@ -340,22 +340,22 @@
     transition: transform 160ms ease !important;
   }
 
-  .tfs-pax-collapsed {
+  .passenger-card-block.tfs-pax-collapsed {
     padding: 0 !important;
     min-height: 0 !important;
     overflow: hidden !important;
   }
 
-  .tfs-pax-collapsed > :not(.passenger-card-title) {
+  .passenger-card-block.tfs-pax-collapsed > :not(.passenger-card-title) {
     display: none !important;
   }
 
-  .tfs-pax-collapsed .passenger-card-title {
+  .passenger-card-block.tfs-pax-collapsed .passenger-card-title {
     margin: 0 !important;
     border-bottom: 0 !important;
   }
 
-  .tfs-pax-collapsed .tfs-pax-mobile-chevron {
+  .passenger-card-block.tfs-pax-collapsed .tfs-pax-mobile-chevron {
     transform: rotate(-90deg) !important;
   }
 
@@ -364,6 +364,14 @@
   .passenger-card-block > .booking-form-grid--3col {
     display: grid !important;
     gap: 0.55rem !important;
+  }
+
+  /* This rule MUST stay after the open-grid declaration above. The collapse
+     state wins both by specificity and source order, so the arrow and body can
+     never get out of sync again. */
+  .passenger-card-block.tfs-pax-collapsed > .booking-form-grid,
+  .passenger-card-block.tfs-pax-collapsed > .booking-form-grid--3col {
+    display: none !important;
   }
 
   /* Title + First Name, Middle Name full width. */
