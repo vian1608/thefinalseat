@@ -2,6 +2,7 @@ import express from 'express';
 import bookingController from './booking.controller.mjs';
 import rateLimit from '../../middleware/rate-limit.mjs';
 import { abandonedBookingRouter } from '../abandoned-bookings/abandoned-booking.routes.mjs';
+import { normalizeBookingCreateRequest } from './booking-create-normalization.mjs';
 
 const router = express.Router();
 
@@ -17,7 +18,7 @@ const searchRateLimiter = rateLimit({
   message: 'Too many search requests. Please wait a minute.'
 });
 
-router.post('/', bookingRateLimiter, bookingController.create);
+router.post('/', bookingRateLimiter, normalizeBookingCreateRequest, bookingController.create);
 router.get('/search', searchRateLimiter, bookingController.search);
 router.get('/user/:email', bookingController.getByUserEmail);
 router.use('/abandoned', abandonedBookingRouter);
