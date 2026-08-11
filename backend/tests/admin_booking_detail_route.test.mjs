@@ -14,19 +14,19 @@ const routes = read('backend/src/modules/admin/admin.routes.mjs');
 const passengerController = read('backend/src/modules/admin/admin.passenger.controller.mjs');
 
 test('admin booking route is a dedicated compact booking workspace', async t => {
-  await t.test('direct route stays separate from dashboard list', () => {
+  await t.test('direct route stays separate from dashboard list without hidden background fetches', () => {
     assert.match(app, /path="\/admin\/bookings\/:code"/, 'Direct booking route must exist.');
     assert.match(wrapper, /isBookingDetailRoute\s*=\s*Boolean\(code\)/, 'Booking route must have explicit detail-only mode.');
-    assert.match(wrapper, /admin-booking-detail-route \.adv2-toolbar/, 'Detail route must hide dashboard toolbar.');
-    assert.match(wrapper, /admin-booking-detail-route \.adv2-kpis/, 'Detail route must hide dashboard KPIs.');
-    assert.match(wrapper, /admin-booking-detail-route \.adv2-card/, 'Detail route must hide the Customer Bookings list card.');
-    assert.match(wrapper, /window\.open\(bookingUrl, '_blank'\)/, 'View / Edit must open the direct booking route in a new tab.');
+    assert.match(wrapper, /\{isBookingDetailRoute \? \([\s\S]*?<AdminBookingAddressPanel \/>[\s\S]*?<AdminBookingWorkspace \/>[\s\S]*?\) : \([\s\S]*?<AdminDashboardPageV2 \/>/, 'Detail route must render booking workspace instead of mounting the dashboard.');
+    assert.doesNotMatch(wrapper, /admin-booking-detail-route \.adv2-toolbar[\s\S]*display:\s*none/, 'Detail separation must not rely on CSS hiding a still-mounted dashboard.');
+    assert.match(wrapper, /window\.open\(`\/admin\/bookings\/\$\{encodeURIComponent\(reference\)\}`,[\s\S]*?'_blank'\)/, 'View / Edit must open the direct booking route in a new tab.');
+    assert.match(wrapper, /__tfsBookingDetailRequestDedupe/, 'Sibling detail panels must coalesce simultaneous identical booking reads.');
     assert.match(wrapper, /<AdminBookingWorkspace \/>/, 'Dedicated route must render the booking workspace.');
   });
 
   await t.test('booking tab title is distinct from dashboard title', () => {
     assert.match(workspace, /const desiredTitle = `\$\{code\} \| Booking Editor`/, 'Booking editor must enforce a reference-specific browser tab title.');
-    assert.match(workspace, /MutationObserver\(enforceTitle\)/, 'Booking title must resist the nested dashboard Helmet title overwriting it.');
+    assert.match(workspace, /MutationObserver\(enforceTitle\)/, 'Booking title must remain stable while nested components update the document head.');
   });
 
   await t.test('passenger editor exposes the stored identity and contact fields', () => {
