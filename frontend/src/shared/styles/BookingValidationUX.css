@@ -21,6 +21,12 @@
   box-shadow: 0 4px 12px rgba(153, 27, 27, 0.07) !important;
 }
 
+/* When the traveler/contact validator already produced a specific message,
+   do not also show the generic "fill all required details" banner by the CTA. */
+.booking-page .payment-error-banner.tfs-validation-duplicate-error {
+  display: none !important;
+}
+
 .booking-page .booking-global-error i,
 .booking-page .payment-error-banner i {
   color: #dc2626 !important;
