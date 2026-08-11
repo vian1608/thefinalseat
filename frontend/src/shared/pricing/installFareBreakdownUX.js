@@ -34,6 +34,10 @@ function buildBreakdown(card) {
   const perTravelerFinal = total / travelerCount;
   const perTravelerOriginal = originalTotal / travelerCount;
   const perTravelerSaving = savingTotal / travelerCount;
+  const hasDiscount = originalTotal > total && savingTotal > 0;
+  const discountPercent = hasDiscount && originalTotal > 0
+    ? Math.round((savingTotal / originalTotal) * 100)
+    : 0;
   const signature = [total, originalTotal, savingTotal, travelerCount].join('|');
 
   let root = card.querySelector('.tfs-fare-breakdown-root');
@@ -49,53 +53,78 @@ function buildBreakdown(card) {
   const wasOpen = root.querySelector('.tfs-fare-details')?.open || false;
 
   root.innerHTML = `
-    <div class="tfs-fare-summary-line">
-      <div>
-        <span class="tfs-fare-kicker">Trip total</span>
+    <div class="tfs-fare-value-story">
+      ${hasDiscount ? `
+        <div class="tfs-fare-original-block">
+          <span class="tfs-fare-kicker">Regular trip fare</span>
+          <del class="tfs-fare-original-total">${formatMoney(originalTotal)}</del>
+        </div>
+
+        <div class="tfs-fare-savings-block">
+          <span class="tfs-fare-savings-label">Your ${discountPercent}% member savings</span>
+          <strong class="tfs-fare-savings-amount">
+            <i class="fas fa-tag" aria-hidden="true"></i>
+            ${formatMoney(savingTotal)}
+          </strong>
+        </div>
+      ` : ''}
+
+      <div class="tfs-fare-final-block ${hasDiscount ? '' : 'tfs-fare-final-block--solo'}">
+        <span class="tfs-fare-kicker">Today's discounted fare</span>
         <strong class="tfs-fare-total">${formatMoney(total)} <small>USD</small></strong>
       </div>
-      ${savingTotal > 0 ? '<span class="tfs-fare-discount-chip">10% OFF</span>' : ''}
+
+      <details class="tfs-fare-details">
+        <summary>
+          <span>View fare breakdown</span>
+          <i class="fas fa-chevron-down" aria-hidden="true"></i>
+        </summary>
+        <div class="tfs-fare-details-body">
+          ${hasDiscount ? `
+            <div class="tfs-fare-row tfs-fare-row--original">
+              <span>Regular fare / traveler</span>
+              <strong>${formatMoney(perTravelerOriginal)}</strong>
+            </div>
+            <div class="tfs-fare-row tfs-fare-row--saving">
+              <span>${discountPercent}% member savings / traveler</span>
+              <strong>−${formatMoney(perTravelerSaving)}</strong>
+            </div>
+          ` : ''}
+          <div class="tfs-fare-row tfs-fare-row--final">
+            <span>Discounted fare / traveler</span>
+            <strong>${formatMoney(perTravelerFinal)}</strong>
+          </div>
+          <div class="tfs-fare-row">
+            <span>Number of travelers</span>
+            <strong>× ${travelerCount}</strong>
+          </div>
+          ${hasDiscount ? `
+            <div class="tfs-fare-row tfs-fare-row--original-total">
+              <span>Regular trip total</span>
+              <strong>${formatMoney(originalTotal)}</strong>
+            </div>
+          ` : ''}
+          <div class="tfs-fare-row tfs-fare-row--total">
+            <span>Today's trip total</span>
+            <strong>${formatMoney(total)} USD</strong>
+          </div>
+          ${hasDiscount ? `
+            <div class="tfs-fare-savings-note">
+              <i class="fas fa-check-circle" aria-hidden="true"></i>
+              You save ${formatMoney(savingTotal)} with your ${discountPercent}% Final Seat member fare.
+            </div>
+          ` : ''}
+        </div>
+      </details>
     </div>
 
     <div class="tfs-fare-per-traveler">
+      <span class="tfs-fare-per-label">Per traveler</span>
+      ${hasDiscount ? `<del>${formatMoney(perTravelerOriginal)}</del><span class="tfs-fare-price-arrow">→</span>` : ''}
       <strong>${formatMoney(perTravelerFinal)}</strong>
       <span>× ${travelerCount} traveler${travelerCount === 1 ? '' : 's'}</span>
-      <span class="tfs-fare-equals">= ${formatMoney(total)}</span>
+      <span class="tfs-fare-equals">= ${formatMoney(total)} total</span>
     </div>
-
-    <details class="tfs-fare-details">
-      <summary>
-        <span>View fare breakdown</span>
-        <i class="fas fa-chevron-down" aria-hidden="true"></i>
-      </summary>
-      <div class="tfs-fare-details-body">
-        ${originalTotal > total ? `
-          <div class="tfs-fare-row">
-            <span>Original fare / traveler</span>
-            <strong>${formatMoney(perTravelerOriginal)}</strong>
-          </div>
-          <div class="tfs-fare-row tfs-fare-row--saving">
-            <span>Member discount / traveler</span>
-            <strong>−${formatMoney(perTravelerSaving)}</strong>
-          </div>
-        ` : ''}
-        <div class="tfs-fare-row">
-          <span>Final fare / traveler</span>
-          <strong>${formatMoney(perTravelerFinal)}</strong>
-        </div>
-        <div class="tfs-fare-row">
-          <span>Number of travelers</span>
-          <strong>× ${travelerCount}</strong>
-        </div>
-        <div class="tfs-fare-row tfs-fare-row--total">
-          <span>Trip total</span>
-          <strong>${formatMoney(total)} USD</strong>
-        </div>
-        ${savingTotal > 0 ? `
-          <div class="tfs-fare-savings-note">You save ${formatMoney(savingTotal)} total.</div>
-        ` : ''}
-      </div>
-    </details>
   `;
 
   root.dataset.signature = signature;
