@@ -134,8 +134,6 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
   const arrDateLabel = formatSummaryDate(effectiveArrDate);
 
   const connectionSummaries = getConnectionSummaries(segments || []);
-  const layoverSummary = connectionSummaries.map(connection => connection.label).join(' · ');
-
   const layoverCitiesFromSegments = connectionSummaries.map(connection => connection.airport).filter(Boolean).join(', ');
   const layoverCities = layoverCitiesFromSegments || layovers.map(l => l.airportCode || l.airportName).filter(Boolean).join(', ');
   const stopsLabel = stops === 0
@@ -223,12 +221,6 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
             <span className={`itin-mobile-arrival-stops ${stops === 0 ? 'itin-mobile-arrival-stops--nonstop' : ''}`}>
               {stopsLabel}
             </span>
-            {layoverSummary && (
-              <span className="itin-mobile-layover-summary">
-                <i className="far fa-clock" aria-hidden="true"></i>
-                {layoverSummary}
-              </span>
-            )}
           </div>
         </div>
 
