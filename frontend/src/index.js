@@ -12,6 +12,7 @@ import './shared/styles/ItineraryDirectionFix.css';
 import './shared/styles/MobileBookingUX.css';
 import './shared/styles/BookingChoiceUX.css';
 import './shared/styles/MobileItineraryCompact.css';
+import './shared/styles/MobileItineraryRoutePolish.css';
 import App from './app/App';
 import { HelmetProvider } from 'react-helmet-async';
 import { installSensitiveDataGuards } from './shared/security/installSensitiveDataGuards';
