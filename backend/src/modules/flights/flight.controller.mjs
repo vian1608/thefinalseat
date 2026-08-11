@@ -14,6 +14,11 @@ function extractIataCode(value) {
   return match ? match[1].toUpperCase() : '';
 }
 
+function toNonNegativeInteger(value, fallback = 0) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 export const flightController = {
   search: async (req, res) => {
     try {
@@ -25,6 +30,8 @@ export const flightController = {
         adults,
         children,
         infants,
+        infantsInSeat,
+        infantsOnLap,
         travelClass,
         currency,
         departureToken,
@@ -71,14 +78,40 @@ export const flightController = {
         });
       }
 
+      const normalizedAdults = Math.max(1, toNonNegativeInteger(adults, 1));
+      const normalizedChildren = toNonNegativeInteger(children, 0);
+      const legacyInfants = toNonNegativeInteger(infants, 0);
+      const hasSplitInfantCounts = infantsInSeat !== undefined || infantsOnLap !== undefined;
+      const normalizedInfantsInSeat = hasSplitInfantCounts ? toNonNegativeInteger(infantsInSeat, 0) : 0;
+      const normalizedInfantsOnLap = hasSplitInfantCounts
+        ? toNonNegativeInteger(infantsOnLap, 0)
+        : legacyInfants;
+      const normalizedInfants = hasSplitInfantCounts
+        ? normalizedInfantsInSeat + normalizedInfantsOnLap
+        : legacyInfants;
+
+      if (normalizedInfantsOnLap > normalizedAdults) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_LAP_INFANT_COUNT',
+            message: 'Infants on lap cannot exceed the number of adult passengers.',
+          },
+        });
+      }
+
       const searchParams = {
         from: fromCode,
         to: toCode,
         departure,
         returnDate,
-        adults: Number.parseInt(adults || 1, 10),
-        children: Number.parseInt(children || 0, 10),
-        infants: Number.parseInt(infants || 0, 10),
+        adults: normalizedAdults,
+        children: normalizedChildren,
+        // Keep total infants for backwards-compatible booking/passenger counts,
+        // while preserving the supplier-specific seated/lap split below.
+        infants: normalizedInfants,
+        infantsInSeat: normalizedInfantsInSeat,
+        infantsOnLap: normalizedInfantsOnLap,
         travelClass: travelClass || 'economy',
         currency: currency || 'USD',
         departureToken: normalizedDepartureToken || undefined,
