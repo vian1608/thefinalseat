@@ -5,6 +5,7 @@ import adminDashboardV2Controller from './admin.dashboard-v2.controller.mjs';
 import adminBackupController from './admin.backup.controller.mjs';
 import adminBulkDeleteController from './admin.bulk-delete.controller.mjs';
 import adminPassengerController from './admin.passenger.controller.mjs';
+import voucherController from '../vouchers/voucher.controller.mjs';
 import '../bookings/booking.repository.runtime-repair.mjs';
 import authenticate from '../../middleware/authenticate.mjs';
 import authorize from '../../middleware/authorize.mjs';
@@ -29,6 +30,12 @@ router.post('/login', loginRateLimiter, adminController.login);
 
 import passengerAuthorizationController from '../authorizations/passenger-authorization.controller.mjs';
 import bookingController from '../bookings/booking.controller.mjs';
+
+// Protected voucher management
+router.get('/vouchers', authenticate, authorize(['admin']), voucherController.listAdmin);
+router.post('/vouchers', authenticate, authorize(['admin']), voucherController.createAdmin);
+router.patch('/vouchers/:id', authenticate, authorize(['admin']), voucherController.updateAdmin);
+router.get('/vouchers/:id/redemptions', authenticate, authorize(['admin']), voucherController.redemptionsAdmin);
 
 // Protected admin endpoints
 // Bulk operations (must be before :id routes to avoid param capture)
