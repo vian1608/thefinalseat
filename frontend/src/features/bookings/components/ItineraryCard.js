@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ItineraryTimeline from '../../../shared/components/ItineraryTimeline';
+import { calculateLayoverDuration } from '../../../shared/utils/gdsItineraryHelper';
 import './ItineraryCard.css';
 
 // Inline logo with fallback
@@ -36,6 +37,73 @@ const formatSummaryDate = (value) => {
   });
 };
 
+const segmentDate = (segment = {}, side = 'departure') => {
+  const nested = side === 'departure' ? segment.departure : segment.arrival;
+  return String(
+    (side === 'departure'
+      ? (segment.departure_date || segment.departureDate)
+      : (segment.arrival_date || segment.arrivalDate)) ||
+    nested?.date ||
+    ''
+  ).trim();
+};
+
+const segmentTime = (segment = {}, side = 'departure') => {
+  const nested = side === 'departure' ? segment.departure : segment.arrival;
+  return String(
+    (side === 'departure'
+      ? (segment.departure_time || segment.departureTime)
+      : (segment.arrival_time || segment.arrivalTime)) ||
+    nested?.time ||
+    ''
+  ).trim();
+};
+
+const segmentAirport = (segment = {}, side = 'departure') => {
+  const nested = side === 'departure' ? segment.departure : segment.arrival;
+  return String(
+    (side === 'departure'
+      ? (segment.origin_airport || segment.departureAirport)
+      : (segment.destination_airport || segment.arrivalAirport)) ||
+    nested?.airport ||
+    ''
+  ).trim().toUpperCase();
+};
+
+const getConnectionSummaries = (segments = []) => {
+  if (!Array.isArray(segments) || segments.length < 2) return [];
+
+  return segments.slice(0, -1).map((segment, index) => {
+    const nextSegment = segments[index + 1] || {};
+    const airport = segmentAirport(segment, 'arrival') || segmentAirport(nextSegment, 'departure') || 'connection';
+    const arrivalTime = segmentTime(segment, 'arrival');
+    const departureTime = segmentTime(nextSegment, 'departure');
+
+    // Some imported GDS segments omit an explicit arrival date for same-day
+    // connections. Fall back to the segment departure/next departure date so
+    // the layover duration can still be calculated correctly.
+    const arrivalDate = segmentDate(segment, 'arrival') || segmentDate(segment, 'departure') || segmentDate(nextSegment, 'departure');
+    const departureDate = segmentDate(nextSegment, 'departure') || arrivalDate;
+
+    const rawDuration = calculateLayoverDuration(
+      arrivalDate,
+      arrivalTime,
+      departureDate,
+      departureTime
+    );
+
+    const duration = /^Layover\s+/i.test(rawDuration)
+      ? rawDuration.replace(/^Layover\s+/i, '')
+      : '';
+
+    return {
+      airport,
+      duration,
+      label: duration ? `${duration} layover in ${airport}` : `Layover in ${airport}`
+    };
+  });
+};
+
 function ItineraryCard({ flight, label, labelColor, isTrain }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -65,7 +133,11 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
   const depDateLabel = formatSummaryDate(effectiveDepDate);
   const arrDateLabel = formatSummaryDate(effectiveArrDate);
 
-  const layoverCities = layovers.map(l => l.airportCode || l.airportName).filter(Boolean).join(', ');
+  const connectionSummaries = getConnectionSummaries(segments || []);
+  const layoverSummary = connectionSummaries.map(connection => connection.label).join(' · ');
+
+  const layoverCitiesFromSegments = connectionSummaries.map(connection => connection.airport).filter(Boolean).join(', ');
+  const layoverCities = layoverCitiesFromSegments || layovers.map(l => l.airportCode || l.airportName).filter(Boolean).join(', ');
   const stopsLabel = stops === 0
     ? 'Nonstop'
     : stops === 1
@@ -145,6 +217,19 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
             <i className={`fas ${isTrain ? 'fa-train' : 'fa-arrow-right'} itin-route-arrow`}></i>
             <span>{arrAirport}</span>
           </div>
+
+          <div className="itin-mobile-arrival-meta" aria-label="Journey duration and connection information">
+            <span className="itin-mobile-arrival-duration">{duration}</span>
+            <span className={`itin-mobile-arrival-stops ${stops === 0 ? 'itin-mobile-arrival-stops--nonstop' : ''}`}>
+              {stopsLabel}
+            </span>
+            {layoverSummary && (
+              <span className="itin-mobile-layover-summary">
+                <i className="far fa-clock" aria-hidden="true"></i>
+                {layoverSummary}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="itin-col-meta">
@@ -160,23 +245,29 @@ function ItineraryCard({ flight, label, labelColor, isTrain }) {
           <div className="itin-details-grid">
             {segments ? (
               <div className="itin-segments-list">
-                {segments.map((seg, sIdx) => (
-                  <div key={sIdx} className="itin-segment-item" style={{ marginBottom: sIdx < segments.length - 1 ? '0.85rem' : 0 }}>
-                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#8b1538', marginBottom: '0.2rem' }}>
-                      Segment {sIdx + 1}: {seg.airline || airline} {seg.flightNumber || seg.flight_number || ''}
-                    </div>
-                    <div style={{ fontSize: '0.84rem', color: '#1e293b', fontWeight: 600 }}>
-                      {seg.departureTime || seg.departure?.time || depTime} ({seg.departureAirport || seg.departure?.airport || depAirport})
-                      {' → '}
-                      {seg.arrivalTime || seg.arrival?.time || arrTime} ({seg.arrivalAirport || seg.arrival?.airport || arrAirport})
-                    </div>
-                    {sIdx < segments.length - 1 && (
-                      <div className="itin-layover-info" style={{ marginTop: '0.4rem' }}>
-                        <i className="fas fa-clock"></i> Connection stop in {seg.arrivalAirport || seg.arrival?.airport || 'layover'}
+                {segments.map((seg, sIdx) => {
+                  const connection = connectionSummaries[sIdx];
+                  return (
+                    <div key={sIdx} className="itin-segment-item" style={{ marginBottom: sIdx < segments.length - 1 ? '0.85rem' : 0 }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#8b1538', marginBottom: '0.2rem' }}>
+                        Segment {sIdx + 1}: {seg.airline || airline} {seg.flightNumber || seg.flight_number || ''}
                       </div>
-                    )}
-                  </div>
-                ))}
+                      <div style={{ fontSize: '0.84rem', color: '#1e293b', fontWeight: 600 }}>
+                        {seg.departureTime || seg.departure?.time || depTime} ({seg.departureAirport || seg.departure?.airport || depAirport})
+                        {' → '}
+                        {seg.arrivalTime || seg.arrival?.time || arrTime} ({seg.arrivalAirport || seg.arrival?.airport || arrAirport})
+                      </div>
+                      {sIdx < segments.length - 1 && (
+                        <div className="itin-layover-info" style={{ marginTop: '0.4rem' }}>
+                          <i className="fas fa-clock"></i>{' '}
+                          {connection?.duration
+                            ? `${connection.duration} connection in ${connection.airport}`
+                            : `Connection stop in ${connection?.airport || seg.arrivalAirport || seg.arrival?.airport || 'layover'}`}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <>
