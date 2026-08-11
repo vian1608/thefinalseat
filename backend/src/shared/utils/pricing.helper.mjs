@@ -72,62 +72,182 @@ export function calculateFlightDiscount({ originalPrice, isMock = false, currenc
   };
 }
 
+const numberOr = (value, fallback = 0) => {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const roundCents = (value) => Math.round(numberOr(value) * 100);
+
 /**
- * Calculates total booking pricing for single or multiple passengers, outbound & return flights
+ * Normalize a flight fare into PARTY-TOTAL cents.
+ *
+ * New supplier/search offers explicitly declare party_total pricing. Older
+ * admin/imported booking objects are kept backward compatible and are treated
+ * as per-traveler contributions, then multiplied by passenger count exactly
+ * once.
  */
-export function calculateBookingTotal({ outboundFlight, returnFlight = null, passengersCount = 1, currency = 'USD' }) {
-  const passCount = Math.max(1, parseInt(passengersCount || 1, 10));
+function resolveFlightPartyFare(flight, passCount, currency) {
+  if (!flight) return null;
 
-  const outboundCalc = calculateFlightDiscount({
-    originalPrice: outboundFlight?.price?.originalApiPrice || outboundFlight?.price?.total || 0,
-    isMock: !!outboundFlight?.isMock,
-    currency,
-  });
+  const price = flight.price || {};
+  const priceScope = price.priceScope || '';
+  const sourcePriceScope = price.sourcePriceScope || '';
+  const hasPreservedPartyFare = sourcePriceScope === 'party_total'
+    && (price.partyOriginalPrice !== undefined || price.partyFinalPrice !== undefined);
+  const isPartyTotal = priceScope === 'party_total' || hasPreservedPartyFare;
 
-  let returnCalc = null;
-  if (returnFlight) {
-    returnCalc = calculateFlightDiscount({
-      originalPrice: returnFlight?.price?.originalApiPrice || returnFlight?.price?.total || 0,
-      isMock: !!returnFlight?.isMock,
+  const tripScope = price.tripScope || '';
+  const selectionStage = price.selectionStage || '';
+  const isMock = !!flight.isMock;
+
+  if (isPartyTotal) {
+    const partyOriginal = numberOr(
+      price.partyOriginalPrice,
+      numberOr(price.originalApiPrice ?? price.originalPrice ?? price.total, 0),
+    );
+    const partyFinalFromSource = numberOr(
+      price.partyFinalPrice,
+      numberOr(price.finalPrice ?? price.total, partyOriginal),
+    );
+
+    // Prefer the explicit supplier/member final when present. If an old party
+    // object only contains an original fare, calculate the normal site discount.
+    const hasExplicitFinal = price.partyFinalPrice !== undefined
+      || price.finalPrice !== undefined
+      || price.total !== undefined;
+    const discountCalc = calculateFlightDiscount({
+      originalPrice: partyOriginal,
+      isMock,
       currency,
     });
+    const partyFinal = hasExplicitFinal
+      ? partyFinalFromSource
+      : discountCalc.finalPriceNum;
+
+    return {
+      originalCents: roundCents(partyOriginal),
+      finalCents: roundCents(partyFinal),
+      isMock,
+      tripScope,
+      selectionStage,
+      isPartyTotal: true,
+    };
   }
 
-  const isMockBooking = outboundCalc.isMock || (returnCalc && returnCalc.isMock);
+  const perTravelerOriginal = numberOr(
+    price.originalApiPrice ?? price.originalPrice ?? price.total,
+    0,
+  );
+  const perTravelerFinal = numberOr(
+    price.finalPrice ?? price.total,
+    perTravelerOriginal,
+  );
 
-  const outboundOriginalCents = Math.round(outboundCalc.originalPriceNum * 100);
-  const returnOriginalCents = returnCalc ? Math.round(returnCalc.originalPriceNum * 100) : 0;
-  const perPassengerOriginalCents = outboundOriginalCents + returnOriginalCents;
-  const totalOriginalCents = perPassengerOriginalCents * passCount;
+  return {
+    originalCents: roundCents(perTravelerOriginal) * passCount,
+    finalCents: roundCents(perTravelerFinal) * passCount,
+    isMock,
+    tripScope,
+    selectionStage,
+    isPartyTotal: false,
+  };
+}
 
-  const outboundFinalCents = Math.round(outboundCalc.finalPriceNum * 100);
-  const returnFinalCents = returnCalc ? Math.round(returnCalc.finalPriceNum * 100) : 0;
-  const perPassengerFinalCents = outboundFinalCents + returnFinalCents;
-  const totalFinalCents = perPassengerFinalCents * passCount;
+const makeBookingPricingResult = ({ originalCents, finalCents, passCount, currency, isMock }) => {
+  const safeOriginalCents = Math.max(0, Math.round(originalCents || 0));
+  const safeFinalCents = Math.max(0, Math.round(finalCents || 0));
+  const discountCents = isMock ? 0 : Math.max(0, safeOriginalCents - safeFinalCents);
 
-  const totalDiscountCents = isMockBooking ? 0 : (totalOriginalCents - totalFinalCents);
-
-  const supplierPriceStr = (totalOriginalCents / 100).toFixed(2);
-  const discountAmountStr = (totalDiscountCents / 100).toFixed(2);
-  const customerPriceStr = (totalFinalCents / 100).toFixed(2);
+  const supplierPriceStr = (safeOriginalCents / 100).toFixed(2);
+  const discountAmountStr = (discountCents / 100).toFixed(2);
+  const customerPriceStr = (safeFinalCents / 100).toFixed(2);
 
   return {
     supplierPrice: supplierPriceStr,
-    supplierPriceNum: totalOriginalCents / 100,
-    discountPercent: isMockBooking ? 0 : 10,
+    supplierPriceNum: safeOriginalCents / 100,
+    discountPercent: isMock || discountCents <= 0 ? 0 : 10,
     discountAmount: discountAmountStr,
-    discountAmountNum: totalDiscountCents / 100,
+    discountAmountNum: discountCents / 100,
     customerPrice: customerPriceStr,
-    customerPriceNum: totalFinalCents / 100,
+    customerPriceNum: safeFinalCents / 100,
     passengersCount: passCount,
     currency: currency.toUpperCase(),
     formattedSupplierPrice: `$${supplierPriceStr}`,
     formattedDiscountAmount: `$${discountAmountStr}`,
     formattedCustomerPrice: `$${customerPriceStr}`,
-    isMock: isMockBooking,
-    outbound: outboundCalc,
-    return: returnCalc,
+    isMock: !!isMock,
   };
+};
+
+/**
+ * Calculates the booking total while respecting the fare's declared scope.
+ *
+ * Rules:
+ *  - party_total is already the total for all travelers: never multiply again.
+ *  - legacy/per-traveler fares are multiplied by passenger count once.
+ *  - a round-trip return result selected through the supplier departure token
+ *    is the final complete-trip quote, so it replaces (not adds to) the
+ *    provisional outbound round-trip quote.
+ */
+export function calculateBookingTotal({ outboundFlight, returnFlight = null, passengersCount = 1, currency = 'USD' }) {
+  const passCount = Math.max(1, parseInt(passengersCount || 1, 10));
+  const outbound = resolveFlightPartyFare(outboundFlight, passCount, currency);
+  const returning = resolveFlightPartyFare(returnFlight, passCount, currency);
+
+  if (!outbound && !returning) {
+    return makeBookingPricingResult({
+      originalCents: 0,
+      finalCents: 0,
+      passCount,
+      currency,
+      isMock: true,
+    });
+  }
+
+  // The return-token response is the complete selected round-trip quote. Using
+  // outbound + return here would double count the same trip.
+  if (
+    returning?.isPartyTotal
+    && returning.tripScope === 'roundtrip_total'
+    && returning.selectionStage === 'return'
+  ) {
+    return makeBookingPricingResult({
+      originalCents: returning.originalCents,
+      finalCents: returning.finalCents,
+      passCount,
+      currency,
+      isMock: returning.isMock,
+    });
+  }
+
+  // A raw outbound round-trip offer is already a complete-trip party quote.
+  // Treat it as one quote when no finalized return-token selection is present.
+  if (
+    outbound?.isPartyTotal
+    && outbound.tripScope === 'roundtrip_total'
+    && outbound.selectionStage === 'outbound'
+  ) {
+    return makeBookingPricingResult({
+      originalCents: outbound.originalCents,
+      finalCents: outbound.finalCents,
+      passCount,
+      currency,
+      isMock: outbound.isMock,
+    });
+  }
+
+  const originalCents = (outbound?.originalCents || 0) + (returning?.originalCents || 0);
+  const finalCents = (outbound?.finalCents || 0) + (returning?.finalCents || 0);
+  const isMockBooking = !!outbound?.isMock || !!returning?.isMock;
+
+  return makeBookingPricingResult({
+    originalCents,
+    finalCents,
+    passCount,
+    currency,
+    isMock: isMockBooking,
+  });
 }
 
 export const moneyToCents = (value) => {
