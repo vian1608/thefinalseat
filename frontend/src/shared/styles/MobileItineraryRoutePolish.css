@@ -1,0 +1,119 @@
+/* Final mobile itinerary route polish.
+   Keeps the compact verification card, aligns trip duration beneath the
+   arrival side, and places the aircraft on the dashed route toward destination. */
+
+@media (max-width: 640px) {
+  /* Use two balanced halves below the route: airline on the departure side,
+     total journey time/stops on the arrival side, then the expand chevron. */
+  .booking-itinerary-top-grid .itin-summary-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 18px !important;
+    grid-template-areas:
+      "route route route"
+      "carrier meta chevron" !important;
+  }
+
+  /* Make the time row a true origin -> destination track. */
+  .booking-itinerary-top-grid .itin-times {
+    display: grid !important;
+    grid-template-columns: auto minmax(56px, 1fr) auto !important;
+    align-items: center !important;
+    width: 100% !important;
+    gap: 0.5rem !important;
+  }
+
+  .booking-itinerary-top-grid .itin-route-dash {
+    position: relative !important;
+    display: block !important;
+    width: 100% !important;
+    min-width: 56px !important;
+    height: 0 !important;
+    margin: 0 !important;
+    border-top: 1.5px dashed #94a3b8 !important;
+    overflow: visible !important;
+    color: transparent !important;
+    font-size: 0 !important;
+  }
+
+  /* Font Awesome plane is horizontal at 0deg, so the nose points right toward
+     the destination. The white chip prevents the dashed line cutting through it. */
+  .booking-itinerary-top-grid .itin-route-dash::after {
+    content: "\f072";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(0deg);
+    transform-origin: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 20px;
+    padding: 0 4px;
+    background: #ffffff;
+    color: #8b1538;
+    font-family: "Font Awesome 6 Free", "Font Awesome 5 Free";
+    font-size: 0.78rem;
+    font-weight: 900;
+    line-height: 1;
+    z-index: 2;
+  }
+
+  /* Airport codes sit directly under their corresponding times. The old arrow
+     is redundant now that the plane itself communicates direction. */
+  .booking-itinerary-top-grid .itin-airports {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  }
+
+  .booking-itinerary-top-grid .itin-route-arrow {
+    display: none !important;
+  }
+
+  .booking-itinerary-top-grid .itin-airports > span:first-child {
+    grid-column: 1 !important;
+    justify-self: start !important;
+  }
+
+  .booking-itinerary-top-grid .itin-airports > span:last-child {
+    grid-column: 2 !important;
+    justify-self: end !important;
+  }
+
+  /* Duration and stop count now belong visually to the arrival half of the card,
+     directly underneath the arrival time/airport instead of floating at far right. */
+  .booking-itinerary-top-grid .itin-col-meta {
+    grid-area: meta !important;
+    grid-column: 2 !important;
+    justify-self: end !important;
+    align-self: center !important;
+    align-items: flex-end !important;
+    width: max-content !important;
+    max-width: 100% !important;
+    padding: 0 0.1rem 0 0 !important;
+    text-align: right !important;
+  }
+
+  .booking-itinerary-top-grid .itin-duration {
+    font-size: 0.76rem !important;
+    font-weight: 800 !important;
+    line-height: 1.1 !important;
+  }
+
+  .booking-itinerary-top-grid .itin-stops {
+    margin-top: 0.08rem !important;
+    font-size: 0.64rem !important;
+    line-height: 1.15 !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .booking-itinerary-top-grid .itin-times {
+    grid-template-columns: auto minmax(42px, 1fr) auto !important;
+    gap: 0.38rem !important;
+  }
+
+  .booking-itinerary-top-grid .itin-route-dash::after {
+    min-width: 21px;
+    height: 18px;
+    font-size: 0.72rem;
+  }
+}
