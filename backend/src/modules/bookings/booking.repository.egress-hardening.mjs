@@ -21,7 +21,7 @@ const BASE_COLUMNS = [
   'voucher_id','voucher_code','voucher_discount','price_before_voucher','minimum_payable_floor','client_request_id','idempotency_key'
 ].join(',');
 const CORE_COLUMNS = 'id,confirmation_code,status,payment_status,total_amount,customer_price,supplier_price,discount_percent,discount_amount,currency,passenger_name,email,phone,internal_notes,original_api_price,created_at,updated_at,voucher_id,voucher_code,voucher_discount,price_before_voucher,minimum_payable_floor';
-const INSERT_RETURN_COLUMNS = 'id,confirmation_code,status,payment_status,total_amount,customer_price,supplier_price,discount_percent,discount_amount,currency,passenger_name,email,phone,original_api_price,created_at,updated_at,voucher_id,voucher_code,voucher_discount,price_before_voucher,minimum_payable_floor';
+const INSERT_RETURN_COLUMNS = 'id,confirmation_code,created_at,updated_at';
 const TRAVELLER_COLUMNS = 'id,booking_id,role,title,first_name,middle_name,last_name,date_of_birth,gender,nationality,passport_number,passport_expiry';
 const CONTACT_COLUMNS = 'id,booking_id,email,country_code,phone_number';
 const FLIGHT_COLUMNS = 'id,booking_id,leg,trip_type,airline_name,carrier_code,flight_number,departure_airport,arrival_airport,departure_date,arrival_date,departure_time_str,arrival_time_str,duration,stops,cabin_class,created_at';
@@ -52,8 +52,17 @@ function canonicalPaymentStatus(value) {
 
 function canonicalBookingStatus(value) {
   const status = String(value || 'PENDING').trim().toUpperCase();
-  const allowed = ['PENDING','AWAITING_AUTHORIZATION','AUTHORIZED','REAUTHORIZATION_REQUIRED','READY_FOR_TICKETING','TICKETED','DONE','FAILED','CANCELLED'];
+  const allowed = ['DRAFT','PENDING','AWAITING_AUTHORIZATION','AUTHORIZED','REAUTHORIZATION_REQUIRED','READY_FOR_TICKETING','TICKETED','DONE','FAILED','CANCELLED'];
   return allowed.includes(status) ? status : 'PENDING';
+}
+
+function normalizeCountryCode(value) {
+  const code = String(value || '').trim();
+  if (!code) return null;
+  // A dialing code is + followed by 1-4 digits. If booking creation accidentally
+  // supplied the entire phone number (e.g. +18885551234), do not persist it as
+  // country_code; the complete number remains safely stored in phone_number.
+  return /^\+\d{1,4}$/.test(code) ? code : null;
 }
 
 function toSegments(flights = []) {
@@ -191,7 +200,7 @@ function install() {
       throw error;
     }
 
-    const record = { ...result.data, client_request_id: clientRequestId, idempotency_key: clientRequestId };
+    const record = { ...insertRow, ...result.data, client_request_id: clientRequestId, idempotency_key: clientRequestId };
     if (clientRequestId) idempotencyMemory.set(clientRequestId, record.id);
     return record;
   };
@@ -204,16 +213,12 @@ function install() {
   };
 
   bookingRepository.insertContact = async row => {
-    let payload = row;
-    let result = await supabase.from('contacts').insert(payload);
-    if (result.error) {
-      payload = {
-        ...row,
-        phone_number: String(row.phone_number || '').slice(0, 50),
-        country_code: String(row.country_code || '').slice(0, 16)
-      };
-      result = await supabase.from('contacts').insert(payload);
-    }
+    const payload = {
+      ...row,
+      country_code: normalizeCountryCode(row.country_code),
+      phone_number: String(row.phone_number || '').slice(0, 50)
+    };
+    const result = await supabase.from('contacts').insert(payload);
     if (result.error) throw new Error(`Contact record insert failed: ${result.error.message}`);
     return [payload];
   };
