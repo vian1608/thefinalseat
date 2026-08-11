@@ -41,7 +41,7 @@ assert.match(addressJs, /addressLine1[\s\S]*city[\s\S]*state[\s\S]*postalCode[\s
 assert.match(addressCss, /address-menu-in/, 'Address suggestion dropdown must use the modern entrance transition.');
 
 assert.match(adminDashboardJs, /AdminBookingAddressPanel/, 'Dedicated booking route must expose the address panel.');
-assert.match(adminDashboardJs, /isBookingDetailRoute\s*&&\s*<AdminBookingAddressPanel/, 'Address panel must be limited to the selected-booking workspace.');
+assert.match(adminDashboardJs, /\{isBookingDetailRoute \? \([\s\S]*?<AdminBookingAddressPanel \/>[\s\S]*?<AdminBookingWorkspace \/>[\s\S]*?\) : \([\s\S]*?<AdminDashboardPageV2 \/>/, 'Address panel must exist only inside the selected-booking branch; the dashboard must not mount there.');
 assert.match(adminAddressJs, /AddressAutocompleteInput/, 'Admin address field must use autocomplete while typing.');
 assert.match(adminAddressJs, /patchBillingDetails/, 'Admin address save must use the isolated billing-details API.');
 for (const field of ['addressLine1', 'addressLine2', 'city', 'stateProvince', 'postalCode', 'country', 'billingEmail', 'billingPhone']) {
