@@ -17,7 +17,18 @@ function extractIataCode(value) {
 export const flightController = {
   search: async (req, res) => {
     try {
-      const { from, to, departure, returnDate, adults, children, infants, travelClass, currency } = req.body;
+      const {
+        from,
+        to,
+        departure,
+        returnDate,
+        adults,
+        children,
+        infants,
+        travelClass,
+        currency,
+        departureToken,
+      } = req.body;
 
       if (!from || !to || !departure) {
         return res.status(400).json({
@@ -46,6 +57,20 @@ export const flightController = {
         });
       }
 
+      const normalizedDepartureToken = typeof departureToken === 'string'
+        ? departureToken.trim()
+        : '';
+
+      if (normalizedDepartureToken && !returnDate) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'RETURN_DATE_REQUIRED',
+            message: 'A return date is required when continuing a round-trip flight selection.',
+          },
+        });
+      }
+
       const searchParams = {
         from: fromCode,
         to: toCode,
@@ -56,6 +81,7 @@ export const flightController = {
         infants: Number.parseInt(infants || 0, 10),
         travelClass: travelClass || 'economy',
         currency: currency || 'USD',
+        departureToken: normalizedDepartureToken || undefined,
       };
 
       const results = await flightService.searchFlights(searchParams);
