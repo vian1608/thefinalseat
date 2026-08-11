@@ -1,0 +1,161 @@
+/* Modern booking preference choices: replace raw browser checkboxes with clear,
+   descriptive toggle cards while preserving the existing React checkbox state. */
+
+.booking-page .contact-checkbox-row,
+.booking-page .checkbox-field-wrapper:has(#wheelchair-check) {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.85rem !important;
+  width: 100% !important;
+  min-height: 74px !important;
+  margin: 0 0 1rem !important;
+  padding: 0.8rem 0.95rem !important;
+  border: 1px solid #d7e0ea !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+  box-sizing: border-box !important;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease !important;
+}
+
+.booking-page .checkbox-field-wrapper:has(#wheelchair-check) {
+  margin-top: 1.75rem !important;
+}
+
+.booking-page .contact-checkbox-row:hover,
+.booking-page .checkbox-field-wrapper:has(#wheelchair-check):hover {
+  border-color: #b9c7d8 !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05) !important;
+}
+
+.booking-page .contact-checkbox-row:has(input:checked),
+.booking-page .checkbox-field-wrapper:has(#wheelchair-check:checked) {
+  border-color: #6ee7b7 !important;
+  background: linear-gradient(135deg, #f7fffb 0%, #ecfdf5 100%) !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.08) !important;
+}
+
+/* Toggle switch */
+.booking-page #contactSame,
+.booking-page #wheelchair-check {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  position: relative !important;
+  flex: 0 0 46px !important;
+  width: 46px !important;
+  height: 26px !important;
+  min-width: 46px !important;
+  min-height: 26px !important;
+  margin: 0 !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 999px !important;
+  background: #e2e8f0 !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08) !important;
+  cursor: pointer !important;
+  outline: none !important;
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease !important;
+}
+
+.booking-page #contactSame::after,
+.booking-page #wheelchair-check::after {
+  content: '' !important;
+  position: absolute !important;
+  top: 3px !important;
+  left: 3px !important;
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 50% !important;
+  background: #ffffff !important;
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.22) !important;
+  transform: translateX(0) !important;
+  transition: transform 160ms ease !important;
+}
+
+.booking-page #contactSame:checked,
+.booking-page #wheelchair-check:checked {
+  border-color: #059669 !important;
+  background: #059669 !important;
+}
+
+.booking-page #contactSame:checked::after,
+.booking-page #wheelchair-check:checked::after {
+  transform: translateX(20px) !important;
+}
+
+.booking-page #contactSame:focus-visible,
+.booking-page #wheelchair-check:focus-visible {
+  box-shadow: 0 0 0 4px rgba(139, 21, 56, 0.14) !important;
+}
+
+/* Replace vague legacy copy visually while retaining the real label association. */
+.booking-page .contact-checkbox-row label,
+.booking-page .checkbox-field-wrapper:has(#wheelchair-check) label {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  gap: 0.18rem !important;
+  margin: 0 !important;
+  color: transparent !important;
+  font-size: 0 !important;
+  line-height: 1.3 !important;
+  cursor: pointer !important;
+}
+
+.booking-page .contact-checkbox-row label::before,
+.booking-page .checkbox-field-wrapper:has(#wheelchair-check) label::before {
+  display: block !important;
+  color: #172033 !important;
+  font-size: 0.92rem !important;
+  font-weight: 800 !important;
+  line-height: 1.25 !important;
+}
+
+.booking-page .contact-checkbox-row label::after,
+.booking-page .checkbox-field-wrapper:has(#wheelchair-check) label::after {
+  display: block !important;
+  color: #64748b !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  line-height: 1.35 !important;
+}
+
+.booking-page .contact-checkbox-row label::before {
+  content: 'Use Passenger #1 as primary contact' !important;
+}
+
+.booking-page .contact-checkbox-row label::after {
+  content: 'Copy Passenger #1’s name into the contact details.' !important;
+}
+
+.booking-page .checkbox-field-wrapper:has(#wheelchair-check) label::before {
+  content: 'Wheelchair assistance' !important;
+}
+
+.booking-page .checkbox-field-wrapper:has(#wheelchair-check) label::after {
+  content: 'Request airport wheelchair support for this booking.' !important;
+}
+
+@media (max-width: 640px) {
+  .booking-page .contact-checkbox-row,
+  .booking-page .checkbox-field-wrapper:has(#wheelchair-check) {
+    min-height: 68px !important;
+    gap: 0.72rem !important;
+    padding: 0.72rem 0.78rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+
+  .booking-page .checkbox-field-wrapper:has(#wheelchair-check) {
+    margin-top: 0.35rem !important;
+  }
+
+  .booking-page .contact-checkbox-row label::before,
+  .booking-page .checkbox-field-wrapper:has(#wheelchair-check) label::before {
+    font-size: 0.86rem !important;
+  }
+
+  .booking-page .contact-checkbox-row label::after,
+  .booking-page .checkbox-field-wrapper:has(#wheelchair-check) label::after {
+    font-size: 0.7rem !important;
+  }
+}
