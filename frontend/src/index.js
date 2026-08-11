@@ -6,6 +6,7 @@ import './shared/styles/ModernInteractionSystem.css';
 import './shared/styles/ModernDetailsMotion.css';
 import './shared/styles/BookingFlowOverrides.css';
 import './shared/styles/BookingValidationUX.css';
+import './shared/styles/ItineraryPriceLayoutFix.css';
 import App from './app/App';
 import { HelmetProvider } from 'react-helmet-async';
 import { installSensitiveDataGuards } from './shared/security/installSensitiveDataGuards';
