@@ -21,6 +21,8 @@ import { normalizeError } from '../../../shared/utils/normalizeError';
 import CarSearchForm from '../../cars/components/CarSearchForm';
 import './Home.css';
 
+const MAX_TRAVELERS = 9;
+
 const initialFormData = {
   name: '',
   email: '',
@@ -43,7 +45,8 @@ const initialSearchData = {
   returnDate: '',
   adults: 1,
   children: 0,
-  infants: 0,
+  infantsInSeat: 0,
+  infantsOnLap: 0,
   travelClass: 'economy',
   currency: 'USD',
   tripType: 'roundtrip'
@@ -99,9 +102,10 @@ function Home() {
 
   const incrementPassenger = (type) => {
     setSearchData((prev) => {
-      const val = prev[type] || 0;
-      if (val >= 9) return prev;
-      return { ...prev, [type]: val + 1 };
+      const total = prev.adults + prev.children + prev.infantsInSeat + prev.infantsOnLap;
+      if (total >= MAX_TRAVELERS) return prev;
+      if (type === 'infantsOnLap' && prev.infantsOnLap >= prev.adults) return prev;
+      return { ...prev, [type]: (prev[type] || 0) + 1 };
     });
   };
 
@@ -110,7 +114,11 @@ function Home() {
       const val = prev[type] || 0;
       const min = type === 'adults' ? 1 : 0;
       if (val <= min) return prev;
-      return { ...prev, [type]: val - 1 };
+      const next = { ...prev, [type]: val - 1 };
+      if (type === 'adults' && next.infantsOnLap > next.adults) {
+        next.infantsOnLap = next.adults;
+      }
+      return next;
     });
   };
 
@@ -151,15 +159,25 @@ function Home() {
       return;
     }
 
+    if (searchData.infantsOnLap > searchData.adults) {
+      setSubmitStatus('error');
+      setSubmitMessage('Infants on lap cannot exceed the number of adult travelers.');
+      return;
+    }
+
     setSubmitStatus('idle');
     setSubmitMessage('');
     setIsSearching(true);
 
     const fromDisplayStr = typeof searchData.from === 'string' ? searchData.from : (searchData.fromAirport?.name ? `${searchData.fromAirport.city || searchData.fromAirport.name} (${fromCode})` : fromCode);
     const toDisplayStr = typeof searchData.to === 'string' ? searchData.to : (searchData.toAirport?.name ? `${searchData.toAirport.city || searchData.toAirport.name} (${toCode})` : toCode);
+    const totalInfants = searchData.infantsInSeat + searchData.infantsOnLap;
 
     const payload = {
       ...searchData,
+      // Keep a total infant count for the booking form, while retaining the split
+      // needed by Google Flights for correct fare availability.
+      infants: totalInfants,
       from: fromDisplayStr,
       to: toDisplayStr,
       fromCode,
@@ -185,7 +203,9 @@ function Home() {
       departure: searchData.departure,
       adults: String(searchData.adults || 1),
       children: String(searchData.children || 0),
-      infants: String(searchData.infants || 0),
+      infants: String(totalInfants),
+      infantsInSeat: String(searchData.infantsInSeat || 0),
+      infantsOnLap: String(searchData.infantsOnLap || 0),
       travelClass: searchData.travelClass || 'economy',
       currency: searchData.currency || 'USD',
       tripType: searchData.tripType || 'roundtrip'
@@ -416,7 +436,7 @@ function Home() {
                               aria-expanded={showPassengerPopup}
                             >
                               <i className="fas fa-user-friends" style={{ color: '#64748b' }}></i>
-                              <span>{searchData.adults + searchData.children + searchData.infants} Traveler(s)</span>
+                              <span>{searchData.adults + searchData.children + searchData.infantsInSeat + searchData.infantsOnLap} Traveler(s)</span>
                               <i className={`fas fa-chevron-${showPassengerPopup ? 'up' : 'down'}`} style={{ fontSize: '0.7rem' }}></i>
                             </button>
 
@@ -430,7 +450,7 @@ function Home() {
                                   <div className="passenger-counters">
                                     <button type="button" className="counter-btn" onClick={() => decrementPassenger('adults')} disabled={searchData.adults <= 1}>-</button>
                                     <span className="counter-value">{searchData.adults}</span>
-                                    <button type="button" className="counter-btn" onClick={() => incrementPassenger('adults')}>+</button>
+                                    <button type="button" className="counter-btn" onClick={() => incrementPassenger('adults')} disabled={searchData.adults + searchData.children + searchData.infantsInSeat + searchData.infantsOnLap >= MAX_TRAVELERS}>+</button>
                                   </div>
                                 </div>
                                 <div className="passenger-row">
@@ -441,18 +461,29 @@ function Home() {
                                   <div className="passenger-counters">
                                     <button type="button" className="counter-btn" onClick={() => decrementPassenger('children')} disabled={searchData.children <= 0}>-</button>
                                     <span className="counter-value">{searchData.children}</span>
-                                    <button type="button" className="counter-btn" onClick={() => incrementPassenger('children')}>+</button>
+                                    <button type="button" className="counter-btn" onClick={() => incrementPassenger('children')} disabled={searchData.adults + searchData.children + searchData.infantsInSeat + searchData.infantsOnLap >= MAX_TRAVELERS}>+</button>
                                   </div>
                                 </div>
                                 <div className="passenger-row">
                                   <div className="passenger-label">
-                                    <span className="passenger-type">Infants</span>
-                                    <span className="passenger-age-desc">Under 2 (lap)</span>
+                                    <span className="passenger-type">Infants in seat</span>
+                                    <span className="passenger-age-desc">Under 2</span>
                                   </div>
                                   <div className="passenger-counters">
-                                    <button type="button" className="counter-btn" onClick={() => decrementPassenger('infants')} disabled={searchData.infants <= 0}>-</button>
-                                    <span className="counter-value">{searchData.infants}</span>
-                                    <button type="button" className="counter-btn" onClick={() => incrementPassenger('infants')}>+</button>
+                                    <button type="button" className="counter-btn" onClick={() => decrementPassenger('infantsInSeat')} disabled={searchData.infantsInSeat <= 0}>-</button>
+                                    <span className="counter-value">{searchData.infantsInSeat}</span>
+                                    <button type="button" className="counter-btn" onClick={() => incrementPassenger('infantsInSeat')} disabled={searchData.adults + searchData.children + searchData.infantsInSeat + searchData.infantsOnLap >= MAX_TRAVELERS}>+</button>
+                                  </div>
+                                </div>
+                                <div className="passenger-row">
+                                  <div className="passenger-label">
+                                    <span className="passenger-type">Infants on lap</span>
+                                    <span className="passenger-age-desc">Under 2</span>
+                                  </div>
+                                  <div className="passenger-counters">
+                                    <button type="button" className="counter-btn" onClick={() => decrementPassenger('infantsOnLap')} disabled={searchData.infantsOnLap <= 0}>-</button>
+                                    <span className="counter-value">{searchData.infantsOnLap}</span>
+                                    <button type="button" className="counter-btn" onClick={() => incrementPassenger('infantsOnLap')} disabled={searchData.infantsOnLap >= searchData.adults || searchData.adults + searchData.children + searchData.infantsInSeat + searchData.infantsOnLap >= MAX_TRAVELERS}>+</button>
                                   </div>
                                 </div>
                                 <button type="button" className="passenger-popup-close" onClick={() => setShowPassengerPopup(false)}>Done</button>
@@ -963,4 +994,3 @@ function Home() {
 }
 
 export default Home;
-
