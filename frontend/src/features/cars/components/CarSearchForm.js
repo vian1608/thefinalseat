@@ -74,7 +74,6 @@ function CarSearchForm({ initialValues = {}, compact = false }) {
     e.preventDefault();
     setErrorMsg('');
 
-    // Client-side validations
     if (!pickupText) {
       setErrorMsg('Please specify a pickup airport or city location.');
       return;
@@ -123,8 +122,6 @@ function CarSearchForm({ initialValues = {}, compact = false }) {
       currency
     };
 
-    sessionStorage.setItem('carSearchParams', JSON.stringify(searchParams));
-
     const query = new URLSearchParams({
       pickup: searchParams.pickupLocation.airport || searchParams.pickupLocation.city || pickupText,
       dropoff: searchParams.dropoffLocation.airport || searchParams.dropoffLocation.city || (sameDropoff ? pickupText : dropoffText),
@@ -133,6 +130,7 @@ function CarSearchForm({ initialValues = {}, compact = false }) {
       dropoffDate,
       dropoffTime,
       driverAge: String(ageNum),
+      driverCountry,
       currency
     });
 
@@ -148,7 +146,6 @@ function CarSearchForm({ initialValues = {}, compact = false }) {
         </div>
       )}
 
-      {/* Meta Options Bar: Driver Age, Country, Currency */}
       <div className="car-search-meta-bar">
         <div className="car-meta-item">
           <label htmlFor="driver-age-input" className="car-meta-label">
@@ -205,7 +202,6 @@ function CarSearchForm({ initialValues = {}, compact = false }) {
         </div>
       </div>
 
-      {/* Locations Row */}
       <div className="car-search-row car-locations-row">
         <div className="car-search-field">
           <LocationAutocomplete
@@ -238,7 +234,6 @@ function CarSearchForm({ initialValues = {}, compact = false }) {
         )}
       </div>
 
-      {/* Dates & Times Row */}
       <div className="car-search-row car-dates-row">
         <div className="car-search-field car-datetime-group">
           <TravelDatePicker
@@ -281,7 +276,6 @@ function CarSearchForm({ initialValues = {}, compact = false }) {
         </div>
       </div>
 
-      {/* Search Submit Button */}
       <div className="car-search-submit-wrapper">
         <button type="submit" className="car-search-submit-btn">
           <i className="fas fa-car" aria-hidden="true" />
