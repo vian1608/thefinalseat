@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import ReturnFlightSelection from '../flights/pages/ReturnFlightSelectionPage';
 import BookingVoucherPage from '../bookings/vouchers/BookingVoucherPage';
 import PaymentSuccessPage from '../bookings/pages/PaymentSuccessPage';
@@ -168,26 +168,34 @@ function restoreDraftValues(draft) {
   });
 }
 
+function restoreVoucher(voucher) {
+  if (!voucher?.code) return;
+  window.setTimeout(() => {
+    const input = document.querySelector('.tfs-voucher-checkout input[aria-label="Voucher code"]');
+    if (!input) return;
+    const section = input.closest('.tfs-voucher-checkout');
+    if (!section || section.querySelector('.tfs-voucher-applied')) return;
+    setNativeValue(input, voucher.code);
+    const button = Array.from(section.querySelectorAll('button')).find((node) => /apply/i.test(node.textContent || ''));
+    button?.click();
+  }, 1150);
+}
+
 function restoreCheckoutDraft(payload = {}) {
   const draft = payload.formDraft;
-  if (!draft) return;
-
-  const run = () => {
-    if (draft.billingExpanded && !document.getElementById('billingAddress')) {
-      document.querySelector('.btn-add-billing')?.click();
-      window.setTimeout(() => restoreDraftValues(draft), 80);
-    } else {
-      restoreDraftValues(draft);
-    }
-
-    if (payload.voucher) {
-      sessionStorage.setItem('tfsAppliedVoucher', JSON.stringify(payload.voucher));
-      window.dispatchEvent(new CustomEvent('tfs:restore-voucher', { detail: payload.voucher }));
-    }
-  };
-
-  window.setTimeout(run, 160);
-  window.setTimeout(run, 700);
+  if (draft) {
+    const run = () => {
+      if (draft.billingExpanded && !document.getElementById('billingAddress')) {
+        document.querySelector('.btn-add-billing')?.click();
+        window.setTimeout(() => restoreDraftValues(draft), 80);
+      } else {
+        restoreDraftValues(draft);
+      }
+    };
+    window.setTimeout(run, 160);
+    window.setTimeout(run, 700);
+  }
+  restoreVoucher(payload.voucher);
 }
 
 function CheckoutDraftPersistence({ token, initialPayload }) {
@@ -221,13 +229,13 @@ function CheckoutDraftPersistence({ token, initialPayload }) {
 
     document.addEventListener('input', schedule, true);
     document.addEventListener('change', schedule, true);
-    window.addEventListener('tfs:voucher-changed', schedule);
+    document.addEventListener('click', schedule, true);
 
     return () => {
       window.clearTimeout(timerRef.current);
       document.removeEventListener('input', schedule, true);
       document.removeEventListener('change', schedule, true);
-      window.removeEventListener('tfs:voucher-changed', schedule);
+      document.removeEventListener('click', schedule, true);
     };
   }, [token, initialPayload]);
 
@@ -240,12 +248,6 @@ export function ReturnFlightBootstrap() {
 
   useEffect(() => {
     let cancelled = false;
-    const existing = sessionStorage.getItem('quoteSessionToken');
-    if (existing?.startsWith('q_')) {
-      navigate(`/return-flight/${encodeURIComponent(existing)}`, { replace: true });
-      return undefined;
-    }
-
     const selectedFlight = readJsonStorage('selectedFlight');
     const searchParams = readJsonStorage('searchParams', {});
     if (!selectedFlight || !searchParams?.returnDate) {
@@ -253,6 +255,8 @@ export function ReturnFlightBootstrap() {
       return undefined;
     }
 
+    sessionStorage.removeItem('quoteSessionToken');
+    sessionStorage.removeItem('checkoutSessionToken');
     journeySessionAPI.createQuote({ searchParams, selectedFlight })
       .then((response) => {
         if (cancelled) return;
@@ -301,12 +305,6 @@ export function BookingBootstrap() {
 
   useEffect(() => {
     let cancelled = false;
-    const existing = sessionStorage.getItem('checkoutSessionToken');
-    if (existing?.startsWith('c_')) {
-      navigate(`/booking/${encodeURIComponent(existing)}`, { replace: true });
-      return undefined;
-    }
-
     const selectedFlight = readJsonStorage('selectedFlight');
     const returnFlight = readJsonStorage('returnFlight') || readJsonStorage('selectedReturnFlight');
     const searchParams = readJsonStorage('searchParams', {});
@@ -317,6 +315,7 @@ export function BookingBootstrap() {
       return undefined;
     }
 
+    sessionStorage.removeItem('checkoutSessionToken');
     journeySessionAPI.createCheckout({ searchParams, selectedFlight, returnFlight, quoteToken })
       .then((response) => {
         if (cancelled) return;
@@ -355,7 +354,6 @@ export function TokenizedBookingPage() {
         }
         if (!payload?.selectedFlight || !payload?.searchParams) throw new Error('This checkout link does not contain a complete itinerary.');
         seedTravelStorage(payload, { quoteToken: payload.quoteToken || null, checkoutToken });
-        if (payload.voucher) sessionStorage.setItem('tfsAppliedVoucher', JSON.stringify(payload.voucher));
         setSession(data);
       })
       .catch((err) => !cancelled && setError(err?.userMessage || err?.message || 'Unable to restore this checkout link.'));
@@ -393,9 +391,4 @@ export function BookingConfirmationRoute() {
 export function LegacyPaymentSuccessRoute() {
   ensureReservationReadBridge();
   return <PaymentSuccessPage />;
-}
-
-export function JourneyCheckoutRedirect() {
-  const token = sessionStorage.getItem('checkoutSessionToken');
-  return token?.startsWith('c_') ? <Navigate to={`/booking/${encodeURIComponent(token)}`} replace /> : <BookingBootstrap />;
 }
