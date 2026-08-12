@@ -13,6 +13,7 @@ const pricing = read('backend/src/shared/utils/pricing.helper.mjs');
 const resultRow = read('frontend/src/features/flights/components/FlightResultRow.js');
 const returnPage = read('frontend/src/features/flights/pages/ReturnFlightSelectionPage.js');
 const bookingContract = read('frontend/src/shared/pricing/bookingPriceContract.js');
+const itineraryNormalizer = read('frontend/src/shared/utils/itineraryNormalizer.js');
 const bookingPage = read('frontend/src/features/bookings/pages/BookingPage.js');
 
 // Supplier prices are explicitly typed as whole-party totals so downstream code
@@ -47,6 +48,14 @@ assert.match(bookingContract, /selectionStage\s*===\s*'outbound'/);
 assert.match(bookingContract, /deferred_until_return_selection/);
 assert.match(bookingContract, /partyOriginalPrice/);
 assert.match(bookingContract, /partyFinalPrice/);
+
+// Important: the deliberately deferred outbound booking contribution is 0, but
+// itinerary integrity must validate the preserved supplier party total instead.
+// Otherwise selecting any round-trip departure produces the pricing-data error.
+assert.match(itineraryNormalizer, /resolveItineraryTotalAmount/);
+assert.match(itineraryNormalizer, /price\.partyFinalPrice/);
+assert.match(itineraryNormalizer, /const totalAmount = resolveItineraryTotalAmount\(rawResult\)/);
+assert.match(itineraryNormalizer, /preserved quote, not the intentionally deferred contribution/);
 
 // The current checkout still multiplies legacy per-traveler contributions by
 // passenger count, which is why the adapter is mandatory. Guard both sides of
