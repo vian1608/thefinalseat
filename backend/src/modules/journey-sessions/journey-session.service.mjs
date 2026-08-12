@@ -127,20 +127,21 @@ async function getSession(token, type) {
 }
 
 async function patchSession(token, type, patch = {}) {
-  const current = await getSession(token, type);
-  const cleanPatch = sanitizeValue(patch || {});
-  const nextPayload = {
-    ...(current.payload || {}),
-    ...cleanPatch,
-  };
+  assertTokenType(token, type);
+  const nextPayload = sanitizeValue(patch?.payload ?? patch ?? {});
+  const now = new Date().toISOString();
 
+  // One conditional UPDATE only. The browser already owns the loaded payload and
+  // sends its complete replacement, so autosave never becomes read-then-write fan-out.
   const { data, error } = await supabase
     .from('journey_sessions')
-    .update({ payload: nextPayload, updated_at: new Date().toISOString() })
+    .update({ payload: nextPayload, updated_at: now })
     .eq('token', token)
     .eq('session_type', type)
+    .neq('status', 'REVOKED')
+    .gt('expires_at', now)
     .select(SESSION_COLUMNS)
-    .single();
+    .maybeSingle();
 
   if (error) {
     const wrapped = new Error(`Unable to update travel session: ${error.message}`);
@@ -148,7 +149,7 @@ async function patchSession(token, type, patch = {}) {
     wrapped.code = 'JOURNEY_SESSION_UPDATE_FAILED';
     throw wrapped;
   }
-  return data;
+  return assertUsable(data);
 }
 
 function normalizeFlightForPublicSession(flight) {
