@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { consultingServices, PAYMENT_DISCLAIMER } from '../../../shared/data/consultingServices';
 import { paymentAPI } from '../../../shared/api/api';
+import journeySessionAPI from '../../../shared/api/journeySessionApi';
 import { normalizeError } from '../../../shared/utils/normalizeError';
 import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../../../shared/constants/supportContact';
 import './ConsultingPaymentPage.css';
@@ -19,14 +20,38 @@ const initialBilling = {
   agreeTerms: false,
 };
 
-function ConsultingPayment() {
-  const [selectedId, setSelectedId] = useState('urgent');
-  const [billing, setBilling] = useState(initialBilling);
+function ConsultingPayment({ paymentToken = null, initialSession = null }) {
+  const initialPayload = initialSession || {};
+  const [selectedId, setSelectedId] = useState(initialPayload.serviceId || 'urgent');
+  const [billing, setBilling] = useState({ ...initialBilling, ...(initialPayload.billing || {}) });
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
 
   const selected = consultingServices.find((service) => service.id === selectedId) || consultingServices[0];
   const finalPrice = Number(selected.price).toFixed(2);
+
+  useEffect(() => {
+    if (!paymentToken) return undefined;
+    const timer = window.setTimeout(() => {
+      journeySessionAPI.updatePayment(paymentToken, {
+        payload: {
+          serviceId: selectedId,
+          billing: {
+            fullName: billing.fullName,
+            email: billing.email,
+            phone: billing.phone,
+            address: billing.address,
+            city: billing.city,
+            state: billing.state,
+            zip: billing.zip,
+            country: billing.country,
+            agreeTerms: !!billing.agreeTerms,
+          },
+        },
+      }).catch(() => {/* non-blocking durable payment-form save */});
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [paymentToken, selectedId, billing]);
 
   const handleChange = (field, value) => {
     setBilling((previous) => ({ ...previous, [field]: value }));
@@ -46,8 +71,9 @@ function ConsultingPayment() {
     setStatus('submitting');
     setMessage('');
 
-    // Only non-sensitive contact/billing context is persisted locally. Raw
-    // payment credentials are entered exclusively on Stripe's hosted page.
+    // Browser storage is only a convenience cache. The p_ URL + server session is
+    // the durable source of truth. Raw card credentials are still entered only on
+    // the hosted provider page and are never stored here.
     sessionStorage.setItem('pendingBilling', JSON.stringify({
       fullName: billing.fullName,
       email: billing.email,
@@ -58,6 +84,7 @@ function ConsultingPayment() {
       zip: billing.zip,
       country: billing.country,
       serviceId: selected.id,
+      paymentToken,
     }));
 
     try {
@@ -75,6 +102,7 @@ function ConsultingPayment() {
         ].join(' | '),
         planName: selected.name,
         planDescription: selected.description,
+        journeySessionToken: paymentToken,
       });
 
       if (response?.success === true && response?.url) {
@@ -87,6 +115,27 @@ function ConsultingPayment() {
 
         if (checkoutUrl.protocol !== 'https:') {
           throw new Error('The secure checkout URL was not valid.');
+        }
+
+        if (paymentToken) {
+          journeySessionAPI.updatePayment(paymentToken, {
+            payload: {
+              serviceId: selectedId,
+              billing: {
+                fullName: billing.fullName,
+                email: billing.email,
+                phone: billing.phone,
+                address: billing.address,
+                city: billing.city,
+                state: billing.state,
+                zip: billing.zip,
+                country: billing.country,
+                agreeTerms: !!billing.agreeTerms,
+              },
+              provider: 'stripe',
+              providerStatus: 'REDIRECTED',
+            },
+          }).catch(() => {/* redirect must not depend on session bookkeeping */});
         }
 
         window.location.assign(checkoutUrl.href);
