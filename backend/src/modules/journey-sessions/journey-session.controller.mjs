@@ -56,7 +56,20 @@ const journeySessionController = {
   getCheckout: async (req, res, next) => {
     try {
       const row = await journeySessionService.getCheckout(req.params.token);
-      res.json({ success: true, data: publicSession(row) });
+      const data = publicSession(row);
+
+      // A duplicated/refreshed checkout link after a successful submit should land
+      // on the durable r_ confirmation URL instead of reopening an editable form.
+      if (row.status === 'COMPLETED' && row.booking_id) {
+        try {
+          const completed = await journeySessionService.completeCheckout(row.token, row.booking_id);
+          data.reservationToken = completed.reservationToken || null;
+        } catch (error) {
+          console.error('[JourneySession] Completed-checkout restore warning:', error.message);
+        }
+      }
+
+      res.json({ success: true, data });
     } catch (error) {
       next(error);
     }
