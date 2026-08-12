@@ -25,7 +25,6 @@ import RefundPolicy from '../shared/pages/RefundPolicyPage';
 import TrainRoute from '../features/flights/pages/TrainRoutePage';
 import FlightRoute from '../features/flights/pages/FlightRoutePage';
 import AirlineActionPage from '../features/flights/pages/AirlineActionPage';
-import ConsultingPayment from '../features/payments/pages/ConsultingPaymentPage';
 import RouteDispatcher from '../features/flights/pages/RouteDispatcher';
 import MyBookings from '../features/bookings/pages/MyBookingsPage';
 import PassengerAuthorization from '../features/authorizations/pages/PassengerAuthorizationPage';
@@ -43,10 +42,10 @@ import {
   TokenizedBookingPage,
   TokenizedReturnFlightPage,
 } from '../features/journey/TokenizedJourneyRoutes';
+import { PaymentBootstrap, TokenizedPaymentPage } from '../features/journey/TokenizedPaymentRoutes';
 
 import CarRentalsHomePage from '../features/cars/pages/CarRentalsHomePage';
-import CarSearchResultsPage from '../features/cars/pages/CarSearchResultsPage';
-
+import CarSearchUrlGuard from '../features/cars/pages/CarSearchUrlGuard';
 
 function LegacyAirlineRedirect() {
   const { airlineSlug } = useParams();
@@ -74,16 +73,16 @@ function App() {
             <PageTransition>
               <Routes>
                 <Route path="/" element={<Home />} />
-                
-                {/* Car Rentals Routes (Booking.com Demand API v3.1) */}
+
+                {/* Car Rentals: results are URL-authoritative and copy/paste safe. */}
                 <Route path="/car-rentals" element={<CarRentalsHomePage />} />
-                <Route path="/car-rentals/search" element={<CarSearchResultsPage />} />
-                <Route path="/car-rentals/results" element={<CarSearchResultsPage />} />
+                <Route path="/car-rentals/search" element={<CarSearchUrlGuard />} />
+                <Route path="/car-rentals/results" element={<CarSearchUrlGuard />} />
 
                 {/* Legacy Amtrak Route Redirect */}
                 <Route path="/amtrak" element={<Navigate to="/car-rentals" replace />} />
                 <Route path="/amtrak-assistance" element={<Navigate to="/car-rentals" replace />} />
-                
+
                 {/* Admin Routes */}
                 <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
                 <Route path="/admin/login" element={<AdminLogin />} />
@@ -94,8 +93,8 @@ function App() {
 
                 {/* Train Routes */}
                 <Route path="/train-nyc-to-dc" element={
-                  <TrainRoute 
-                    title="Train from NYC to Washington, D.C." 
+                  <TrainRoute
+                    title="Train from NYC to Washington, D.C."
                     metaTitle="Train from NYC to DC | Book Tickets & Schedules | The Final Seat"
                     metaDescription="Need a train from NYC to Washington DC? Get optimized schedules, seat selections, and seamless ticketing assistance on the Northeast Corridor."
                     keywords="train from nyc to dc, train new york washington, new york to washington dc train, train to new york"
@@ -106,8 +105,8 @@ function App() {
                   />
                 } />
                 <Route path="/train-dc-to-nyc" element={
-                  <TrainRoute 
-                    title="Train from D.C. to New York City" 
+                  <TrainRoute
+                    title="Train from D.C. to New York City"
                     metaTitle="Train from DC to NYC | Schedules & Easy Booking | The Final Seat"
                     metaDescription="Find the fastest train routes from Washington DC to New York City. Plan your Northeast Corridor travel with zero hassle or booking stress."
                     keywords="train from dc to nyc, train to new york from dc, new york to dc train, boston to nyc train"
@@ -118,8 +117,8 @@ function App() {
                   />
                 } />
                 <Route path="/train-philly-to-nyc" element={
-                  <TrainRoute 
-                    title="Train from Philadelphia to NYC" 
+                  <TrainRoute
+                    title="Train from Philadelphia to NYC"
                     metaTitle="Train from Philly to NYC | Fast Passenger Routing | The Final Seat"
                     metaDescription="Coordination and support for train travel from Philadelphia to NYC. Book your Amtrak or regional commuter seats instantly."
                     keywords="train from philly to nyc, train from nyc to philadelphia, buy train tickets, amtrak tickets"
@@ -130,8 +129,8 @@ function App() {
                   />
                 } />
                 <Route path="/train-boston-to-nyc" element={
-                  <TrainRoute 
-                    title="Train from Boston to NYC" 
+                  <TrainRoute
+                    title="Train from Boston to NYC"
                     metaTitle="Train from Boston to NYC | Premium Tickets | The Final Seat"
                     metaDescription="Expert logistics for Northeast Corridor rail from Boston to New York City."
                     keywords="boston to nyc train, train to new york from boston, amtrak boston to nyc"
@@ -144,8 +143,8 @@ function App() {
 
                 {/* Flight Routes */}
                 <Route path="/flight-nyc-to-mia" element={
-                  <FlightRoute 
-                    title="Flights from NYC to Miami (MIA)" 
+                  <FlightRoute
+                    title="Flights from NYC to Miami (MIA)"
                     metaTitle="Flights from NYC to Miami | Fast Booking & Deals | The Final Seat"
                     metaDescription="Find best flight deals and seamless advisory for non-stop flights from New York to Miami."
                     keywords="flights from nyc to mia, new york to miami flights, nyc to miami plane tickets"
@@ -156,8 +155,8 @@ function App() {
                   />
                 } />
                 <Route path="/flight-lax-to-jfk" element={
-                  <FlightRoute 
-                    title="Flights from Los Angeles (LAX) to New York (JFK)" 
+                  <FlightRoute
+                    title="Flights from Los Angeles (LAX) to New York (JFK)"
                     metaTitle="Flights from LAX to JFK | Transcontinental Deals | The Final Seat"
                     metaDescription="Book premium transcontinental flights from Los Angeles to New York JFK with expert logistics."
                     keywords="flights from lax to jfk, los angeles to new york flights, lax to jfk tickets"
@@ -175,12 +174,15 @@ function App() {
                 <Route path="/cancellation/:airline" element={<AirlineActionPage action="cancellation" />} />
                 <Route path="/airlines/:airlineSlug" element={<LegacyAirlineRedirect />} />
 
-                {/* Flight & App Routes */}
+                {/* Flight search remains readable/shareable by query string. */}
                 <Route path="/search" element={<SearchResults />} />
-                <Route path="/payment" element={<ConsultingPayment />} />
+
+                {/* Consulting payment uses an opaque p_ session URL. */}
+                <Route path="/payment" element={<PaymentBootstrap />} />
+                <Route path="/payment/:paymentToken" element={<TokenizedPaymentPage />} />
                 <Route path="/pay" element={<Navigate to="/payment" replace />} />
 
-                {/* Durable journey URLs. Legacy simple paths bootstrap tokens. */}
+                {/* Durable flight journey URLs. Legacy simple paths bootstrap tokens. */}
                 <Route path="/return-flight" element={<ReturnFlightBootstrap />} />
                 <Route path="/return-flight/:quoteToken" element={<TokenizedReturnFlightPage />} />
                 <Route path="/booking" element={<BookingBootstrap />} />
@@ -200,7 +202,7 @@ function App() {
                 <Route path="/contact" element={<ContactInfo />} />
                 <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                 <Route path="/refund-policy" element={<RefundPolicy />} />
-                
+
                 {/* Dedicated Landing Pages */}
                 <Route path="/travel-assistance" element={<TravelAssistance />} />
                 <Route path="/booking-for-parents" element={<BookingForParents />} />
@@ -213,8 +215,7 @@ function App() {
                 <Route path="/privacypolicy" element={<Navigate to="/privacy-policy" replace />} />
                 <Route path="/refund" element={<Navigate to="/refund-policy" replace />} />
                 <Route path="/refundpolicy" element={<Navigate to="/refund-policy" replace />} />
-                
-                {/* Unknown client routes render a real not-found experience instead of redirecting to home. */}
+
                 <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </PageTransition>
