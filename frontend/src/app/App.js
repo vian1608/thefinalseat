@@ -16,7 +16,6 @@ import AdminVouchersPage from '../features/admin/pages/AdminVouchersPage';
 import AdminVoucherShortcut from '../features/admin/components/AdminVoucherShortcut';
 import OneWayConfirmation from '../features/bookings/pages/OneWayConfirmationPage';
 import RoundTripConfirmation from '../features/bookings/pages/RoundTripConfirmationPage';
-import ReturnFlightSelection from '../features/flights/pages/ReturnFlightSelectionPage';
 import TermsAndConditions from '../shared/pages/TermsAndConditionsPage';
 import ContactInfo from '../shared/pages/ContactInfoPage';
 import NotFoundPage from '../shared/pages/NotFoundPage';
@@ -28,8 +27,6 @@ import FlightRoute from '../features/flights/pages/FlightRoutePage';
 import AirlineActionPage from '../features/flights/pages/AirlineActionPage';
 import ConsultingPayment from '../features/payments/pages/ConsultingPaymentPage';
 import RouteDispatcher from '../features/flights/pages/RouteDispatcher';
-import Booking from '../features/bookings/vouchers/BookingVoucherPage';
-import PaymentSuccess from '../features/bookings/pages/PaymentSuccessPage';
 import MyBookings from '../features/bookings/pages/MyBookingsPage';
 import PassengerAuthorization from '../features/authorizations/pages/PassengerAuthorizationPage';
 import TravelAssistance from '../features/flights/pages/TravelAssistancePage';
@@ -38,6 +35,14 @@ import UrgentTravel from '../features/flights/pages/UrgentTravelPage';
 import AppErrorBoundary from '../shared/components/AppErrorBoundary';
 import { Analytics } from '@vercel/analytics/react';
 import SeniorTravelPage from '../features/flights/pages/SeniorTravelPage';
+import {
+  BookingBootstrap,
+  BookingConfirmationRoute,
+  LegacyPaymentSuccessRoute,
+  ReturnFlightBootstrap,
+  TokenizedBookingPage,
+  TokenizedReturnFlightPage,
+} from '../features/journey/TokenizedJourneyRoutes';
 
 import CarRentalsHomePage from '../features/cars/pages/CarRentalsHomePage';
 import CarSearchResultsPage from '../features/cars/pages/CarSearchResultsPage';
@@ -174,18 +179,23 @@ function App() {
                 <Route path="/search" element={<SearchResults />} />
                 <Route path="/payment" element={<ConsultingPayment />} />
                 <Route path="/pay" element={<Navigate to="/payment" replace />} />
-                <Route path="/booking" element={<Booking />} />
+
+                {/* Durable journey URLs. Legacy simple paths bootstrap tokens. */}
+                <Route path="/return-flight" element={<ReturnFlightBootstrap />} />
+                <Route path="/return-flight/:quoteToken" element={<TokenizedReturnFlightPage />} />
+                <Route path="/booking" element={<BookingBootstrap />} />
+                <Route path="/booking/:checkoutToken" element={<TokenizedBookingPage />} />
+
                 <Route path="/authorize/:token" element={<PassengerAuthorization />} />
-                <Route path="/confirmation/success" element={<PaymentSuccess />} />
-                <Route path="/booking-confirmed/:confirmationCode" element={<PaymentSuccess />} />
-                <Route path="/booking-confirmed" element={<PaymentSuccess />} />
+                <Route path="/confirmation/success" element={<LegacyPaymentSuccessRoute />} />
+                <Route path="/booking-confirmed/:confirmationCode" element={<BookingConfirmationRoute />} />
+                <Route path="/booking-confirmed" element={<LegacyPaymentSuccessRoute />} />
 
                 <Route path="/my-bookings" element={<MyBookings />} />
                 <Route path="/signin" element={<SignIn />} />
                 <Route path="/signup" element={<SignUp />} />
                 <Route path="/confirmation/one-way" element={<OneWayConfirmation />} />
                 <Route path="/confirmation/round-trip" element={<RoundTripConfirmation />} />
-                <Route path="/return-flight" element={<ReturnFlightSelection />} />
                 <Route path="/terms" element={<TermsAndConditions />} />
                 <Route path="/contact" element={<ContactInfo />} />
                 <Route path="/privacy-policy" element={<PrivacyPolicy />} />
