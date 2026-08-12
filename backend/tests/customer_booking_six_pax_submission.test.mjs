@@ -84,12 +84,16 @@ async function run() {
   );
   assert.ok(routeSource.includes('normalizeBookingCreateRequest'));
   assert.ok(routeSource.includes('applyVoucherPricingToBooking'));
-  assert.ok(routeSource.includes("router.post('/', bookingRateLimiter, normalizeBookingCreateRequest, applyVoucherPricingToBooking, bookingController.create)"));
+  assert.ok(routeSource.includes('completeJourneySessionAfterBooking'));
+  assert.match(
+    routeSource,
+    /router\.post\([\s\S]*?'\/'[\s\S]*?bookingRateLimiter[\s\S]*?normalizeBookingCreateRequest[\s\S]*?applyVoucherPricingToBooking[\s\S]*?completeJourneySessionAfterBooking[\s\S]*?bookingController\.create[\s\S]*?\);/
+  );
 
   console.log('✔ Six-passenger validation passed.');
   console.log('✔ Lowercase checkout statuses normalize to canonical uppercase DB states.');
   console.log('✔ Invalid status values return a 400-class validation error.');
-  console.log('✔ Voucher pricing remains in the booking-create middleware chain.');
+  console.log('✔ Voucher pricing and durable journey finalization remain in the booking-create middleware chain.');
 }
 
 run().catch((error) => {
