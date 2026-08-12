@@ -11,6 +11,7 @@ import whopRouter from '../modules/payments/whop.routes.mjs';
 import paypalController from '../modules/payments/paypal.controller.mjs';
 import rateLimit from '../middleware/rate-limit.mjs';
 import voucherRoutes from '../modules/vouchers/voucher.routes.mjs';
+import { journeySessionRouter } from '../modules/journey-sessions/journey-session.routes.mjs';
 
 import { noStore, publicLookupCache } from '../middleware/cache-control.middleware.mjs';
 
@@ -42,6 +43,7 @@ router.use('/authorizations', noStore, authorizationRouter);
 router.use('/authorization', noStore, authorizationRouter);
 router.use('/admin', noStore, adminRouter);
 router.use('/vouchers', noStore, voucherRoutes);
+router.use('/journey-sessions', noStore, journeySessionRouter);
 
 router.post('/webhooks/paypal', paypalController.handleWebhook);
 router.use('/inquiries', enquiryRouter);
