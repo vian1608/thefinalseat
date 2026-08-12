@@ -4,6 +4,7 @@ import rateLimit from '../../middleware/rate-limit.mjs';
 import { abandonedBookingRouter } from '../abandoned-bookings/abandoned-booking.routes.mjs';
 import { normalizeBookingCreateRequest } from './booking-create-normalization.mjs';
 import applyVoucherPricingToBooking from '../vouchers/voucher-booking.middleware.mjs';
+import completeJourneySessionAfterBooking from '../journey-sessions/checkout-session-booking.middleware.mjs';
 import './booking.repository.egress-hardening.mjs';
 import './booking.service.status-hardening.mjs';
 
@@ -27,7 +28,14 @@ const bookingReadRateLimiter = rateLimit({
   message: 'Too many booking lookups. Please wait a minute before trying again.'
 });
 
-router.post('/', bookingRateLimiter, normalizeBookingCreateRequest, applyVoucherPricingToBooking, bookingController.create);
+router.post(
+  '/',
+  bookingRateLimiter,
+  normalizeBookingCreateRequest,
+  applyVoucherPricingToBooking,
+  completeJourneySessionAfterBooking,
+  bookingController.create
+);
 router.get('/search', searchRateLimiter, bookingController.search);
 router.get('/user/:email', bookingReadRateLimiter, bookingController.getByUserEmail);
 router.use('/abandoned', abandonedBookingRouter);
