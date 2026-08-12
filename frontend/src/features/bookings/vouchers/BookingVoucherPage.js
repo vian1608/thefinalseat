@@ -9,6 +9,13 @@ import './BookingVoucherPage.css';
 let currentVoucher = null;
 let bookingApiPatched = false;
 
+const PROCESSING_MESSAGES = [
+  'Checking traveler and contact details…',
+  'Securing your selected itinerary and final fare…',
+  'Applying booking protections and preparing your reservation…',
+  'Preparing your confirmation details…',
+];
+
 function lastFour(value) {
   const digits = String(value || '').replace(/\D/g, '');
   return digits.length >= 4 ? digits.slice(-4) : null;
@@ -91,6 +98,19 @@ function ensurePortalHost(id, beforeSelector, fallbackSelector) {
   return host;
 }
 
+function ensureProcessingHost() {
+  let host = document.getElementById('tfs-booking-processing-host');
+  if (host?.isConnected) return host;
+
+  const button = document.querySelector('.amtrak-btn.amtrak-btn--cta.amtrak-btn--full');
+  if (!button?.parentElement) return null;
+
+  host = document.createElement('div');
+  host.id = 'tfs-booking-processing-host';
+  button.insertAdjacentElement('afterend', host);
+  return host;
+}
+
 function setTextIfChanged(node, value) {
   if (!node || node.textContent === value) return;
   node.textContent = value;
@@ -127,6 +147,48 @@ function syncDisplayedTotals(basePricing, appliedVoucher) {
     const labelNode = completeButton.querySelector('span') || completeButton;
     setTextIfChanged(labelNode, desired);
   }
+}
+
+function syncProcessingButton(setProcessing) {
+  const button = document.querySelector('.amtrak-btn.amtrak-btn--cta.amtrak-btn--full');
+  const processing = !!button && /Processing/i.test(button.textContent || '');
+  if (button) button.classList.toggle('tfs-booking-processing-active', processing);
+  setProcessing((current) => current === processing ? current : processing);
+}
+
+function ProcessingExperience({ passengerCount = 1 }) {
+  const [messageIndex, setMessageIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setMessageIndex((current) => (current + 1) % PROCESSING_MESSAGES.length);
+    }, 3500);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <section className="tfs-booking-processing-card" role="status" aria-live="polite" aria-atomic="true">
+      <div className="tfs-booking-processing-card__top">
+        <div className="tfs-booking-processing-card__shield" aria-hidden="true">
+          <i className="fas fa-shield-alt" />
+        </div>
+        <div>
+          <strong>We’re securing your reservation</strong>
+          <p>{PROCESSING_MESSAGES[messageIndex]}</p>
+        </div>
+        <div className="tfs-booking-processing-card__dots" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+      </div>
+      <p className="tfs-booking-processing-card__note">
+        <i className="fas fa-info-circle" aria-hidden="true" />
+        Keep this page open. Please don’t refresh, press Back, or click the booking button again while we finish.
+        {passengerCount > 1 ? ' Bookings with multiple travelers can take a little longer.' : ''}
+      </p>
+    </section>
+  );
 }
 
 function VoucherCheckoutPanel({ basePricing, appliedVoucher, onApplied, onRemoved }) {
@@ -244,6 +306,8 @@ function VoucherSidebarRow({ appliedVoucher }) {
 function VoucherEnhancement() {
   const [paymentHost, setPaymentHost] = useState(null);
   const [sidebarHost, setSidebarHost] = useState(null);
+  const [processingHost, setProcessingHost] = useState(null);
+  const [processing, setProcessing] = useState(false);
   const [appliedVoucher, setAppliedVoucher] = useState(null);
   const basePricing = useMemo(() => getCheckoutBasePricing(), []);
 
@@ -265,15 +329,20 @@ function VoucherEnhancement() {
         sidebar.id = 'tfs-voucher-sidebar-host';
         totalRow.parentElement.insertBefore(sidebar, totalRow);
       }
+      const processingStatusHost = ensureProcessingHost();
       if (payment) setPaymentHost((current) => current === payment ? current : payment);
       if (sidebar) setSidebarHost((current) => current === sidebar ? current : sidebar);
+      if (processingStatusHost) setProcessingHost((current) => current === processingStatusHost ? current : processingStatusHost);
     };
 
-    installHosts();
-    const observer = new MutationObserver(() => {
+    const syncCheckoutState = () => {
       installHosts();
       syncDisplayedTotals(basePricing, currentVoucher);
-    });
+      syncProcessingButton(setProcessing);
+    };
+
+    syncCheckoutState();
+    const observer = new MutationObserver(syncCheckoutState);
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
     const clearOnEmailChange = (event) => {
@@ -289,7 +358,7 @@ function VoucherEnhancement() {
     };
 
     const resyncAfterInput = () => {
-      window.requestAnimationFrame(() => syncDisplayedTotals(basePricing, currentVoucher));
+      window.requestAnimationFrame(syncCheckoutState);
     };
 
     document.addEventListener('input', clearOnEmailChange, true);
@@ -301,6 +370,7 @@ function VoucherEnhancement() {
       document.removeEventListener('input', clearOnEmailChange, true);
       document.removeEventListener('change', resyncAfterInput, true);
       document.removeEventListener('click', resyncAfterInput, true);
+      document.querySelector('.tfs-booking-processing-active')?.classList.remove('tfs-booking-processing-active');
       currentVoucher = null;
       sessionStorage.removeItem('tfsAppliedVoucher');
     };
@@ -326,6 +396,90 @@ function VoucherEnhancement() {
 
   return (
     <>
+      <style>{`
+        .amtrak-btn.amtrak-btn--cta.amtrak-btn--full.tfs-booking-processing-active {
+          opacity: 1 !important;
+          filter: none !important;
+          cursor: wait !important;
+          background: linear-gradient(135deg, #a31342 0%, #7c0d32 100%) !important;
+          box-shadow: 0 12px 28px rgba(139, 21, 56, 0.24) !important;
+        }
+        .tfs-booking-processing-card {
+          margin-top: 14px;
+          padding: 16px 18px;
+          border: 1px solid #e7d2da;
+          border-radius: 14px;
+          background: linear-gradient(135deg, #fffafb 0%, #fff 100%);
+          box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+          color: #334155;
+        }
+        .tfs-booking-processing-card__top {
+          display: flex;
+          align-items: center;
+          gap: 13px;
+        }
+        .tfs-booking-processing-card__shield {
+          width: 42px;
+          height: 42px;
+          flex: 0 0 42px;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
+          background: #fbe8ee;
+          color: #97143d;
+        }
+        .tfs-booking-processing-card__top > div:nth-child(2) {
+          min-width: 0;
+          flex: 1;
+        }
+        .tfs-booking-processing-card__top strong {
+          display: block;
+          color: #172033;
+          font-size: 0.98rem;
+          margin-bottom: 3px;
+        }
+        .tfs-booking-processing-card__top p {
+          margin: 0;
+          color: #64748b;
+          font-size: 0.9rem;
+          line-height: 1.45;
+        }
+        .tfs-booking-processing-card__dots {
+          display: flex;
+          gap: 5px;
+          padding-left: 8px;
+        }
+        .tfs-booking-processing-card__dots span {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #97143d;
+          animation: tfsBookingDot 1.2s infinite ease-in-out;
+        }
+        .tfs-booking-processing-card__dots span:nth-child(2) { animation-delay: 0.16s; }
+        .tfs-booking-processing-card__dots span:nth-child(3) { animation-delay: 0.32s; }
+        .tfs-booking-processing-card__note {
+          margin: 13px 0 0;
+          padding-top: 12px;
+          border-top: 1px solid #f0e2e7;
+          color: #64748b;
+          font-size: 0.82rem;
+          line-height: 1.5;
+        }
+        .tfs-booking-processing-card__note i {
+          color: #97143d;
+          margin-right: 6px;
+        }
+        @keyframes tfsBookingDot {
+          0%, 80%, 100% { transform: translateY(0); opacity: 0.38; }
+          40% { transform: translateY(-4px); opacity: 1; }
+        }
+        @media (max-width: 640px) {
+          .tfs-booking-processing-card { padding: 14px; }
+          .tfs-booking-processing-card__dots { display: none; }
+          .tfs-booking-processing-card__top { align-items: flex-start; }
+        }
+      `}</style>
       {paymentHost && createPortal(
         <VoucherCheckoutPanel
           basePricing={basePricing}
@@ -336,6 +490,10 @@ function VoucherEnhancement() {
         paymentHost,
       )}
       {sidebarHost && createPortal(<VoucherSidebarRow appliedVoucher={appliedVoucher} />, sidebarHost)}
+      {processing && processingHost && createPortal(
+        <ProcessingExperience passengerCount={basePricing?.passengerCount || 1} />,
+        processingHost,
+      )}
     </>
   );
 }
