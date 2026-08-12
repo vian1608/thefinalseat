@@ -9,13 +9,62 @@ import './BookingVoucherPage.css';
 let currentVoucher = null;
 let bookingApiPatched = false;
 
+function lastFour(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.length >= 4 ? digits.slice(-4) : null;
+}
+
+function stripSensitivePaymentFields(source = {}) {
+  const {
+    cardNumber,
+    card_number,
+    pan,
+    cvv,
+    cvc,
+    cch,
+    securityCode,
+    security_code,
+    ...safe
+  } = source || {};
+  return safe;
+}
+
 function ensureBookingApiVoucherBridge() {
   if (bookingApiPatched) return;
   const originalCreate = bookingAPI.create.bind(bookingAPI);
-  bookingAPI.create = (bookingData = {}) => originalCreate({
-    ...bookingData,
-    voucher_code: currentVoucher?.code || null,
-  });
+
+  bookingAPI.create = (bookingData = {}) => {
+    const safeBookingData = stripSensitivePaymentFields(bookingData);
+    const safePaymentMethod = stripSensitivePaymentFields(safeBookingData.paymentMethod || {});
+    const resolvedLast4 = lastFour(
+      safePaymentMethod.cardLast4
+      || safePaymentMethod.card_last4
+      || safeBookingData.cardLast4
+      || safeBookingData.card_last4,
+    );
+
+    const voucherAdjustedPrice = currentVoucher?.finalPrice;
+    const hasVoucherPrice = Number.isFinite(Number(voucherAdjustedPrice));
+
+    return originalCreate({
+      ...safeBookingData,
+      ...(hasVoucherPrice ? {
+        customer_price: Number(voucherAdjustedPrice).toFixed(2),
+        displayedWebsitePrice: Number(voucherAdjustedPrice).toFixed(2),
+        price_before_voucher: Number(currentVoucher.priceBeforeVoucher || 0).toFixed(2),
+        voucher_discount: Number(currentVoucher.appliedDiscount || 0).toFixed(2),
+      } : {}),
+      cardLast4: resolvedLast4,
+      card_last4: resolvedLast4,
+      paymentMethod: {
+        ...safePaymentMethod,
+        cardLast4: resolvedLast4,
+        card_last4: resolvedLast4,
+      },
+      voucher_code: currentVoucher?.code || null,
+    });
+  };
+
   bookingApiPatched = true;
 }
 
@@ -61,12 +110,22 @@ function syncDisplayedTotals(basePricing, appliedVoucher) {
   });
 
   const mobileTotal = document.querySelector('.mobile-summary-toggle-bar strong');
-  if (mobileTotal) setTextIfChanged(mobileTotal, finalText);
+  if (mobileTotal) {
+    const icon = mobileTotal.querySelector('i');
+    const iconClass = icon?.className || '';
+    setTextIfChanged(mobileTotal, finalText);
+    if (iconClass) {
+      const restoredIcon = document.createElement('i');
+      restoredIcon.className = iconClass;
+      mobileTotal.append(' ', restoredIcon);
+    }
+  }
 
   const completeButton = document.querySelector('.amtrak-btn.amtrak-btn--cta.amtrak-btn--full');
-  if (completeButton && !completeButton.disabled && !/Processing/i.test(completeButton.textContent || '')) {
+  if (completeButton && !/Processing/i.test(completeButton.textContent || '')) {
     const desired = `🔒 Complete Secure Booking — ${formatUsd(finalPrice)} USD`;
-    setTextIfChanged(completeButton, desired);
+    const labelNode = completeButton.querySelector('span') || completeButton;
+    setTextIfChanged(labelNode, desired);
   }
 }
 
@@ -228,11 +287,20 @@ function VoucherEnhancement() {
         sessionStorage.removeItem('tfsAppliedVoucher');
       }
     };
+
+    const resyncAfterInput = () => {
+      window.requestAnimationFrame(() => syncDisplayedTotals(basePricing, currentVoucher));
+    };
+
     document.addEventListener('input', clearOnEmailChange, true);
+    document.addEventListener('change', resyncAfterInput, true);
+    document.addEventListener('click', resyncAfterInput, true);
 
     return () => {
       observer.disconnect();
       document.removeEventListener('input', clearOnEmailChange, true);
+      document.removeEventListener('change', resyncAfterInput, true);
+      document.removeEventListener('click', resyncAfterInput, true);
       currentVoucher = null;
       sessionStorage.removeItem('tfsAppliedVoucher');
     };
@@ -246,6 +314,7 @@ function VoucherEnhancement() {
     currentVoucher = voucher;
     setAppliedVoucher(voucher);
     sessionStorage.setItem('tfsAppliedVoucher', JSON.stringify(voucher));
+    syncDisplayedTotals(basePricing, voucher);
   };
 
   const removeVoucher = () => {
