@@ -109,6 +109,39 @@ export function normalizeTripType(rawType = "ONE_WAY") {
   return "ONE_WAY";
 }
 
+function positiveMoney(value) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+/**
+ * Resolve the actual supplier/search total used for itinerary integrity.
+ *
+ * prepareFlightForBooking() deliberately changes a selected round-trip outbound
+ * fare to a $0 booking contribution until the return leg is chosen. The original
+ * whole-party quote is preserved as partyFinalPrice. Integrity validation must
+ * validate that preserved quote, not the intentionally deferred contribution.
+ */
+export function resolveItineraryTotalAmount(rawResult = {}) {
+  const price = rawResult?.price;
+
+  if (price && typeof price === "object") {
+    const preservedPartyTotal = positiveMoney(price.partyFinalPrice);
+    if (preservedPartyTotal > 0) return preservedPartyTotal;
+
+    const finalPrice = positiveMoney(price.finalPrice);
+    if (finalPrice > 0) return finalPrice;
+
+    const total = positiveMoney(price.total);
+    if (total > 0) return total;
+
+    const amount = positiveMoney(price.amount);
+    if (amount > 0) return amount;
+  }
+
+  return positiveMoney(price);
+}
+
 /**
  * Normalize provider-specific raw search result into canonical normalized itinerary.
  */
@@ -144,7 +177,7 @@ export function normalizeSelectedItinerary(rawResult, searchContext = {}) {
     cabinClass: normalizeCabinClass(seg.cabinClass || seg.class || rawResult.cabinClass || rawResult.class)
   }));
 
-  const totalAmount = parseFloat(rawResult.price?.finalPrice || rawResult.price?.total || rawResult.price || 0);
+  const totalAmount = resolveItineraryTotalAmount(rawResult);
 
   return {
     id: rawResult.id || `fl_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
