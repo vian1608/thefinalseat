@@ -35,6 +35,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_bookings_idempotency_key
 CREATE INDEX IF NOT EXISTS idx_bookings_deleted_at ON public.bookings(deleted_at);
 
 -- ── 3. Canonical operational statuses. ──
+-- IMPORTANT: remove the legacy constraints BEFORE altering/updating rows.
+-- Older production schemas used a different payment-status contract/casing,
+-- so even an unrelated UPDATE could fail while the legacy check remained active.
+ALTER TABLE public.bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
+ALTER TABLE public.bookings DROP CONSTRAINT IF EXISTS bookings_payment_status_check;
+ALTER TABLE public.payments DROP CONSTRAINT IF EXISTS payments_payment_status_check;
+
 ALTER TABLE public.bookings ALTER COLUMN status TYPE VARCHAR(50);
 ALTER TABLE public.bookings ALTER COLUMN payment_status TYPE VARCHAR(50);
 
@@ -83,16 +90,13 @@ SET payment_status = CASE UPPER(COALESCE(payment_status, 'PENDING'))
   ELSE 'PENDING'
 END;
 
-ALTER TABLE public.bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
 ALTER TABLE public.bookings ADD CONSTRAINT bookings_status_check CHECK (status IN (
   'DRAFT','PENDING','AWAITING_AUTHORIZATION','AUTHORIZED','REAUTHORIZATION_REQUIRED',
   'READY_FOR_TICKETING','TICKETED','DONE','FAILED','CANCELLED'
 ));
-ALTER TABLE public.bookings DROP CONSTRAINT IF EXISTS bookings_payment_status_check;
 ALTER TABLE public.bookings ADD CONSTRAINT bookings_payment_status_check CHECK (payment_status IN (
   'PENDING','PROCESSING','PAID','FAILED','REFUNDED'
 ));
-ALTER TABLE public.payments DROP CONSTRAINT IF EXISTS payments_payment_status_check;
 ALTER TABLE public.payments ADD CONSTRAINT payments_payment_status_check CHECK (payment_status IN (
   'PENDING','PROCESSING','PAID','FAILED','REFUNDED'
 ));
