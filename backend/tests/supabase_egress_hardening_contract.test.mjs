@@ -82,9 +82,12 @@ assert.match(bookingHardening, /\^\\\+\\d\{1,4\}\$/);
 assert.match(bookingHardening, /'DRAFT','PENDING'/);
 assert.match(bookingConstants, /'DRAFT'/);
 
-// Payment authorization is not a payment status.
-assert.match(statusHardening, /PENDING.*PROCESSING.*PAID.*FAILED.*REFUNDED/s);
-assert.doesNotMatch(statusHardening, /'AUTHORIZED'/);
+// Payment authorization is not a persisted payment status. Legacy AUTHORIZED
+// values may be recognized only so they can be converted to PROCESSING.
+assert.match(statusHardening, /ALLOWED_PAYMENT_STATES = new Set\(\['PENDING', 'PROCESSING', 'PAID', 'FAILED', 'REFUNDED'\]\)/);
+assert.doesNotMatch(statusHardening, /ALLOWED_PAYMENT_STATES = new Set\([^\n]*AUTHORIZED/);
+assert.match(statusHardening, /normalized === 'AUTHORIZED'[\s\S]*'PROCESSING'/);
+assert.match(statusHardening, /payment_status: normalizePaymentState\(paymentRow\.payment_status\)/);
 assert.match(statusHardening, /authorization_status/);
 
 // Expensive public/admin lookup routes are bounded.
