@@ -13,7 +13,9 @@ const read = relative => fs.readFileSync(path.join(root, relative), 'utf8');
 const dashboard = read('frontend/src/features/admin/pages/AdminDashboardPageV2.js');
 const dashboardWrapper = read('frontend/src/features/admin/pages/AdminDashboardPage.js');
 const api = read('frontend/src/shared/api/api.js');
-const gdsModal = read('frontend/src/features/admin/components/AdminGdsImportModalV2.js');
+const gdsShim = read('frontend/src/features/admin/components/AdminGdsImportModalV2.js');
+const gdsAdapter = read('frontend/src/features/admin/components/AdminEditBookingGdsImporter.js');
+const sharedGdsImporter = read('frontend/src/shared/components/admin/AdminItineraryImportModal.js');
 const previewModal = read('frontend/src/shared/components/admin/AdminEmailPreviewModal.js');
 const backupModal = read('frontend/src/features/admin/components/BookingBackupImportModal.js');
 const createBooking = read('frontend/src/features/admin/pages/AdminCreateBookingPage.js');
@@ -88,10 +90,13 @@ test('Admin dashboard button reliability contract', async t => {
     expectRegex(api, /exportSelectedBackups[\s\S]*?timeout:\s*ADMIN_TIMEOUTS\.export/, 'Export API timeout is required');
   });
 
-  await t.test('9. GDS parse and Confirm & Apply both timeout, show errors and reset state', () => {
-    expectRegex(gdsModal, /const parse = async[\s\S]*?withTimeout\([\s\S]*?15000[\s\S]*?setParseError[\s\S]*?finally\s*{[\s\S]*?setParsing\(false\)/, 'GDS parser must reset parsing state');
-    expectRegex(gdsModal, /const apply = async[\s\S]*?withTimeout\([\s\S]*?20000[\s\S]*?setSaveError[\s\S]*?finally\s*{[\s\S]*?setSaving\(false\)/, 'GDS apply must reset saving state');
-    expectText(gdsModal, 'Confirm & Apply Itinerary');
+  await t.test('9. Shared GDS parsing and edit-booking apply both expose bounded, visible failure handling', () => {
+    expectText(gdsShim, 'AdminEditBookingGdsImporter', 'Legacy GDS entry point must route to the edit adapter');
+    expectRegex(sharedGdsImporter, /try\s*{[\s\S]*?handleParseAndPreview[\s\S]*?setErrorMsg/, 'Shared importer must surface parsing errors');
+    expectText(sharedGdsImporter, 'Parse & Preview');
+    expectRegex(gdsAdapter, /await Promise\.resolve\(onApply/, 'Edit-booking importer must wait for the persisted itinerary save');
+    expectRegex(gdsAdapter, /catch\s*\(error\)[\s\S]*?setApplyError/, 'Edit-booking save failures must remain visible');
+    expectText(gdsAdapter, 'savingRef.current', 'Duplicate edit-booking apply actions must be guarded');
   });
 
   await t.test('10. Email preview and manual-sent controls have visible error handling and reset loading state', () => {
