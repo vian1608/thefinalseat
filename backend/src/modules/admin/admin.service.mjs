@@ -3,11 +3,27 @@ import env from '../../config/env.mjs';
 import bookingRepository from '../bookings/booking.repository.mjs';
 import bookingCurrentView from '../bookings/booking-current-view.mjs';
 import adminBookingReadRepository from './admin-booking-read.repository.mjs';
+import adminCurrentItineraryRepository from './admin-current-itinerary.repository.mjs';
 import ga4Service from '../../integrations/ga4/ga4.service.mjs';
 import supabase from '../../integrations/supabase/supabase.client.mjs';
 import bcrypt from 'bcryptjs';
 
-const loadCanonicalDetail = async id => bookingCurrentView(await bookingRepository.getCompleteBookingById(id));
+const loadCanonicalDetail = async id => {
+  const detail = await adminBookingReadRepository.getDetail(id);
+  if (!detail?.id) return detail;
+
+  const currentSegments = await adminCurrentItineraryRepository.getByBookingId(detail.id);
+  const merged = currentSegments.length > 0
+    ? {
+        ...detail,
+        itinerary_segments: currentSegments,
+        outbound_segments: currentSegments.filter(segment => segment.journey_direction === 'outbound'),
+        return_segments: currentSegments.filter(segment => segment.journey_direction === 'return')
+      }
+    : detail;
+
+  return bookingCurrentView(merged);
+};
 
 export const adminService = {
   login: async (email = '', password = '') => {
@@ -41,9 +57,8 @@ export const adminService = {
     return { token, admin: { email: cleanEmail } };
   },
 
-  // The high-volume list remains bounded/lightweight. A single booking detail
-  // uses the same complete aggregate as confirmation, email and auth consumers,
-  // so normalized GDS itinerary edits cannot diverge from the admin view.
+  // High-volume list reads stay lightweight. Detail reads remain bounded and add
+  // only one compact normalized-itinerary query so GDS edits are authoritative.
   getAllBookings: async (filters) => adminBookingReadRepository.list(filters),
   getBookingDetails: loadCanonicalDetail,
   getCompleteBookingById: loadCanonicalDetail,
