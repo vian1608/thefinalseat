@@ -1,0 +1,35 @@
+name: Apply Tokenized Booking Hydration Fix
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/apply-tokenized-booking-hydration.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Apply hydration fix
+        run: python3 scripts/patch-tokenized-booking-hydration.py
+
+      - name: Commit changes and remove helpers
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-tokenized-booking-hydration.yml scripts/patch-tokenized-booking-hydration.py
+          git add frontend/src/features/bookings/pages/BookingPage.js \
+                  frontend/src/features/bookings/vouchers/BookingVoucherPage.js \
+                  frontend/src/features/journey/TokenizedJourneyRoutes.js \
+                  frontend/src/shared/api/journeySessionApi.js
+          git commit -m "fix: hydrate tokenized checkout directly from server journey state"
+          git push origin HEAD:master
