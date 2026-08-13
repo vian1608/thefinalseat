@@ -14,6 +14,8 @@ const managementCss = read('frontend/src/features/admin/components/AdminBookingM
 const adminEnhancementsCss = read('frontend/src/features/admin/pages/AdminDashboardEnhancements.css');
 const header = read('frontend/src/shared/components/Header.js');
 const headerCss = read('frontend/src/shared/components/Header.css');
+const footer = read('frontend/src/shared/components/Footer.js');
+const footerCss = read('frontend/src/shared/components/Footer.css');
 const app = read('frontend/src/app/App.js');
 const routes = read('backend/src/modules/admin/admin.routes.mjs');
 const passengerController = read('backend/src/modules/admin/admin.passenger.controller.mjs');
@@ -28,12 +30,15 @@ test('admin booking route is a dedicated compact booking workspace', async t => 
     assert.match(wrapper, /window\.open\(`\/admin\/bookings\/\$\{encodeURIComponent\(reference\)\}`,[\s\S]*?'_blank'\)/, 'View / Edit must open the direct booking route in a new tab.');
   });
 
-  await t.test('admin site and admin brand headers align with the 1540px body container', () => {
+  await t.test('admin site header, admin brand header and footer align with the 1540px body container', () => {
     assert.match(header, /const isAdminRoute = location\.pathname\.startsWith\('\/admin'\)/, 'Site header must recognize admin routes.');
     assert.match(header, /header--admin-route/, 'Admin routes must receive a dedicated site-header width class.');
     assert.match(headerCss, /\.header--admin-route \.container\s*\{[\s\S]*?max-width:\s*1540px;[\s\S]*?padding-left:\s*22px;[\s\S]*?padding-right:\s*22px;/, 'Red site header must match the admin body width and horizontal padding.');
     assert.match(adminEnhancementsCss, /\.adv2-header__inner\s*\{[\s\S]*?max-width:\s*1540px\s*!important;[\s\S]*?padding:\s*12px 22px\s*!important;/, 'Blue admin header must match the admin body width and horizontal padding.');
     assert.match(workspaceCss, /\.abx-workspace\s*\{[\s\S]*?max-width:\s*1540px;[\s\S]*?padding:\s*18px 22px 0;/, 'Booking workspace must keep the same horizontal geometry.');
+    assert.match(footer, /const isAdminRoute = location\.pathname\.startsWith\('\/admin'\)/, 'Footer must recognize admin routes.');
+    assert.match(footer, /footer--admin/, 'Admin routes must receive a dedicated footer width class.');
+    assert.match(footerCss, /\.footer--admin > \.container\s*\{[\s\S]*?max-width:\s*1540px;[\s\S]*?padding-left:\s*22px;[\s\S]*?padding-right:\s*22px;/, 'Admin footer must match the admin body width and horizontal padding.');
   });
 
   await t.test('booking tab title is distinct from dashboard title', () => {
