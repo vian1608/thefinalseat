@@ -1,6 +1,6 @@
 /* Admin dashboard list + header enhancements.
-   Customer header uses .container { max-width: 1200px; padding: 0 20px; }.
-   Match that exact horizontal geometry for the admin brand row. */
+   Keep the admin brand row on the same 1540px / 22px horizontal geometry
+   as .adv2-shell and the dedicated booking workspace. */
 
 .adv2-header {
   transition: box-shadow 180ms ease, background 180ms ease;
@@ -8,11 +8,11 @@
 
 .adv2-header__inner {
   width: 100% !important;
-  max-width: 1200px !important;
+  max-width: 1540px !important;
   min-height: 64px;
   margin-left: auto !important;
   margin-right: auto !important;
-  padding: 12px 20px !important;
+  padding: 12px 22px !important;
   transition: min-height 180ms ease, padding 180ms ease, gap 180ms ease;
 }
 
