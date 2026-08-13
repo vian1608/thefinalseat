@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../constants/supportContact';
 import './Footer.css';
 
@@ -21,8 +21,11 @@ function FooterSection({ title, children }) {
 }
 
 function Footer() {
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith('/admin');
+
   return (
-    <footer className="footer">
+    <footer className={`footer${isAdminRoute ? ' footer--admin' : ''}`}>
       <div className="container">
         <div className="footer-content">
           {/* Brand — always visible */}
