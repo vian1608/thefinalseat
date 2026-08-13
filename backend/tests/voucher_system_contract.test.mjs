@@ -94,7 +94,7 @@ assert.match(bookingMapper, /minimum_payable_floor/);
 assert.match(app, /path="\/booking\/:checkoutToken"/);
 assert.match(app, /TokenizedBookingPage/);
 assert.match(journeyRoutes, /features\/bookings\/vouchers\/BookingVoucherPage|\.\.\/bookings\/vouchers\/BookingVoucherPage/);
-assert.match(journeyRoutes, /<BookingVoucherPage \/>/);
+assert.match(journeyRoutes, /<BookingVoucherPage initialJourneyPayload=\{session\.payload \|\| \{\}\} \/>/);
 assert.match(app, /path="\/admin\/vouchers"/);
 assert.match(checkout, /voucherAPI\.validate/);
 assert.match(checkout, /Vouchers require a booking amount of at least \$150\.00/);
