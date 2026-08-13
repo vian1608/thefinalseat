@@ -51,7 +51,7 @@ assert.match(appEntry, /BookingValidationUX\.css/);
 assert.match(appEntry, /installBookingValidationUX/);
 assert.match(validationUX, /scrollIntoView\(\{ behavior: 'smooth', block: 'center'/);
 assert.match(validationUX, /aria-invalid/);
-assert.match(validationUX, /passenger\s*#\(\\d\+\)/i);
+assert.match(validationUX, /const numbered = normalizedMessage\.match/);
 assert.match(validationUX, /data-passenger-index/);
 assert.match(validationUX, /Passenger-card error ownership belongs to BookingPage React state/);
 assert.doesNotMatch(validationUX, /passengerCard\.classList\.add\('tfs-passenger-card-error'\)/);
