@@ -25,9 +25,8 @@ function clearValidationHighlight(root = document) {
   root.querySelectorAll(`.${ERROR_WRAPPER_CLASS}`).forEach((element) => {
     element.classList.remove(ERROR_WRAPPER_CLASS);
   });
-  root.querySelectorAll('.tfs-passenger-card-error').forEach((element) => {
-    element.classList.remove('tfs-passenger-card-error');
-  });
+  // Passenger-card error ownership belongs to BookingPage React state. Do not
+  // add/remove tfs-passenger-card-error from this DOM enhancer.
   root.querySelectorAll('.tfs-validation-alert-active').forEach((element) => {
     element.classList.remove('tfs-validation-alert-active');
   });
@@ -61,7 +60,7 @@ function markInvalid(element) {
   visualTarget.classList.add(ERROR_CLASS);
   visualTarget.setAttribute('aria-invalid', 'true');
 
-  const wrapper = visualTarget.closest('.booking-form-field, .dob-container, .travel-date-picker, .passenger-card-block');
+  const wrapper = visualTarget.closest('.booking-form-field, .dob-container, .travel-date-picker');
   if (wrapper && wrapper !== visualTarget) {
     wrapper.classList.add(ERROR_WRAPPER_CLASS);
   }
@@ -95,12 +94,39 @@ function passengerName(card) {
 
 function findPassengerCardFromMessage(page, message) {
   const normalizedMessage = normalize(message);
-  const cards = Array.from(page.querySelectorAll('.passenger-card-block'));
+  const numbered = normalizedMessage.match(/passenger\s*#(\d+)/i);
+  if (numbered) {
+    const index = Number(numbered[1]) - 1;
+    if (Number.isInteger(index) && index >= 0) {
+      const exact = page.querySelector(`[data-passenger-index="${index}"]`);
+      if (exact) return exact;
+    }
+  }
 
+  const cards = Array.from(page.querySelectorAll('.passenger-card-block'));
   return cards.find((card) => {
     const name = passengerName(card);
     return name && normalizedMessage.startsWith(name);
   }) || null;
+}
+
+function exactPassengerField(card, message) {
+  if (!card) return null;
+  const text = normalize(message);
+  const selects = Array.from(card.querySelectorAll('select'));
+
+  if (text.includes('title')) return selects[0] || null;
+  if (text.includes('first name')) return card.querySelector('input[placeholder^="First Name"]');
+  if (text.includes('last name')) return card.querySelector('input[placeholder^="Last Name"]');
+  if (text.includes('gender')) return selects[1] || null;
+  if (text.includes('date of birth') || text.includes('age requirement') || text.includes('children must') || text.includes('adults must') || text.includes('infants must')) {
+    return card.querySelector('.dob-input');
+  }
+  if (text.includes('passport number')) return card.querySelector('input[placeholder*="Passport Number"]');
+  if (text.includes('passport') && (text.includes('expiration') || text.includes('expiry') || text.includes('valid through'))) {
+    return card.querySelector('input[id^="passport-exp-"]') || card.querySelector('input[placeholder="YYYY-MM-DD"]');
+  }
+  return null;
 }
 
 function firstMissingTravelerField(page) {
@@ -109,6 +135,7 @@ function firstMissingTravelerField(page) {
   for (const card of cards) {
     const selects = Array.from(card.querySelectorAll('select'));
     const candidates = [
+      selects[0] || null,
       card.querySelector('input[placeholder^="First Name"]'),
       card.querySelector('input[placeholder^="Last Name"]'),
       selects[1] || null,
@@ -120,7 +147,7 @@ function firstMissingTravelerField(page) {
     }
   }
 
-  return cards[0]?.querySelector('input[placeholder^="First Name"], input[placeholder^="Last Name"], .dob-input, select') || null;
+  return null;
 }
 
 function firstMissingContactField(page) {
@@ -128,12 +155,10 @@ function firstMissingContactField(page) {
     page.querySelector('#contact-email'),
     page.querySelector('#contact-phone')
   ];
-
   const contactFirst = Array.from(page.querySelectorAll('input[placeholder="First Name"]'))
     .find((input) => !input.closest('.passenger-card-block'));
   const contactLast = Array.from(page.querySelectorAll('input[placeholder="Last Name"]'))
     .find((input) => !input.closest('.passenger-card-block'));
-
   const candidates = [contactFirst, contactLast, ...explicit].filter(Boolean);
   return candidates.find((field) => !String(field.value || '').trim()) || candidates[0] || null;
 }
@@ -141,28 +166,16 @@ function firstMissingContactField(page) {
 function targetFromTravelerMessage(page, message) {
   const text = normalize(message);
   const passengerCard = findPassengerCardFromMessage(page, message);
-
   if (passengerCard) {
-    if (text.includes('date of birth') || text.includes('age requirement') || text.includes('children must') || text.includes('adults must') || text.includes('infants must')) {
-      return passengerCard.querySelector('.dob-input');
-    }
-
-    if (text.includes('passport number')) {
-      return passengerCard.querySelector('input[placeholder*="Passport Number"]');
-    }
-
-    if (text.includes('passport') && (text.includes('expiration') || text.includes('expiry') || text.includes('valid through'))) {
-      return passengerCard.querySelector('input[id^="passport-exp-"]') || passengerCard.querySelector('input[placeholder="YYYY-MM-DD"]');
-    }
-
-    return passengerCard.querySelector('input, select');
+    return exactPassengerField(passengerCard, message)
+      || firstMissingTravelerField(passengerCard)
+      || passengerCard.querySelector('input, select');
   }
 
   if (text.includes('primary contact')) return firstMissingContactField(page);
   if (text.includes('required fields for all travelers') || text.includes('traveler and contact details')) {
     return firstMissingTravelerField(page) || firstMissingContactField(page);
   }
-
   return null;
 }
 
@@ -188,7 +201,6 @@ function targetFromPaymentMessage(page, message) {
       if (found) return found;
     }
   }
-
   return null;
 }
 
@@ -196,20 +208,15 @@ function suppressDuplicateGenericError(page) {
   const globalError = page.querySelector('.booking-global-error');
   const paymentError = page.querySelector('.payment-error-banner');
   if (!globalError || !paymentError) return;
-
   const globalMessage = normalize(globalError.textContent);
   const paymentMessage = normalize(paymentError.textContent);
   const isGenericDuplicate = paymentMessage.includes('please fill in all required traveler and contact details above');
-
-  if (globalMessage && isGenericDuplicate) {
-    paymentError.classList.add('tfs-validation-duplicate-error');
-  }
+  if (globalMessage && isGenericDuplicate) paymentError.classList.add('tfs-validation-duplicate-error');
 }
 
 function findBestErrorTarget(page) {
   const globalError = page.querySelector('.booking-global-error');
   const globalMessage = globalError?.textContent?.trim() || '';
-
   if (globalMessage) {
     const travelerTarget = targetFromTravelerMessage(page, globalMessage);
     if (travelerTarget) return { target: travelerTarget, banner: globalError };
@@ -223,29 +230,21 @@ function findBestErrorTarget(page) {
   }
 
   const nativeInvalid = page.querySelector('input:invalid, select:invalid, textarea:invalid');
-  if (nativeInvalid && isVisible(nativeInvalid)) {
-    return { target: nativeInvalid, banner: globalError || paymentError || null };
-  }
-
+  if (nativeInvalid && isVisible(nativeInvalid)) return { target: nativeInvalid, banner: globalError || paymentError || null };
   return null;
 }
 
 function applyValidationFeedback() {
   if (!isValidationFeedbackArmed()) return false;
-
   const page = document.querySelector('.booking-page');
   if (!page) return false;
 
   clearValidationHighlight(page);
   suppressDuplicateGenericError(page);
-
   const result = findBestErrorTarget(page);
   if (!result?.target) return false;
 
   const target = markInvalid(result.target);
-  const passengerCard = target?.closest?.('.passenger-card-block');
-  if (passengerCard) passengerCard.classList.add('tfs-passenger-card-error');
-
   if (result.banner) result.banner.classList.add('tfs-validation-alert-active');
   scrollToInvalid(target);
   disarmValidationFeedback();
@@ -255,19 +254,16 @@ function applyValidationFeedback() {
 function clearFieldOnEdit(event) {
   const target = event.target;
   if (!target?.closest?.('.booking-page')) return;
-
   if (target.classList?.contains(ERROR_CLASS)) {
     target.classList.remove(ERROR_CLASS);
     target.removeAttribute('aria-invalid');
     target.closest(`.${ERROR_WRAPPER_CLASS}`)?.classList.remove(ERROR_WRAPPER_CLASS);
-    target.closest('.tfs-passenger-card-error')?.classList.remove('tfs-passenger-card-error');
   }
 }
 
 function mutationTouchesErrorBanner(mutation) {
   const target = mutation.target instanceof Element ? mutation.target : mutation.target?.parentElement;
   if (target?.matches?.(ERROR_BANNER_SELECTOR) || target?.closest?.(ERROR_BANNER_SELECTOR)) return true;
-
   return Array.from(mutation.addedNodes || []).some((node) => {
     if (!(node instanceof Element)) return false;
     return node.matches?.(ERROR_BANNER_SELECTOR) || node.querySelector?.(ERROR_BANNER_SELECTOR);
@@ -281,11 +277,9 @@ export function installBookingValidationUX() {
 
   document.addEventListener('input', clearFieldOnEdit, true);
   document.addEventListener('change', clearFieldOnEdit, true);
-
   document.addEventListener('click', (event) => {
     const button = event.target.closest?.('.booking-page .amtrak-btn--cta, .booking-page .booking-submit-button');
     if (!button || button.disabled) return;
-
     armValidationFeedback();
     window.setTimeout(applyValidationFeedback, 90);
     window.setTimeout(applyValidationFeedback, 280);
@@ -293,15 +287,9 @@ export function installBookingValidationUX() {
 
   const observer = new MutationObserver((mutations) => {
     if (!isValidationFeedbackArmed()) return;
-    const relevant = mutations.some(mutationTouchesErrorBanner);
-    if (relevant) window.setTimeout(applyValidationFeedback, 80);
+    if (mutations.some(mutationTouchesErrorBanner)) window.setTimeout(applyValidationFeedback, 80);
   });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-    characterData: true
-  });
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 }
 
 export default installBookingValidationUX;
