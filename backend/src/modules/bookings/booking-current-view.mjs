@@ -3,12 +3,19 @@ import { buildCanonicalItinerary } from '../../shared/utils/airline-lookup.mjs';
 const clean = value => value === null || value === undefined ? '' : String(value).trim();
 const numeric = value => { const n = Number(value); return Number.isFinite(n) ? n : null; };
 
+function latestPayment(record) {
+  const rows = Array.isArray(record.payments) ? [...record.payments] : [];
+  rows.sort((a, b) => new Date(b.payment_date || b.paid_at || b.created_at || 0) - new Date(a.payment_date || a.paid_at || a.created_at || 0));
+  return rows[0] || null;
+}
+
 export function bookingCurrentView(record = {}) {
   if (!record || typeof record !== 'object') return record;
   const travellers = Array.isArray(record.travellers) ? record.travellers : (Array.isArray(record.passengers) ? record.passengers : []);
   const contacts = Array.isArray(record.contacts) ? record.contacts : [];
   const traveller = travellers[0] || null;
   const contact = contacts[0] || record.contact || null;
+  const payment = latestPayment(record);
   const primaryName = traveller
     ? [traveller.first_name ?? traveller.firstName, traveller.middle_name ?? traveller.middleName, traveller.last_name ?? traveller.lastName].map(clean).filter(Boolean).join(' ')
     : clean(record.passenger_name || record.passengerName);
@@ -17,6 +24,7 @@ export function bookingCurrentView(record = {}) {
   const customerTotal = numeric(record.customer_price ?? record.customerPrice ?? record.total_amount ?? record.totalAmount);
   const supplierTotal = numeric(record.supplier_price ?? record.supplierPrice ?? record.supplier_fare ?? record.supplierFare ?? record.original_api_price);
   const currency = (clean(record.currency) || 'USD').toUpperCase();
+  const paymentStatus = (clean(payment?.payment_status ?? record.payment_status ?? record.paymentStatus) || 'PENDING').toUpperCase();
   const itinerary = buildCanonicalItinerary(record);
   const outbound = Array.isArray(itinerary?.outbound) ? itinerary.outbound : [];
   const first = outbound[0] || {};
@@ -31,6 +39,8 @@ export function bookingCurrentView(record = {}) {
     email,
     phone,
     contact: contact ? { ...contact, email, phone } : { email, phone },
+    payment_status: paymentStatus,
+    paymentStatus,
     customer_price: customerTotal,
     customerPrice: customerTotal,
     total_amount: customerTotal ?? numeric(record.total_amount),
