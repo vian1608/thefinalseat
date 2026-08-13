@@ -1,0 +1,34 @@
+name: Apply Production Booking Runtime Cleanup
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/apply-production-booking-runtime.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Apply production booking cleanup
+        run: python3 scripts/patch-production-booking-runtime.py
+
+      - name: Commit cleanup and remove helpers
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-production-booking-runtime.yml scripts/patch-production-booking-runtime.py
+          git add backend/src/modules/bookings/booking.repository.mjs \
+                  backend/src/modules/bookings/booking.service.mjs \
+                  backend/src/modules/authorizations/passenger-authorization.service.mjs
+          git commit -m "fix: close remaining booking persistence and admin runtime gaps"
+          git push origin HEAD:master
