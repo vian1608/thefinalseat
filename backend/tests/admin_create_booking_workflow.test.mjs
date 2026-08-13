@@ -113,14 +113,16 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     assert.match(fs.readFileSync(ctrlPath, 'utf-8'), /markEmailManuallySent:/, 'Controller must contain markEmailManuallySent method');
   });
 
-  await t.test('15. Create Booking keeps shared importer while rebuilt Dashboard uses single-input GDS importer', () => {
-    const legacyModalPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminItineraryImportModal.js');
+  await t.test('15. Create Booking and Edit Booking share the supported trip-type GDS importer', () => {
+    const sharedModalPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminItineraryImportModal.js');
+    const editAdapterPath = path.join(projectRoot, 'frontend/src/features/admin/components/AdminEditBookingGdsImporter.js');
     const v2ModalPath = path.join(projectRoot, 'frontend/src/features/admin/components/AdminGdsImportModalV2.js');
     const createPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
-    assert.ok(fs.existsSync(legacyModalPath), 'Existing AdminItineraryImportModal must remain available to Create Booking');
-    assert.ok(fs.existsSync(v2ModalPath), 'AdminGdsImportModalV2 must exist for the rebuilt dashboard');
-    assert.match(fs.readFileSync(createPagePath, 'utf-8'), /AdminItineraryImportModal/, 'AdminCreateBookingPage must continue using its supported importer');
-    assert.match(activeDashboardContent(), /AdminGdsImportModalV2/, 'Rebuilt dashboard must use the single-input GDS importer');
+    assert.ok(fs.existsSync(sharedModalPath), 'Shared AdminItineraryImportModal must remain available');
+    assert.ok(fs.existsSync(editAdapterPath), 'Edit Booking shared importer adapter must exist');
+    assert.match(fs.readFileSync(createPagePath, 'utf-8'), /AdminItineraryImportModal/, 'AdminCreateBookingPage must continue using the shared importer');
+    assert.match(fs.readFileSync(editAdapterPath, 'utf-8'), /AdminItineraryImportModal/, 'Edit Booking must reuse the same shared importer');
+    assert.match(fs.readFileSync(v2ModalPath, 'utf-8'), /AdminEditBookingGdsImporter/, 'Legacy V2 entry point must route to the shared edit adapter');
   });
 
   await t.test('16. AdminEmailPreviewModal shared component exists and is imported by active dashboard', () => {
@@ -138,23 +140,27 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     assert.match(content, /patchItinerary:/, 'api.js must export patchItinerary in adminAPI');
   });
 
-  await t.test('18. Itinerary help remains available where applicable and rebuilt dashboard explains the single import flow inline', () => {
+  await t.test('18. Itinerary help remains available in the shared trip-type importer', () => {
     const helpModalPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminItineraryHelpModal.js');
     const importModalPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminItineraryImportModal.js');
     const createPagePath = path.join(projectRoot, 'frontend/src/features/admin/pages/AdminCreateBookingPage.js');
     assert.ok(fs.existsSync(helpModalPath), 'AdminItineraryHelpModal.js component file must exist');
-    assert.match(fs.readFileSync(importModalPath, 'utf-8'), /AdminItineraryHelpModal/, 'Legacy importer must retain help modal');
+    assert.match(fs.readFileSync(importModalPath, 'utf-8'), /AdminItineraryHelpModal/, 'Shared importer must retain the help modal');
     assert.match(fs.readFileSync(createPagePath, 'utf-8'), /AdminItineraryHelpModal/, 'Create Booking must retain itinerary help');
-    assert.match(activeDashboardContent(), /There is no separate outbound\/inbound import step/, 'Rebuilt dashboard must explain its simplified GDS import behavior');
   });
 
-  await t.test('19. Rebuilt GDS importer does not force outbound/inbound selection before parsing', () => {
-    const modalPath = path.join(projectRoot, 'frontend/src/features/admin/components/AdminGdsImportModalV2.js');
-    const content = fs.readFileSync(modalPath, 'utf-8');
-    assert.match(content, /Paste the GDS command\/lines once/, 'Importer must explicitly use one combined source input');
-    assert.match(content, /Parse & Preview/, 'Importer must provide Parse & Preview');
-    assert.match(content, /Confirm & Apply Itinerary/, 'Importer must provide a final apply action');
-    assert.doesNotMatch(content, /Select Trip Type to Begin Import/, 'Rebuilt importer must not force trip direction selection before input');
+  await t.test('19. Shared GDS importer exposes One Way, Round Trip and Multi-City inputs for edit booking', () => {
+    const sharedPath = path.join(projectRoot, 'frontend/src/shared/components/admin/AdminItineraryImportModal.js');
+    const adapterPath = path.join(projectRoot, 'frontend/src/features/admin/components/AdminEditBookingGdsImporter.js');
+    const shared = fs.readFileSync(sharedPath, 'utf-8');
+    const adapter = fs.readFileSync(adapterPath, 'utf-8');
+    assert.match(shared, /Select Trip Type to Begin Import/, 'Shared importer must start with trip-type selection');
+    assert.match(shared, /One Way/, 'Shared importer must support One Way');
+    assert.match(shared, /Round Trip/, 'Shared importer must support Round Trip');
+    assert.match(shared, /Multi-City/, 'Shared importer must support Multi-City');
+    assert.match(shared, /Outbound Journey GDS Lines/, 'Round Trip must expose an outbound GDS input');
+    assert.match(shared, /Return Journey GDS Lines/, 'Round Trip must expose a return GDS input');
+    assert.match(adapter, /existingItineraryHasData=\{true\}/, 'Edit Booking must require overwrite confirmation for an existing itinerary');
   });
 
   await t.test('20. adminService exports getCompleteBookingById and all controller-called methods', async () => {
@@ -213,7 +219,7 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     };
 
     const html = renderEmailItineraryHtml(mockItinerary);
-    const text = renderEmailItineraryText(mockItinerary);
+    const renderedText = renderEmailItineraryText(mockItinerary);
 
     assert.match(html, /Delta Air Lines/, 'HTML itinerary must render real airline name');
     assert.match(html, /DL 106/, 'HTML itinerary must render real flight number');
@@ -222,8 +228,8 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     assert.doesNotMatch(html, /Commercial Airline/, 'HTML itinerary must not contain Commercial Airline fallback');
     assert.doesNotMatch(html, /\(\)\s*→\s*\(\)/, 'HTML itinerary must not contain () -> () empty route fallback');
 
-    assert.match(text, /Delta Air Lines DL 106/, 'Text itinerary must contain airline and flight number');
-    assert.match(text, /JFK.*-> LHR/, 'Text itinerary must contain route');
+    assert.match(renderedText, /Delta Air Lines DL 106/, 'Text itinerary must contain airline and flight number');
+    assert.match(renderedText, /JFK.*-> LHR/, 'Text itinerary must contain route');
   });
 
   await t.test('25. Active dashboard authorization email uses centralized adminAPI.sendEmailAction', () => {
@@ -259,11 +265,12 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     assert.match(repair, /persistenceVerified:\s*true/, 'Backend itinerary response must explicitly confirm persistence verification');
   });
 
-  await t.test('29. GDS Confirm & Apply waits for onApply and keeps errors visible', () => {
-    const content = fs.readFileSync(path.join(projectRoot, 'frontend/src/features/admin/components/AdminGdsImportModalV2.js'), 'utf-8');
-    assert.match(content, /await withTimeout\(\s*Promise\.resolve\(onApply/, 'Confirm & Apply must await the actual dashboard save');
-    assert.match(content, /setSaveError\(error\.message/, 'Apply failures must be rendered in the modal');
-    assert.match(content, /resetAndClose\(\);/, 'Modal must close only after successful apply path');
+  await t.test('29. Shared edit importer waits for the booking save and keeps errors visible', () => {
+    const content = fs.readFileSync(path.join(projectRoot, 'frontend/src/features/admin/components/AdminEditBookingGdsImporter.js'), 'utf-8');
+    assert.match(content, /await Promise\.resolve\(onApply/, 'Edit importer must await the actual booking itinerary save');
+    assert.match(content, /setApplyError\(error\?\.message/, 'Apply failures must remain visible in the importer');
+    assert.match(content, /savingRef\.current/, 'Duplicate confirm actions must be guarded while a save is running');
+    assert.match(content, /onClose\?\.\(\);/, 'Importer must close only from the successful persisted-save path or an explicit non-saving close');
   });
 
   await t.test('30. Price update returns complete read-after-write booking snapshot', () => {
@@ -274,7 +281,6 @@ test('Admin Create Booking & Email Workflow Comprehensive Tests', async (t) => {
     assert.match(controller, /persistenceVerified:\s*true/, 'Pricing response must expose persistence verification');
   });
 
-  // Keep the mapper resolver directly exercised by this workflow suite.
   await t.test('31. Price resolver accepts nested pricing values used by admin create flow', () => {
     assert.equal(resolvePositiveAmount(undefined, undefined, 741), 741);
     assert.equal(resolvePositiveAmount(0, -1, '850.25'), 850.25);
