@@ -23,17 +23,8 @@ jobs:
           from pathlib import Path
           p = Path('backend/src/modules/bookings/booking.repository.mjs')
           s = p.read_text()
-          old = """      if (filters.status) {
-        let s = filters.status.toUpperCase();
-        if (s === 'CONFIRMED' || s === 'COMPLETED') s = 'DONE';
-        query = query.eq('status', s);
-      }
-"""
-          new = """      if (filters.status) {
-        const s = filters.status.toUpperCase();
-        query = query.eq('status', s);
-      }
-"""
+          old = "      if (filters.status) {\n        let s = filters.status.toUpperCase();\n        if (s === 'CONFIRMED' || s === 'COMPLETED') s = 'DONE';\n        query = query.eq('status', s);\n      }\n"
+          new = "      if (filters.status) {\n        const s = filters.status.toUpperCase();\n        query = query.eq('status', s);\n      }\n"
           if old not in s:
               raise SystemExit('expected status alias block not found')
           p.write_text(s.replace(old, new, 1))
