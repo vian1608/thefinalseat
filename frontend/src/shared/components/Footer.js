@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_HREF } from '../constants/supportContact';
 import './Footer.css';
+import './FooterLayoutOverrides.css';
 
 function FooterSection({ title, children }) {
   const [open, setOpen] = useState(false);
@@ -28,13 +29,11 @@ function Footer() {
     <footer className={`footer${isAdminRoute ? ' footer--admin' : ''}`}>
       <div className="container">
         <div className="footer-content">
-          {/* Brand — always visible */}
           <div className="footer-section footer-brand">
             <h3>The Final Seat LLC</h3>
             <p>The Final Seat provides flight-search and reservation assistance for travelers who value clear information and real human support.</p>
           </div>
 
-          {/* Collapsible on mobile */}
           <FooterSection title="Company">
             <ul>
               <li><Link to="/">Flights</Link></li>
