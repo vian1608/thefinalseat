@@ -4,6 +4,7 @@ import { adminAPI } from '../../../shared/api/api';
 import AdminDashboardPageV2 from './AdminDashboardPageV2';
 import AdminBookingWorkspace from '../components/AdminBookingWorkspace';
 import AdminBookingAddressPanel from '../components/AdminBookingAddressPanel';
+import AdminBookingManagementPanel from '../components/AdminBookingManagementPanel';
 import './AdminDashboardEnhancements.css';
 
 const ADMIN_BOOKINGS_PAGE_SIZE = 20;
@@ -24,7 +25,7 @@ if (!adminAPI.__tfsTwentyBookingPages) {
   });
 }
 
-// The booking detail route contains two views that historically requested the
+// The booking detail route contains several focused panels that can request the
 // same complete booking at mount time. Coalesce only simultaneous identical
 // reads; once the request settles it is removed so saves always get fresh data.
 if (!adminAPI.__tfsBookingDetailRequestDedupe) {
@@ -180,6 +181,7 @@ export default function AdminDashboardPage() {
         <>
           <AdminBookingAddressPanel />
           <AdminBookingWorkspace />
+          <AdminBookingManagementPanel />
         </>
       ) : (
         <AdminDashboardPageV2 />
