@@ -17,6 +17,8 @@ const bookingMiddleware = read('backend/src/modules/journey-sessions/checkout-se
 const app = read('frontend/src/app/App.js');
 const journey = read('frontend/src/features/journey/TokenizedJourneyRoutes.js');
 const journeyApi = read('frontend/src/shared/api/journeySessionApi.js');
+const bookingPage = read('frontend/src/features/bookings/pages/BookingPage.js');
+const voucherCheckout = read('frontend/src/features/bookings/vouchers/BookingVoucherPage.js');
 const paymentJourney = read('frontend/src/features/journey/TokenizedPaymentRoutes.js');
 const consultingPayment = read('frontend/src/features/payments/pages/ConsultingPaymentPage.js');
 const carGuard = read('frontend/src/features/cars/pages/CarSearchUrlGuard.js');
@@ -90,6 +92,27 @@ assert.match(journey, /cvv/);
 assert.match(journey, /cch/);
 assert.match(journey, /journeySessionAPI\.updateCheckout/);
 assert.match(journey, /restoreVoucher/);
+
+// Checkout hydration contract: the fetched c_ payload is authoritative on the
+// very first BookingPage render. This prevents the transient/stuck
+// "No Itinerary Selected" state caused by initializing flight state as null and
+// waiting for a later sessionStorage effect.
+assert.match(journey, /<BookingVoucherPage initialJourneyPayload=\{session\.payload \|\| \{\}\} \/>/);
+assert.match(voucherCheckout, /BookingVoucherPage\(\{ initialJourneyPayload = null \}\)/);
+assert.match(voucherCheckout, /<Booking initialJourneyPayload=\{initialJourneyPayload\} \/>/);
+assert.match(bookingPage, /function Booking\(\{ initialJourneyPayload = null \}\)/);
+assert.match(bookingPage, /initialJourneyPayload\?\.selectedFlight \|\| readBookingSessionJson\('selectedFlight', null\)/);
+assert.match(bookingPage, /initialJourneyPayload\?\.returnFlight/);
+assert.match(bookingPage, /initialJourneyPayload\?\.searchParams/);
+assert.doesNotMatch(bookingPage, /if \(!flightData\) \{ navigate\('\/'\); return; \}/);
+
+// A failed/hung journey-session request must become a recoverable UI state,
+// never an infinite browser spinner.
+assert.match(journeyApi, /JOURNEY_SESSION_TIMEOUT_MS = 15000/);
+assert.match(journeyApi, /timeoutConfig/);
+assert.match(journey, /const \[reloadKey, setReloadKey\] = useState\(0\)/);
+assert.match(journey, /Retry checkout/);
+assert.match(journey, /\[checkoutToken, navigate, reloadKey\]/);
 
 // Consulting payments have p_ state but continue to use hosted card entry.
 assert.match(paymentJourney, /createPayment/);
