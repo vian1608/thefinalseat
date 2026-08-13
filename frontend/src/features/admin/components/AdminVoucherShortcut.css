@@ -1,54 +1,42 @@
 .admin-voucher-shortcut {
-  position: fixed;
-  right: 22px;
-  bottom: 22px;
-  z-index: 9000;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-width: 150px;
-  padding: 10px 14px;
-  border-radius: 12px;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 10px;
   background: #8b1538;
   color: #fff;
   text-decoration: none;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, .22);
-  border: 1px solid rgba(255,255,255,.2);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1;
+  border: 1px solid #74112f;
+  box-shadow: 0 4px 12px rgba(139, 21, 56, 0.18);
+  white-space: nowrap;
+  transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
-.admin-voucher-shortcut:hover {
+.admin-voucher-shortcut:hover,
+.admin-voucher-shortcut:focus-visible {
   background: #74112f;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(139, 21, 56, 0.24);
   transform: translateY(-1px);
+  outline: none;
+}
+
+.admin-voucher-shortcut:active {
+  transform: translateY(0);
 }
 
 .admin-voucher-shortcut > i {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
 }
 
-.admin-voucher-shortcut span {
-  display: grid;
-  line-height: 1.2;
-}
-
-.admin-voucher-shortcut strong {
-  font-size: .88rem;
-}
-
-.admin-voucher-shortcut small {
-  margin-top: 2px;
-  color: #f5dce4;
-  font-size: .68rem;
-}
-
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .admin-voucher-shortcut {
-    right: 12px;
-    bottom: 12px;
-    min-width: 0;
-    padding: 10px 12px;
-  }
-
-  .admin-voucher-shortcut small {
-    display: none;
+    width: 100%;
   }
 }
