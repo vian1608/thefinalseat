@@ -1,0 +1,48 @@
+/* Shared customer/admin shell geometry and the refined flight palette. */
+.header:not(.header--admin-route) .container {
+  width: 100%;
+  max-width: var(--tfs-public-shell, 1440px);
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+.header--admin-route .container {
+  width: 100%;
+  max-width: var(--tfs-admin-shell, 1540px);
+  padding-left: 22px;
+  padding-right: 22px;
+}
+
+.header.header--flights {
+  background: linear-gradient(120deg, var(--tfs-wine-700, #861b3d) 0%, var(--tfs-wine-800, #6d1532) 52%, var(--tfs-wine-950, #3b0a1c) 100%);
+  box-shadow: 0 6px 22px rgba(59, 10, 28, 0.24);
+}
+
+.header.header--flights .logo-icon {
+  color: var(--tfs-gold-300, #ead58e);
+}
+
+.header .header-nav-link {
+  font-size: 0.94rem;
+  font-weight: 550;
+  letter-spacing: 0;
+}
+
+.header .header-nav-link--active {
+  font-weight: 700;
+  border-bottom-color: var(--tfs-gold-300, #ead58e);
+}
+
+@media (max-width: 768px) {
+  .header.header--flights .nav {
+    background: linear-gradient(145deg, var(--tfs-wine-700, #861b3d), var(--tfs-wine-950, #3b0a1c));
+  }
+}
+
+@media (max-width: 640px) {
+  .header:not(.header--admin-route) .container,
+  .header--admin-route .container {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
