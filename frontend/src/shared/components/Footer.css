@@ -6,6 +6,15 @@
   overflow-x: hidden;
 }
 
+/* Admin pages use the same horizontal geometry as the 1540px admin shell.
+   Customer-facing pages keep the standard 1200px global .container. */
+.footer--admin > .container {
+  width: 100%;
+  max-width: 1540px;
+  padding-left: 22px;
+  padding-right: 22px;
+}
+
 .footer-content {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr 0.8fr 1fr;
@@ -101,6 +110,11 @@
   .footer {
     padding: 1.25rem 0 0.75rem;
     border-top-width: 2px;
+  }
+
+  .footer--admin > .container {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
   .footer-content {
