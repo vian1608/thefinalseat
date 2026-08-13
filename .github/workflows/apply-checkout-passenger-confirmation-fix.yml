@@ -1,0 +1,29 @@
+name: Apply Checkout Passenger Confirmation Fix
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/apply-checkout-passenger-confirmation-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+      - name: Apply checkout passenger and confirmation hardening
+        run: python3 .github/scripts/fix_checkout_passenger_confirmation.py
+      - name: Commit runtime fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/apply-checkout-passenger-confirmation-fix.yml .github/scripts/fix_checkout_passenger_confirmation.py
+          git add frontend/src/features/bookings/pages/BookingPage.js frontend/src/features/bookings/pages/BookingPage.css frontend/src/features/bookings/pages/PaymentSuccessPage.js frontend/src/shared/mobile/installMobileBookingUX.js
+          git commit -m "fix: make passenger validation and confirmation render deterministic"
+          git push origin HEAD:master
