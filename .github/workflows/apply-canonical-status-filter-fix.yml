@@ -1,0 +1,48 @@
+name: Apply Canonical Status Filter Fix
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/apply-canonical-status-filter-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+      - name: Fix canonical booking status filter
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('backend/src/modules/bookings/booking.repository.mjs')
+          s = p.read_text()
+          old = """      if (filters.status) {
+        let s = filters.status.toUpperCase();
+        if (s === 'CONFIRMED' || s === 'COMPLETED') s = 'DONE';
+        query = query.eq('status', s);
+      }
+"""
+          new = """      if (filters.status) {
+        const s = filters.status.toUpperCase();
+        query = query.eq('status', s);
+      }
+"""
+          if old not in s:
+              raise SystemExit('expected status alias block not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-canonical-status-filter-fix.yml
+          git add backend/src/modules/bookings/booking.repository.mjs
+          git commit -m "fix: preserve canonical booking status filters"
+          git push origin HEAD:master
