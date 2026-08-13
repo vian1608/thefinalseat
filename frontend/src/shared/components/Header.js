@@ -44,10 +44,11 @@ function Header() {
   const isCarsActive = location.pathname.startsWith('/car-rentals');
   const isContactActive = location.pathname === '/contact';
   const isCarsTheme = isCarsActive;
+  const isAdminRoute = location.pathname.startsWith('/admin');
 
   return (
     <header
-      className={`header ${isCarsTheme ? 'header--cars' : 'header--flights'} ${scrolled ? 'header--scrolled' : ''}`}
+      className={`header ${isCarsTheme ? 'header--cars' : 'header--flights'} ${isAdminRoute ? 'header--admin-route' : ''} ${scrolled ? 'header--scrolled' : ''}`}
     >
       <div className="container header-inner">
         <div className="logo">
