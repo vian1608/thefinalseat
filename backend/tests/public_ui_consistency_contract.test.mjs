@@ -23,6 +23,7 @@ assert.match(design, /--tfs-gold-300:\s*#ead58e/i, 'Warm gold accent must remain
 assert.match(design, /--tfs-navy-950:\s*#0b1628/i, 'Deep navy neutral must remain defined.');
 assert.match(design, /--tfs-public-shell:\s*1440px/i, 'Public shell width must remain 1440px.');
 assert.match(design, /--tfs-admin-shell:\s*1540px/i, 'Admin shell width must remain 1540px.');
+assert.match(design, /body \.container\s*\{[\s\S]*?max-width:\s*var\(--tfs-public-shell\)/, 'Shared customer containers must use the public shell.');
 
 assert.match(pageTransition, /pathname\.startsWith\('\/return-flight'\)/, 'Return-flight pages must declare contextual navigation.');
 assert.match(pageTransition, /pathname\.startsWith\('\/booking-confirmed'\)/, 'Confirmation pages must declare contextual navigation.');
@@ -40,8 +41,11 @@ assert.match(results, /var\(--tfs-public-shell,\s*1440px\)/, 'Flight results mus
 assert.match(confirmation, /import AirlineLogo from/, 'Confirmation itinerary must use the shared airline logo component.');
 assert.doesNotMatch(confirmation, /seg\.airlineLogoUrl\s*&&\s*<img/i, 'Confirmation must not render provider logo URLs as unguarded images.');
 assert.match(confirmation, /airlineLogoSlugFor/, 'Confirmation must retain local airline-logo fallback mapping.');
+assert.match(confirmation, /Back to My Bookings/, 'Confirmation must expose one aligned contextual back action.');
+assert.match(confirmation, /className="confirmation-context-back"/, 'Confirmation contextual back action must use its dedicated style.');
 assert.match(airlineLogo, /fa-plane/, 'Airline logo component must end with a visible plane-icon fallback.');
 assert.match(confirmationCss, /\.confirmation-container\s*\{[\s\S]*?max-width:\s*960px;/, 'Confirmation content width must remain balanced at 960px.');
+assert.match(confirmationCss, /\.confirmation-context-back\s*\{/, 'Confirmation back action must stay aligned inside the confirmation column.');
 assert.match(confirmationCss, /\.segment-airline \.segment-logo/, 'Confirmation must size airline identity consistently.');
 
 console.log('public UI consistency contract: PASS');
