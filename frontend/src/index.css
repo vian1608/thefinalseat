@@ -1,2 +1,3 @@
-/* Import styles from original CSS file */
+/* Import legacy styles first, then normalize them through the shared design system. */
 @import url('./shared/styles/styles.css');
+@import url('./shared/styles/TfsDesignSystem.css');
