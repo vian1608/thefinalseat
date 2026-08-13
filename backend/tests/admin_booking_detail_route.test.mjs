@@ -11,6 +11,9 @@ const workspace = read('frontend/src/features/admin/components/AdminBookingWorks
 const workspaceCss = read('frontend/src/features/admin/components/AdminBookingWorkspace.css');
 const management = read('frontend/src/features/admin/components/AdminBookingManagementPanel.js');
 const managementCss = read('frontend/src/features/admin/components/AdminBookingManagementPanel.css');
+const adminEnhancementsCss = read('frontend/src/features/admin/pages/AdminDashboardEnhancements.css');
+const header = read('frontend/src/shared/components/Header.js');
+const headerCss = read('frontend/src/shared/components/Header.css');
 const app = read('frontend/src/app/App.js');
 const routes = read('backend/src/modules/admin/admin.routes.mjs');
 const passengerController = read('backend/src/modules/admin/admin.passenger.controller.mjs');
@@ -23,6 +26,14 @@ test('admin booking route is a dedicated compact booking workspace', async t => 
     assert.match(wrapper, /__tfsBookingDetailRequestDedupe/, 'Sibling detail panels must coalesce simultaneous identical booking reads.');
     assert.doesNotMatch(management, /getBookings\(|getStats\(|getAnalytics\(|getAbandonedBookings\(/, 'Dedicated management panel must not query booking lists, stats, analytics or abandoned forms.');
     assert.match(wrapper, /window\.open\(`\/admin\/bookings\/\$\{encodeURIComponent\(reference\)\}`,[\s\S]*?'_blank'\)/, 'View / Edit must open the direct booking route in a new tab.');
+  });
+
+  await t.test('admin site and admin brand headers align with the 1540px body container', () => {
+    assert.match(header, /const isAdminRoute = location\.pathname\.startsWith\('\/admin'\)/, 'Site header must recognize admin routes.');
+    assert.match(header, /header--admin-route/, 'Admin routes must receive a dedicated site-header width class.');
+    assert.match(headerCss, /\.header--admin-route \.container\s*\{[\s\S]*?max-width:\s*1540px;[\s\S]*?padding-left:\s*22px;[\s\S]*?padding-right:\s*22px;/, 'Red site header must match the admin body width and horizontal padding.');
+    assert.match(adminEnhancementsCss, /\.adv2-header__inner\s*\{[\s\S]*?max-width:\s*1540px\s*!important;[\s\S]*?padding:\s*12px 22px\s*!important;/, 'Blue admin header must match the admin body width and horizontal padding.');
+    assert.match(workspaceCss, /\.abx-workspace\s*\{[\s\S]*?max-width:\s*1540px;[\s\S]*?padding:\s*18px 22px 0;/, 'Booking workspace must keep the same horizontal geometry.');
   });
 
   await t.test('booking tab title is distinct from dashboard title', () => {
