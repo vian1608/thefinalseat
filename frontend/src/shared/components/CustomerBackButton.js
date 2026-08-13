@@ -5,7 +5,7 @@ import './CustomerBackButton.css';
 
 const FALLBACK_BY_PATH = [
   [/^\/return-flight/, '/search'],
-  [/^\/booking$/, '/return-flight'],
+  [/^\/booking(?:\/|$)/, '/search'],
   [/^\/payment/, '/booking'],
   [/^\/authorize\//, '/my-bookings'],
   [/^\/confirmation\//, '/my-bookings'],
@@ -24,7 +24,7 @@ export default function CustomerBackButton() {
   const navigate = useNavigate();
   const location = useLocation();
   const pathname = location.pathname || '/';
-  const isBookingPage = pathname === '/booking';
+  const isBookingPage = /^\/booking(?:\/|$)/.test(pathname);
   const [bookingTarget, setBookingTarget] = useState(null);
 
   useEffect(() => {
