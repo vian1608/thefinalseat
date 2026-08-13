@@ -498,10 +498,10 @@ function VoucherEnhancement() {
   );
 }
 
-export default function BookingVoucherPage() {
+export default function BookingVoucherPage({ initialJourneyPayload = null }) {
   return (
     <>
-      <Booking />
+      <Booking initialJourneyPayload={initialJourneyPayload} />
       <VoucherEnhancement />
     </>
   );

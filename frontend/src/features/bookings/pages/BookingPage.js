@@ -50,10 +50,25 @@ const formatCch = (val = '') => {
   return val.replace(/\D/g, '').slice(0, 4);
 };
 
-function Booking() {
+const readBookingSessionJson = (key, fallback = null) => {
+  try {
+    const raw = sessionStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+function Booking({ initialJourneyPayload = null }) {
   const navigate = useNavigate();
-  const [flight, setFlight] = useState(null);
-  const [returnFlight, setReturnFlight] = useState(null);
+  const [flight, setFlight] = useState(() =>
+    initialJourneyPayload?.selectedFlight || readBookingSessionJson('selectedFlight', null)
+  );
+  const [returnFlight, setReturnFlight] = useState(() =>
+    initialJourneyPayload?.returnFlight
+      || readBookingSessionJson('returnFlight', null)
+      || readBookingSessionJson('selectedReturnFlight', null)
+  );
   const [error, setError] = useState('');
 
   // Single unified Credit / Debit Card & Billing state
@@ -193,14 +208,22 @@ function Booking() {
   const [passengersList, setPassengersList] = useState([]);
 
   useEffect(() => {
-    const flightData = JSON.parse(sessionStorage.getItem('selectedFlight') || 'null');
-    if (!flightData) { navigate('/'); return; }
-    setFlight(flightData);
+    const flightData = initialJourneyPayload?.selectedFlight
+      || readBookingSessionJson('selectedFlight', null);
+    const returnFlightData = initialJourneyPayload?.returnFlight
+      || readBookingSessionJson('returnFlight', null)
+      || readBookingSessionJson('selectedReturnFlight', null);
+    const searchParams = initialJourneyPayload?.searchParams
+      || readBookingSessionJson('searchParams', {});
 
-    const returnFlightData = JSON.parse(sessionStorage.getItem('returnFlight') || 'null');
+    if (!flightData) {
+      setError('We could not restore the selected itinerary. Please retry this checkout link or search again.');
+      return;
+    }
+
+    setFlight(flightData);
     setReturnFlight(returnFlightData);
 
-    const searchParams = JSON.parse(sessionStorage.getItem('searchParams') || '{}');
     const adults = parseInt(searchParams.adults || 1, 10);
     const children = parseInt(searchParams.children || 0, 10);
     const infants = parseInt(searchParams.infants || 0, 10);
@@ -226,7 +249,7 @@ function Booking() {
       contactInfo: null,
       currentStep: 'travellers',
     }).catch(() => {/* non-blocking */});
-  }, [navigate]);
+  }, [initialJourneyPayload]);
 
   function createPassenger(role) {
     return {

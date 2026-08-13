@@ -338,11 +338,14 @@ export function TokenizedBookingPage() {
   const navigate = useNavigate();
   const [session, setSession] = useState(null);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   ensureBookingSessionBridge();
 
   useEffect(() => {
     let cancelled = false;
+    setError('');
+    setSession(null);
     journeySessionAPI.getCheckout(checkoutToken)
       .then((response) => {
         if (cancelled) return;
@@ -358,14 +361,38 @@ export function TokenizedBookingPage() {
       })
       .catch((err) => !cancelled && setError(err?.userMessage || err?.message || 'Unable to restore this checkout link.'));
     return () => { cancelled = true; };
-  }, [checkoutToken, navigate]);
+  }, [checkoutToken, navigate, reloadKey]);
 
-  if (error) return <JourneyState error title="This checkout link cannot be restored" message={error} />;
+  if (error) return (
+    <JourneyState
+      error
+      title="This checkout link cannot be restored"
+      message={error}
+      action={(
+        <div style={{ marginTop: 18, display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => setReloadKey((current) => current + 1)}
+            style={{ padding: '.8rem 1.15rem', borderRadius: 10, border: 0, background: '#8b1538', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+          >
+            Retry checkout
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            style={{ padding: '.8rem 1.15rem', borderRadius: 10, border: '1px solid #cbd5e1', background: '#fff', color: '#334155', fontWeight: 700, cursor: 'pointer' }}
+          >
+            Search flights
+          </button>
+        </div>
+      )}
+    />
+  );
   if (!session) return <JourneyState title="Restoring your secure checkout" message="Loading the exact itinerary and saved non-sensitive form progress attached to this checkout link." />;
 
   return (
     <>
-      <BookingVoucherPage />
+      <BookingVoucherPage initialJourneyPayload={session.payload || {}} />
       <CheckoutDraftPersistence token={checkoutToken} initialPayload={session.payload || {}} />
     </>
   );
