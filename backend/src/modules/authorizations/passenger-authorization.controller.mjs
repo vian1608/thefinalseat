@@ -13,6 +13,17 @@ export const passengerAuthorizationController = {
       }
 
       const payload = await passengerAuthorizationService.getAuthorizationByToken(token);
+      const state = String(payload?.status || payload?.authorizationStatus || '').toLowerCase();
+      if (state === 'superseded' || state === 'reauthorization_required') {
+        return res.status(409).json({
+          success: false,
+          error: {
+            code: 'AUTHORIZATION_SUPERSEDED',
+            message: 'This booking was updated after this authorization link was issued. Please use the newest authorization request.'
+          }
+        });
+      }
+
       return res.json({
         success: true,
         authorization: payload
@@ -30,7 +41,7 @@ export const passengerAuthorizationController = {
           error: { code: 'EXPIRED', message: 'This authorization link has expired. A new authorization link will be sent.' }
         });
       }
-      if (error.message === 'AUTHORIZATION_INVALIDATED_PRICE_CHANGE') {
+      if (error.message === 'AUTHORIZATION_INVALIDATED_PRICE_CHANGE' || error.message === 'AUTHORIZATION_SUPERSEDED') {
         return res.status(409).json({
           success: false,
           error: { code: 'INVALIDATED', message: 'The booking details or fare changed. A new authorization is required.' }
@@ -80,6 +91,12 @@ export const passengerAuthorizationController = {
 
       return res.json(result);
     } catch (error) {
+      if (error.message.includes('SUPERSEDED')) {
+        return res.status(409).json({
+          success: false,
+          error: { code: 'AUTHORIZATION_SUPERSEDED', message: 'This booking changed after the authorization link was issued. Please use the newest authorization request.' }
+        });
+      }
       if (error.message.includes('ALREADY')) {
         return res.status(400).json({
           success: false,
