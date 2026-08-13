@@ -104,6 +104,7 @@ assert.match(checkout, /60% of the ticket value/);
 // tight loop. This protects against Chrome's Page Unresponsive failure on /booking/c_.
 assert.match(checkout, /new MutationObserver\(scheduleSync\)/);
 assert.match(checkout, /requestAnimationFrame/);
+assert.match(checkout, /currentText !== finalText/);
 assert.doesNotMatch(checkout, /new MutationObserver\(syncCheckoutState\)/);
 assert.doesNotMatch(checkout, /characterData:\s*true/);
 assert.doesNotMatch(checkout, /setTextIfChanged\(mobileTotal,\s*finalText\)/);
