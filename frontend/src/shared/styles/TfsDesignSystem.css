@@ -52,6 +52,17 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* One public-page horizontal rhythm. Components that intentionally need a
+   narrower reading column keep their own max-width inside this shell. */
+body .container {
+  width: 100%;
+  max-width: var(--tfs-public-shell);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
 body.theme-flights {
   background-color: var(--tfs-surface-soft);
 }
@@ -83,4 +94,11 @@ textarea:focus-visible {
 ::selection {
   background: var(--tfs-wine-100);
   color: var(--tfs-wine-950);
+}
+
+@media (max-width: 640px) {
+  body .container {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
 }
