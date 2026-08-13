@@ -100,6 +100,28 @@ function Home() {
     setSearchData((prev) => ({ ...prev, [field]: value }));
   };
 
+
+  const handleSwapSearchAirports = () => {
+    setSearchData((prev) => ({
+      ...prev,
+      from: prev.to || '',
+      to: prev.from || '',
+      fromAirport: prev.toAirport || null,
+      toAirport: prev.fromAirport || null,
+    }));
+    setSubmitStatus('idle');
+    setSubmitMessage('');
+  };
+
+  const handleSwapInquiryAirports = () => {
+    setFormData((prev) => ({
+      ...prev,
+      origin: prev.destination || '',
+      destination: prev.origin || '',
+    }));
+    setFieldErrors((prev) => ({ ...prev, origin: undefined, destination: undefined }));
+  };
+
   const incrementPassenger = (type) => {
     setSearchData((prev) => {
       const total = prev.adults + prev.children + prev.infantsInSeat + prev.infantsOnLap;
@@ -509,7 +531,7 @@ function Home() {
                       </div>
 
                       {/* Airport Autocomplete Row */}
-                      <div className="flights-form__row" style={{ gap: '1.25rem' }}>
+                      <div className="airport-swap-row">
                         <div className="flights-form__group" style={{ margin: 0 }}>
                           <AirportAutocomplete 
                             label="Origin Airport"
@@ -524,6 +546,16 @@ function Home() {
                             required
                           />
                         </div>
+                        <button
+                          type="button"
+                          className="airport-swap-button"
+                          onClick={handleSwapSearchAirports}
+                          disabled={!searchData.from && !searchData.to}
+                          aria-label="Swap origin and destination airports"
+                          title="Swap origin and destination"
+                        >
+                          <i className="fas fa-exchange-alt" aria-hidden="true"></i>
+                        </button>
                         <div className="flights-form__group" style={{ margin: 0 }}>
                           <AirportAutocomplete 
                             label="Destination Airport"
@@ -657,7 +689,7 @@ function Home() {
                           />
                         </div>
                       </div>
-                      <div className="flights-form__row">
+                      <div className="airport-swap-row airport-swap-row--inquiry">
                         <div className="flights-form__group">
                           <InquiryLocationSelect
                             id="flight-origin"
@@ -669,6 +701,16 @@ function Home() {
                             required
                           />
                         </div>
+                        <button
+                          type="button"
+                          className="airport-swap-button"
+                          onClick={handleSwapInquiryAirports}
+                          disabled={!formData.origin && !formData.destination}
+                          aria-label="Swap origin and destination airports"
+                          title="Swap origin and destination"
+                        >
+                          <i className="fas fa-exchange-alt" aria-hidden="true"></i>
+                        </button>
                         <div className="flights-form__group">
                           <InquiryLocationSelect
                             id="flight-destination"
