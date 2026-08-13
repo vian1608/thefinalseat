@@ -71,31 +71,30 @@ export const bookingRepository = {
       .select()
       .single();
 
-    if (data?.id) {
-      const fullRecord = { ...data, client_request_id: clientReqId };
-      bookingsMemoryStore.set(data.id, fullRecord);
-      if (data.confirmation_code) bookingsMemoryStore.set(data.confirmation_code, fullRecord);
-      if (clientReqId) bookingsMemoryStore.set(clientReqId, fullRecord);
-      return fullRecord;
-    }
-
     if (error) {
       const insertError = new Error(`Booking record insert failed: ${error.message}`);
       insertError.code = 'BOOKING_INSERT_FAILED';
       throw insertError;
     }
-    if (data) {
-      if (data.id) bookingsMemoryStore.set(data.id, data);
-      if (data.confirmation_code) bookingsMemoryStore.set(data.confirmation_code, data);
+    if (!data?.id) {
+      const insertError = new Error('Booking record insert failed: database returned no persisted booking.');
+      insertError.code = 'BOOKING_INSERT_FAILED';
+      throw insertError;
     }
+
+    const fullRecord = { ...data, client_request_id: clientReqId };
+    bookingsMemoryStore.set(data.id, fullRecord);
+    if (data.confirmation_code) bookingsMemoryStore.set(data.confirmation_code, fullRecord);
+    if (clientReqId) bookingsMemoryStore.set(clientReqId, fullRecord);
+
     await bookingRepository.recordAuditLog({
-      bookingId: data.id || dbRow.id,
+      bookingId: data.id,
       action: 'BOOKING_CREATED',
       oldValue: null,
-      newValue: data,
+      newValue: { confirmation_code: data.confirmation_code, status: data.status, payment_status: data.payment_status },
       actor: dbRow.created_by || 'customer'
     });
-    return data;
+    return fullRecord;
   },
 
 
@@ -710,9 +709,23 @@ export const bookingRepository = {
     }
 
     try {
-      const { error } = await supabase.from('email_logs').insert(logRecord);
+      const { error } = await supabase.from('email_deliveries').insert({
+        booking_id: realId,
+        confirmation_code: refCode,
+        email_type: templateType,
+        recipient,
+        provider: emailData.provider || 'RESEND',
+        provider_message_id: providerMessageId,
+        status,
+        error_message: errorMsg,
+        sent_at: sentAt,
+        expires_at: templateType.includes('AUTH') ? expiresAt : null,
+        last_attempt_at: sentAt,
+        created_at: sentAt,
+        updated_at: sentAt
+      });
       if (error) {
-        logger.warn(`[saveEmailActivity] email_logs insert notice: ${error.message}`);
+        logger.warn(`[saveEmailActivity] email_deliveries insert notice: ${error.message}`);
       }
     } catch (err) {
       logger.warn(`[saveEmailActivity] Supabase notice: ${err.message}`);
@@ -848,8 +861,6 @@ export const bookingRepository = {
       reason: `[${eventType}] PNR: ${cleanPnr || 'N/A'}, Airline: ${cleanName || 'N/A'} (${cleanCode || 'N/A'}), Ticket: ${cleanTkt || 'N/A'}, IssuedAt: ${cleanIssuedAt || 'N/A'}`
     });
 
-    return await bookingRepository.getCompleteBookingById(realId);
-
     // Create Immutable Append-Only Ticket Snapshot
     if (cleanPnr || cleanTkt) {
       const completeBooking = await bookingRepository.getById(realId);
@@ -941,7 +952,6 @@ export const bookingRepository = {
    */
   savePaymentMethodRecord: async (bookingId, payload = {}) => {
     const record = {
-      id: payload.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `pm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`),
       booking_id: bookingId,
       payment_provider: payload.payment_provider || payload.paymentProvider || 'card',
       provider_customer_id: payload.provider_customer_id || payload.providerCustomerId || null,
@@ -1104,7 +1114,6 @@ export const bookingRepository = {
       savedError = res.error;
     } else {
       const insertRecord = {
-        id: `pm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         booking_id: bookingId,
         payment_provider: 'card',
         provider_payment_method_id: `pm_tok_${Date.now()}`,
@@ -1174,9 +1183,7 @@ export const bookingRepository = {
    */
   recordAuditLog: async ({ bookingId, action, oldValue = null, newValue = null, actor = 'system', ipAddress = null }) => {
     if (!bookingId) return null;
-    const logId = `audit_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const record = {
-      id: logId,
       booking_id: bookingId,
       action,
       old_value: oldValue,
@@ -1192,16 +1199,19 @@ export const bookingRepository = {
     auditLogsMemoryStore.set(bookingId, list);
 
     // 2. Database Persistent Insert
-    const { error } = await supabase
+    const { data: persistedAudit, error } = await supabase
       .from('audit_logs')
-      .insert(record);
+      .insert(record)
+      .select('id,booking_id,action,old_value,new_value,actor,ip_address,created_at')
+      .single();
 
     if (error) {
-      logger.warn(`audit_logs insert notice (stored in memory store): ${error.message}`);
+      logger.warn(`audit_logs insert notice: ${error.message}`);
     }
 
+    const finalRecord = persistedAudit || record;
     logger.info(`[AuditLog] Action '${action}' recorded for booking ${bookingId} by actor '${record.actor}'`);
-    return record;
+    return finalRecord;
   },
 
   /**
@@ -1326,8 +1336,7 @@ export const bookingRepository = {
 
       if (filters.status) {
         let s = filters.status.toUpperCase();
-        if (s === 'CONFIRMED') s = 'RESERVATION_CONFIRMED';
-        if (s === 'DONE') s = 'COMPLETED';
+        if (s === 'CONFIRMED' || s === 'COMPLETED') s = 'DONE';
         query = query.eq('status', s);
       }
       if (filters.email) {
@@ -1575,37 +1584,10 @@ export const bookingRepository = {
       .maybeSingle();
 
     if (error) {
-      logger.warn(`Supabase schema notice: ${error.message}.`);
-
-      // Retry without non-persisted schema fields (paid_amount, paid_at, refund_amount, delete_reason)
-      const safeFields = { ...cleanFields };
-      delete safeFields.paid_amount;
-      delete safeFields.paid_at;
-      delete safeFields.refund_amount;
-      delete safeFields.refund_timestamp;
-      delete safeFields.delete_reason;
-      delete safeFields.transaction_reference;
-      delete safeFields.transactionReference;
-
-      if (Object.keys(safeFields).length > 0) {
-        const { data: safeData, error: safeErr } = await supabase
-          .from('bookings')
-          .update(safeFields)
-          .eq('id', id)
-          .select()
-          .maybeSingle();
-
-        if (!safeErr && safeData) {
-          const finalRec = { ...updatedMem, ...safeData };
-          bookingsMemoryStore.set(id, finalRec);
-          if (finalRec.confirmation_code) {
-            bookingsMemoryStore.set(finalRec.confirmation_code, finalRec);
-          }
-          return finalRec;
-        }
-      }
-
-      return updatedMem;
+      logger.error(`Booking update failed for ${id}: ${error.message}`);
+      const updateError = new Error(`BOOKING_UPDATE_FAILED: ${error.message}`);
+      updateError.code = 'BOOKING_UPDATE_FAILED';
+      throw updateError;
     }
 
     const finalRec = data ? { ...updatedMem, ...data } : updatedMem;
@@ -1852,7 +1834,7 @@ export const bookingRepository = {
 
       // Payment Status & Totals
       if (targetPaymentStatus) {
-        bookingUpdateFields.payment_status = targetPaymentStatus.toLowerCase();
+        bookingUpdateFields.payment_status = targetPaymentStatus;
         if (targetPaymentStatus === 'PAID') {
           const rawRef = payload.transactionReference ?? payload.transaction_reference ?? payload.transactionRef ?? payload.referenceId ?? payload.transaction_id ?? payload.payment_intent_id ?? existingBooking.transaction_id ?? existingBooking.provider_payment_id ?? null;
           const transactionRef = rawRef ? String(rawRef).trim() : null;
@@ -2486,7 +2468,8 @@ export const bookingRepository = {
       }
 
       // 7 & 8. Update payments and bookings
-      const targetPaymentStatus = (paymentState || paymentMetadata.paymentStatus || booking.payment_status || 'pending').toLowerCase();
+      const requestedPaymentStatus = (paymentState || paymentMetadata.paymentStatus || booking.payment_status || 'PENDING').toUpperCase();
+      const targetPaymentStatus = requestedPaymentStatus === 'AUTHORIZED' ? 'PROCESSING' : requestedPaymentStatus;
       
       // 5. Log SQL update query executed (payments table update)
       logger.info(`[Transaction] 5. Executing: UPDATE payments SET authorized_amount = ${calculatedTotal}, payment_amount = ${calculatedTotal}, payment_status = '${targetPaymentStatus}' WHERE booking_id = '${realId}'`);
@@ -2881,11 +2864,10 @@ export const bookingRepository = {
       bookingsMemoryStore.set(base.confirmation_code, { ...base, ...existingMem, ...updateFields });
     }
 
-    // Update DB
-    try {
-      await supabase.from('bookings').update(updateFields).eq('id', base.id);
-    } catch (dbErr) {
-      logger.warn(`[updatePricingAtomic] Supabase update warning for ${base.id}:`, dbErr.message);
+    // Update DB and verify the write instead of reporting a memory-only success.
+    const { error: pricingUpdateError } = await supabase.from('bookings').update(updateFields).eq('id', base.id);
+    if (pricingUpdateError) {
+      throw new Error(`PRICING_UPDATE_FAILED: ${pricingUpdateError.message}`);
     }
 
     // Record price revision

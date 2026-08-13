@@ -454,11 +454,12 @@ export const bookingService = {
       throw err;
     }
 
-    const ALLOWED_PAY_STATUS = ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'AUTHORIZED', 'PROCESSING'];
+    const ALLOWED_PAY_STATUS = ['PENDING', 'PROCESSING', 'PAID', 'FAILED', 'REFUNDED'];
     const booking = await bookingRepository.resolveBooking(id);
     const realId = booking.id;
 
-    const targetStatus = (paymentState || paymentStatus || booking.payment_status || 'pending').toUpperCase();
+    const requestedPaymentStatus = (paymentState || paymentStatus || booking.payment_status || 'PENDING').toUpperCase();
+    const targetStatus = requestedPaymentStatus === 'AUTHORIZED' ? 'PROCESSING' : requestedPaymentStatus;
     if (!ALLOWED_PAY_STATUS.includes(targetStatus)) {
       const err = new Error(`Invalid payment status '${targetStatus}'. Allowed: ${ALLOWED_PAY_STATUS.join(', ')}.`);
       err.code = 'INVALID_PAYMENT_STATUS';

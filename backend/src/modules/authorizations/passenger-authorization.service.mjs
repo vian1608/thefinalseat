@@ -151,13 +151,21 @@ export const passengerAuthorizationService = {
     const authRecord = {
       booking_id: bookingId,
       token,
+      authorization_token: token,
       status: 'pending',
+      authorization_status: 'AWAITING_AUTHORIZATION',
       authorized_amount: authorizedAmountNum,
+      booking_amount: authorizedAmountNum,
       currency: (completeBooking.currency || 'USD').toUpperCase(),
 
       payment_method_token: vaultData.paymentMethodToken || vaultData.token || completeBooking.paymentMethod?.provider_payment_method_id || null,
       card_brand: vaultData.cardBrand || vaultData.brand || completeBooking.paymentMethod?.card_brand || null,
+      payment_card_brand: vaultData.cardBrand || vaultData.brand || completeBooking.paymentMethod?.card_brand || null,
       card_last4: (() => {
+        const raw = String(vaultData.cardLast4 || vaultData.last4 || completeBooking.paymentMethod?.card_last4 || '').replace(/\D/g, '');
+        return /^\d{4}$/.test(raw) ? raw : null;
+      })(),
+      payment_card_last4: (() => {
         const raw = String(vaultData.cardLast4 || vaultData.last4 || completeBooking.paymentMethod?.card_last4 || '').replace(/\D/g, '');
         return /^\d{4}$/.test(raw) ? raw : null;
       })(),
@@ -166,6 +174,7 @@ export const passengerAuthorizationService = {
       policies_snapshot: policiesSnapshot,
       authorization_text_version: 'v1.0',
       expires_at: expiresAt,
+      authorization_expires_at: expiresAt,
       created_at: new Date().toISOString()
     };
 
@@ -178,13 +187,18 @@ export const passengerAuthorizationService = {
         .single();
 
       if (error) {
-        logger.warn(`[Auth] Supabase table insert warning: ${error.message}. Saving to resilience memory store.`);
-        memoryAuthStore.set(token, authRecord);
+        if (process.env.NODE_ENV === 'test') {
+          logger.warn(`[Auth] Supabase table insert warning in test mode: ${error.message}.`);
+          memoryAuthStore.set(token, authRecord);
+        } else {
+          throw new Error(`AUTHORIZATION_PERSISTENCE_FAILED: ${error.message}`);
+        }
       } else {
         memoryAuthStore.set(token, data);
       }
     } catch (e) {
-      memoryAuthStore.set(token, authRecord);
+      if (process.env.NODE_ENV === 'test') memoryAuthStore.set(token, authRecord);
+      else throw e;
     }
 
     // Only persist the authorization token & expiry on the booking record.
@@ -711,7 +725,11 @@ Email: support@thefinalseat.com | Call: ${env.supportPhoneDisplay}
       .eq('token', token);
 
     if (paError) {
-      logger.warn(`[Auth] passenger_authorizations update notice (non-fatal): ${paError.message}`);
+      if (process.env.NODE_ENV === 'test') {
+        logger.warn(`[Auth] passenger_authorizations update notice in test mode: ${paError.message}`);
+      } else {
+        throw new Error(`AUTHORIZATION_ACCEPT_PERSISTENCE_FAILED: ${paError.message}`);
+      }
     }
 
     // Persist into authorization_snapshots table & memory store
