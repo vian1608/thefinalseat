@@ -9,9 +9,21 @@ function latestPayment(record) {
   return rows[0] || null;
 }
 
+function orderedTravellers(record) {
+  const rows = Array.isArray(record.travellers) ? record.travellers : (Array.isArray(record.passengers) ? record.passengers : []);
+  return [...rows].sort((a, b) => {
+    const primaryDelta = Number(Boolean(b.is_primary ?? b.isPrimary)) - Number(Boolean(a.is_primary ?? a.isPrimary));
+    if (primaryDelta) return primaryDelta;
+    const aSeq = Number(a.passenger_sequence ?? a.passengerSequence ?? Number.MAX_SAFE_INTEGER);
+    const bSeq = Number(b.passenger_sequence ?? b.passengerSequence ?? Number.MAX_SAFE_INTEGER);
+    if (aSeq !== bSeq) return aSeq - bSeq;
+    return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+  });
+}
+
 export function bookingCurrentView(record = {}) {
   if (!record || typeof record !== 'object') return record;
-  const travellers = Array.isArray(record.travellers) ? record.travellers : (Array.isArray(record.passengers) ? record.passengers : []);
+  const travellers = orderedTravellers(record);
   const contacts = Array.isArray(record.contacts) ? record.contacts : [];
   const traveller = travellers[0] || null;
   const contact = contacts[0] || record.contact || null;
@@ -34,6 +46,8 @@ export function bookingCurrentView(record = {}) {
 
   return {
     ...record,
+    travellers,
+    passengers: travellers,
     passenger_name: primaryName || record.passenger_name,
     passengerName: primaryName || record.passengerName,
     email,
