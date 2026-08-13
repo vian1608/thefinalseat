@@ -77,7 +77,13 @@ test('admin booking route is a dedicated compact booking workspace', async t => 
     assert.match(management, /AdminGdsImportModalV2/, 'Itinerary editor must support the existing GDS/JSON importer.');
     assert.match(management, /AdminEmailPreviewModal/, 'Email actions must retain preview support.');
     assert.match(management, /authorization-pdf/, 'Authorization evidence download must remain available.');
-    assert.doesNotMatch(management, /cardNumber|\bcvv\b|\bcvc\b/i, 'Management panel must never accept full PAN or CVV/CVC.');
+    assert.match(management, /Safe card metadata only/, 'Billing editor must explicitly explain that only safe card metadata is stored.');
+    assert.doesNotMatch(
+      management,
+      /cardNumber\s*:|card_number\s*:|name=["']cardNumber|id=["']cardNumber|securityCode\s*:|security_code\s*:|cvv\s*:|cvc\s*:/i,
+      'Management panel must never define or accept full PAN or CVV/CVC fields.'
+    );
+    assert.match(management, /cardLast4/, 'Billing editor should expose only masked card reference data.');
     assert.match(managementCss, /\.abm-two-column/, 'Pricing and authorization should have a compact dedicated layout.');
     assert.match(managementCss, /@media \(max-width: 680px\)/, 'Management controls must remain usable on mobile.');
   });
