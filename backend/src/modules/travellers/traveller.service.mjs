@@ -34,11 +34,25 @@ export const travellerService = {
       const traveler = list[i];
       const name = `${traveler.firstName || ''} ${traveler.lastName || ''}`.trim() || `Passenger #${i + 1}`;
 
+      if (!traveler.title || !String(traveler.title).trim()) {
+        throw travellerValidationError(`Title is required for ${name}.`);
+      }
       if (!traveler.firstName || !traveler.firstName.trim()) {
         throw travellerValidationError(`First name is required for ${name}.`);
       }
       if (!traveler.lastName || !traveler.lastName.trim()) {
         throw travellerValidationError(`Last name is required for ${name}.`);
+      }
+      if (!traveler.gender || !String(traveler.gender).trim()) {
+        throw travellerValidationError(`Gender is required for ${name}.`);
+      }
+
+      const role = String(traveler.role || 'adult').toLowerCase();
+      if (role === 'infant') {
+        const infantType = String(traveler.infantType || traveler.infant_type || '').toUpperCase();
+        if (infantType && !['IN_SEAT', 'ON_LAP'].includes(infantType)) {
+          throw travellerValidationError(`Invalid infant travel type for ${name}.`);
+        }
       }
 
       // Date of birth validation

@@ -73,7 +73,7 @@ export const bookingService = {
       ...payload,
       customerName: masterPassengerName,
       status: isDraft ? 'DRAFT' : (payload.status || 'PENDING'),
-      paymentStatus: isDraft ? 'draft' : (payload.paymentStatus || 'pending'),
+      paymentStatus: 'PENDING',
       payment_provider: payload.payment_provider || null
     };
 
@@ -105,6 +105,9 @@ export const bookingService = {
             nationality: p.nationality || null,
             passport_number: p.passportNumber || null,
             passport_expiry: p.passportExpiry || null,
+            infant_type: (p.role || '').toLowerCase() === 'infant'
+              ? (String(p.infantType || p.infant_type || '').toUpperCase() || null)
+              : null,
           }))
         );
       }
@@ -113,10 +116,18 @@ export const bookingService = {
       // 5 — Save primary contact details
       const tStartContact = Date.now();
       const rawPhone = String(payload.phone || '').trim();
-      const countryCode = rawPhone.startsWith('+') ? rawPhone.split(' ')[0] : null;
+      const contactEmail = String(payload.email || '').trim().toLowerCase();
+      if (!contactEmail || !rawPhone) {
+        const contactError = new Error('A valid primary contact email and phone number are required.');
+        contactError.code = 'CONTACT_REQUIRED';
+        throw contactError;
+      }
+      // Only persist a separate country code when the input explicitly separates it
+      // (for example '+1 7165550123'). Never mistake the whole E.164 phone for a code.
+      const countryCode = rawPhone.match(/^(\+\d{1,4})\s+/)?.[1] || null;
       const contactRow = {
         booking_id: booking.id,
-        email: payload.email,
+        email: contactEmail,
         country_code: countryCode,
         phone_number: rawPhone
       };
@@ -184,7 +195,7 @@ export const bookingService = {
         provider_payment_id: payload.provider_payment_id || null,
         payment_amount: resolvedPrice || 0,
         currency: (payload.currency || 'USD').toUpperCase(),
-        payment_status: isDraft ? 'draft' : (payload.paymentStatus || 'pending'),
+        payment_status: 'PENDING',
         payment_date: new Date().toISOString()
       };
       const payments = await bookingRepository.insertPayment(paymentRow);

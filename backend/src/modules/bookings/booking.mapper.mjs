@@ -55,7 +55,7 @@ export const bookingMapper = {
     return {
       confirmation_code: bookingReference,
       status: payload.status || 'PENDING',
-      payment_status: payload.paymentStatus || 'pending',
+      payment_status: String(payload.paymentStatus || 'PENDING').toUpperCase(),
       total_amount: rawCustomerPrice,
       customer_price: rawCustomerPrice,
       supplier_price: rawSupplierPrice,
@@ -73,6 +73,7 @@ export const bookingMapper = {
       phone: payload.phone,
       original_api_price: rawSupplierPrice,
       client_request_id: clientReqId,
+      idempotency_key: clientReqId,
     };
   },
 
@@ -197,7 +198,8 @@ export const bookingMapper = {
         gender: t.gender,
         nationality: t.nationality,
         passportNumber: t.passport_number,
-        passportExpiry: t.passport_expiry
+        passportExpiry: t.passport_expiry,
+        infantType: t.infant_type || null
       })),
       traveller_details: travellers,
 

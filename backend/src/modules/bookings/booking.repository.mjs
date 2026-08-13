@@ -35,7 +35,7 @@ export const bookingRepository = {
     try {
       const { data, error } = await supabase
         .from('bookings')
-        .select('*')
+        .select('id,confirmation_code,status,payment_status,total_amount,customer_price,supplier_price,currency,passenger_name,email,phone,client_request_id,idempotency_key,created_at,updated_at')
         .or(`client_request_id.eq.${clientRequestId},idempotency_key.eq.${clientRequestId}`)
         .limit(1)
         .maybeSingle();
@@ -58,8 +58,12 @@ export const bookingRepository = {
       throw err;
     }
 
-    const clientReqId = dbRow.client_request_id || dbRow.clientRequestId || null;
-    const { client_request_id, ...cleanDbRow } = dbRow;
+    const clientReqId = dbRow.client_request_id || dbRow.clientRequestId || dbRow.idempotency_key || dbRow.idempotencyKey || null;
+    const cleanDbRow = {
+      ...dbRow,
+      client_request_id: clientReqId,
+      idempotency_key: dbRow.idempotency_key || dbRow.idempotencyKey || clientReqId || null,
+    };
 
     const { data, error } = await supabase
       .from('bookings')
@@ -76,56 +80,9 @@ export const bookingRepository = {
     }
 
     if (error) {
-      // Resilience fallback for schema cache delays on remote database: insert established core columns
-      const coreRow = {
-        confirmation_code: dbRow.confirmation_code,
-        status: dbRow.status,
-        payment_status: dbRow.payment_status,
-        total_amount: dbRow.total_amount,
-        original_api_price: dbRow.original_api_price,
-        currency: dbRow.currency,
-        passenger_name: dbRow.passenger_name,
-        email: dbRow.email,
-        phone: dbRow.phone,
-      };
-      const { data: coreData, error: coreError } = await supabase
-        .from('bookings')
-        .insert(coreRow)
-        .select()
-        .single();
-
-      if (coreError) {
-        logger.warn(`createBookingRecord Supabase notice: ${coreError.message}. Storing in resilience memory store.`);
-        const fallbackId = dbRow.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `bk_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`);
-        const fallbackRecord = { id: fallbackId, created_at: new Date().toISOString(), ...dbRow, client_request_id: clientReqId };
-        bookingsMemoryStore.set(fallbackId, fallbackRecord);
-        if (dbRow.id) bookingsMemoryStore.set(dbRow.id, fallbackRecord);
-        if (fallbackRecord.confirmation_code) bookingsMemoryStore.set(fallbackRecord.confirmation_code, fallbackRecord);
-        if (clientReqId) bookingsMemoryStore.set(clientReqId, fallbackRecord);
-        await bookingRepository.recordAuditLog({
-          bookingId: fallbackId,
-          action: 'BOOKING_CREATED',
-          oldValue: null,
-          newValue: fallbackRecord,
-          actor: dbRow.created_by || 'customer'
-        });
-        return fallbackRecord;
-      }
-      if (coreData) {
-        const fullRecord = { ...coreData, client_request_id: clientReqId };
-        if (coreData.id) bookingsMemoryStore.set(coreData.id, fullRecord);
-        if (coreData.confirmation_code) bookingsMemoryStore.set(coreData.confirmation_code, fullRecord);
-        if (clientReqId) bookingsMemoryStore.set(clientReqId, fullRecord);
-        return fullRecord;
-      }
-      await bookingRepository.recordAuditLog({
-        bookingId: coreData.id || dbRow.id,
-        action: 'BOOKING_CREATED',
-        oldValue: null,
-        newValue: coreData,
-        actor: dbRow.created_by || 'customer'
-      });
-      return coreData;
+      const insertError = new Error(`Booking record insert failed: ${error.message}`);
+      insertError.code = 'BOOKING_INSERT_FAILED';
+      throw insertError;
     }
     if (data) {
       if (data.id) bookingsMemoryStore.set(data.id, data);
@@ -161,22 +118,14 @@ export const bookingRepository = {
       .select();
 
     if (error) {
-      // Resilience fallback for character length limits before migration 006 runs
-      const safeContactRow = {
-        ...contactRow,
-        phone_number: String(contactRow.phone_number || '').substring(0, 32),
-        country_code: String(contactRow.country_code || '').substring(0, 10)
-      };
-      const { data: safeData, error: safeError } = await supabase
-        .from('contacts')
-        .insert(safeContactRow)
-        .select();
-
-      if (safeError) {
-        console.warn('Non-blocking contact insert warning:', safeError.message);
-        return [safeContactRow];
-      }
-      return safeData;
+      const insertError = new Error(`Contact record insert failed: ${error.message}`);
+      insertError.code = 'CONTACT_INSERT_FAILED';
+      throw insertError;
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+      const insertError = new Error('Contact record insert failed: database returned no persisted contact.');
+      insertError.code = 'CONTACT_INSERT_FAILED';
+      throw insertError;
     }
     return data;
   },
@@ -192,28 +141,28 @@ export const bookingRepository = {
   },
 
   insertPayment: async (paymentRow) => {
+    const canonicalStatus = String(paymentRow.payment_status || 'PENDING').trim().toUpperCase();
+    const allowedStatuses = new Set(['PENDING', 'PROCESSING', 'PAID', 'FAILED', 'REFUNDED']);
+    const normalizedRow = {
+      ...paymentRow,
+      payment_status: allowedStatuses.has(canonicalStatus) ? canonicalStatus : 'PENDING',
+      currency: String(paymentRow.currency || 'USD').trim().toUpperCase(),
+    };
+
     const { data, error } = await supabase
       .from('payments')
-      .insert(paymentRow)
+      .insert(normalizedRow)
       .select();
 
     if (error) {
-      // Fallback if optional payment provider columns are missing in remote DB schema
-      const corePaymentRow = {
-        booking_id: paymentRow.booking_id,
-        payment_provider: paymentRow.payment_provider || 'whop',
-        payment_amount: paymentRow.payment_amount || paymentRow.amount || 0,
-        currency: paymentRow.currency || 'USD',
-        payment_status: paymentRow.payment_status || 'pending',
-        payment_date: paymentRow.payment_date || new Date().toISOString()
-      };
-      const { data: corePaymentData, error: corePaymentErr } = await supabase
-        .from('payments')
-        .insert(corePaymentRow)
-        .select();
-
-      if (corePaymentErr) throw new Error(`Payment record insert failed: ${corePaymentErr.message}`);
-      return corePaymentData;
+      const insertError = new Error(`Payment record insert failed: ${error.message}`);
+      insertError.code = 'PAYMENT_INSERT_FAILED';
+      throw insertError;
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+      const insertError = new Error('Payment record insert failed: database returned no persisted payment.');
+      insertError.code = 'PAYMENT_INSERT_FAILED';
+      throw insertError;
     }
     return data;
   },

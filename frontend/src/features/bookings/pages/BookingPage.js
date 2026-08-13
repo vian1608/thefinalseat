@@ -226,7 +226,11 @@ function Booking({ initialJourneyPayload = null }) {
 
     const adults = parseInt(searchParams.adults || 1, 10);
     const children = parseInt(searchParams.children || 0, 10);
-    const infants = parseInt(searchParams.infants || 0, 10);
+    const infantsInSeat = parseInt(searchParams.infantsInSeat || 0, 10);
+    const infantsOnLap = parseInt(searchParams.infantsOnLap || 0, 10);
+    const legacyInfants = parseInt(searchParams.infants || 0, 10);
+    const explicitInfants = infantsInSeat + infantsOnLap;
+    const infants = explicitInfants > 0 ? explicitInfants : legacyInfants;
 
     const initialList = [];
     for (let i = 0; i < adults; i++) {
@@ -235,8 +239,11 @@ function Booking({ initialJourneyPayload = null }) {
     for (let i = 0; i < children; i++) {
       initialList.push(createPassenger('child'));
     }
-    for (let i = 0; i < infants; i++) {
-      initialList.push(createPassenger('infant'));
+    if (explicitInfants > 0) {
+      for (let i = 0; i < infantsInSeat; i++) initialList.push(createPassenger('infant', 'IN_SEAT'));
+      for (let i = 0; i < infantsOnLap; i++) initialList.push(createPassenger('infant', 'ON_LAP'));
+    } else {
+      for (let i = 0; i < infants; i++) initialList.push(createPassenger('infant', 'ON_LAP'));
     }
     setPassengersList(initialList);
 
@@ -251,7 +258,7 @@ function Booking({ initialJourneyPayload = null }) {
     }).catch(() => {/* non-blocking */});
   }, [initialJourneyPayload]);
 
-  function createPassenger(role) {
+  function createPassenger(role, infantType = null) {
     return {
       role,
       title: '',
@@ -265,6 +272,7 @@ function Booking({ initialJourneyPayload = null }) {
       passportExpiry: '',
       knownTravelerNumber: '',
       redressNumber: '',
+      infantType: role === 'infant' ? infantType : null,
     };
   }
 
@@ -280,8 +288,8 @@ function Booking({ initialJourneyPayload = null }) {
   }, [contactSameAsTraveller, passengersList]);
 
   // Dynamic step completion flags (Turn green checkmark when valid, revert to red when invalid)
-  const isStep1Complete = passengersList.length > 0 && passengersList.every(p => 
-    !!(p.firstName && p.firstName.trim() && p.lastName && p.lastName.trim() && p.gender && p.dateOfBirth)
+  const isStep1Complete = passengersList.length > 0 && passengersList.every(p =>
+    !!(p.title && p.firstName && p.firstName.trim() && p.lastName && p.lastName.trim() && p.gender && p.dateOfBirth)
   );
 
   const isStep2Complete = !!(
@@ -311,15 +319,17 @@ function Booking({ initialJourneyPayload = null }) {
   };
 
   const validateForm = () => {
-    if (!isStep2Complete) {
-      setError('Please fill in all primary contact details (First Name, Last Name, Email, Phone).');
-      setOpenSections({ travellers: false, contact: true, requests: false, payment: false });
+    if (!isStep1Complete) {
+      setError('Please complete all required fields for all travelers (Title, First Name, Last Name, Gender, DOB).');
+      setOpenSections({ travellers: true, contact: false, requests: false, payment: false });
+      window.setTimeout(() => document.querySelector('.passenger-card-block select:invalid, .passenger-card-block input:invalid')?.focus(), 80);
       return false;
     }
 
-    if (!isStep1Complete) {
-      setError('Please complete all required fields for all travelers (First Name, Last Name, Gender, DOB).');
-      setOpenSections({ travellers: true, contact: false, requests: false, payment: false });
+    if (!isStep2Complete) {
+      setError('Please fill in all primary contact details (First Name, Last Name, Email, Phone).');
+      setOpenSections({ travellers: false, contact: true, requests: false, payment: false });
+      window.setTimeout(() => document.querySelector('#contact-email, #contact-phone')?.focus(), 80);
       return false;
     }
 
@@ -360,7 +370,11 @@ function Booking({ initialJourneyPayload = null }) {
   const [isBillingExpanded, setIsBillingExpanded] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  const idempotencyKeyRef = useRef(`idemp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
+  const idempotencyKeyRef = useRef(
+    sessionStorage.getItem('checkoutSessionToken')
+      ? `checkout:${sessionStorage.getItem('checkoutSessionToken')}`
+      : `idemp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+  );
 
   const handlePaymentFocus = () => {
     if (!isBillingExpanded) {
@@ -392,13 +406,8 @@ function Booking({ initialJourneyPayload = null }) {
     };
 
     const cleanCardNum = cardForm.cardNumber.replace(/\D/g, '');
-    const cardLast4 = cleanCardNum || null;
+    const cardLast4 = cleanCardNum.length >= 4 ? cleanCardNum.slice(-4) : null;
     const cardBrand = detectCardBrand(cardForm.cardNumber).name;
-    console.log(
-      {cleanCardNum},
-      {cardLast4},
-      {cardBrand}
-    )
 
     // Parse expDate "MM/YY" or "MM/YYYY" into separate integers
     const expParts = (cardForm.expDate || '').split('/');
@@ -437,7 +446,7 @@ function Booking({ initialJourneyPayload = null }) {
       discount_amount: pricing.discountAmount,
       customer_price: pricing.total,
       displayedWebsitePrice: pricing.total,
-      paymentStatus: 'pending',
+      paymentStatus: 'PENDING',
       payment_provider: 'card',
       // Nested canonical object (primary pickup path)
       paymentMethod,
@@ -491,7 +500,11 @@ function Booking({ initialJourneyPayload = null }) {
           console.info('[Checkout] Idempotent reuse detected — booking already exists:', bCode);
         }
 
-        return { id: bId, code: bCode };
+        return {
+          id: bId,
+          code: bCode,
+          reservationReadToken: res?.reservationReadToken || res?.data?.reservationReadToken || null,
+        };
       }
     }
 
@@ -601,8 +614,10 @@ function Booking({ initialJourneyPayload = null }) {
 
       setPaymentComplete(true);
 
-      // 3. Navigate to dedicated reservation confirmation page
-      navigate(`/booking-confirmed/${encodeURIComponent(bCode)}?email=${encodeURIComponent(primaryContact.email)}`);
+      // 3. Prefer the opaque reservation-read token when the backend issued one.
+      const readToken = pending.reservationReadToken || sessionStorage.getItem(`reservationReadToken:${bCode}`) || null;
+      const confirmationRef = readToken || bCode;
+      navigate(`/booking-confirmed/${encodeURIComponent(confirmationRef)}?email=${encodeURIComponent(primaryContact.email)}`);
     } catch (err) {
       console.error('Card payment processing error:', err);
 
