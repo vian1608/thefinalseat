@@ -43,10 +43,13 @@ assert.match(service, /const contactEmail = String\(payload\.email/);
 assert.match(service, /rawPhone\.match\(\/\^\(\\\+\\d\{1,4\}\)\\s\+\//);
 assert.doesNotMatch(service, /rawPhone\.startsWith\('\+'\) \? rawPhone\.split\(' '\)\[0\]/);
 
-// Passenger contract: visible required fields are required server-side too.
+// Passenger contract: visible required fields are required server-side and the
+// customer UI must use the same shared React-side completion predicate.
 assert.match(traveller, /Title is required/);
 assert.match(traveller, /Gender is required/);
-assert.match(bookingPage, /p\.title && p\.firstName/);
+assert.match(bookingPage, /PASSENGER_REQUIRED_FIELDS/);
+assert.match(bookingPage, /isPassengerRequiredComplete/);
+assert.match(bookingPage, /getMissingPassengerFields/);
 
 // Explicit infant types survive search -> checkout -> persisted traveller row.
 assert.match(bookingPage, /infantsInSeat/);
