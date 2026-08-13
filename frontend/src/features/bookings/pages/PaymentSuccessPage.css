@@ -12,6 +12,40 @@
   margin: 0 auto;
 }
 
+.confirmation-context-nav {
+  display: flex;
+  align-items: center;
+  margin: 0 0 0.85rem;
+}
+
+.confirmation-context-back {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--tfs-border-strong, #c7d3e1);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--tfs-text, #33445a);
+  font-size: .88rem;
+  font-weight: 750;
+  text-decoration: none;
+  box-shadow: var(--tfs-shadow-sm, 0 4px 16px rgba(11, 22, 40, .06));
+  transition: transform .18s ease, border-color .18s ease, color .18s ease, background .18s ease;
+}
+
+.confirmation-context-back i {
+  color: var(--tfs-wine-700, #861b3d);
+}
+
+.confirmation-context-back:hover {
+  transform: translateY(-1px);
+  border-color: rgba(134, 27, 61, .35);
+  color: var(--tfs-wine-800, #6d1532);
+  background: var(--tfs-wine-50, #fff7fa);
+}
+
 .confirmation-card--loading,
 .confirmation-card--error {
   max-width: 620px;

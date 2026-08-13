@@ -264,7 +264,13 @@ function PaymentSuccessPage() {
       </Helmet>
 
       <div className="confirmation-container no-print-padding">
-        
+        <div className="confirmation-context-nav no-print">
+          <Link to="/my-bookings" className="confirmation-context-back">
+            <i className="fas fa-arrow-left" aria-hidden="true"></i>
+            Back to My Bookings
+          </Link>
+        </div>
+
         {/* ── 1. Header Banner & Success Checkmark ──────────────────────── */}
         <div className="confirmation-header-banner">
           <div className="confirmation-checkmark-circle">
