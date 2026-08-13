@@ -92,7 +92,7 @@ test('Admin dashboard button reliability contract', async t => {
 
   await t.test('9. Shared GDS parsing and edit-booking apply both expose bounded, visible failure handling', () => {
     expectText(gdsShim, 'AdminEditBookingGdsImporter', 'Legacy GDS entry point must route to the edit adapter');
-    expectRegex(sharedGdsImporter, /try\s*{[\s\S]*?handleParseAndPreview[\s\S]*?setErrorMsg/, 'Shared importer must surface parsing errors');
+    expectRegex(sharedGdsImporter, /handleParseAndPreview[\s\S]*?catch\s*\(err\)[\s\S]*?setErrorMsg/, 'Shared importer must surface parsing errors');
     expectText(sharedGdsImporter, 'Parse & Preview');
     expectRegex(gdsAdapter, /await Promise\.resolve\(onApply/, 'Edit-booking importer must wait for the persisted itinerary save');
     expectRegex(gdsAdapter, /catch\s*\(error\)[\s\S]*?setApplyError/, 'Edit-booking save failures must remain visible');
