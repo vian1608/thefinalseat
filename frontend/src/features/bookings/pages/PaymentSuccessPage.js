@@ -4,6 +4,19 @@ import { Helmet } from 'react-helmet-async';
 import { bookingAPI } from '../../../shared/api/api';
 import './PaymentSuccessPage.css';
 
+const displayText = (value, fallback = '') => {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'object') {
+    const preferred = value.name || value.label || value.code || value.value || value.formatted;
+    if (preferred !== undefined && preferred !== null && typeof preferred !== 'object') return String(preferred);
+  }
+  return fallback;
+};
+
+const safeArray = value => Array.isArray(value) ? value : [];
+
 function PaymentSuccessPage() {
   const params = useParams();
   const [searchParams] = useSearchParams();
@@ -113,11 +126,11 @@ function PaymentSuccessPage() {
   // ── 3. DATA EXTRACTION & DERIVED VALUES ──────────────────────────────────
   // ── 3. DATA EXTRACTION & DERIVED VALUES ──────────────────────────────────
   const isPaid = (booking.booking?.paymentStatus || booking.payment_status || booking.paymentStatus || '').toLowerCase() === 'paid';
-  const passengerName = booking.booking?.passengerName || booking.passenger_name || booking.passengerName || 'Valued Traveler';
+  const passengerName = displayText(booking.booking?.passengerName || booking.passenger_name || booking.passengerName, 'Valued Traveler');
   const firstName = passengerName.split(' ')[0] || 'Traveler';
-  const code = booking.booking?.confirmationCode || booking.confirmation_code || booking.confirmationCode || booking.bookingId || confirmationCodeParam;
-  const email = booking.booking?.email || booking.email || userEmailParam || 'customer@example.com';
-  const phone = booking.booking?.phone || booking.phone || 'N/A';
+  const code = displayText(booking.booking?.confirmationCode || booking.confirmation_code || booking.confirmationCode || booking.bookingId || confirmationCodeParam, 'Reservation');
+  const email = displayText(booking.booking?.email || booking.email || userEmailParam, 'Email unavailable');
+  const phone = displayText(booking.booking?.phone || booking.phone, 'N/A');
   const bookingDate = (booking.booking?.bookingDate || booking.created_at)
     ? new Date(booking.booking?.bookingDate || booking.created_at).toLocaleDateString('en-US', {
         year: 'numeric', month: 'long', day: 'numeric'
@@ -125,7 +138,7 @@ function PaymentSuccessPage() {
     : new Date().toLocaleDateString('en-US');
 
   const paymentStatusDisplay = isPaid ? 'Paid' : 'Pending';
-  const bookingStatusDisplay = (booking.booking?.status || booking.status || 'PENDING').toUpperCase();
+  const bookingStatusDisplay = displayText(booking.booking?.status || booking.status, 'PENDING').toUpperCase();
 
   // Email Delivery Status Notice (Authoritative backend status)
   const emailDeliveryStatus = booking.emailDelivery?.status || booking.emailDeliveryStatus || (booking.authorization_email_sent_at ? 'SENT' : 'UNATTEMPTED');
@@ -145,17 +158,19 @@ function PaymentSuccessPage() {
   }
 
   // Itinerary Segments (Authored solely from backend flights list)
-  const flightsList = Array.isArray(booking.flights) && booking.flights.length > 0
-    ? booking.flights
-    : (booking.itinerary?.outbound || (Array.isArray(booking.itinerary_segments) && booking.itinerary_segments.length > 0 ? booking.itinerary_segments : []));
+  const itineraryOutbound = safeArray(booking.itinerary?.outbound);
+  const itineraryReturn = safeArray(booking.itinerary?.return);
+  const flightsList = safeArray(booking.flights).length > 0
+    ? safeArray(booking.flights)
+    : (itineraryOutbound.length > 0 ? itineraryOutbound : safeArray(booking.itinerary_segments));
 
-  const outboundSegments = (booking.itinerary?.outbound && booking.itinerary.outbound.length > 0)
-    ? booking.itinerary.outbound
-    : flightsList.filter(f => (f.leg || f.journey_direction || '').toLowerCase() === 'outbound' || (!f.leg && flightsList.indexOf(f) === 0));
+  const outboundSegments = itineraryOutbound.length > 0
+    ? itineraryOutbound
+    : flightsList.filter(f => displayText(f?.leg || f?.journey_direction).toLowerCase() === 'outbound' || (!f?.leg && flightsList.indexOf(f) === 0));
 
-  const returnSegments = (booking.itinerary?.return && booking.itinerary.return.length > 0)
-    ? booking.itinerary.return
-    : flightsList.filter(f => (f.leg || f.journey_direction || '').toLowerCase() === 'return' || (!f.leg && flightsList.indexOf(f) > 0));
+  const returnSegments = itineraryReturn.length > 0
+    ? itineraryReturn
+    : flightsList.filter(f => displayText(f?.leg || f?.journey_direction).toLowerCase() === 'return' || (!f?.leg && flightsList.indexOf(f) > 0));
 
   const allSegments = [...outboundSegments, ...returnSegments];
 
@@ -172,13 +187,14 @@ function PaymentSuccessPage() {
   // Price Calculation & Validation (Section 8 rule: Positive numeric total or unavailable)
   const rawPrice = parseFloat(booking.booking?.totalAmount ?? booking.totalAmount ?? booking.total_amount ?? booking.customer_price ?? 0);
   const hasValidPrice = !isNaN(rawPrice) && rawPrice > 0;
-  const currency = (booking.booking?.currency || booking.currency || 'USD').toUpperCase();
+  const currency = displayText(booking.booking?.currency || booking.currency, 'USD').toUpperCase();
   const totalPriceDisplay = hasValidPrice ? `$${rawPrice.toFixed(2)} ${currency}` : 'Reservation amount unavailable';
 
   // Payment Method Metadata Reference (Section 2, 5, 6 rules)
-  const cardRef = booking.cardReference || booking.paymentMethod || booking.payment_method || {};
-  const cardholderName = cardRef.cardholderName || cardRef.cardholder_name || booking.passenger_name || passengerName;
-  const cardBrand = cardRef.cardBrand || cardRef.card_brand || cardRef.brand || null;
+  const rawCardRef = booking.cardReference || booking.paymentMethod || booking.payment_method || {};
+  const cardRef = rawCardRef && typeof rawCardRef === 'object' && !Array.isArray(rawCardRef) ? rawCardRef : {};
+  const cardholderName = displayText(cardRef.cardholderName || cardRef.cardholder_name || booking.passenger_name, passengerName);
+  const cardBrand = displayText(cardRef.cardBrand || cardRef.card_brand || cardRef.brand, '');
   const rawLast4 = String(cardRef.last4 || cardRef.card_last4 || cardRef.cardLast4 || '').replace(/\D/g, '');
   const validLast4 = /^\d{4}$/.test(rawLast4) ? rawLast4 : null;
 
@@ -195,7 +211,7 @@ function PaymentSuccessPage() {
   const expYear = cardRef.expYear || cardRef.card_exp_year || cardRef.cardExpYear;
   const expDisplay = (expMonth && expYear) ? `${expMonth}/${expYear}` : 'N/A';
 
-  const billingAddr = cardRef.billingAddress || [
+  const billingAddr = displayText(cardRef.billingAddress) || [
     cardRef.billing_address_line1 || cardRef.billingAddressLine1,
     cardRef.billing_address_line2 || cardRef.billingAddressLine2,
     cardRef.billing_city || cardRef.billingCity,
@@ -204,7 +220,7 @@ function PaymentSuccessPage() {
     cardRef.billing_country || cardRef.billingCountry
   ].filter(Boolean).join(', ') || 'On File';
 
-  const billingPhone = cardRef.billingPhone || cardRef.billing_phone || phone;
+  const billingPhone = displayText(cardRef.billingPhone || cardRef.billing_phone, phone);
 
   return (
     <div className="confirmation-page-wrapper">
@@ -296,14 +312,14 @@ function PaymentSuccessPage() {
                         <div className="segment-header">
                           <span className="segment-airline">
                             {seg.airlineLogoUrl && <img src={seg.airlineLogoUrl} alt={seg.airlineName} className="segment-logo" />}
-                            <strong>{seg.airlineName || seg.airline || 'Airline'}</strong> ({seg.flightNumber || seg.flight_number || 'N/A'})
+                            <strong>{displayText(seg.airlineName || seg.airline || 'Airline')}</strong> ({displayText(seg.flightNumber || seg.flight_number || 'N/A')})
                           </span>
-                          <span className="segment-cabin">{seg.cabinClass || seg.cabin || 'Economy'}</span>
+                          <span className="segment-cabin">{displayText(seg.cabinClass || seg.cabin || 'Economy')}</span>
                         </div>
                         <div className="segment-route">
                           <div className="route-point">
-                            <span className="airport-code">{seg.departureAirport || seg.originCode || seg.departure_airport || seg.origin_airport}</span>
-                            <span className="city-name">{seg.originName || seg.originCity || seg.origin_city || ''}</span>
+                            <span className="airport-code">{displayText(seg.departureAirport || seg.originCode || seg.departure_airport || seg.origin_airport)}</span>
+                            <span className="city-name">{displayText(seg.originName || seg.originCity || seg.origin_city || '')}</span>
                             <span className="time-date">{seg.departureDate || seg.departure_date} {seg.departureTime || seg.departure_time || ''}</span>
                           </div>
                           <div className="route-arrow">
@@ -311,8 +327,8 @@ function PaymentSuccessPage() {
                             <span className="stops-count">{seg.stops === 0 ? 'Non-stop' : `${seg.stops} stop(s)`}</span>
                           </div>
                           <div className="route-point">
-                            <span className="airport-code">{seg.arrivalAirport || seg.destinationCode || seg.arrival_airport || seg.destination_airport}</span>
-                            <span className="city-name">{seg.destinationName || seg.destinationCity || seg.destination_city || ''}</span>
+                            <span className="airport-code">{displayText(seg.arrivalAirport || seg.destinationCode || seg.arrival_airport || seg.destination_airport)}</span>
+                            <span className="city-name">{displayText(seg.destinationName || seg.destinationCity || seg.destination_city || '')}</span>
                             <span className="time-date">{seg.arrivalDate || seg.arrival_date} {seg.arrivalTime || seg.arrival_time || ''}</span>
                           </div>
                         </div>
@@ -329,14 +345,14 @@ function PaymentSuccessPage() {
                         <div className="segment-header">
                           <span className="segment-airline">
                             {seg.airlineLogoUrl && <img src={seg.airlineLogoUrl} alt={seg.airlineName} className="segment-logo" />}
-                            <strong>{seg.airlineName || seg.airline || 'Airline'}</strong> ({seg.flightNumber || seg.flight_number || 'N/A'})
+                            <strong>{displayText(seg.airlineName || seg.airline || 'Airline')}</strong> ({displayText(seg.flightNumber || seg.flight_number || 'N/A')})
                           </span>
-                          <span className="segment-cabin">{seg.cabinClass || seg.cabin || 'Economy'}</span>
+                          <span className="segment-cabin">{displayText(seg.cabinClass || seg.cabin || 'Economy')}</span>
                         </div>
                         <div className="segment-route">
                           <div className="route-point">
-                            <span className="airport-code">{seg.departureAirport || seg.originCode || seg.departure_airport || seg.origin_airport}</span>
-                            <span className="city-name">{seg.originName || seg.originCity || seg.origin_city || ''}</span>
+                            <span className="airport-code">{displayText(seg.departureAirport || seg.originCode || seg.departure_airport || seg.origin_airport)}</span>
+                            <span className="city-name">{displayText(seg.originName || seg.originCity || seg.origin_city || '')}</span>
                             <span className="time-date">{seg.departureDate || seg.departure_date} {seg.departureTime || seg.departure_time || ''}</span>
                           </div>
                           <div className="route-arrow">
@@ -344,8 +360,8 @@ function PaymentSuccessPage() {
                             <span className="stops-count">{seg.stops === 0 ? 'Non-stop' : `${seg.stops} stop(s)`}</span>
                           </div>
                           <div className="route-point">
-                            <span className="airport-code">{seg.arrivalAirport || seg.destinationCode || seg.arrival_airport || seg.destination_airport}</span>
-                            <span className="city-name">{seg.destinationName || seg.destinationCity || seg.destination_city || ''}</span>
+                            <span className="airport-code">{displayText(seg.arrivalAirport || seg.destinationCode || seg.arrival_airport || seg.destination_airport)}</span>
+                            <span className="city-name">{displayText(seg.destinationName || seg.destinationCity || seg.destination_city || '')}</span>
                             <span className="time-date">{seg.arrivalDate || seg.arrival_date} {seg.arrivalTime || seg.arrival_time || ''}</span>
                           </div>
                         </div>

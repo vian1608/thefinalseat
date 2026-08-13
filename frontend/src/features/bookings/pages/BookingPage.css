@@ -1069,3 +1069,44 @@ input.input-synced:focus {
     align-items: flex-start;
   }
 }
+
+
+/* React-owned passenger accordion hardening */
+.passenger-card-title {
+  width: 100%;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  cursor: pointer;
+}
+.passenger-card-title-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+.passenger-card-title .tfs-pax-mobile-state {
+  margin-left: auto;
+  font-weight: 800;
+  font-size: 0.78rem;
+}
+.passenger-card-title .tfs-pax-state-complete {
+  color: #047857;
+}
+.passenger-card-title .tfs-pax-mobile-chevron {
+  flex: 0 0 auto;
+  transition: transform 160ms ease;
+}
+.passenger-card-block.tfs-pax-collapsed > :not(.passenger-card-title) {
+  display: none !important;
+}
+.passenger-card-block.tfs-pax-collapsed .tfs-pax-mobile-chevron {
+  transform: rotate(-90deg);
+}
+.passenger-card-block.tfs-passenger-card-error {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.10) !important;
+}

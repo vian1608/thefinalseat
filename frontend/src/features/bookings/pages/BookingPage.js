@@ -59,6 +59,26 @@ const readBookingSessionJson = (key, fallback = null) => {
   }
 };
 
+const PASSENGER_REQUIRED_FIELDS = [
+  ['title', 'Title'],
+  ['firstName', 'First Name'],
+  ['lastName', 'Last Name'],
+  ['gender', 'Gender'],
+  ['dateOfBirth', 'Date of Birth'],
+];
+
+const normalizePassengerFieldValue = (field, value) => {
+  if (field === 'title') return String(value || '').trim().replace(/\.$/, '');
+  if (field === 'gender') return String(value || '').trim().toLowerCase();
+  return value;
+};
+
+const getMissingPassengerFields = (passenger = {}) => PASSENGER_REQUIRED_FIELDS
+  .filter(([key]) => !String(passenger?.[key] ?? '').trim())
+  .map(([, label]) => label);
+
+const isPassengerRequiredComplete = (passenger = {}) => getMissingPassengerFields(passenger).length === 0;
+
 function Booking({ initialJourneyPayload = null }) {
   const navigate = useNavigate();
   const [flight, setFlight] = useState(() =>
@@ -206,6 +226,15 @@ function Booking({ initialJourneyPayload = null }) {
   });
 
   const [passengersList, setPassengersList] = useState([]);
+  const [expandedPassengers, setExpandedPassengers] = useState({});
+  const [passengerValidationErrors, setPassengerValidationErrors] = useState({});
+
+  const revealPassenger = (index) => {
+    setExpandedPassengers(prev => ({ ...prev, [index]: true }));
+    window.setTimeout(() => {
+      document.querySelector(`[data-passenger-index=\"${index}\"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 40);
+  };
 
   useEffect(() => {
     const flightData = initialJourneyPayload?.selectedFlight
@@ -288,9 +317,7 @@ function Booking({ initialJourneyPayload = null }) {
   }, [contactSameAsTraveller, passengersList]);
 
   // Dynamic step completion flags (Turn green checkmark when valid, revert to red when invalid)
-  const isStep1Complete = passengersList.length > 0 && passengersList.every(p =>
-    !!(p.title && p.firstName && p.firstName.trim() && p.lastName && p.lastName.trim() && p.gender && p.dateOfBirth)
-  );
+  const isStep1Complete = passengersList.length > 0 && passengersList.every(isPassengerRequiredComplete);
 
   const isStep2Complete = !!(
     primaryContact.firstName && primaryContact.firstName.trim() && 
@@ -311,20 +338,33 @@ function Booking({ initialJourneyPayload = null }) {
   };
 
   const handlePassengerChange = (index, field, value) => {
+    const normalizedValue = normalizePassengerFieldValue(field, value);
     setPassengersList(prev => {
       const newList = [...prev];
-      newList[index] = { ...newList[index], [field]: value };
+      newList[index] = { ...newList[index], [field]: normalizedValue };
       return newList;
     });
+    setPassengerValidationErrors(prev => {
+      if (!prev[index]) return prev;
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+    if (error) setError('');
   };
 
   const validateForm = () => {
-    if (!isStep1Complete) {
-      setError('Please complete all required fields for all travelers (Title, First Name, Last Name, Gender, DOB).');
+    const firstIncompleteIndex = passengersList.findIndex(p => !isPassengerRequiredComplete(p));
+    if (firstIncompleteIndex >= 0) {
+      const missing = getMissingPassengerFields(passengersList[firstIncompleteIndex]);
+      setPassengerValidationErrors({ [firstIncompleteIndex]: missing });
+      setError(`Passenger #${firstIncompleteIndex + 1}: Please complete ${missing.join(', ')}.`);
       setOpenSections({ travellers: true, contact: false, requests: false, payment: false });
-      window.setTimeout(() => document.querySelector('.passenger-card-block select:invalid, .passenger-card-block input:invalid')?.focus(), 80);
+      revealPassenger(firstIncompleteIndex);
       return false;
     }
+
+    setPassengerValidationErrors({});
 
     if (!isStep2Complete) {
       setError('Please fill in all primary contact details (First Name, Last Name, Email, Phone).');
@@ -341,7 +381,9 @@ function Booking({ initialJourneyPayload = null }) {
       const dobCheck = validateDateOfBirth(p.dateOfBirth, p.role || 'adult', depDate);
       if (!dobCheck.valid) {
         setError(`${pName}: ${dobCheck.message}`);
+        setPassengerValidationErrors({ [i]: [dobCheck.message] });
         setOpenSections({ travellers: true, contact: false, requests: false, payment: false });
+        revealPassenger(i);
         return false;
       }
 
@@ -349,7 +391,9 @@ function Booking({ initialJourneyPayload = null }) {
         const passCheck = validatePassportNumber(p.passportNumber);
         if (!passCheck.valid) {
           setError(`${pName}: ${passCheck.message}`);
+          setPassengerValidationErrors({ [i]: [passCheck.message] });
           setOpenSections({ travellers: true, contact: false, requests: false, payment: false });
+          revealPassenger(i);
           return false;
         }
       }
@@ -358,7 +402,9 @@ function Booking({ initialJourneyPayload = null }) {
         const expCheck = validatePassportExpiry(p.passportExpiry, depDate);
         if (!expCheck.valid) {
           setError(`${pName}: ${expCheck.message}`);
+          setPassengerValidationErrors({ [i]: [expCheck.message] });
           setOpenSections({ travellers: true, contact: false, requests: false, payment: false });
+          revealPassenger(i);
           return false;
         }
       }
@@ -815,7 +861,7 @@ function Booking({ initialJourneyPayload = null }) {
               </div>
             )}
 
-            <form onSubmit={(e) => e.preventDefault()}>
+            <form noValidate onSubmit={(e) => e.preventDefault()}>
 
               {/* SECTION 1: TRAVELLER DETAILS */}
               <AccordionSection
@@ -827,10 +873,25 @@ function Booking({ initialJourneyPayload = null }) {
                 isComplete={isStep1Complete}
               >
                 {passengersList.map((passenger, idx) => (
-                  <div key={idx} className="passenger-card-block">
-                    <h4 className="passenger-card-title">
-                      <i className="fas fa-user"></i> Passenger #{idx + 1} ({safeUpper(passenger?.role || 'ADULT')})
-                    </h4>
+                  <div
+                    key={idx}
+                    data-passenger-index={idx}
+                    className={`passenger-card-block${expandedPassengers[idx] === false ? ' tfs-pax-collapsed' : ''}${passengerValidationErrors[idx]?.length ? ' tfs-passenger-card-error' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      className="passenger-card-title"
+                      aria-expanded={expandedPassengers[idx] !== false}
+                      onClick={() => setExpandedPassengers(prev => ({ ...prev, [idx]: prev[idx] === false }))}
+                    >
+                      <span className="passenger-card-title-main">
+                        <i className="fas fa-user"></i> Passenger #{idx + 1} ({safeUpper(passenger?.role || 'ADULT')})
+                      </span>
+                      <span className={`tfs-pax-mobile-state${isPassengerRequiredComplete(passenger) ? ' tfs-pax-state-complete' : ''}`}>
+                        {isPassengerRequiredComplete(passenger) ? 'Done' : 'Required'}
+                      </span>
+                      <i className="fas fa-chevron-down tfs-pax-mobile-chevron" aria-hidden="true"></i>
+                    </button>
 
                     <div className="booking-form-grid booking-form-grid--3col">
                       <label className="booking-form-field">
@@ -838,12 +899,14 @@ function Booking({ initialJourneyPayload = null }) {
                         <select
                           value={passenger.title}
                           onChange={(e) => handlePassengerChange(idx, 'title', e.target.value)}
-                          required
+                          aria-required="true"
                         >
                           <option value="">Select</option>
                           <option value="Mr">Mr.</option>
                           <option value="Mrs">Mrs.</option>
                           <option value="Ms">Ms.</option>
+                          <option value="Miss">Miss</option>
+                          <option value="Master">Master</option>
                           <option value="Dr">Dr.</option>
                         </select>
                       </label>
@@ -854,7 +917,7 @@ function Booking({ initialJourneyPayload = null }) {
                           type="text"
                           value={passenger.firstName}
                           onChange={(e) => handlePassengerChange(idx, 'firstName', e.target.value)}
-                          required
+                          aria-required="true"
                           placeholder="First Name (as on Passport/ID)"
                         />
                       </label>
@@ -877,7 +940,7 @@ function Booking({ initialJourneyPayload = null }) {
                           type="text"
                           value={passenger.lastName}
                           onChange={(e) => handlePassengerChange(idx, 'lastName', e.target.value)}
-                          required
+                          aria-required="true"
                           placeholder="Last Name (as on Passport/ID)"
                         />
                       </label>
@@ -887,7 +950,7 @@ function Booking({ initialJourneyPayload = null }) {
                         <select
                           value={passenger.gender}
                           onChange={(e) => handlePassengerChange(idx, 'gender', e.target.value)}
-                          required
+                          aria-required="true"
                         >
                           <option value="">Select Gender</option>
                           <option value="male">Male</option>
@@ -901,7 +964,7 @@ function Booking({ initialJourneyPayload = null }) {
                           id={`dob-pass-${idx}`}
                           value={passenger.dateOfBirth}
                           onChange={(val) => handlePassengerChange(idx, 'dateOfBirth', val)}
-                          required
+                          aria-required="true"
                         />
                       </div>
                     </div>
