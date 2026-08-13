@@ -58,6 +58,7 @@ async function saveTravellers(realId, passengers, replacePassengers = true) {
     .from('travellers')
     .select('*')
     .eq('booking_id', realId)
+    .order('passenger_sequence', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: true });
 
   if (existingError) throw new Error(`Unable to load existing passengers: ${existingError.message}`);
@@ -74,6 +75,8 @@ async function saveTravellers(realId, passengers, replacePassengers = true) {
     const target = explicitExisting || positionalExisting || null;
     const row = {
       booking_id: realId,
+      passenger_sequence: index + 1,
+      is_primary: index === 0,
       role: passenger.role,
       title: passenger.title,
       first_name: passenger.first_name,
