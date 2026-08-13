@@ -1,5 +1,6 @@
 import bookingService from './booking.service.mjs';
 import bookingRepository from './booking.repository.mjs';
+import './booking.search.current-hardening.mjs';
 
 const ALLOWED_PAYMENT_STATES = new Set(['PENDING', 'PROCESSING', 'PAID', 'FAILED', 'REFUNDED']);
 
