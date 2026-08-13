@@ -19,6 +19,26 @@ jobs:
           ref: master
           fetch-depth: 0
 
+      - name: Prepare voucher wrapper for hydration payload
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('frontend/src/features/bookings/vouchers/BookingVoucherPage.js')
+          text = p.read_text()
+          if 'BookingVoucherPage({ initialJourneyPayload = null })' not in text:
+              text = text.replace(
+                  'export default function BookingVoucherPage() {',
+                  'export default function BookingVoucherPage({ initialJourneyPayload = null }) {',
+                  1,
+              )
+              text = text.replace(
+                  '      <Booking />',
+                  '      <Booking initialJourneyPayload={initialJourneyPayload} />',
+                  1,
+              )
+          p.write_text(text)
+          PY
+
       - name: Apply hydration fix
         run: python3 scripts/patch-tokenized-booking-hydration.py
 
