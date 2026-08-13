@@ -9,19 +9,20 @@ const read = relative => fs.readFileSync(path.join(root, relative), 'utf8');
 const wrapper = read('frontend/src/features/admin/pages/AdminDashboardPage.js');
 const workspace = read('frontend/src/features/admin/components/AdminBookingWorkspace.js');
 const workspaceCss = read('frontend/src/features/admin/components/AdminBookingWorkspace.css');
+const management = read('frontend/src/features/admin/components/AdminBookingManagementPanel.js');
+const managementCss = read('frontend/src/features/admin/components/AdminBookingManagementPanel.css');
 const app = read('frontend/src/app/App.js');
 const routes = read('backend/src/modules/admin/admin.routes.mjs');
 const passengerController = read('backend/src/modules/admin/admin.passenger.controller.mjs');
 
 test('admin booking route is a dedicated compact booking workspace', async t => {
-  await t.test('direct route stays separate from dashboard list without hidden background fetches', () => {
+  await t.test('direct route stays separate from dashboard list and mounts dedicated management controls', () => {
     assert.match(app, /path="\/admin\/bookings\/:code"/, 'Direct booking route must exist.');
     assert.match(wrapper, /isBookingDetailRoute\s*=\s*Boolean\(code\)/, 'Booking route must have explicit detail-only mode.');
-    assert.match(wrapper, /\{isBookingDetailRoute \? \([\s\S]*?<AdminBookingAddressPanel \/>[\s\S]*?<AdminBookingWorkspace \/>[\s\S]*?\) : \([\s\S]*?<AdminDashboardPageV2 \/>/, 'Detail route must render booking workspace instead of mounting the dashboard.');
-    assert.doesNotMatch(wrapper, /admin-booking-detail-route \.adv2-toolbar[\s\S]*display:\s*none/, 'Detail separation must not rely on CSS hiding a still-mounted dashboard.');
-    assert.match(wrapper, /window\.open\(`\/admin\/bookings\/\$\{encodeURIComponent\(reference\)\}`,[\s\S]*?'_blank'\)/, 'View / Edit must open the direct booking route in a new tab.');
+    assert.match(wrapper, /\{isBookingDetailRoute \? \([\s\S]*?<AdminBookingAddressPanel \/>[\s\S]*?<AdminBookingWorkspace \/>[\s\S]*?<AdminBookingManagementPanel \/>[\s\S]*?\) : \([\s\S]*?<AdminDashboardPageV2 \/>/, 'Detail route must mount focused booking panels without mounting the dashboard list.');
     assert.match(wrapper, /__tfsBookingDetailRequestDedupe/, 'Sibling detail panels must coalesce simultaneous identical booking reads.');
-    assert.match(wrapper, /<AdminBookingWorkspace \/>/, 'Dedicated route must render the booking workspace.');
+    assert.doesNotMatch(management, /getBookings\(|getStats\(|getAnalytics\(|getAbandonedBookings\(/, 'Dedicated management panel must not query booking lists, stats, analytics or abandoned forms.');
+    assert.match(wrapper, /window\.open\(`\/admin\/bookings\/\$\{encodeURIComponent\(reference\)\}`,[\s\S]*?'_blank'\)/, 'View / Edit must open the direct booking route in a new tab.');
   });
 
   await t.test('booking tab title is distinct from dashboard title', () => {
@@ -57,8 +58,27 @@ test('admin booking route is a dedicated compact booking workspace', async t => 
     assert.match(workspace, /className="abx-route-line"/, 'Itinerary must have a visual airport-to-airport route line.');
     assert.match(workspace, /layoverBetween/, 'Multi-segment itinerary should display calculable layovers.');
     assert.match(workspace, /<details className="abx-flight"/, 'Every visual flight segment must be independently collapsible.');
-    assert.match(workspace, /adv2-editor-section[\s\S]*?abx-collapsed/, 'Operational booking sections must be collapsed by default.');
-    assert.match(workspaceCss, /adv2-editor-section\.abx-collapsed \.adv2-editor-section__body/, 'Collapsed operational sections must hide their body.');
-    assert.match(workspaceCss, /adv2-segment-card\.abx-collapsed/, 'Manual itinerary segment cards must also collapse.');
+    assert.match(workspaceCss, /adv2-editor-section\.abx-collapsed \.adv2-editor-section__body/, 'Legacy compact operational section styling must remain available.');
+  });
+
+  await t.test('detail route exposes full booking management workflow', () => {
+    [
+      'Booking Management', 'Status & Internal Notes', 'Flight Itinerary', 'Import GDS / JSON',
+      'Add Flight Manually', 'Save Itinerary', 'Pricing', 'Supplier fare', 'Customer total',
+      'Passenger Authorization', 'Authorized amount', 'Payment & Splits', 'Billing & Card Reference',
+      'Airline Ticket / PNR', 'Email & Authorization Actions', 'Download Authorization Evidence PDF'
+    ].forEach(label => assert.ok(management.includes(label), `Missing booking management control: ${label}`));
+
+    [
+      'patchStatusNotes', 'patchItinerary', 'patchPricing', 'patchAuthorizationSettings',
+      'patchPaymentAuthorization', 'patchBillingDetails', 'patchAirlineDetails', 'sendEmailAction'
+    ].forEach(method => assert.match(management, new RegExp(`adminAPI\\.${method}`), `Management panel must use adminAPI.${method}.`));
+
+    assert.match(management, /AdminGdsImportModalV2/, 'Itinerary editor must support the existing GDS/JSON importer.');
+    assert.match(management, /AdminEmailPreviewModal/, 'Email actions must retain preview support.');
+    assert.match(management, /authorization-pdf/, 'Authorization evidence download must remain available.');
+    assert.doesNotMatch(management, /cardNumber|\bcvv\b|\bcvc\b/i, 'Management panel must never accept full PAN or CVV/CVC.');
+    assert.match(managementCss, /\.abm-two-column/, 'Pricing and authorization should have a compact dedicated layout.');
+    assert.match(managementCss, /@media \(max-width: 680px\)/, 'Management controls must remain usable on mobile.');
   });
 });
