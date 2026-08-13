@@ -131,13 +131,14 @@ function syncDisplayedTotals(basePricing, appliedVoucher) {
 
   const mobileTotal = document.querySelector('.mobile-summary-toggle-bar strong');
   if (mobileTotal) {
-    const icon = mobileTotal.querySelector('i');
-    const iconClass = icon?.className || '';
-    setTextIfChanged(mobileTotal, finalText);
-    if (iconClass) {
-      const restoredIcon = document.createElement('i');
-      restoredIcon.className = iconClass;
-      mobileTotal.append(' ', restoredIcon);
+    // Never rewrite this node when only whitespace/icon markup differs. The prior
+    // implementation replaced the text and re-appended the icon on every observer
+    // callback, which caused a self-triggering MutationObserver loop and froze Chrome.
+    const currentText = String(mobileTotal.textContent || '').replace(/\s+/g, ' ').trim();
+    if (currentText !== finalText) {
+      const icon = mobileTotal.querySelector('i')?.cloneNode(true) || null;
+      mobileTotal.textContent = finalText;
+      if (icon) mobileTotal.append(' ', icon);
     }
   }
 
@@ -341,9 +342,20 @@ function VoucherEnhancement() {
       syncProcessingButton(setProcessing);
     };
 
+    let syncFrame = null;
+    const scheduleSync = () => {
+      if (syncFrame !== null) return;
+      syncFrame = window.requestAnimationFrame(() => {
+        syncFrame = null;
+        syncCheckoutState();
+      });
+    };
+
     syncCheckoutState();
-    const observer = new MutationObserver(syncCheckoutState);
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    const observer = new MutationObserver(scheduleSync);
+    // Structural changes are enough for finding/reinstalling portal hosts. Watching
+    // characterData caused our own price-label edits to recursively wake the observer.
+    observer.observe(document.body, { childList: true, subtree: true });
 
     const clearOnEmailChange = (event) => {
       if (!currentVoucher) return;
@@ -357,9 +369,7 @@ function VoucherEnhancement() {
       }
     };
 
-    const resyncAfterInput = () => {
-      window.requestAnimationFrame(syncCheckoutState);
-    };
+    const resyncAfterInput = scheduleSync;
 
     document.addEventListener('input', clearOnEmailChange, true);
     document.addEventListener('change', resyncAfterInput, true);
@@ -367,6 +377,10 @@ function VoucherEnhancement() {
 
     return () => {
       observer.disconnect();
+      if (syncFrame !== null) {
+        window.cancelAnimationFrame(syncFrame);
+        syncFrame = null;
+      }
       document.removeEventListener('input', clearOnEmailChange, true);
       document.removeEventListener('change', resyncAfterInput, true);
       document.removeEventListener('click', resyncAfterInput, true);

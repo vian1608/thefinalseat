@@ -99,6 +99,14 @@ assert.match(app, /path="\/admin\/vouchers"/);
 assert.match(checkout, /voucherAPI\.validate/);
 assert.match(checkout, /Vouchers require a booking amount of at least \$150\.00/);
 assert.match(checkout, /60% of the ticket value/);
+
+// Checkout DOM synchronization must never observe and rewrite the same text in a
+// tight loop. This protects against Chrome's Page Unresponsive failure on /booking/c_.
+assert.match(checkout, /new MutationObserver\(scheduleSync\)/);
+assert.match(checkout, /requestAnimationFrame/);
+assert.doesNotMatch(checkout, /new MutationObserver\(syncCheckoutState\)/);
+assert.doesNotMatch(checkout, /characterData:\s*true/);
+assert.doesNotMatch(checkout, /setTextIfChanged\(mobileTotal,\s*finalText\)/);
 assert.match(adminPage, /Minimum customer payment/);
 assert.match(adminPage, /minimumPayablePercent/);
 assert.match(adminPage, /minimumBookingAmount/);
