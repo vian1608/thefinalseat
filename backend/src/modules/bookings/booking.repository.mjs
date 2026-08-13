@@ -1335,8 +1335,7 @@ export const bookingRepository = {
       let query = supabase.from('bookings').select('*', { count: 'exact' });
 
       if (filters.status) {
-        let s = filters.status.toUpperCase();
-        if (s === 'CONFIRMED' || s === 'COMPLETED') s = 'DONE';
+        const s = filters.status.toUpperCase();
         query = query.eq('status', s);
       }
       if (filters.email) {
