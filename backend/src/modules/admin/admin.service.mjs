@@ -7,6 +7,8 @@ import ga4Service from '../../integrations/ga4/ga4.service.mjs';
 import supabase from '../../integrations/supabase/supabase.client.mjs';
 import bcrypt from 'bcryptjs';
 
+const loadCanonicalDetail = async id => bookingCurrentView(await bookingRepository.getCompleteBookingById(id));
+
 export const adminService = {
   login: async (email = '', password = '') => {
     const cleanEmail = (email || '').toLowerCase().trim();
@@ -39,10 +41,12 @@ export const adminService = {
     return { token, admin: { email: cleanEmail } };
   },
 
-  // High-volume admin reads intentionally use a purpose-built bounded repository.
+  // The high-volume list remains bounded/lightweight. A single booking detail
+  // uses the same complete aggregate as confirmation, email and auth consumers,
+  // so normalized GDS itinerary edits cannot diverge from the admin view.
   getAllBookings: async (filters) => adminBookingReadRepository.list(filters),
-  getBookingDetails: async (id) => bookingCurrentView(await adminBookingReadRepository.getDetail(id)),
-  getCompleteBookingById: async (id) => bookingCurrentView(await adminBookingReadRepository.getDetail(id)),
+  getBookingDetails: loadCanonicalDetail,
+  getCompleteBookingById: loadCanonicalDetail,
 
   updateBooking: async (id, updateFields) => bookingRepository.updateStatus(id, updateFields),
   getDashboardStats: async () => bookingRepository.getStats(),
