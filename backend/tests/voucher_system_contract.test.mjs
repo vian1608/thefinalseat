@@ -56,6 +56,8 @@ const app = read('frontend/src/app/App.js');
 const journeyRoutes = read('frontend/src/features/journey/TokenizedJourneyRoutes.js');
 const checkout = read('frontend/src/features/bookings/vouchers/BookingVoucherPage.js');
 const adminPage = read('frontend/src/features/admin/pages/AdminVouchersPage.js');
+const voucherShortcut = read('frontend/src/features/admin/components/AdminVoucherShortcut.js');
+const voucherShortcutCss = read('frontend/src/features/admin/components/AdminVoucherShortcut.css');
 
 assert.match(migration, /minimum_booking_amount[\s\S]*CHECK \(minimum_booking_amount >= 150\.00\)/);
 assert.match(migration, /minimum_payable_percent[\s\S]*CHECK \(minimum_payable_percent >= 60\.00/);
@@ -101,5 +103,12 @@ assert.match(adminPage, /Minimum customer payment/);
 assert.match(adminPage, /minimumPayablePercent/);
 assert.match(adminPage, /minimumBookingAmount/);
 assert.match(adminPage, /Redemption history/);
+
+// The dashboard voucher shortcut must live in the admin toolbar, never as a
+// floating footer/pagination overlay.
+assert.match(voucherShortcut, /createPortal/);
+assert.match(voucherShortcut, /document\.querySelector\('\.adv2-toolbar'\)/);
+assert.doesNotMatch(voucherShortcutCss, /position\s*:\s*fixed/i);
+assert.doesNotMatch(voucherShortcutCss, /bottom\s*:/i);
 
 console.log('voucher checkout + admin + 60% revenue-floor contract: PASS');
