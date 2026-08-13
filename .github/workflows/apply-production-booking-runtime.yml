@@ -38,7 +38,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/apply-production-booking-runtime.yml scripts/patch-production-booking-runtime.py
+          git rm .github/workflows/apply-production-booking-runtime.yml
+          git rm -f scripts/patch-production-booking-runtime.py
           git add backend/src/modules/bookings/booking.repository.mjs \
                   backend/src/modules/bookings/booking.service.mjs \
                   backend/src/modules/authorizations/passenger-authorization.service.mjs
