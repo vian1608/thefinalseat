@@ -19,6 +19,18 @@ jobs:
           ref: master
           fetch-depth: 0
 
+      - name: Prepare cleanup helper
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/patch-production-booking-runtime.py')
+          text = path.read_text()
+          start = text.index('# Collapse rollback/delete into one FK-cascade booking delete plus non-FK audit cleanup.')
+          end = text.index('# Pricing writes are not successful unless the DB update succeeds.', start)
+          text = text[:start] + '# Rollback simplification is handled separately after the runtime cleanup.\n' + text[end:]
+          path.write_text(text)
+          PY
+
       - name: Apply production booking cleanup
         run: python3 scripts/patch-production-booking-runtime.py
 
