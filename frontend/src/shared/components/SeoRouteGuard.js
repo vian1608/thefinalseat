@@ -24,8 +24,33 @@ const INDEXABLE_EXACT = new Set([
   '/train-boston-to-nyc',
 ]);
 
+const PAGE_NAMES = {
+  '/': 'The Final Seat',
+  '/car-rentals': 'Car Rentals',
+  '/contact': 'Contact The Final Seat',
+  '/terms': 'Terms and Conditions',
+  '/privacy-policy': 'Privacy Policy',
+  '/refund-policy': 'Refund Policy',
+  '/travel-assistance': 'Flight Booking Assistance',
+  '/booking-for-parents': 'Booking Flights for Parents and Relatives',
+  '/urgent-travel': 'Urgent Travel Assistance',
+  '/senior-travel/flight-deals': 'Senior Flight Assistance',
+  '/flight-nyc-to-mia': 'Flights from New York to Miami',
+  '/flight-lax-to-jfk': 'Flights from Los Angeles to New York',
+  '/train-nyc-to-dc': 'Train from New York to Washington, D.C.',
+  '/train-dc-to-nyc': 'Train from Washington, D.C. to New York',
+  '/train-philly-to-nyc': 'Train from Philadelphia to New York',
+  '/train-boston-to-nyc': 'Train from Boston to New York',
+};
+
 const VALID_ROUTE_PATHS = new Set(
   routesData.filter((route) => route?.slug).map((route) => `/routes/${route.slug}`)
+);
+
+const ROUTE_PAGE_NAMES = new Map(
+  routesData
+    .filter((route) => route?.slug)
+    .map((route) => [`/routes/${route.slug}`, route.title || route.metaTitle || route.slug])
 );
 
 const CANONICAL_ALIASES = {
@@ -49,6 +74,10 @@ const normalizePath = (pathname) => {
 
 function isIndexablePath(pathname) {
   return INDEXABLE_EXACT.has(pathname) || VALID_ROUTE_PATHS.has(pathname);
+}
+
+function getPageName(pathname) {
+  return PAGE_NAMES[pathname] || ROUTE_PAGE_NAMES.get(pathname) || 'The Final Seat';
 }
 
 export default function SeoRouteGuard() {
@@ -78,9 +107,39 @@ export default function SeoRouteGuard() {
   }, [location.search, navigate, normalizedPath]);
 
   const canonicalUrl = `${CANONICAL_ORIGIN}${canonicalPath === '/' ? '/' : canonicalPath}`;
+  const pageName = getPageName(canonicalPath);
   const robotsValue = indexable
     ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
     : 'noindex, nofollow, noarchive';
+
+  const webPageData = indexable ? {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    '@id': `${canonicalUrl}#webpage`,
+    url: canonicalUrl,
+    name: pageName,
+    isPartOf: { '@id': `${CANONICAL_ORIGIN}/#website` },
+    about: { '@id': `${CANONICAL_ORIGIN}/#organization` },
+  } : null;
+
+  const breadcrumbData = indexable && canonicalPath !== '/' && canonicalPath !== '/senior-travel/flight-deals' ? {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Home',
+        item: `${CANONICAL_ORIGIN}/`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: pageName,
+        item: canonicalUrl,
+      },
+    ],
+  } : null;
 
   return (
     <Helmet>
@@ -88,6 +147,8 @@ export default function SeoRouteGuard() {
       <meta name="googlebot" content={robotsValue} />
       {indexable && <link rel="canonical" href={canonicalUrl} />}
       {indexable && <meta property="og:url" content={canonicalUrl} />}
+      {webPageData && <script type="application/ld+json">{JSON.stringify(webPageData)}</script>}
+      {breadcrumbData && <script type="application/ld+json">{JSON.stringify(breadcrumbData)}</script>}
     </Helmet>
   );
 }
