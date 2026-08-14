@@ -19,8 +19,11 @@ const vercel = read('vercel.json');
 assert.match(sitemap, /https:\/\/www\.thefinalseat\.com\//);
 assert.doesNotMatch(sitemap, /<loc>https:\/\/thefinalseat\.com/);
 assert.match(robots, /Sitemap: https:\/\/www\.thefinalseat\.com\/sitemap\.xml/);
-assert.match(indexHtml, /<link rel="canonical" href="https:\/\/www\.thefinalseat\.com\/"/);
+assert.doesNotMatch(indexHtml, /<link rel="canonical"/);
+assert.doesNotMatch(indexHtml, /<meta property="og:url"/);
 assert.match(seoGuard, /https:\/\/www\.thefinalseat\.com/);
+assert.match(seoGuard, /<link rel="canonical" href=\{canonicalUrl\}/);
+assert.match(seoGuard, /<meta property="og:url" content=\{canonicalUrl\}/);
 
 const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
 const sitemapPaths = locs.map((url) => new URL(url).pathname.replace(/\/+$/, '') || '/');
