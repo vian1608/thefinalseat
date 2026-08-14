@@ -12,6 +12,7 @@ const robots = read('frontend', 'public', 'robots.txt');
 const indexHtml = read('frontend', 'public', 'index.html');
 const app = read('frontend', 'src', 'app', 'App.js');
 const seoGuard = read('frontend', 'src', 'shared', 'components', 'SeoRouteGuard.js');
+const footer = read('frontend', 'src', 'shared', 'components', 'Footer.js');
 const routeDispatcher = read('frontend', 'src', 'features', 'flights', 'pages', 'RouteDispatcher.js');
 const airlineAction = read('frontend', 'src', 'features', 'flights', 'pages', 'AirlineActionPage.js');
 const vercel = read('vercel.json');
@@ -54,10 +55,29 @@ assert.match(seoGuard, /noindex, nofollow, noarchive/);
 assert.match(seoGuard, /INDEXABLE_EXACT/);
 assert.match(seoGuard, /VALID_ROUTE_PATHS/);
 assert.match(seoGuard, /routesData/);
+assert.match(seoGuard, /'@type': 'WebPage'/);
+assert.match(seoGuard, /'@type': 'BreadcrumbList'/);
+assert.match(seoGuard, /isPartOf: \{ '@id': `\$\{CANONICAL_ORIGIN\}\/\#website` \}/);
 assert.doesNotMatch(seoGuard, /INDEXABLE_PREFIXES/);
 assert.doesNotMatch(seoGuard, /startsWith\('\/book\/'\)/);
 assert.doesNotMatch(seoGuard, /startsWith\('\/changes\/'\)/);
 assert.doesNotMatch(seoGuard, /startsWith\('\/cancellation\/'\)/);
+
+const crawlPriorityLinks = [
+  '/travel-assistance',
+  '/booking-for-parents',
+  '/urgent-travel',
+  '/senior-travel/flight-deals',
+  '/flight-nyc-to-mia',
+  '/flight-lax-to-jfk',
+  '/routes/flight-nyc-to-lon',
+  '/routes/flight-lax-to-tokyo',
+  '/train-nyc-to-dc',
+  '/train-boston-to-nyc',
+];
+for (const pathname of crawlPriorityLinks) {
+  assert.match(footer, new RegExp(`to=["']${pathname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`), `Missing crawlable footer link for ${pathname}`);
+}
 
 assert.match(routeDispatcher, /NotFoundPage/);
 assert.doesNotMatch(routeDispatcher, /Navigate to="\/"/);
@@ -69,6 +89,9 @@ assert.match(indexHtml, /name="google-site-verification"/);
 assert.match(indexHtml, /name="robots" content="index, follow/);
 assert.match(indexHtml, /"@type": "TravelAgency"/);
 assert.match(indexHtml, /"@type": "WebSite"/);
+assert.match(indexHtml, /"legalName": "The Final Seat LLC"/);
+assert.match(indexHtml, /"@type": "PostalAddress"/);
+assert.match(indexHtml, /"addressLocality": "Casper"/);
 
 const vercelConfig = JSON.parse(vercel);
 const canonicalHostRedirect = (vercelConfig.redirects || []).find((rule) =>
@@ -83,4 +106,4 @@ const noindexHeaderRules = (vercelConfig.headers || []).filter((rule) =>
 );
 assert.ok(noindexHeaderRules.length >= 10, 'Expected private admin/transaction routes to have X-Robots-Tag noindex protection.');
 
-console.log(`SEO indexing contract passed (${locs.length} canonical sitemap URLs; catalog-backed dynamic routes only).`);
+console.log(`SEO indexing contract passed (${locs.length} canonical sitemap URLs; crawl-priority internal links and structured data verified).`);
