@@ -5,6 +5,7 @@ import adminDashboardV2Controller from './admin.dashboard-v2.controller.mjs';
 import adminBackupController from './admin.backup.controller.mjs';
 import adminBulkDeleteController from './admin.bulk-delete.controller.mjs';
 import adminPassengerController from './admin.passenger.controller.mjs';
+import adminBookingMutationController from './admin.booking-mutation.controller.mjs';
 import voucherController from '../vouchers/voucher.controller.mjs';
 import '../bookings/booking.repository.runtime-repair.mjs';
 import '../bookings/booking.repository.egress-hardening.mjs';
@@ -43,15 +44,15 @@ router.post('/bookings/:id/email-manual-sent', adminWriteRateLimiter, authentica
 router.get('/bookings/:id', adminReadRateLimiter, authenticate, authorize(['admin']), adminController.getBookingDetail);
 router.delete('/bookings/:id', adminWriteRateLimiter, authenticate, authorize(['admin']), adminRepairController.deleteBooking);
 
-router.patch('/bookings/:id/status-notes', adminWriteRateLimiter, authenticate, authorize(['admin']), adminController.updateStatusNotes);
+router.patch('/bookings/:id/status-notes', adminWriteRateLimiter, authenticate, authorize(['admin']), adminBookingMutationController.updateStatusNotes);
 router.patch('/bookings/:id/status', adminWriteRateLimiter, authenticate, authorize(['admin']), bookingController.updateStatus);
 router.patch('/bookings/:id/passenger-details', adminWriteRateLimiter, authenticate, authorize(['admin']), adminPassengerController.updatePassengerDetails);
-router.patch('/bookings/:id/contact-details', adminWriteRateLimiter, authenticate, authorize(['admin']), adminController.updateContactDetails);
+router.patch('/bookings/:id/contact-details', adminWriteRateLimiter, authenticate, authorize(['admin']), adminBookingMutationController.updateContactDetails);
 router.patch('/bookings/:id/itinerary', adminWriteRateLimiter, authenticate, authorize(['admin']), adminRepairController.updateItinerary);
 router.patch('/bookings/:id/pricing', adminWriteRateLimiter, authenticate, authorize(['admin']), adminDashboardV2Controller.updatePricing);
-router.patch('/bookings/:id/airline-details', adminWriteRateLimiter, authenticate, authorize(['admin']), adminController.saveTicketDetails);
-router.patch('/bookings/:id/authorization', adminWriteRateLimiter, authenticate, authorize(['admin']), adminController.updateAuthorizationSettings);
-router.patch('/bookings/:id/authorization-settings', adminWriteRateLimiter, authenticate, authorize(['admin']), adminController.updateAuthorizationSettings);
+router.patch('/bookings/:id/airline-details', adminWriteRateLimiter, authenticate, authorize(['admin']), adminBookingMutationController.saveTicketDetails);
+router.patch('/bookings/:id/authorization', adminWriteRateLimiter, authenticate, authorize(['admin']), adminBookingMutationController.updateAuthorizationSettings);
+router.patch('/bookings/:id/authorization-settings', adminWriteRateLimiter, authenticate, authorize(['admin']), adminBookingMutationController.updateAuthorizationSettings);
 router.patch('/bookings/:id/payment', adminWriteRateLimiter, authenticate, authorize(['admin']), adminController.updatePaymentAuthorization);
 router.patch('/bookings/:id/payment-authorization', adminWriteRateLimiter, authenticate, authorize(['admin']), adminController.updatePaymentAuthorization);
 router.patch('/bookings/:id/billing-reference', adminWriteRateLimiter, authenticate, authorize(['admin']), adminController.updateBillingDetails);
@@ -69,9 +70,9 @@ router.post('/bookings/:id/restore-snapshot', adminWriteRateLimiter, authenticat
 
 router.put('/bookings/:id/save-all', adminWriteRateLimiter, authenticate, authorize(['admin']), adminController.saveAllChanges);
 router.put('/bookings/:id', adminWriteRateLimiter, authenticate, authorize(['admin']), adminController.updateBooking);
-router.put('/bookings/:id/payment-splits', adminWriteRateLimiter, authenticate, authorize(['admin']), adminController.updatePaymentSplits);
-router.patch('/bookings/:id/payment-splits', adminWriteRateLimiter, authenticate, authorize(['admin']), adminController.updatePaymentSplits);
-router.put('/bookings/:id/ticket-details', adminWriteRateLimiter, authenticate, authorize(['admin']), adminController.saveTicketDetails);
+router.put('/bookings/:id/payment-splits', adminWriteRateLimiter, authenticate, authorize(['admin']), adminBookingMutationController.updatePaymentSplits);
+router.patch('/bookings/:id/payment-splits', adminWriteRateLimiter, authenticate, authorize(['admin']), adminBookingMutationController.updatePaymentSplits);
+router.put('/bookings/:id/ticket-details', adminWriteRateLimiter, authenticate, authorize(['admin']), adminBookingMutationController.saveTicketDetails);
 router.post('/bookings/:id/send-final-ticket', adminWriteRateLimiter, authenticate, authorize(['admin']), adminController.sendFinalTicketEmail);
 router.post('/bookings/:id/resend-admin-email', adminWriteRateLimiter, authenticate, authorize(['admin']), adminController.resendAdminAcknowledgement);
 router.get('/bookings/:id/diagnostic', adminReadRateLimiter, authenticate, authorize(['admin']), adminController.getBookingDiagnosticData);
