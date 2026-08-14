@@ -33,7 +33,7 @@ assert.equal(adminRoutes.includes("adminBookingMutationController.updateContactD
 assert.equal(adminRoutes.includes("adminBookingMutationController.updateStatusNotes"), true);
 assert.equal(adminRoutes.includes("adminBookingMutationController.updateAuthorizationSettings"), true);
 assert.equal(adminRoutes.includes("adminBookingMutationController.updatePaymentSplits"), true);
-assert.equal(adminRoutes.includes("adminBookingMutationController.updateTicketDetails"), true);
+assert.equal(adminRoutes.includes("adminBookingMutationController.saveTicketDetails"), true);
 assert.equal(mutationController.includes('bookingMutationService.updateContact'), true);
 assert.equal(mutationController.includes('bookingMutationService.updateStatusAndNotes'), true);
 assert.equal(mutationController.includes('bookingMutationService.updateAuthorizationSettings'), true);
