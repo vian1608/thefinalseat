@@ -1,34 +1,38 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://www.thefinalseat.com/</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/car-rentals</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/contact</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/terms</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/privacy-policy</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/refund-policy</loc><lastmod>2026-08-08</lastmod></url>
+  <!-- Core public pages -->
+  <url><loc>https://www.thefinalseat.com/</loc></url>
+  <url><loc>https://www.thefinalseat.com/car-rentals</loc></url>
+  <url><loc>https://www.thefinalseat.com/contact</loc></url>
+  <url><loc>https://www.thefinalseat.com/terms</loc></url>
+  <url><loc>https://www.thefinalseat.com/privacy-policy</loc></url>
+  <url><loc>https://www.thefinalseat.com/refund-policy</loc></url>
 
-  <url><loc>https://www.thefinalseat.com/travel-assistance</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/booking-for-parents</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/urgent-travel</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/senior-travel/flight-deals</loc><lastmod>2026-08-08</lastmod></url>
+  <!-- Service / campaign landing pages -->
+  <url><loc>https://www.thefinalseat.com/travel-assistance</loc></url>
+  <url><loc>https://www.thefinalseat.com/booking-for-parents</loc></url>
+  <url><loc>https://www.thefinalseat.com/urgent-travel</loc></url>
+  <url><loc>https://www.thefinalseat.com/senior-travel/flight-deals</loc></url>
 
-  <url><loc>https://www.thefinalseat.com/flight-nyc-to-mia</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/flight-lax-to-jfk</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/train-nyc-to-dc</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/train-dc-to-nyc</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/train-philly-to-nyc</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/train-boston-to-nyc</loc><lastmod>2026-08-08</lastmod></url>
+  <!-- Canonical direct route pages -->
+  <url><loc>https://www.thefinalseat.com/flight-nyc-to-mia</loc></url>
+  <url><loc>https://www.thefinalseat.com/flight-lax-to-jfk</loc></url>
+  <url><loc>https://www.thefinalseat.com/train-nyc-to-dc</loc></url>
+  <url><loc>https://www.thefinalseat.com/train-dc-to-nyc</loc></url>
+  <url><loc>https://www.thefinalseat.com/train-philly-to-nyc</loc></url>
+  <url><loc>https://www.thefinalseat.com/train-boston-to-nyc</loc></url>
 
-  <url><loc>https://www.thefinalseat.com/routes/flight-nyc-to-lon</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/routes/flight-lax-to-tokyo</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/routes/flight-mia-to-paris</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/routes/flight-ord-to-fra</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/routes/flight-sfo-to-syd</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/routes/flight-jfk-to-dxb</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/routes/flight-dfw-to-lhr</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/routes/flight-bos-to-dub</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/routes/train-chicago-to-stlouis</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/routes/train-la-to-sandiego</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/routes/train-seattle-to-portland</loc><lastmod>2026-08-08</lastmod></url>
-  <url><loc>https://www.thefinalseat.com/routes/train-nyc-to-albany</loc><lastmod>2026-08-08</lastmod></url>
+  <!-- Canonical dynamic route pages -->
+  <url><loc>https://www.thefinalseat.com/routes/flight-nyc-to-lon</loc></url>
+  <url><loc>https://www.thefinalseat.com/routes/flight-lax-to-tokyo</loc></url>
+  <url><loc>https://www.thefinalseat.com/routes/flight-mia-to-paris</loc></url>
+  <url><loc>https://www.thefinalseat.com/routes/flight-ord-to-fra</loc></url>
+  <url><loc>https://www.thefinalseat.com/routes/flight-sfo-to-syd</loc></url>
+  <url><loc>https://www.thefinalseat.com/routes/flight-jfk-to-dxb</loc></url>
+  <url><loc>https://www.thefinalseat.com/routes/flight-dfw-to-lhr</loc></url>
+  <url><loc>https://www.thefinalseat.com/routes/flight-bos-to-dub</loc></url>
+  <url><loc>https://www.thefinalseat.com/routes/train-chicago-to-stlouis</loc></url>
+  <url><loc>https://www.thefinalseat.com/routes/train-la-to-sandiego</loc></url>
+  <url><loc>https://www.thefinalseat.com/routes/train-seattle-to-portland</loc></url>
+  <url><loc>https://www.thefinalseat.com/routes/train-nyc-to-albany</loc></url>
 </urlset>
