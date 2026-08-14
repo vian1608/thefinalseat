@@ -1,3 +1,4 @@
+import supabase from '../../integrations/supabase/supabase.client.mjs';
 import bookingRepository from './booking.repository.mjs';
 import bookingService from './booking.service.mjs';
 
@@ -38,6 +39,47 @@ function assertExpectedVersion(booking, expectedVersion) {
   }
 }
 
+async function persistPrimaryContact(bookingId, contact = {}, fallback = {}) {
+  const email = String(contact.email ?? contact.contactEmail ?? fallback.email ?? '').trim().toLowerCase();
+  const phone = String(contact.phone ?? contact.phone_number ?? contact.phoneNumber ?? fallback.phone ?? '').trim();
+
+  if (!email || !email.includes('@')) {
+    throw mutationError('A valid contact email is required.', 'INVALID_CONTACT_EMAIL');
+  }
+  if (!phone) {
+    throw mutationError('A valid contact phone number is required.', 'INVALID_CONTACT_PHONE');
+  }
+
+  const row = {
+    email,
+    phone_number: phone,
+  };
+  if (contact.country_code !== undefined || contact.countryCode !== undefined) {
+    row.country_code = contact.country_code ?? contact.countryCode ?? null;
+  }
+
+  const { data: existing, error: lookupError } = await supabase
+    .from('contacts')
+    .select('id')
+    .eq('booking_id', bookingId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (lookupError) {
+    throw mutationError(`Unable to load current contact: ${lookupError.message}`, 'CONTACT_LOOKUP_FAILED', 500);
+  }
+
+  const write = existing?.id
+    ? supabase.from('contacts').update(row).eq('id', existing.id).select().single()
+    : supabase.from('contacts').insert({ booking_id: bookingId, ...row }).select().single();
+
+  const { error: writeError } = await write;
+  if (writeError) {
+    throw mutationError(`Unable to save contact details: ${writeError.message}`, 'CONTACT_UPDATE_FAILED', 500);
+  }
+}
+
 /**
  * Single backend gateway for Admin mutations that do not already use a
  * transactional repository RPC. Database triggers remain the final integrity
@@ -57,23 +99,7 @@ const bookingMutationService = {
 
   updateContact: (reference, contact = {}, context = {}) => execute(reference, {
     expectedVersion: context.expectedVersion,
-    mutate: async (booking) => {
-      const email = String(contact.email ?? contact.contactEmail ?? booking.email ?? '').trim().toLowerCase();
-      const phone = String(contact.phone ?? contact.phone_number ?? contact.phoneNumber ?? booking.phone ?? '').trim();
-      if (!email || !email.includes('@')) {
-        throw mutationError('A valid contact email is required.', 'INVALID_CONTACT_EMAIL');
-      }
-      if (!phone) {
-        throw mutationError('A valid contact phone number is required.', 'INVALID_CONTACT_PHONE');
-      }
-
-      await bookingRepository.updateBookingContactDetails(booking.id, {
-        ...contact,
-        email,
-        phone,
-        phone_number: phone,
-      });
-    },
+    mutate: (booking) => persistPrimaryContact(booking.id, contact, booking),
   }),
 
   updateStatusAndNotes: (reference, payload = {}, context = {}) => execute(reference, {
@@ -118,7 +144,7 @@ const bookingMutationService = {
       if (Object.keys(update).length === 0) {
         throw mutationError('No authorization settings were supplied.', 'NO_AUTHORIZATION_CHANGES');
       }
-      await bookingRepository.updateBookingStatus(booking.id, update, context.adminId || 'admin');
+      await bookingRepository.updateBookingStatus(booking.id, update);
     },
   }),
 
