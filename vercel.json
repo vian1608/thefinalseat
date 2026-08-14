@@ -187,7 +187,11 @@
     { "source": "/routes/train-nyc-to-dc", "destination": "/train-nyc-to-dc", "permanent": true },
     { "source": "/routes/train-dc-to-nyc", "destination": "/train-dc-to-nyc", "permanent": true },
     { "source": "/routes/train-philly-to-nyc", "destination": "/train-philly-to-nyc", "permanent": true },
-    { "source": "/routes/train-boston-to-nyc", "destination": "/train-boston-to-nyc", "permanent": true }
+    { "source": "/routes/train-boston-to-nyc", "destination": "/train-boston-to-nyc", "permanent": true },
+    { "source": "/train-chicago-to-stlouis", "destination": "/routes/train-chicago-to-stlouis", "permanent": true },
+    { "source": "/train-la-to-sandiego", "destination": "/routes/train-la-to-sandiego", "permanent": true },
+    { "source": "/train-seattle-to-portland", "destination": "/routes/train-seattle-to-portland", "permanent": true },
+    { "source": "/train-nyc-to-albany", "destination": "/routes/train-nyc-to-albany", "permanent": true }
   ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/app.js" },
