@@ -36,6 +36,10 @@ const CANONICAL_ALIASES = {
   '/refundpolicy': '/refund-policy',
   '/amtrak': '/car-rentals',
   '/amtrak-assistance': '/car-rentals',
+  '/routes/train-nyc-to-dc': '/train-nyc-to-dc',
+  '/routes/train-dc-to-nyc': '/train-dc-to-nyc',
+  '/routes/train-philly-to-nyc': '/train-philly-to-nyc',
+  '/routes/train-boston-to-nyc': '/train-boston-to-nyc',
 };
 
 const normalizePath = (pathname) => {
