@@ -27,6 +27,12 @@
       ]
     },
     {
+      "source": "/admin",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+      ]
+    },
+    {
       "source": "/admin/(.*)",
       "headers": [
         { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
@@ -45,7 +51,19 @@
       ]
     },
     {
+      "source": "/booking/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+      ]
+    },
+    {
       "source": "/payment",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+      ]
+    },
+    {
+      "source": "/payment/(.*)",
       "headers": [
         { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
       ]
@@ -99,6 +117,30 @@
       ]
     },
     {
+      "source": "/return-flight/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+      ]
+    },
+    {
+      "source": "/book/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+      ]
+    },
+    {
+      "source": "/changes/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+      ]
+    },
+    {
+      "source": "/cancellation/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+      ]
+    },
+    {
       "source": "/car-rentals/search",
       "headers": [
         { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
@@ -140,7 +182,12 @@
     { "source": "/flight-sfo-to-syd", "destination": "/routes/flight-sfo-to-syd", "permanent": true },
     { "source": "/flight-jfk-to-dxb", "destination": "/routes/flight-jfk-to-dxb", "permanent": true },
     { "source": "/flight-dfw-to-lhr", "destination": "/routes/flight-dfw-to-lhr", "permanent": true },
-    { "source": "/flight-bos-to-dub", "destination": "/routes/flight-bos-to-dub", "permanent": true }
+    { "source": "/flight-bos-to-dub", "destination": "/routes/flight-bos-to-dub", "permanent": true },
+
+    { "source": "/routes/train-nyc-to-dc", "destination": "/train-nyc-to-dc", "permanent": true },
+    { "source": "/routes/train-dc-to-nyc", "destination": "/train-dc-to-nyc", "permanent": true },
+    { "source": "/routes/train-philly-to-nyc", "destination": "/train-philly-to-nyc", "permanent": true },
+    { "source": "/routes/train-boston-to-nyc", "destination": "/train-boston-to-nyc", "permanent": true }
   ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/app.js" },
