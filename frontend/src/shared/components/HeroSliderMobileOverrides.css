@@ -13,7 +13,7 @@
 
   .hero-slider__ui {
     padding-top: 0.55rem;
-    padding-bottom: 2.65rem;
+    padding-bottom: 3.35rem;
     padding-left: 1rem;
     padding-right: 1rem;
   }
@@ -72,21 +72,83 @@
     padding: 0.22rem 0.42rem;
   }
 
+  /*
+   * Mobile carousel navigation — compact bottom overlay.
+   * This shared rule applies to every HeroSlider instance, including flights,
+   * car rentals, and any landing page that reuses the global hero carousel.
+   */
   .hero-slider__controls {
-    bottom: 6px;
-    gap: 0.5rem;
+    left: 50% !important;
+    bottom: 8px !important;
+    transform: translateX(-50%) !important;
+    width: min(250px, calc(100% - 40px)) !important;
+    min-height: 42px !important;
+    padding: 5px 8px !important;
+    box-sizing: border-box !important;
+    display: grid !important;
+    grid-template-columns: 36px 1fr 36px !important;
+    align-items: center !important;
+    justify-items: center !important;
+    gap: 8px !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    border-radius: 999px !important;
+    background: rgba(15, 23, 42, 0.48) !important;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.18) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    backdrop-filter: blur(8px) !important;
   }
 
   .hero-slider__arrow {
-    min-width: 32px;
-    min-height: 32px;
-    padding: 0.3rem;
-    font-size: 0.95rem;
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    padding: 0 !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 50% !important;
+    background: rgba(255, 255, 255, 0.11) !important;
+    color: #fff !important;
+    font-size: 0.82rem !important;
+    opacity: 1 !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  .hero-slider__arrow:hover,
+  .hero-slider__arrow:focus-visible {
+    background: rgba(255, 255, 255, 0.2) !important;
+    border-color: rgba(255, 255, 255, 0.34) !important;
+    transform: none !important;
+  }
+
+  .hero-slider__arrow:active {
+    transform: scale(0.94) !important;
+  }
+
+  .hero-slider__dots {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 7px !important;
   }
 
   .hero-slider__dot {
-    width: 7px;
-    height: 7px;
+    width: 6px !important;
+    height: 6px !important;
+    min-width: 6px !important;
+    min-height: 6px !important;
+    border-radius: 50% !important;
+    background: rgba(255, 255, 255, 0.42) !important;
+    transform: none !important;
+  }
+
+  .hero-slider__dot--active {
+    width: 18px !important;
+    min-width: 18px !important;
+    border-radius: 999px !important;
+    background: #fff !important;
+    transform: none !important;
   }
 
   .hero-offer-bar__inner {
@@ -120,5 +182,17 @@
 
   .hero-trust-badge {
     font-size: 0.64rem;
+  }
+
+  .hero-slider__controls {
+    width: min(230px, calc(100% - 28px)) !important;
+    grid-template-columns: 34px 1fr 34px !important;
+  }
+
+  .hero-slider__arrow {
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+    min-height: 30px !important;
   }
 }
