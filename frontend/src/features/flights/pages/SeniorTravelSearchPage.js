@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import FlightSearchPanel from '../components/FlightSearchPanel';
+import SeniorFlightSearchPanel from '../components/SeniorFlightSearchPanel';
 import SeniorTravelPage from './SeniorTravelPage';
 
 export default function SeniorTravelSearchPage() {
@@ -32,11 +32,7 @@ export default function SeniorTravelSearchPage() {
           style={{ paddingTop: '40px', paddingBottom: '40px' }}
         >
           <div className="container">
-            <FlightSearchPanel
-              pageId="senior-travel-flight-deals"
-              title="Search Flights"
-              subtitle="Enter your route and travel dates to compare available flight options. Personal booking assistance is still available below if you would like help."
-            />
+            <SeniorFlightSearchPanel />
           </div>
         </section>,
         searchMount
