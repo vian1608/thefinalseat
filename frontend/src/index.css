@@ -1,3 +1,12 @@
 /* Import legacy styles first, then normalize them through the shared design system. */
 @import url('./shared/styles/styles.css');
 @import url('./shared/styles/TfsDesignSystem.css');
+
+/* Keep every phone/call icon across the public site facing the intended direction.
+   This applies to Call Now buttons, phone CTAs, mobile header call actions, and
+   decorative phone icons without having to patch each page independently. */
+i[class*="fa-phone"] {
+  display: inline-block;
+  transform: scaleX(-1) !important;
+  transform-origin: center;
+}
