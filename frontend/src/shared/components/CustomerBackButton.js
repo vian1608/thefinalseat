@@ -70,6 +70,14 @@ export default function CustomerBackButton() {
   if (isPrimaryLandingPage || pathname.startsWith('/admin')) return null;
 
   const handleBack = () => {
+    // Search results are a top-level customer page. The Back button should always
+    // return to the flight-search home page instead of replaying journey history
+    // (for example, accidentally reopening /return-flight from a prior booking flow).
+    if (pathname === '/search') {
+      navigate('/');
+      return;
+    }
+
     const browserHasAppHistory = Number(window.history.state?.idx || 0) > 0;
     if (browserHasAppHistory) {
       navigate(-1);
