@@ -94,17 +94,19 @@
   align-items: end;
 }
 
-.senior-search-airport-field .airport-autocomplete {
+.senior-search-airport-field .airport-autocomplete-container {
+  width: 100%;
   margin: 0;
+  position: relative;
 }
 
-.senior-search-airport-field .airport-autocomplete__input-wrapper,
-.senior-search-airport-field .airport-autocomplete__input-container {
+.senior-search-airport-field .autocomplete-input-wrapper,
+.senior-search-airport-field .autocomplete-input {
   min-height: 46px;
 }
 
-.senior-search-airport-field input {
-  min-height: 46px;
+.senior-search-airport-field .autocomplete-suggestions-list {
+  z-index: 50;
 }
 
 .senior-search-field.is-disabled {
