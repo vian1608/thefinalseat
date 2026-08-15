@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ServiceNav from './ServiceNav';
 import './HeroSlider.css';
+import './HeroSliderMobileOverrides.css';
 
 const ROTATE_MS = 5000;
 
@@ -69,7 +70,6 @@ function HeroSlider({ slides, variant = 'flights', serviceNavActive, offerTag })
         onFocus={() => setIsPaused(true)}
         onBlur={() => setIsPaused(false)}
       >
-        {/* Background Image Slides Layer */}
         <div className="hero-slider__slides" aria-live="polite">
           {slides.map((item, index) => {
             const bgSrc = item.image || item.backgroundImage;
@@ -94,7 +94,6 @@ function HeroSlider({ slides, variant = 'flights', serviceNavActive, offerTag })
           })}
         </div>
 
-        {/* Foreground UI Layer */}
         <div className="container hero-slider__ui">
           <ServiceNav active={serviceNavActive} />
 
@@ -109,13 +108,12 @@ function HeroSlider({ slides, variant = 'flights', serviceNavActive, offerTag })
                     <span className="hero-lead-mobile">{slide.mobileLead || slide.lead || slide.description}</span>
                   </p>
                 )}
-                
-                {/* Feature Chips / Trust Badges (2 on mobile, 4 on desktop) */}
+
                 <div className="hero-trust-statement">
                   <div className="hero-trust-badges">
                     {defaultChips.map((chip, idx) => (
-                      <span 
-                        key={idx} 
+                      <span
+                        key={idx}
                         className={`hero-trust-badge ${idx === 1 || idx === 2 ? 'hero-trust-badge--desktop-only' : ''}`}
                       >
                         <i className={chip.icon} aria-hidden="true" /> {chip.label}
@@ -126,7 +124,6 @@ function HeroSlider({ slides, variant = 'flights', serviceNavActive, offerTag })
               </div>
             </div>
 
-            {/* Navigation Controls locked in fixed position */}
             <div className="hero-slider__controls">
               <button
                 type="button"
@@ -178,5 +175,3 @@ function HeroSlider({ slides, variant = 'flights', serviceNavActive, offerTag })
 }
 
 export default HeroSlider;
-
-
