@@ -33,7 +33,7 @@ import BookingForParents from '../features/flights/pages/BookingForParentsPage';
 import UrgentTravel from '../features/flights/pages/UrgentTravelPage';
 import AppErrorBoundary from '../shared/components/AppErrorBoundary';
 import { Analytics } from '@vercel/analytics/react';
-import SeniorTravelPage from '../features/flights/pages/SeniorTravelPage';
+import SeniorTravelSearchPage from '../features/flights/pages/SeniorTravelSearchPage';
 import {
   BookingBootstrap,
   BookingConfirmationRoute,
@@ -209,8 +209,8 @@ function App() {
                 <Route path="/urgent-travel" element={<UrgentTravel />} />
 
                 {/* Senior Travel Landing — Google Ads campaign page */}
-                <Route path="/senior-travel/flight-deals" element={<SeniorTravelPage />} />
-                <Route path="/senior-travel" element={<SeniorTravelPage />} />
+                <Route path="/senior-travel/flight-deals" element={<SeniorTravelSearchPage />} />
+                <Route path="/senior-travel" element={<SeniorTravelSearchPage />} />
                 <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
                 <Route path="/privacypolicy" element={<Navigate to="/privacy-policy" replace />} />
                 <Route path="/refund" element={<Navigate to="/refund-policy" replace />} />
