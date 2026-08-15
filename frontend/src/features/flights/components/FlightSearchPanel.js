@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import AirportAutocomplete from './AirportAutocomplete';
 import CustomSelect from '../../../shared/components/CustomSelect';
 import TravelDatePicker from './TravelDatePicker';
@@ -8,6 +8,27 @@ import './FlightSearchPanel.css';
 
 const MAX_TRAVELERS = 9;
 
+const getLocalDateString = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const extractAirportCode = (value, airport) => {
+  const directCode = airport?.code || airport?.iata || airport?.id;
+  if (directCode && /^[A-Z]{3}$/i.test(String(directCode).trim())) {
+    return String(directCode).trim().toUpperCase();
+  }
+
+  const text = String(value || '').trim();
+  const parenthesized = text.match(/\(([A-Z]{3})\)/i);
+  if (parenthesized) return parenthesized[1].toUpperCase();
+  if (/^[A-Z]{3}$/i.test(text)) return text.toUpperCase();
+  return '';
+};
+
 function FlightSearchPanel({
   pageId = 'home',
   title = 'Search Flights',
@@ -15,7 +36,6 @@ function FlightSearchPanel({
   defaultBookingForSomeoneElse = false,
   isUrgentContext = false,
 }) {
-  const navigate = useNavigate();
   const location = useLocation();
 
   const [isSearching, setIsSearching] = useState(false);
@@ -23,8 +43,7 @@ function FlightSearchPanel({
   const [showPassengerPopup, setShowPassengerPopup] = useState(false);
   const passengerRef = useRef(null);
 
-  // Initialize search form state
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateString();
 
   const [searchData, setSearchData] = useState({
     from: '',
@@ -44,7 +63,6 @@ function FlightSearchPanel({
     airlinePrefill: '',
   });
 
-  // Safe URL Query Parameter Pre-filling
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const airline = params.get('airline') || '';
@@ -75,7 +93,6 @@ function FlightSearchPanel({
       infantsInSeat: hasSplitInfants && Number.isInteger(infantsInSeatParam) && infantsInSeatParam >= 0
         ? infantsInSeatParam
         : 0,
-      // Old links only had `infants`, and that field historically meant lap infants.
       infantsOnLap: hasSplitInfants
         ? (Number.isInteger(infantsOnLapParam) && infantsOnLapParam >= 0 ? infantsOnLapParam : 0)
         : (Number.isInteger(legacyInfantsParam) && legacyInfantsParam >= 0 ? legacyInfantsParam : prev.infantsOnLap),
@@ -86,7 +103,6 @@ function FlightSearchPanel({
     analytics.trackSeoPageView(pageId);
   }, [location.search, pageId, defaultBookingForSomeoneElse, isUrgentContext, todayStr]);
 
-  // Outside click listener for passenger popover
   useEffect(() => {
     function handleClickOutside(event) {
       if (passengerRef.current && !passengerRef.current.contains(event.target)) {
@@ -102,7 +118,6 @@ function FlightSearchPanel({
     setErrorMessage('');
   };
 
-  // Passenger count modifiers
   const incrementPassenger = (type) => {
     setSearchData((prev) => {
       const total = prev.adults + prev.children + prev.infantsInSeat + prev.infantsOnLap;
@@ -128,21 +143,25 @@ function FlightSearchPanel({
     if (e.key === 'Escape') setShowPassengerPopup(false);
   };
 
-  const validateSearchForm = () => {
-    if (!searchData.from || !searchData.from.trim()) {
-      setErrorMessage('Select your departure airport.');
+  const validateSearchForm = (fromCode, toCode) => {
+    if (!fromCode) {
+      setErrorMessage('Select a valid departure airport from the suggestions.');
       return false;
     }
-    if (!searchData.to || !searchData.to.trim()) {
-      setErrorMessage('Select your destination airport.');
+    if (!toCode) {
+      setErrorMessage('Select a valid destination airport from the suggestions.');
       return false;
     }
-    if (searchData.from.trim().toUpperCase() === searchData.to.trim().toUpperCase()) {
+    if (fromCode === toCode) {
       setErrorMessage('Origin and destination airports cannot be identical.');
       return false;
     }
     if (!searchData.departure) {
       setErrorMessage('Choose a valid departure date.');
+      return false;
+    }
+    if (searchData.departure < todayStr) {
+      setErrorMessage('Departure date cannot be in the past.');
       return false;
     }
     if (searchData.tripType === 'roundtrip' && !searchData.returnDate) {
@@ -166,38 +185,57 @@ function FlightSearchPanel({
 
   const handleSearchFlightsSubmit = (e) => {
     e.preventDefault();
+    if (isSearching) return;
     setErrorMessage('');
 
-    if (!validateSearchForm()) {
-      analytics.trackFlightSearchFailed(pageId, 'Validation Failed');
+    const fromCode = extractAirportCode(searchData.from, searchData.fromAirport);
+    const toCode = extractAirportCode(searchData.to, searchData.toAirport);
+
+    if (!validateSearchForm(fromCode, toCode)) {
+      try {
+        analytics.trackFlightSearchFailed(pageId, 'Validation Failed');
+      } catch (_) {}
       return;
     }
 
     setIsSearching(true);
-    analytics.trackFlightSearchSubmitted(pageId, searchData);
 
     try {
       const totalInfants = searchData.infantsInSeat + searchData.infantsOnLap;
+      const fromDisplay = String(searchData.from || fromCode).trim();
+      const toDisplay = String(searchData.to || toCode).trim();
 
-      // Save criteria into shared session state. `infants` remains the total so
-      // existing booking forms create one traveler form for every infant.
-      sessionStorage.setItem('searchParams', JSON.stringify({
+      const payload = {
         ...searchData,
+        from: fromDisplay,
+        to: toDisplay,
+        fromCode,
+        toCode,
+        fromDisplay,
+        toDisplay,
         infants: totalInfants,
         searchDate: new Date().toISOString(),
-      }));
+      };
 
-      // Construct URL query string
+      sessionStorage.setItem('searchParams', JSON.stringify(payload));
+      sessionStorage.setItem('searchType', searchData.tripType);
+      sessionStorage.removeItem('selectedFlight');
+      sessionStorage.removeItem('selectedReturnFlight');
+      sessionStorage.removeItem('returnFlight');
+      sessionStorage.removeItem('bookingDraft');
+
       const searchQueryParams = new URLSearchParams({
-        from: searchData.from.trim().toUpperCase(),
-        to: searchData.to.trim().toUpperCase(),
+        from: fromCode,
+        to: toCode,
+        fromDisplay,
+        toDisplay,
         departure: searchData.departure,
         tripType: searchData.tripType,
-        adults: searchData.adults,
-        children: searchData.children,
-        infants: totalInfants,
-        infantsInSeat: searchData.infantsInSeat,
-        infantsOnLap: searchData.infantsOnLap,
+        adults: String(searchData.adults),
+        children: String(searchData.children),
+        infants: String(totalInfants),
+        infantsInSeat: String(searchData.infantsInSeat),
+        infantsOnLap: String(searchData.infantsOnLap),
         travelClass: searchData.travelClass,
         currency: searchData.currency,
       });
@@ -212,12 +250,17 @@ function FlightSearchPanel({
         searchQueryParams.set('bookingForOther', 'true');
       }
 
-      navigate(`/search?${searchQueryParams.toString()}`);
+      try {
+        analytics.trackFlightSearchSubmitted(pageId, payload);
+      } catch (_) {}
+
+      window.location.assign(`/search?${searchQueryParams.toString()}`);
     } catch (err) {
       console.error('[Flight Search Error]:', err);
       setErrorMessage('We could not load flight options right now. Please try again or call a travel specialist.');
-      analytics.trackFlightSearchFailed(pageId, err.message);
-    } finally {
+      try {
+        analytics.trackFlightSearchFailed(pageId, err?.message || 'Search failed');
+      } catch (_) {}
       setIsSearching(false);
     }
   };
@@ -227,11 +270,9 @@ function FlightSearchPanel({
   return (
     <div className="flight-search-panel-wrapper" id="flight-search-form">
       <div className="flights-inquiry-card">
-        {/* Panel Title & Header */}
         <h2 className="flight-search-title">{title}</h2>
         {subtitle && <p className="flights-inquiry__intro">{subtitle}</p>}
 
-        {/* Airline Intent Note */}
         {searchData.airlinePrefill && (
           <div className="airline-prefill-banner">
             <i className="fas fa-plane-departure"></i>
@@ -239,7 +280,6 @@ function FlightSearchPanel({
           </div>
         )}
 
-        {/* Urgent Search Hint */}
         {isUrgentContext && (
           <p className="search-urgent-hint">
             <i className="fas fa-bolt"></i>
@@ -248,7 +288,6 @@ function FlightSearchPanel({
         )}
 
         <form className="flights-form" onSubmit={handleSearchFlightsSubmit}>
-          {/* Meta Selections Row */}
           <div className="search-meta-row">
             <div className="search-meta-left">
               <CustomSelect
@@ -269,13 +308,12 @@ function FlightSearchPanel({
                 options={[
                   { value: 'economy', label: 'Economy' },
                   { value: 'premium', label: 'Premium Economy' },
-                  { value: 'business', label: 'Business' },
+                  { value: 'business', label: 'Business Class' },
                   { value: 'first', label: 'First Class' },
                 ]}
                 icon="fas fa-chair"
               />
 
-              {/* Traveler Popover */}
               <div className="search-meta-group" style={{ position: 'relative' }} ref={passengerRef} onKeyDown={handlePassengerKeyDown}>
                 <button
                   type="button"
@@ -292,10 +330,7 @@ function FlightSearchPanel({
                 {showPassengerPopup && (
                   <div className="passenger-popover" role="dialog" aria-label="Traveler selector">
                     <div className="passenger-row">
-                      <div className="passenger-label">
-                        <span className="passenger-type">Adults</span>
-                        <span className="passenger-age-desc">Age 18+</span>
-                      </div>
+                      <div className="passenger-label"><span className="passenger-type">Adults</span><span className="passenger-age-desc">Age 18+</span></div>
                       <div className="passenger-counters">
                         <button type="button" className="counter-btn" onClick={() => decrementPassenger('adults')} disabled={searchData.adults <= 1}>-</button>
                         <span className="counter-value">{searchData.adults}</span>
@@ -303,10 +338,7 @@ function FlightSearchPanel({
                       </div>
                     </div>
                     <div className="passenger-row">
-                      <div className="passenger-label">
-                        <span className="passenger-type">Children</span>
-                        <span className="passenger-age-desc">Age 2-17</span>
-                      </div>
+                      <div className="passenger-label"><span className="passenger-type">Children</span><span className="passenger-age-desc">Age 2-17</span></div>
                       <div className="passenger-counters">
                         <button type="button" className="counter-btn" onClick={() => decrementPassenger('children')} disabled={searchData.children <= 0}>-</button>
                         <span className="counter-value">{searchData.children}</span>
@@ -314,10 +346,7 @@ function FlightSearchPanel({
                       </div>
                     </div>
                     <div className="passenger-row">
-                      <div className="passenger-label">
-                        <span className="passenger-type">Infants in seat</span>
-                        <span className="passenger-age-desc">Under 2</span>
-                      </div>
+                      <div className="passenger-label"><span className="passenger-type">Infants in seat</span><span className="passenger-age-desc">Under 2</span></div>
                       <div className="passenger-counters">
                         <button type="button" className="counter-btn" onClick={() => decrementPassenger('infantsInSeat')} disabled={searchData.infantsInSeat <= 0}>-</button>
                         <span className="counter-value">{searchData.infantsInSeat}</span>
@@ -325,10 +354,7 @@ function FlightSearchPanel({
                       </div>
                     </div>
                     <div className="passenger-row">
-                      <div className="passenger-label">
-                        <span className="passenger-type">Infants on lap</span>
-                        <span className="passenger-age-desc">Under 2</span>
-                      </div>
+                      <div className="passenger-label"><span className="passenger-type">Infants on lap</span><span className="passenger-age-desc">Under 2</span></div>
                       <div className="passenger-counters">
                         <button type="button" className="counter-btn" onClick={() => decrementPassenger('infantsOnLap')} disabled={searchData.infantsOnLap <= 0}>-</button>
                         <span className="counter-value">{searchData.infantsOnLap}</span>
@@ -357,7 +383,6 @@ function FlightSearchPanel({
             </div>
           </div>
 
-          {/* Airport Autocomplete Row */}
           <div className="flights-form__row" style={{ gap: '1.25rem' }}>
             <div className="flights-form__group" style={{ margin: 0 }}>
               <AirportAutocomplete
@@ -366,8 +391,8 @@ function FlightSearchPanel({
                 value={searchData.from}
                 excludeCode={searchData.toAirport?.code}
                 onChange={(val, item) => {
-                  handleSearchChange('from', val);
-                  handleSearchChange('fromAirport', item);
+                  setSearchData((prev) => ({ ...prev, from: val, fromAirport: item || null }));
+                  setErrorMessage('');
                 }}
                 placeholder="e.g. New York (JFK)"
                 required
@@ -380,8 +405,8 @@ function FlightSearchPanel({
                 value={searchData.to}
                 excludeCode={searchData.fromAirport?.code}
                 onChange={(val, item) => {
-                  handleSearchChange('to', val);
-                  handleSearchChange('toAirport', item);
+                  setSearchData((prev) => ({ ...prev, to: val, toAirport: item || null }));
+                  setErrorMessage('');
                 }}
                 placeholder="e.g. Los Angeles (LAX)"
                 required
@@ -389,7 +414,6 @@ function FlightSearchPanel({
             </div>
           </div>
 
-          {/* Dates Row */}
           <div className="flights-form__row" style={{ gap: '1.25rem', marginTop: '1.25rem' }}>
             <div className="flights-form__group" style={{ margin: 0 }}>
               <TravelDatePicker
@@ -414,7 +438,6 @@ function FlightSearchPanel({
             </div>
           </div>
 
-          {/* Booking For Someone Else Checkbox */}
           <div className="search-booking-for-someone-else" style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px dashed #cbd5e1' }}>
             <label htmlFor="booking-for-someone-else" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', color: '#334155', fontWeight: '500' }}>
               <input
@@ -428,7 +451,6 @@ function FlightSearchPanel({
             </label>
           </div>
 
-          {/* Submit Action */}
           <div style={{ marginTop: '1.25rem' }}>
             <button
               type="submit"
@@ -443,14 +465,12 @@ function FlightSearchPanel({
             </button>
           </div>
 
-          {/* Validation & API Error Notice */}
           {errorMessage && (
             <p className="inquiry-form__message inquiry-form__message--error" role="alert" style={{ marginTop: '1rem' }}>
               <i className="fas fa-exclamation-triangle"></i> {errorMessage}
             </p>
           )}
 
-          {/* Airline Intent Independent Service Disclosure */}
           <p className="airline-intent-disclosure" style={{ fontSize: '0.78rem', color: '#64748b', textAlign: 'center', marginTop: '1.25rem', marginBottom: 0, lineHeight: 1.45 }}>
             <i className="fas fa-info-circle"></i> The Final Seat is an independent flight-search and reservation-assistance service and is not affiliated with or endorsed by individual airlines.
           </p>
