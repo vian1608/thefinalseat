@@ -101,6 +101,14 @@
   }
 }
 
+@media (max-width: 640px) {
+  .header:not(.header--admin-route) .container,
+  .header--admin-route .container {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
 @media (max-width: 480px) {
   .header:not(.header--admin-route) .container {
     padding-left: 12px;
@@ -125,13 +133,5 @@
   .header .nav-toggle {
     width: 38px;
     height: 38px;
-  }
-}
-
-@media (max-width: 640px) {
-  .header:not(.header--admin-route) .container,
-  .header--admin-route .container {
-    padding-left: 16px;
-    padding-right: 16px;
   }
 }
