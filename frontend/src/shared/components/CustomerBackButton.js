@@ -66,13 +66,16 @@ export default function CustomerBackButton() {
     };
   }, [isBookingPage]);
 
-  const isPrimaryLandingPage = pathname === '/' || pathname.startsWith('/senior-travel');
+  const isPrimaryLandingPage =
+    pathname === '/' ||
+    pathname === '/car-rentals' ||
+    pathname.startsWith('/senior-travel');
+
   if (isPrimaryLandingPage || pathname.startsWith('/admin')) return null;
 
   const handleBack = () => {
     // Search results are a top-level customer page. The Back button should always
-    // return to the flight-search home page instead of replaying journey history
-    // (for example, accidentally reopening /return-flight from a prior booking flow).
+    // return to the flight-search home page instead of replaying journey history.
     if (pathname === '/search') {
       navigate('/');
       return;
