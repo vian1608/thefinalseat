@@ -13,7 +13,7 @@
 
   .hero-slider__ui {
     padding-top: 0.55rem;
-    padding-bottom: 3.35rem;
+    padding-bottom: 3.1rem;
     padding-left: 1rem;
     padding-right: 1rem;
   }
@@ -72,53 +72,47 @@
     padding: 0.22rem 0.42rem;
   }
 
-  /*
-   * Mobile carousel navigation — compact bottom overlay.
-   * This shared rule applies to every HeroSlider instance, including flights,
-   * car rentals, and any landing page that reuses the global hero carousel.
-   */
+  /* Mobile slider controls intentionally mirror the desktop/web treatment:
+     simple chevrons + circular dots, with no capsule/background container. */
   .hero-slider__controls {
     left: 50% !important;
-    bottom: 8px !important;
+    bottom: 10px !important;
     transform: translateX(-50%) !important;
-    width: min(250px, calc(100% - 40px)) !important;
-    min-height: 42px !important;
-    padding: 5px 8px !important;
-    box-sizing: border-box !important;
-    display: grid !important;
-    grid-template-columns: 36px 1fr 36px !important;
+    width: auto !important;
+    min-height: 40px !important;
+    padding: 0 !important;
+    display: flex !important;
     align-items: center !important;
-    justify-items: center !important;
-    gap: 8px !important;
-    border: 1px solid rgba(255, 255, 255, 0.18) !important;
-    border-radius: 999px !important;
-    background: rgba(15, 23, 42, 0.48) !important;
-    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.18) !important;
-    -webkit-backdrop-filter: blur(8px) !important;
-    backdrop-filter: blur(8px) !important;
+    justify-content: center !important;
+    gap: 18px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
 
   .hero-slider__arrow {
-    width: 32px !important;
-    height: 32px !important;
-    min-width: 32px !important;
-    min-height: 32px !important;
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    min-height: 38px !important;
     padding: 0 !important;
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
-    border-radius: 50% !important;
-    background: rgba(255, 255, 255, 0.11) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
     color: #fff !important;
-    font-size: 0.82rem !important;
-    opacity: 1 !important;
+    font-size: 1.35rem !important;
+    opacity: 0.92 !important;
     box-shadow: none !important;
-    transform: none !important;
   }
 
   .hero-slider__arrow:hover,
   .hero-slider__arrow:focus-visible {
-    background: rgba(255, 255, 255, 0.2) !important;
-    border-color: rgba(255, 255, 255, 0.34) !important;
-    transform: none !important;
+    background: transparent !important;
+    opacity: 1 !important;
+    transform: scale(1.08) !important;
   }
 
   .hero-slider__arrow:active {
@@ -126,27 +120,31 @@
   }
 
   .hero-slider__dots {
-    width: 100% !important;
+    width: auto !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 7px !important;
+    gap: 10px !important;
   }
 
   .hero-slider__dot {
-    width: 6px !important;
-    height: 6px !important;
-    min-width: 6px !important;
-    min-height: 6px !important;
+    width: 9px !important;
+    height: 9px !important;
+    min-width: 9px !important;
+    min-height: 9px !important;
+    padding: 0 !important;
+    border: 0 !important;
     border-radius: 50% !important;
-    background: rgba(255, 255, 255, 0.42) !important;
+    background: rgba(255, 255, 255, 0.48) !important;
     transform: none !important;
   }
 
   .hero-slider__dot--active {
-    width: 18px !important;
-    min-width: 18px !important;
-    border-radius: 999px !important;
+    width: 11px !important;
+    height: 11px !important;
+    min-width: 11px !important;
+    min-height: 11px !important;
+    border-radius: 50% !important;
     background: #fff !important;
     transform: none !important;
   }
@@ -185,14 +183,18 @@
   }
 
   .hero-slider__controls {
-    width: min(230px, calc(100% - 28px)) !important;
-    grid-template-columns: 34px 1fr 34px !important;
+    gap: 14px !important;
   }
 
   .hero-slider__arrow {
-    width: 30px !important;
-    height: 30px !important;
-    min-width: 30px !important;
-    min-height: 30px !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    font-size: 1.2rem !important;
+  }
+
+  .hero-slider__dots {
+    gap: 8px !important;
   }
 }
