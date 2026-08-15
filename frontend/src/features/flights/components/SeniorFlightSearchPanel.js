@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import AirportAutocomplete from './AirportAutocomplete';
-import CustomSelect from '../../../shared/components/CustomSelect';
-import TravelDatePicker from './TravelDatePicker';
-import analytics from '../../../shared/utils/analytics';
-import './FlightSearchPanel.css';
+import './SeniorFlightSearchPanel.css';
+
+const getLocalDateString = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const extractAirportCode = (value, airport) => {
   const directCode = airport?.code || airport?.id;
@@ -20,8 +24,7 @@ const extractAirportCode = (value, airport) => {
 };
 
 export default function SeniorFlightSearchPanel() {
-  const navigate = useNavigate();
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
   const [isSearching, setIsSearching] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [searchData, setSearchData] = useState({
@@ -29,7 +32,7 @@ export default function SeniorFlightSearchPanel() {
     fromAirport: null,
     to: '',
     toAirport: null,
-    departure: today,
+    departure: '',
     returnDate: '',
     tripType: 'roundtrip',
     adults: 1,
@@ -50,57 +53,35 @@ export default function SeniorFlightSearchPanel() {
     const toCode = extractAirportCode(searchData.to, searchData.toAirport);
 
     if (!fromCode || !toCode) {
-      setErrorMessage('Please select valid origin and destination airports from the suggestions.');
+      setErrorMessage('Please select both airports from the suggestions.');
       return;
     }
     if (fromCode === toCode) {
-      setErrorMessage('Origin and destination airports cannot be the same.');
+      setErrorMessage('Origin and destination airports must be different.');
       return;
     }
     if (!searchData.departure) {
       setErrorMessage('Please select a departure date.');
       return;
     }
-    if (searchData.tripType === 'roundtrip' && !searchData.returnDate) {
-      setErrorMessage('Please select a return date for a round trip.');
+    if (searchData.departure < today) {
+      setErrorMessage('Departure date cannot be in the past.');
       return;
     }
-    if (
-      searchData.tripType === 'roundtrip' &&
-      searchData.returnDate &&
-      searchData.returnDate < searchData.departure
-    ) {
-      setErrorMessage('Return date cannot be before the departure date.');
+    if (searchData.tripType === 'roundtrip' && !searchData.returnDate) {
+      setErrorMessage('Please select a return date.');
+      return;
+    }
+    if (searchData.tripType === 'roundtrip' && searchData.returnDate < searchData.departure) {
+      setErrorMessage('Return date cannot be before departure date.');
       return;
     }
 
     setIsSearching(true);
 
     try {
-      const fromDisplay = typeof searchData.from === 'string' ? searchData.from : fromCode;
-      const toDisplay = typeof searchData.to === 'string' ? searchData.to : toCode;
-
-      const payload = {
-        ...searchData,
-        from: fromDisplay,
-        to: toDisplay,
-        fromCode,
-        toCode,
-        children: 0,
-        infants: 0,
-        infantsInSeat: 0,
-        infantsOnLap: 0,
-        fromAirport: searchData.fromAirport || { code: fromCode, name: fromDisplay },
-        toAirport: searchData.toAirport || { code: toCode, name: toDisplay },
-        searchDate: new Date().toISOString(),
-      };
-
-      sessionStorage.setItem('searchParams', JSON.stringify(payload));
-      sessionStorage.setItem('searchType', searchData.tripType);
-      sessionStorage.removeItem('selectedFlight');
-      sessionStorage.removeItem('returnFlight');
-
-      analytics.trackFlightSearchSubmitted('senior-travel-flight-deals', payload);
+      const fromDisplay = String(searchData.from || fromCode).trim();
+      const toDisplay = String(searchData.to || toCode).trim();
 
       const params = new URLSearchParams({
         from: fromCode,
@@ -122,165 +103,176 @@ export default function SeniorFlightSearchPanel() {
         params.set('returnDate', searchData.returnDate);
       }
 
-      navigate(`/search?${params.toString()}`);
+      const payload = {
+        ...searchData,
+        from: fromDisplay,
+        to: toDisplay,
+        fromCode,
+        toCode,
+        fromDisplay,
+        toDisplay,
+        children: 0,
+        infants: 0,
+        infantsInSeat: 0,
+        infantsOnLap: 0,
+      };
+
+      sessionStorage.setItem('searchParams', JSON.stringify(payload));
+      sessionStorage.setItem('searchType', searchData.tripType);
+      sessionStorage.removeItem('selectedFlight');
+      sessionStorage.removeItem('selectedReturnFlight');
+      sessionStorage.removeItem('returnFlight');
+
+      if (typeof window !== 'undefined' && window.gtag) {
+        window.gtag('event', 'senior_flight_search', {
+          origin: fromCode,
+          destination: toCode,
+          trip_type: searchData.tripType,
+        });
+      }
+
+      // Use a direct browser navigation here instead of relying on component/router
+      // state. This makes the landing-page search reliable even after ad redirects,
+      // client-side transitions, or portal mounting.
+      window.location.assign(`/search?${params.toString()}`);
     } catch (error) {
-      analytics.trackFlightSearchFailed('senior-travel-flight-deals', error?.message || 'Search failed');
+      console.error('[Senior Flight Search Error]', error);
       setErrorMessage('We could not open flight results. Please try again.');
       setIsSearching(false);
     }
   };
 
   return (
-    <div className="flight-search-panel-wrapper" id="senior-flight-search-form">
-      <div className="flights-inquiry-card">
-        <h2 className="flight-search-title">Search Flights</h2>
-        <p className="flights-inquiry__intro">
-          Enter your route and travel dates to compare available flight options. Personal booking assistance is also available below.
-        </p>
-
-        <form className="flights-form" onSubmit={handleSearch}>
-          <div className="search-meta-row">
-            <div className="search-meta-left">
-              <CustomSelect
-                id="senior-search-trip-type"
-                value={searchData.tripType}
-                onChange={(value) => change('tripType', value)}
-                options={[
-                  { value: 'roundtrip', label: 'Round Trip' },
-                  { value: 'oneway', label: 'One Way' },
-                ]}
-                icon="fas fa-route"
-              />
-              <CustomSelect
-                id="senior-search-class"
-                value={searchData.travelClass}
-                onChange={(value) => change('travelClass', value)}
-                options={[
-                  { value: 'economy', label: 'Economy' },
-                  { value: 'premium', label: 'Premium Economy' },
-                  { value: 'business', label: 'Business' },
-                  { value: 'first', label: 'First Class' },
-                ]}
-                icon="fas fa-chair"
-              />
-              <CustomSelect
-                id="senior-search-travelers"
-                value={String(searchData.adults)}
-                onChange={(value) => change('adults', Number(value))}
-                options={[1, 2, 3, 4, 5, 6].map((count) => ({
-                  value: String(count),
-                  label: `${count} Traveler${count > 1 ? 's' : ''}`,
-                }))}
-                icon="fas fa-user-friends"
-              />
-            </div>
-            <div className="search-meta-right">
-              <CustomSelect
-                id="senior-search-currency"
-                value={searchData.currency}
-                onChange={(value) => change('currency', value)}
-                options={[
-                  { value: 'USD', label: 'USD ($)' },
-                  { value: 'EUR', label: 'EUR (€)' },
-                  { value: 'GBP', label: 'GBP (£)' },
-                  { value: 'CAD', label: 'CAD (C$)' },
-                ]}
-                icon="fas fa-dollar-sign"
-              />
-            </div>
-          </div>
-
-          <div className="flights-form__row" style={{ gap: '1.25rem' }}>
-            <div className="flights-form__group" style={{ margin: 0 }}>
-              <AirportAutocomplete
-                label="Origin Airport"
-                id="senior-search-origin"
-                value={searchData.from}
-                excludeCode={searchData.toAirport?.code}
-                onChange={(value, item) => {
-                  change('from', value);
-                  setSearchData((prev) => ({ ...prev, fromAirport: item }));
-                }}
-                placeholder="e.g. New York (JFK)"
-                required
-              />
-            </div>
-            <div className="flights-form__group" style={{ margin: 0 }}>
-              <AirportAutocomplete
-                label="Destination Airport"
-                id="senior-search-destination"
-                value={searchData.to}
-                excludeCode={searchData.fromAirport?.code}
-                onChange={(value, item) => {
-                  change('to', value);
-                  setSearchData((prev) => ({ ...prev, toAirport: item }));
-                }}
-                placeholder="e.g. Los Angeles (LAX)"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="flights-form__row" style={{ gap: '1.25rem', marginTop: '1.25rem' }}>
-            <div className="flights-form__group" style={{ margin: 0 }}>
-              <TravelDatePicker
-                id="senior-search-departure"
-                label="Departure Date"
-                value={searchData.departure}
-                onChange={(value) => change('departure', value)}
-                minDate={today}
-                required
-              />
-            </div>
-            <div
-              className="flights-form__group"
-              style={{ margin: 0, opacity: searchData.tripType === 'oneway' ? 0.45 : 1 }}
-            >
-              <TravelDatePicker
-                id="senior-search-return"
-                label="Return Date"
-                value={searchData.returnDate}
-                onChange={(value) => change('returnDate', value)}
-                minDate={searchData.departure || today}
-                disabled={searchData.tripType === 'oneway'}
-                required={searchData.tripType === 'roundtrip'}
-              />
-            </div>
-          </div>
-
-          <div style={{ marginTop: '1.25rem' }}>
-            <button
-              type="submit"
-              className="flights-btn flights-btn--cta btn-primary-search"
-              disabled={isSearching}
-              style={{ width: '100%' }}
-            >
-              {isSearching ? (
-                <><i className="fas fa-circle-notch fa-spin"></i> Searching Flights...</>
-              ) : (
-                <><i className="fas fa-search"></i> Search Flights</>
-              )}
-            </button>
-          </div>
-
-          {errorMessage && (
-            <p
-              className="inquiry-form__message inquiry-form__message--error"
-              role="alert"
-              style={{ marginTop: '1rem' }}
-            >
-              <i className="fas fa-exclamation-triangle"></i> {errorMessage}
-            </p>
-          )}
-
-          <p
-            className="airline-intent-disclosure"
-            style={{ fontSize: '0.78rem', color: '#64748b', textAlign: 'center', marginTop: '1.25rem', marginBottom: 0, lineHeight: 1.45 }}
-          >
-            <i className="fas fa-info-circle"></i> The Final Seat is an independent flight-search and reservation-assistance service and is not affiliated with or endorsed by individual airlines.
-          </p>
-        </form>
+    <div className="senior-search-card" id="senior-flight-search-form">
+      <div className="senior-search-heading">
+        <div>
+          <span className="senior-search-kicker">Find your flight</span>
+          <h2>Search Flights</h2>
+          <p>Choose your airports and dates to view available flight options.</p>
+        </div>
       </div>
+
+      <form onSubmit={handleSearch} className="senior-search-form" noValidate>
+        <div className="senior-search-options">
+          <label>
+            <span>Trip</span>
+            <select
+              value={searchData.tripType}
+              onChange={(e) => {
+                change('tripType', e.target.value);
+                if (e.target.value === 'oneway') change('returnDate', '');
+              }}
+            >
+              <option value="roundtrip">Round Trip</option>
+              <option value="oneway">One Way</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Cabin</span>
+            <select value={searchData.travelClass} onChange={(e) => change('travelClass', e.target.value)}>
+              <option value="economy">Economy</option>
+              <option value="premium">Premium Economy</option>
+              <option value="business">Business Class</option>
+              <option value="first">First Class</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Travelers</span>
+            <select value={searchData.adults} onChange={(e) => change('adults', Number(e.target.value))}>
+              {[1, 2, 3, 4, 5, 6].map((count) => (
+                <option key={count} value={count}>{count} Traveler{count > 1 ? 's' : ''}</option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Currency</span>
+            <select value={searchData.currency} onChange={(e) => change('currency', e.target.value)}>
+              <option value="USD">USD ($)</option>
+              <option value="EUR">EUR (€)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="CAD">CAD (C$)</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="senior-search-route-row">
+          <div className="senior-search-field senior-search-airport-field">
+            <AirportAutocomplete
+              label="Origin Airport"
+              id="senior-search-origin"
+              value={searchData.from}
+              excludeCode={searchData.toAirport?.code}
+              onChange={(value, item) => {
+                setSearchData((prev) => ({ ...prev, from: value, fromAirport: item || null }));
+                setErrorMessage('');
+              }}
+              placeholder="City or airport, e.g. JFK"
+              required
+            />
+          </div>
+
+          <div className="senior-search-field senior-search-airport-field">
+            <AirportAutocomplete
+              label="Destination Airport"
+              id="senior-search-destination"
+              value={searchData.to}
+              excludeCode={searchData.fromAirport?.code}
+              onChange={(value, item) => {
+                setSearchData((prev) => ({ ...prev, to: value, toAirport: item || null }));
+                setErrorMessage('');
+              }}
+              placeholder="City or airport, e.g. LAX"
+              required
+            />
+          </div>
+
+          <label className="senior-search-field">
+            <span>Departure Date</span>
+            <input
+              type="date"
+              value={searchData.departure}
+              min={today}
+              onChange={(e) => change('departure', e.target.value)}
+              required
+            />
+          </label>
+
+          <label className={`senior-search-field ${searchData.tripType === 'oneway' ? 'is-disabled' : ''}`}>
+            <span>Return Date</span>
+            <input
+              type="date"
+              value={searchData.returnDate}
+              min={searchData.departure || today}
+              onChange={(e) => change('returnDate', e.target.value)}
+              disabled={searchData.tripType === 'oneway'}
+              required={searchData.tripType === 'roundtrip'}
+            />
+          </label>
+        </div>
+
+        {errorMessage && (
+          <div className="senior-search-error" role="alert">
+            <i className="fas fa-exclamation-circle" aria-hidden="true"></i>
+            {errorMessage}
+          </div>
+        )}
+
+        <div className="senior-search-action-row">
+          <p>
+            Prefer help? You can still request personal booking assistance below.
+          </p>
+          <button type="submit" disabled={isSearching}>
+            {isSearching ? (
+              <><i className="fas fa-circle-notch fa-spin" aria-hidden="true"></i> Opening Results...</>
+            ) : (
+              <><i className="fas fa-search" aria-hidden="true"></i> Search Flights</>
+            )}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
