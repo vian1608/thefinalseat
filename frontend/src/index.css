@@ -2,6 +2,7 @@
 @import url('./shared/styles/styles.css');
 @import url('./shared/styles/TfsDesignSystem.css');
 @import url('./shared/styles/MobileFlightSearchOptimization.css');
+@import url('./shared/styles/MobilePassengerSelector.css');
 
 /* Keep every phone/call icon across the public site facing the intended direction.
    This applies to Call Now buttons, phone CTAs, mobile header call actions, and
