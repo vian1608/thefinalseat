@@ -66,7 +66,8 @@ export default function CustomerBackButton() {
     };
   }, [isBookingPage]);
 
-  if (pathname === '/' || pathname.startsWith('/admin')) return null;
+  const isPrimaryLandingPage = pathname === '/' || pathname.startsWith('/senior-travel');
+  if (isPrimaryLandingPage || pathname.startsWith('/admin')) return null;
 
   const handleBack = () => {
     const browserHasAppHistory = Number(window.history.state?.idx || 0) > 0;
