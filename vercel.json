@@ -168,6 +168,7 @@
     { "source": "/amtrak-assisstance", "destination": "/car-rentals", "permanent": true },
     { "source": "/amtrak-asistance", "destination": "/car-rentals", "permanent": true },
     { "source": "/senior-travel", "destination": "/senior-travel/flight-deals", "permanent": true },
+    { "source": "/senior-flight-deals", "destination": "/senior-travel/flight-deals", "permanent": true },
     { "source": "/privacy", "destination": "/privacy-policy", "permanent": true },
     { "source": "/privacypolicy", "destination": "/privacy-policy", "permanent": true },
     { "source": "/refund", "destination": "/refund-policy", "permanent": true },
