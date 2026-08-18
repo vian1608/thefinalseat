@@ -13,6 +13,13 @@ function ServiceNav({ active }) {
         <span>Flights</span>
       </Link>
       <Link
+        to="/hotels"
+        className={`service-nav__item ${active === 'hotels' ? 'service-nav__item--active' : ''}`}
+      >
+        <i className="fas fa-hotel" aria-hidden="true" />
+        <span>Hotels</span>
+      </Link>
+      <Link
         to="/car-rentals"
         className={`service-nav__item ${active === 'cars' ? 'service-nav__item--active' : ''}`}
       >
