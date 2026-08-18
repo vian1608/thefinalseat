@@ -72,7 +72,9 @@ assert.doesNotMatch(timeline, /\|\| 'ORIG'|\|\| 'CONN'|\|\| 'DEST'/);
 
 assert.match(transition, /<CustomerBackButton\s*\/>/);
 assert.match(backButton, /navigate\(-1\)/);
-assert.match(backButton, /pathname === '\/' \|\| pathname\.startsWith\('\/admin'\)/);
+// Current master groups landing pages under isPrimaryLandingPage; admin routes must
+// still suppress the customer back button without coupling the test to old syntax.
+assert.match(backButton, /if \(isPrimaryLandingPage \|\| pathname\.startsWith\('\/admin'\)\) return null/);
 assert.match(backButton, /document\.querySelector\('\.booking-itinerary-top-panel__inner'\)/);
 assert.match(backButton, /createPortal\(button, bookingTarget\)/);
 assert.match(backButton, /\/return-flight/);

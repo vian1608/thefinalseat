@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 import './index.css';
 import './shared/styles/ProductionSafetyOverrides.css';
 import './shared/styles/ModernInteractionSystem.css';
@@ -14,6 +15,9 @@ import './shared/styles/BookingChoiceUX.css';
 import './shared/styles/MobileItineraryCompact.css';
 import './shared/styles/MobileItineraryRoutePolish.css';
 import App from './app/App';
+import BackOfficeRouter from './features/backoffice/BackOfficeRouter';
+import { boPatch } from './features/backoffice/backofficeApi';
+import { adminAPI } from './shared/api/api';
 import { HelmetProvider } from 'react-helmet-async';
 import { installSensitiveDataGuards } from './shared/security/installSensitiveDataGuards';
 import { installBookingValidationUX } from './shared/validation/installBookingValidationUX';
@@ -27,11 +31,39 @@ installFareBreakdownUX();
 installMobileBookingUX();
 installPrimaryContactSyncUX();
 
+// CRM launches the EXISTING create-flight workflow with a leadId query parameter.
+// Patch only that single request path so the successful legacy create call is
+// linked back to CRM without rewriting the production booking form itself.
+const query = new URLSearchParams(window.location.search);
+const crmLeadId = window.location.pathname === '/admin/bookings/new' ? query.get('leadId') : null;
+if (crmLeadId && !adminAPI.__tfsCrmFlightCreateBridge) {
+  const originalCreateBooking = adminAPI.createBooking.bind(adminAPI);
+  adminAPI.createBooking = async (...args) => {
+    const result = await originalCreateBooking(...args);
+    const resultData = result?.data ?? result;
+    const createdBooking = result?.booking || resultData?.booking || resultData;
+    const createdBookingId = createdBooking?.id;
+    if (createdBookingId) {
+      try {
+        await boPatch(`/bookings/flights/${createdBookingId}/link`, { leadId: crmLeadId });
+      } catch (error) {
+        window.dispatchEvent(new CustomEvent('admin-api-error', { detail: { code: error.code || 'CRM_BOOKING_LINK_FAILED', message: `Booking was created, but CRM linking failed: ${error.message}` } }));
+      }
+    }
+    return result;
+  };
+  Object.defineProperty(adminAPI, '__tfsCrmFlightCreateBridge', { value: true, configurable: false, enumerable: false, writable: false });
+}
+
+// Preserve every established App.js route. Only the new additive back-office URLs
+// are intercepted here so the stable flight/admin route table does not need a rewrite.
+const isNewBackOfficePath = /^\/admin\/(backoffice|crm(?:\/|$)|trips(?:\/|$)|bookings\/(?:flights|hotels|cars)(?:\/|$)|payments(?:\/|$)|finance(?:\/|$)|suppliers(?:\/|$)|reports(?:\/|$)|team(?:\/|$)|settings(?:\/|$))/.test(window.location.pathname);
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
     <HelmetProvider>
-      <App />
+      {isNewBackOfficePath ? <BrowserRouter><BackOfficeRouter /></BrowserRouter> : <App />}
     </HelmetProvider>
   </React.StrictMode>
 );

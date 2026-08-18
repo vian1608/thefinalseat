@@ -46,6 +46,7 @@ import { PaymentBootstrap, TokenizedPaymentPage } from '../features/journey/Toke
 
 import CarRentalsHomePage from '../features/cars/pages/CarRentalsHomePage';
 import CarSearchUrlGuard from '../features/cars/pages/CarSearchUrlGuard';
+import HotelSearchPage from '../features/hotels/pages/HotelSearchPage';
 
 function LegacyAirlineRedirect() {
   const { airlineSlug } = useParams();
@@ -73,6 +74,10 @@ function App() {
             <PageTransition>
               <Routes>
                 <Route path="/" element={<Home />} />
+
+                {/* Hotel search is URL-authoritative; all booking requests return through CRM. */}
+                <Route path="/hotels" element={<HotelSearchPage />} />
+                <Route path="/hotels/results" element={<HotelSearchPage />} />
 
                 {/* Car Rentals: results are URL-authoritative and copy/paste safe. */}
                 <Route path="/car-rentals" element={<CarRentalsHomePage />} />

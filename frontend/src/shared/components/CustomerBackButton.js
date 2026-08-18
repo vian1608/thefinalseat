@@ -10,6 +10,7 @@ const FALLBACK_BY_PATH = [
   [/^\/authorize\//, '/my-bookings'],
   [/^\/confirmation\//, '/my-bookings'],
   [/^\/booking-confirmed/, '/my-bookings'],
+  [/^\/hotels\/results/, '/hotels'],
   [/^\/car-rentals\/(search|results)/, '/car-rentals'],
   [/^\/signin/, '/'],
   [/^\/signup/, '/signin'],
@@ -68,6 +69,7 @@ export default function CustomerBackButton() {
 
   const isPrimaryLandingPage =
     pathname === '/' ||
+    pathname === '/hotels' ||
     pathname === '/car-rentals' ||
     pathname.startsWith('/senior-travel');
 

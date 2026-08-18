@@ -43,6 +43,7 @@ function Header() {
   const closeMenu = () => setMenuOpen(false);
 
   const isFlightsActive = location.pathname === '/';
+  const isHotelsActive = location.pathname.startsWith('/hotels');
   const isCarsActive = location.pathname.startsWith('/car-rentals');
   const isContactActive = location.pathname === '/contact';
   const isCarsTheme = isCarsActive;
@@ -102,6 +103,12 @@ function Header() {
               className={`header-nav-link ${isFlightsActive ? 'header-nav-link--active' : ''}`}
             >
               Flights
+            </Link>
+            <Link
+              to="/hotels"
+              className={`header-nav-link ${isHotelsActive ? 'header-nav-link--active' : ''}`}
+            >
+              Hotels
             </Link>
             <Link
               to="/car-rentals"
