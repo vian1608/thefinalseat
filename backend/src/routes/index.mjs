@@ -14,6 +14,9 @@ import rateLimit from '../middleware/rate-limit.mjs';
 import voucherRoutes from '../modules/vouchers/voucher.routes.mjs';
 import { journeySessionRouter } from '../modules/journey-sessions/journey-session.routes.mjs';
 import { noStore, publicLookupCache } from '../middleware/cache-control.middleware.mjs';
+import { carRouter } from '../modules/cars/car.routes.mjs';
+import { hotelRouter } from '../modules/hotels/hotel.routes.mjs';
+import addressAutocompleteController from '../modules/flights/address-autocomplete.controller.mjs';
 
 const router = express.Router();
 const paypalRateLimiter = rateLimit({ windowMs: 60000, maxRequests: 15, message: 'Too many payment requests. Please wait a minute.' });
@@ -43,9 +46,8 @@ router.use('/enquiries', enquiryRouter);
 router.use('/', whopRouter);
 router.use('/flights', flightRouter);
 router.use('/airports', publicLookupCache(300, 86400, 3600), airportRouter);
-import { carRouter } from '../modules/cars/car.routes.mjs';
 router.use('/cars', carRouter);
-import addressAutocompleteController from '../modules/flights/address-autocomplete.controller.mjs';
+router.use('/hotels', noStore, hotelRouter);
 router.get('/address-autocomplete', publicLookupCache(300, 86400, 3600), addressAutocompleteController.getAddressAutocomplete);
 router.get('/health', (req, res) => res.json({ success: true, data: { status: 'ok', message: 'Urgent Travel API is running', timestamp: new Date().toISOString() } }));
 
