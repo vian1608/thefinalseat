@@ -3,18 +3,45 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import AdminDashboard from '../admin/pages/AdminDashboardPage';
 import { BackOfficeAuthProvider, useBackOfficeAuth } from './BackOfficeAuthContext';
 import BackOfficeShell from './BackOfficeShell';
-import { BackOfficeDashboard, FlightBookingsLanding, ModuleLanding } from './BackOfficePages';
+import { AuditLogsPage, CarsPage, CommissionsPage, CustomersPage, DashboardPage, DisputesPage, FinancePage, FlightBookingsPage, HotelsPage, IntegrationsPage, LeadDetailPage, LeadsPage, PaymentsPage, PlaceholderPage, ProductBookingDetailPage, RefundsPage, ReportsPage, RolesPage, SecurityPage, SettingsPage, SupplierPaymentsPage, SuppliersPage, TasksPage, TeamPage, TeamsPage, TripDetailPage, TripsPage } from './BackOfficeDataPages';
 
 function Guard({ permission, children }) { const { loading, profile, hasPermission } = useBackOfficeAuth(); if (loading) return <div className="bo-card">Loading back office…</div>; if (!profile) return <Navigate to="/admin/login" replace />; if (permission && !hasPermission(permission)) return <div className="bo-card"><h2>Access denied</h2><p>You do not have permission to open this module.</p></div>; return children; }
 function Page({ permission, children }) { return <Guard permission={permission}><BackOfficeShell>{children}</BackOfficeShell></Guard>; }
+
 export default function BackOfficeRouter() { return <BackOfficeAuthProvider><Routes>
-<Route path="backoffice" element={<Page permission="dashboard.view"><BackOfficeDashboard /></Page>} />
-<Route path="crm" element={<Navigate to="/admin/crm/leads" replace />} /><Route path="crm/leads" element={<Page permission="crm.leads.view"><ModuleLanding title="Leads" /></Page>} /><Route path="crm/leads/:id" element={<Page permission="crm.leads.view"><ModuleLanding title="Lead Details" /></Page>} /><Route path="crm/customers" element={<Page permission="crm.customers.view"><ModuleLanding title="Customers" /></Page>} /><Route path="crm/customers/:id" element={<Page permission="crm.customers.view"><ModuleLanding title="Customer Details" /></Page>} /><Route path="crm/tasks" element={<Page permission="crm.tasks.view"><ModuleLanding title="Tasks & Follow-ups" /></Page>} />
-<Route path="trips" element={<Page permission="trips.view"><ModuleLanding title="Trips" /></Page>} /><Route path="trips/:id" element={<Page permission="trips.view"><ModuleLanding title="Trip Details" /></Page>} />
-<Route path="bookings" element={<Navigate to="/admin/bookings/flights" replace />} /><Route path="bookings/flights" element={<Page permission="bookings.flights.view"><FlightBookingsLanding /></Page>} /><Route path="bookings/flights/:code" element={<Page permission="bookings.flights.view"><AdminDashboard /></Page>} /><Route path="bookings/hotels" element={<Page permission="bookings.hotels.view"><ModuleLanding title="Hotel Bookings" /></Page>} /><Route path="bookings/hotels/:id" element={<Page permission="bookings.hotels.view"><ModuleLanding title="Hotel Booking" /></Page>} /><Route path="bookings/cars" element={<Page permission="bookings.cars.view"><ModuleLanding title="Car Bookings" /></Page>} /><Route path="bookings/cars/:id" element={<Page permission="bookings.cars.view"><ModuleLanding title="Car Booking" /></Page>} />
-<Route path="payments" element={<Page permission="payments.view"><ModuleLanding title="Payments" /></Page>} /><Route path="payments/authorizations" element={<Page permission="authorization.view"><ModuleLanding title="Authorizations" /></Page>} /><Route path="payments/refunds" element={<Page permission="payments.refund"><ModuleLanding title="Refunds" /></Page>} /><Route path="payments/disputes" element={<Page permission="payments.view"><ModuleLanding title="Disputes" /></Page>} />
-<Route path="finance" element={<Page permission="finance.view"><ModuleLanding title="Finance" /></Page>} /><Route path="finance/commissions" element={<Page permission="finance.commissions"><ModuleLanding title="Commissions" /></Page>} /><Route path="finance/supplier-payments" element={<Page permission="finance.view"><ModuleLanding title="Supplier Payments" /></Page>} /><Route path="suppliers" element={<Page permission="suppliers.view"><ModuleLanding title="Suppliers" /></Page>} /><Route path="reports" element={<Page permission="reports.view"><ModuleLanding title="Reports" /></Page>} />
-<Route path="team" element={<Navigate to="/admin/team/users" replace />} /><Route path="team/users" element={<Page permission="team.view"><ModuleLanding title="Users" /></Page>} /><Route path="team/roles" element={<Page permission="team.view"><ModuleLanding title="Roles & Permissions" /></Page>} /><Route path="team/teams" element={<Page permission="team.view"><ModuleLanding title="Teams" /></Page>} />
-<Route path="settings" element={<Page permission="admin.settings"><ModuleLanding title="Admin / Settings" /></Page>} /><Route path="settings/integrations" element={<Page permission="admin.integrations"><ModuleLanding title="Integrations" /></Page>} /><Route path="settings/email" element={<Page permission="admin.settings"><ModuleLanding title="Email Templates" /></Page>} /><Route path="settings/security" element={<Page permission="admin.settings"><ModuleLanding title="Security" /></Page>} /><Route path="settings/audit-logs" element={<Page permission="admin.audit_logs"><ModuleLanding title="Audit Logs" /></Page>} />
-<Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
+  <Route path="backoffice" element={<Page permission="dashboard.view"><DashboardPage /></Page>} />
+  <Route path="crm" element={<Navigate to="/admin/crm/leads" replace />} />
+  <Route path="crm/leads" element={<Page permission="crm.leads.view"><LeadsPage /></Page>} />
+  <Route path="crm/leads/:id" element={<Page permission="crm.leads.view"><LeadDetailPage /></Page>} />
+  <Route path="crm/customers" element={<Page permission="crm.customers.view"><CustomersPage /></Page>} />
+  <Route path="crm/customers/:id" element={<Page permission="crm.customers.view"><CustomersPage /></Page>} />
+  <Route path="crm/tasks" element={<Page permission="crm.tasks.view"><TasksPage /></Page>} />
+  <Route path="trips" element={<Page permission="trips.view"><TripsPage /></Page>} />
+  <Route path="trips/:id" element={<Page permission="trips.view"><TripDetailPage /></Page>} />
+  <Route path="bookings" element={<Navigate to="/admin/bookings/flights" replace />} />
+  <Route path="bookings/flights" element={<Page permission="bookings.flights.view"><FlightBookingsPage /></Page>} />
+  <Route path="bookings/flights/:code" element={<Page permission="bookings.flights.view"><AdminDashboard /></Page>} />
+  <Route path="bookings/hotels" element={<Page permission="bookings.hotels.view"><HotelsPage /></Page>} />
+  <Route path="bookings/hotels/:id" element={<Page permission="bookings.hotels.view"><ProductBookingDetailPage type="hotel" /></Page>} />
+  <Route path="bookings/cars" element={<Page permission="bookings.cars.view"><CarsPage /></Page>} />
+  <Route path="bookings/cars/:id" element={<Page permission="bookings.cars.view"><ProductBookingDetailPage type="car" /></Page>} />
+  <Route path="payments" element={<Page permission="payments.view"><PaymentsPage /></Page>} />
+  <Route path="payments/authorizations" element={<Page permission="authorization.view"><PlaceholderPage title="Authorizations" description="Authorization actions remain inside the stable flight booking workspace." /></Page>} />
+  <Route path="payments/refunds" element={<Page permission="payments.view"><RefundsPage /></Page>} />
+  <Route path="payments/disputes" element={<Page permission="payments.view"><DisputesPage /></Page>} />
+  <Route path="finance" element={<Page permission="finance.view"><FinancePage /></Page>} />
+  <Route path="finance/commissions" element={<Page permission="finance.commissions"><CommissionsPage /></Page>} />
+  <Route path="finance/supplier-payments" element={<Page permission="finance.view"><SupplierPaymentsPage /></Page>} />
+  <Route path="suppliers" element={<Page permission="suppliers.view"><SuppliersPage /></Page>} />
+  <Route path="reports" element={<Page permission="reports.view"><ReportsPage /></Page>} />
+  <Route path="team" element={<Navigate to="/admin/team/users" replace />} />
+  <Route path="team/users" element={<Page permission="team.view"><TeamPage /></Page>} />
+  <Route path="team/roles" element={<Page permission="team.view"><RolesPage /></Page>} />
+  <Route path="team/teams" element={<Page permission="team.view"><TeamsPage /></Page>} />
+  <Route path="settings" element={<Page permission="admin.settings"><SettingsPage /></Page>} />
+  <Route path="settings/integrations" element={<Page permission="admin.integrations"><IntegrationsPage /></Page>} />
+  <Route path="settings/email" element={<Page permission="admin.settings"><PlaceholderPage title="Email Templates" description="Existing booking email actions remain preserved; template management is a safe extension point." /></Page>} />
+  <Route path="settings/security" element={<Page permission="admin.settings"><SecurityPage /></Page>} />
+  <Route path="settings/audit-logs" element={<Page permission="admin.audit_logs"><AuditLogsPage /></Page>} />
+  <Route path="*" element={<Navigate to="/admin/backoffice" replace />} />
 </Routes></BackOfficeAuthProvider>; }
