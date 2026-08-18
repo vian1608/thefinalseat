@@ -12,6 +12,7 @@ const routes = read('backend/src/modules/hotels/hotel.routes.mjs');
 const routeIndex = read('backend/src/routes/index.mjs');
 const migration = read('backend/migrations/106_public_hotel_search_tracking.sql');
 const app = read('frontend/src/app/App.js');
+const header = read('frontend/src/shared/components/Header.js');
 const serviceNav = read('frontend/src/shared/components/ServiceNav.js');
 const hotelPage = read('frontend/src/features/hotels/pages/HotelSearchPage.js');
 const hotelApi = read('frontend/src/features/hotels/hotelApi.js');
@@ -41,6 +42,8 @@ assert.match(migration, /client_request_id/);
 assert.match(migration, /UNIQUE INDEX IF NOT EXISTS idx_hotel_bookings_client_request_id/);
 assert.match(migration, /website_serpapi_google_hotels' OR lead_id IS NOT NULL/);
 
+assert.match(header, /to="\/hotels"/);
+assert.match(header, />\s*Hotels\s*</);
 assert.match(serviceNav, /to="\/hotels"/);
 assert.match(serviceNav, />Hotels</);
 assert.match(app, /<Route path="\/hotels" element={<HotelSearchPage \/>} \/>/);
