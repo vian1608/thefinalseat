@@ -7,6 +7,7 @@ const CANONICAL_ORIGIN = 'https://www.thefinalseat.com';
 
 const INDEXABLE_EXACT = new Set([
   '/',
+  '/hotels',
   '/car-rentals',
   '/contact',
   '/terms',
@@ -26,6 +27,7 @@ const INDEXABLE_EXACT = new Set([
 
 const PAGE_NAMES = {
   '/': 'The Final Seat',
+  '/hotels': 'Hotel Search and Booking Assistance',
   '/car-rentals': 'Car Rentals',
   '/contact': 'Contact The Final Seat',
   '/terms': 'Terms and Conditions',
