@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 import './index.css';
 import './shared/styles/ProductionSafetyOverrides.css';
 import './shared/styles/ModernInteractionSystem.css';
@@ -14,6 +15,7 @@ import './shared/styles/BookingChoiceUX.css';
 import './shared/styles/MobileItineraryCompact.css';
 import './shared/styles/MobileItineraryRoutePolish.css';
 import App from './app/App';
+import BackOfficeRouter from './features/backoffice/BackOfficeRouter';
 import { HelmetProvider } from 'react-helmet-async';
 import { installSensitiveDataGuards } from './shared/security/installSensitiveDataGuards';
 import { installBookingValidationUX } from './shared/validation/installBookingValidationUX';
@@ -27,11 +29,15 @@ installFareBreakdownUX();
 installMobileBookingUX();
 installPrimaryContactSyncUX();
 
+// Preserve every established App.js route. Only the new additive back-office URLs
+// are intercepted here so the stable flight/admin route table does not need a rewrite.
+const isNewBackOfficePath = /^\/admin\/(backoffice|crm(?:\/|$)|trips(?:\/|$)|bookings\/(?:flights|hotels|cars)(?:\/|$)|payments(?:\/|$)|finance(?:\/|$)|suppliers(?:\/|$)|reports(?:\/|$)|team(?:\/|$)|settings(?:\/|$))/.test(window.location.pathname);
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
     <HelmetProvider>
-      <App />
+      {isNewBackOfficePath ? <BrowserRouter><BackOfficeRouter /></BrowserRouter> : <App />}
     </HelmetProvider>
   </React.StrictMode>
 );
