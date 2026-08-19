@@ -1,6 +1,7 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import HeroSlider from '../../../shared/components/HeroSlider';
+import ProductSearchCard from '../../../shared/components/ProductSearchCard';
 import CarSearchForm from '../components/CarSearchForm';
 import { SUPPORT_PHONE_HREF, SUPPORT_PHONE_DISPLAY } from '../../../shared/constants/supportContact';
 import './CarRentalsHomePage.css';
@@ -73,19 +74,14 @@ function CarRentalsHomePage() {
 
       <section className="car-search-shell" aria-label="Search rental cars">
         <div className="container">
-          <div className="car-search-shell__card">
-            <div className="car-search-shell__heading">
-              <div>
-                <span className="car-section-eyebrow">Find a rental car</span>
-                <h2>Search Cars</h2>
-              </div>
-              <div className="car-search-shell__secure-note">
-                <i className="fas fa-shield-alt" aria-hidden="true" />
-                <span>Clear search details. Secure supplier handoff.</span>
-              </div>
-            </div>
+          <ProductSearchCard
+            theme="cars"
+            eyebrow="Find a rental car"
+            title="Search Cars"
+            trustText="Clear search details. Secure supplier handoff."
+          >
             <CarSearchForm />
-          </div>
+          </ProductSearchCard>
         </div>
       </section>
 
