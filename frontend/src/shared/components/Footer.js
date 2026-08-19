@@ -25,14 +25,15 @@ function Footer() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
   const isHotelRoute = location.pathname.startsWith('/hotels');
+  const isCarRoute = location.pathname.startsWith('/car-rentals');
 
   return (
-    <footer className={`footer${isAdminRoute ? ' footer--admin' : ''}${isHotelRoute ? ' footer--hotels' : ''}`}>
+    <footer className={`footer${isAdminRoute ? ' footer--admin' : ''}${isHotelRoute ? ' footer--hotels' : ''}${isCarRoute ? ' footer--cars' : ''}`}>
       <div className="container">
         <div className="footer-content">
           <div className="footer-section footer-brand">
             <h3>The Final Seat LLC</h3>
-            <p>The Final Seat provides flight-search and reservation assistance for travelers who value clear information and real human support.</p>
+            <p>The Final Seat provides travel-search and reservation assistance for travelers who value clear information and real human support.</p>
           </div>
 
           <FooterSection title="Company">
