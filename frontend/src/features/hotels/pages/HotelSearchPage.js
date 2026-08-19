@@ -38,6 +38,7 @@ const heroOffer = {
 };
 
 const AMENITY_FILTERS = ['Free Wi-Fi', 'Breakfast', 'Pool', 'Parking', 'Airport shuttle', 'Fitness center'];
+const EMPTY_FILTERS = { priceBand: 'any', rating: 0, classes: [], amenities: [], freeCancellation: false };
 
 function buildSearchFromParams(params) {
   return {
@@ -190,12 +191,21 @@ function StayDetailsModal({ property, search, onClose, onRequest }) {
     let live = true;
     setLoading(true);
     setError('');
-    hotelApi.details({ ...search, property_token: property.propertyToken })
+    hotelApi.details({
+      q: search.q,
+      check_in_date: search.check_in_date,
+      check_out_date: search.check_out_date,
+      adults: search.adults,
+      children: search.children,
+      children_ages: search.children_ages,
+      currency: search.currency,
+      property_token: property.propertyToken
+    })
       .then((data) => { if (live) setDetails(data || property); })
       .catch((err) => { if (live) setError(err.message || 'Detailed hotel information is temporarily unavailable.'); })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
-  }, [property.propertyToken, search]);
+  }, [property.propertyToken, search.q, search.check_in_date, search.check_out_date, search.adults, search.children, search.children_ages, search.currency]);
 
   const resolved = details || property;
   const source = getBestPriceSource(resolved) || getBestPriceSource(property);
@@ -320,7 +330,7 @@ function HotelCard({ property, onView }) {
   </article>;
 }
 
-function HotelFilters({ filters, setFilters, onReset, onClose }) {
+function HotelFilters({ filters, setFilters, onReset, onClose, currency }) {
   const toggleAmenity = (amenity) => {
     const current = filters.amenities || [];
     setFilters({ ...filters, amenities: current.includes(amenity) ? current.filter((item) => item !== amenity) : [...current, amenity] });
@@ -334,13 +344,13 @@ function HotelFilters({ filters, setFilters, onReset, onClose }) {
     </div>
 
     <div className="hotel-filter-group">
-      <h4>Price per night</h4>
+      <h4>Price per night ({currency || 'USD'})</h4>
       <select value={filters.priceBand} onChange={(e)=>setFilters({...filters,priceBand:e.target.value})}>
         <option value="any">Any price</option>
-        <option value="under100">Under $100</option>
-        <option value="100to200">$100–$200</option>
-        <option value="200to300">$200–$300</option>
-        <option value="300plus">$300+</option>
+        <option value="under100">Under 100</option>
+        <option value="100to200">100–200</option>
+        <option value="200to300">200–300</option>
+        <option value="300plus">300+</option>
       </select>
     </div>
 
@@ -365,8 +375,6 @@ function HotelFilters({ filters, setFilters, onReset, onClose }) {
     </div>
   </>;
 }
-
-const EMPTY_FILTERS = { priceBand: 'any', rating: 0, classes: [], amenities: [], freeCancellation: false };
 
 export default function HotelSearchPage() {
   const location = useLocation();
@@ -511,7 +519,7 @@ export default function HotelSearchPage() {
 
           <div className="hotel-results-workspace">
             <aside className={`hotel-filter-sidebar${showMobileFilters?' hotel-filter-sidebar--open':''}`}>
-              <HotelFilters filters={filters} setFilters={setFilters} onReset={resetFilters} onClose={()=>setShowMobileFilters(false)}/>
+              <HotelFilters filters={filters} setFilters={setFilters} onReset={resetFilters} onClose={()=>setShowMobileFilters(false)} currency={searchFromUrl.currency}/>
             </aside>
             {showMobileFilters && <button className="hotel-filter-backdrop" type="button" aria-label="Close filters" onClick={()=>setShowMobileFilters(false)}/>} 
 
