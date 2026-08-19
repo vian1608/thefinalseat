@@ -2,6 +2,26 @@ import React, { useState } from 'react';
 import { carAPI } from '../../../shared/api/api';
 import './CarResultCard.css';
 
+function ratingLabel(score) {
+  const value = Number(score);
+  if (!Number.isFinite(value)) return '';
+  if (value >= 9) return 'Exceptional';
+  if (value >= 8.5) return 'Excellent';
+  if (value >= 8) return 'Very Good';
+  if (value >= 7) return 'Good';
+  return 'Guest rating';
+}
+
+function formatMoney(amount, currency = 'USD') {
+  const numeric = Number(amount);
+  if (!Number.isFinite(numeric)) return null;
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(numeric);
+  } catch {
+    return `${currency} ${numeric.toFixed(2)}`;
+  }
+}
+
 function CarResultCard({ result, enrichment = {} }) {
   const [redirecting, setRedirecting] = useState(false);
   const [dealError, setDealError] = useState('');
@@ -17,34 +37,39 @@ function CarResultCard({ result, enrichment = {} }) {
 
   const makeModel = carInfo.make && carInfo.model
     ? `${carInfo.make} ${carInfo.model}`
-    : (carInfo.name || result.vehicle_name || 'Compact Rental Car');
-  const category = carInfo.category || result.category || 'Compact';
-  const isOrSimilar = carInfo.or_similar !== false;
+    : (carInfo.name || result.vehicle_name || 'Rental Car');
+  const category = carInfo.category || result.category || null;
+  const isOrSimilar = carInfo.or_similar === true || result.or_similar === true;
   const imageUrl = carInfo.image_url || carInfo.imageUrl || result.image_url || 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=600&q=80';
 
-  const seats = carInfo.seats || result.seats || 5;
-  const doors = carInfo.doors || result.doors || 4;
-  const transmission = carInfo.transmission || result.transmission || 'Automatic';
-  const hasAirCon = carInfo.air_conditioning !== false;
-  const largeBags = carInfo.baggage?.large_bags || result.large_bags || 1;
+  const seats = carInfo.seats || result.seats || null;
+  const doors = carInfo.doors || result.doors || null;
+  const transmission = carInfo.transmission || result.transmission || null;
+  const hasAirCon = carInfo.air_conditioning === true || result.air_conditioning === true;
+  const largeBags = carInfo.baggage?.large_bags || result.large_bags || null;
 
-  const supplierName = supplierInfo.name || supplierInfo.supplier_name || result.supplier_name || 'Rental Supplier';
+  const supplierName = supplierInfo.name || supplierInfo.supplier_name || result.supplier_name || 'Rental supplier';
   const supplierLogo = supplierInfo.logo_url || supplierInfo.logoUrl || result.supplier_logo || '';
-  const reviewScore = depotScoreInfo.score || supplierInfo.rating || result.review_score || 8.6;
-  const depotName = depotInfo.name || result.depot_name || 'Airport Terminal Counter';
-  const pickupMethod = depotInfo.pickup_method || depotInfo.type || result.pickup_method || 'In terminal';
+  const reviewScore = depotScoreInfo.score ?? supplierInfo.rating ?? result.review_score ?? null;
+  const depotName = depotInfo.name || result.depot_name || null;
+  const pickupMethod = depotInfo.pickup_method || depotInfo.type || result.pickup_method || null;
 
   const policies = result.policies || {};
-  const freeCancellation = policies.cancellation?.free_cancellation !== false;
-  const cancelDetail = policies.cancellation?.cancel_until || 'up to 48h before pickup';
-  const mileageType = policies.mileage?.type || 'Unlimited';
-  const fuelPolicy = policies.fuel?.policy || 'Return same';
-  const depositAmt = policies.deposit?.amount ? `${result.pricing?.currency || 'USD'} $${policies.deposit.amount}` : '$200';
-  const paymentTiming = policies.payment_timing || 'Pay now';
+  const cancellation = policies.cancellation || {};
+  const freeCancellation = cancellation.free_cancellation === true;
+  const cancelDetail = cancellation.cancel_until || null;
+  const mileageType = policies.mileage?.type || null;
+  const fuelPolicy = policies.fuel?.policy || null;
+  const paymentTiming = policies.payment_timing || null;
 
   const pricing = result.pricing || {};
-  const currencySymbol = pricing.currency === 'EUR' ? '€' : (pricing.currency === 'GBP' ? '£' : '$');
-  const rentalTotal = pricing.rental_total ? Number(pricing.rental_total).toFixed(2) : (pricing.display_price || '189.50');
+  const currency = pricing.currency || 'USD';
+  const depositAmount = policies.deposit?.amount ?? null;
+  const depositText = formatMoney(depositAmount, currency);
+  const numericRentalTotal = Number(pricing.rental_total);
+  const rentalTotal = Number.isFinite(numericRentalTotal)
+    ? formatMoney(numericRentalTotal, currency)
+    : (pricing.display_price || null);
   const extraCharges = Array.isArray(pricing.extra_charges) ? pricing.extra_charges : [];
   const webUrl = result.url?.web || result.web_url || result.booking_url || '';
 
@@ -69,12 +94,11 @@ function CarResultCard({ result, enrichment = {} }) {
 
     setRedirecting(true);
 
-    // Analytics must never block the customer from reaching the provider.
     void carAPI.recordClick({
       car_id: carId,
       supplier_id: supplierId,
       pickup_depot_id: pickupDepotId,
-      currency: pricing.currency || 'USD',
+      currency,
       displayed_total: rentalTotal,
       booking_url: safeUrl
     }).catch(() => {});
@@ -87,12 +111,15 @@ function CarResultCard({ result, enrichment = {} }) {
     }
   };
 
+  const hasSpecs = category || transmission || seats || doors || largeBags || hasAirCon;
+  const hasPolicies = freeCancellation || mileageType || fuelPolicy || depositText || paymentTiming;
+
   return (
     <div className="car-result-card">
       <div className="car-card-main">
         <div className="car-card-media">
           <img src={imageUrl} alt={makeModel} className="car-card-img" loading="lazy" />
-          <span className="car-category-badge">{category}</span>
+          {category && <span className="car-category-badge">{category}</span>}
         </div>
 
         <div className="car-card-content">
@@ -107,60 +134,62 @@ function CarResultCard({ result, enrichment = {} }) {
                 ) : (
                   <span className="supplier-name-tag">{supplierName}</span>
                 )}
-                <span className="car-depot-location"><i className="fas fa-map-marker-alt" /> {depotName} ({pickupMethod})</span>
+                {(depotName || pickupMethod) && <span className="car-depot-location"><i className="fas fa-map-marker-alt" /> {[depotName, pickupMethod].filter(Boolean).join(' · ')}</span>}
               </div>
             </div>
 
-            {reviewScore && (
+            {reviewScore !== null && reviewScore !== undefined && Number.isFinite(Number(reviewScore)) && (
               <div className="car-rating-box">
-                <span className="rating-score">{reviewScore}</span>
-                <span className="rating-label">Very Good</span>
+                <span className="rating-score">{Number(reviewScore).toFixed(1)}</span>
+                <span className="rating-label">{ratingLabel(reviewScore)}</span>
               </div>
             )}
           </div>
 
-          <div className="car-specs-grid">
-            <span className="car-spec-item" title="Category"><i className="fas fa-car-side" /> {category}</span>
-            <span className="car-spec-item" title="Transmission"><i className="fas fa-cog" /> {transmission}</span>
-            <span className="car-spec-item" title="Passengers"><i className="fas fa-user" /> {seats} Seats</span>
-            <span className="car-spec-item" title="Doors"><i className="fas fa-door-closed" /> {doors} Doors</span>
-            <span className="car-spec-item" title="Baggage"><i className="fas fa-suitcase" /> {largeBags} Bag(s)</span>
-            {hasAirCon && <span className="car-spec-item" title="Air Conditioning"><i className="fas fa-snowflake" /> Air Con</span>}
-          </div>
+          {hasSpecs && <div className="car-specs-grid">
+            {category && <span className="car-spec-item" title="Category"><i className="fas fa-car-side" /> {category}</span>}
+            {transmission && <span className="car-spec-item" title="Transmission"><i className="fas fa-cog" /> {transmission}</span>}
+            {seats && <span className="car-spec-item" title="Passengers"><i className="fas fa-user" /> {seats} Seats</span>}
+            {doors && <span className="car-spec-item" title="Doors"><i className="fas fa-door-closed" /> {doors} Doors</span>}
+            {largeBags && <span className="car-spec-item" title="Baggage"><i className="fas fa-suitcase" /> {largeBags} Bag{Number(largeBags) === 1 ? '' : 's'}</span>}
+            {hasAirCon && <span className="car-spec-item" title="Air Conditioning"><i className="fas fa-snowflake" /> Air conditioning</span>}
+          </div>}
 
-          <div className="car-policies-list">
-            {freeCancellation && <span className="policy-badge policy-badge--green"><i className="fas fa-check-circle" /> Free Cancellation ({cancelDetail})</span>}
-            <span className="policy-badge"><i className="fas fa-road" /> {mileageType} Mileage</span>
-            <span className="policy-badge"><i className="fas fa-gas-pump" /> Fuel: {fuelPolicy}</span>
-            <span className="policy-badge"><i className="fas fa-shield-alt" /> Refundable Deposit ({depositAmt})</span>
-            <span className="policy-badge"><i className="fas fa-credit-card" /> {paymentTiming}</span>
-          </div>
+          {hasPolicies && <div className="car-policies-list">
+            {freeCancellation && <span className="policy-badge policy-badge--green"><i className="fas fa-check-circle" /> Free cancellation{cancelDetail ? ` (${cancelDetail})` : ''}</span>}
+            {mileageType && <span className="policy-badge"><i className="fas fa-road" /> {mileageType} mileage</span>}
+            {fuelPolicy && <span className="policy-badge"><i className="fas fa-gas-pump" /> Fuel: {fuelPolicy}</span>}
+            {depositText && <span className="policy-badge"><i className="fas fa-shield-alt" /> Deposit: {depositText}</span>}
+            {paymentTiming && <span className="policy-badge"><i className="fas fa-credit-card" /> {paymentTiming}</span>}
+          </div>}
         </div>
 
         <div className="car-card-pricing">
           <div className="price-breakdown">
-            <span className="price-label">Rental Total</span>
-            <div className="price-amount">
-              <span className="currency-sym">{currencySymbol}</span>
-              <span className="total-num">{rentalTotal}</span>
-            </div>
+            <span className="price-label">Rental total</span>
+            {rentalTotal ? (
+              <div className="price-amount"><span className="total-num">{rentalTotal}</span></div>
+            ) : (
+              <div className="price-amount price-amount--unavailable"><span className="total-num">See provider price</span></div>
+            )}
 
             {extraCharges.length > 0 && (
               <div className="extra-charges-notice">
-                {extraCharges.map((charge, idx) => (
-                  <div key={`${charge.type || 'charge'}-${idx}`} className="extra-charge-line">
-                    <span>{charge.type}:</span>
-                    <span>{charge.included ? 'Included' : `+${currencySymbol}${charge.amount}`}</span>
-                  </div>
-                ))}
+                {extraCharges.map((charge, idx) => {
+                  const chargeAmount = formatMoney(charge.amount, currency);
+                  return <div key={`${charge.type || 'charge'}-${idx}`} className="extra-charge-line">
+                    <span>{charge.type || 'Additional charge'}:</span>
+                    <span>{charge.included ? 'Included' : (chargeAmount ? `+${chargeAmount}` : 'See provider')}</span>
+                  </div>;
+                })}
               </div>
             )}
 
-            <span className="price-guarantee-note">Price &amp; availability provided by Booking.com</span>
+            <span className="price-guarantee-note">Current provider information. Verify the final price, inclusions, deposit and cancellation terms before completing the rental.</span>
           </div>
 
           <div className="car-cta-wrapper">
-            <p className="redirect-notice-text">You’ll continue securely on Booking.com to review and complete your rental.</p>
+            <p className="redirect-notice-text">You’ll continue securely on Booking.com to review the complete rental terms and finish the reservation.</p>
             {dealError && <p role="alert" style={{ color: '#991b1b', fontSize: '0.82rem', margin: '0 0 0.5rem' }}>{dealError}</p>}
             <button
               type="button"
@@ -168,7 +197,7 @@ function CarResultCard({ result, enrichment = {} }) {
               onClick={handleViewDeal}
               disabled={redirecting || !webUrl}
             >
-              <span>{redirecting ? 'Opening Deal...' : 'View Deal'}</span>
+              <span>{redirecting ? 'Opening Provider...' : 'View Rental'}</span>
               <i className="fas fa-external-link-alt" aria-hidden="true" />
             </button>
           </div>
