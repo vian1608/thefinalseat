@@ -76,7 +76,7 @@ router.get('/authorizations/:token/collect-config', async (req, res, next) => {
     if (!row || !validPublicWindow(row)) return res.status(404).json({ success: false, error: { code: 'SECURE_AUTH_NOT_FOUND', message: 'This secure authorization link is invalid or expired.' } });
     const safe = getSafeVgsVaultConfig();
     if (!safe.configured) return res.status(503).json({ success: false, error: { code: 'VGS_NOT_CONFIGURED', message: 'Secure card collection is not configured yet.' } });
-    if (!safe.cvvTtlConfirmed) return res.status(503).json({ success: false, error: { code: 'VGS_CVV_TTL_NOT_CONFIRMED', message: `The requested ${safe.targetCvvTtlHours}-hour CVV vault window has not yet been confirmed for this VGS vault.` } });
+    if (!safe.ttlReady) return res.status(503).json({ success: false, error: { code: 'VGS_CVV_TTL_NOT_CONFIRMED', message: `The requested ${safe.targetCvvTtlHours}-hour CVV vault window has not yet been confirmed for this VGS vault.` } });
     const accessToken = await getVgsAccessToken();
     res.json({ success: true, data: { ...safe, accessToken } });
   } catch (error) { next(error); }
@@ -87,7 +87,7 @@ router.post('/authorizations/:token/complete', async (req, res, next) => {
     const row = await findByToken(req);
     if (!row || !validPublicWindow(row)) return res.status(404).json({ success: false, error: { code: 'SECURE_AUTH_NOT_FOUND', message: 'This secure authorization link is invalid or expired.' } });
     const config = getVgsVaultConfig();
-    if (!config.configured || !config.cvvTtlConfirmed) return res.status(503).json({ success: false, error: { code: 'VGS_CVV_TTL_NOT_CONFIRMED', message: 'Secure card collection is disabled until the requested volatile CVV TTL is confirmed in VGS.' } });
+    if (!config.configured || !config.ttlReady) return res.status(503).json({ success: false, error: { code: 'VGS_CVV_TTL_NOT_CONFIRMED', message: 'Secure card collection is disabled until the requested volatile CVV TTL is available for this VGS environment.' } });
 
     const body = req.body || {};
     const recollectionOnly = row.status === 'RECOLLECTION_REQUIRED';
@@ -98,7 +98,7 @@ router.post('/authorizations/:token/complete', async (req, res, next) => {
     if (!recollectionOnly && !String(body.signatureName || '').trim()) return res.status(400).json({ success: false, error: { code: 'SIGNATURE_REQUIRED', message: 'Cardholder authorization name is required.' } });
 
     const collectedAt = new Date();
-    const cvvExpiresAt = new Date(collectedAt.getTime() + config.targetCvvTtlHours * 60 * 60 * 1000);
+    const cvvExpiresAt = new Date(collectedAt.getTime() + config.effectiveCvvTtlHours * 60 * 60 * 1000);
     const existing = await supabase.from('vaulted_payment_methods').select('*').eq('authorization_id', row.id).maybeSingle();
     if (existing.error) throw existing.error;
     const methodPayload = {
@@ -143,7 +143,7 @@ router.post('/authorizations/:token/complete', async (req, res, next) => {
     };
     const saved = await supabase.from('payment_authorizations').update(update).eq('id', row.id).select('id,authorization_code,status').single();
     if (saved.error) throw saved.error;
-    await supabase.from('payment_authorization_events').insert({ authorization_id: row.id, event_type: recollectionOnly ? 'CVV_RECOLLECTED' : 'CARD_VAULTED', metadata: { provider: 'VGS', targetCvvTtlHours: config.targetCvvTtlHours } });
+    await supabase.from('payment_authorization_events').insert({ authorization_id: row.id, event_type: recollectionOnly ? 'CVV_RECOLLECTED' : 'CARD_VAULTED', metadata: { provider: 'VGS', effectiveCvvTtlHours: config.effectiveCvvTtlHours, usesSandboxDefaultTtl: config.usesSandboxDefaultTtl } });
     res.json({ success: true, data: { authorizationCode: saved.data.authorization_code, status: saved.data.status, paymentMethod: method, cvvExpiresAt: method.cvv_expires_at } });
   } catch (error) { next(error); }
 });
