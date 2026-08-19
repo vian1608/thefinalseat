@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import SupportCallCTA from './SupportCallCTA';
 
+const SUPPORT_MINIMIZED_KEY = 'tfs-support-call-minimized';
+
 function useBrowserPathname() {
   const [pathname, setPathname] = useState(() => (typeof window === 'undefined' ? '/' : window.location.pathname));
 
@@ -200,6 +202,25 @@ function useSecurePaymentTheme(pathname) {
   return theme;
 }
 
+function readMinimizedPreference() {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.sessionStorage.getItem(SUPPORT_MINIMIZED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeMinimizedPreference(minimized) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (minimized) window.sessionStorage.setItem(SUPPORT_MINIMIZED_KEY, '1');
+    else window.sessionStorage.removeItem(SUPPORT_MINIMIZED_KEY);
+  } catch {
+    // The UI should still work when storage is blocked by browser privacy settings.
+  }
+}
+
 export default function SupportCallLayer() {
   const pathname = useBrowserPathname();
   const routeTheme = productThemeForPath(pathname);
@@ -208,6 +229,17 @@ export default function SupportCallLayer() {
   const showSticky = isTravelJourneyPath(pathname);
   const portalConfig = useMemo(() => portalConfigForPath(pathname), [pathname]);
   const portalTarget = usePortalTarget(portalConfig?.selector, pathname);
+  const [stickyMinimized, setStickyMinimized] = useState(readMinimizedPreference);
+
+  const minimizeSticky = () => {
+    setStickyMinimized(true);
+    writeMinimizedPreference(true);
+  };
+
+  const restoreSticky = () => {
+    setStickyMinimized(false);
+    writeMinimizedPreference(false);
+  };
 
   if (!showSticky && !portalTarget) return null;
 
@@ -224,14 +256,31 @@ export default function SupportCallLayer() {
         portalTarget,
       )}
 
-      {showSticky && (
+      {showSticky && !stickyMinimized && (
         <SupportCallCTA
           theme={theme}
           mode="sticky"
           title="Need help booking?"
           subtitle="Talk to a real travel specialist"
           className="support-call-sticky"
+          dismissible
+          onDismiss={minimizeSticky}
         />
+      )}
+
+      {showSticky && stickyMinimized && (
+        <button
+          type="button"
+          className={`support-call-cta support-call-cta--${theme} support-call-minimized`}
+          onClick={restoreSticky}
+          aria-label="Show phone booking assistance"
+          title="Show booking assistance"
+        >
+          <i className="fas fa-phone-alt" aria-hidden="true" />
+          <span className="support-call-minimized__indicator" aria-hidden="true">
+            <i className="fas fa-chevron-left" />
+          </span>
+        </button>
       )}
     </>
   );
