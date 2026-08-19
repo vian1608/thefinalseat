@@ -159,14 +159,18 @@ export default function SecurePaymentPage() {
     }, () => { setSubmitting(false); setError('Please correct the highlighted secure card fields and try again.'); });
   };
 
-  if (loading) return <div className="secure-payment-page"><div className="secure-payment-card">Loading secure authorization…</div></div>;
-  if (error && !authorization) return <div className="secure-payment-page"><div className="secure-payment-card"><div className="secure-payment-brand">THE FINAL SEAT</div><h1>Secure authorization unavailable</h1><div className="secure-payment-error">{error}</div></div></div>;
+  const isHotelAuthorization = String(authorization?.context?.entityType || '').toUpperCase() === 'HOTEL';
+  const pageClassName = `secure-payment-page${isHotelAuthorization ? ' secure-payment-page--hotels' : ''}`;
+  const paymentLabel = isHotelAuthorization ? 'HOTEL SECURE PAYMENT' : 'SECURE PAYMENT';
+
+  if (loading) return <div className={pageClassName}><div className="secure-payment-card">Loading secure authorization…</div></div>;
+  if (error && !authorization) return <div className={pageClassName}><div className="secure-payment-card"><div className="secure-payment-brand">THE FINAL SEAT</div><h1>Secure authorization unavailable</h1><div className="secure-payment-error">{error}</div></div></div>;
   if (!authorization) return null;
 
-  if (success) return <div className="secure-payment-page"><div className="secure-payment-card secure-payment-success"><div className="secure-payment-brand">THE FINAL SEAT</div><div className="secure-payment-check">✓</div><h1>{authorization.recollectionOnly ? 'Security code updated' : 'Payment method secured'}</h1><p>Your payment information was sent directly to the secure vault. The Final Seat stores only vault references and masked card metadata.</p><div className="secure-payment-summary"><span>Authorization</span><strong>{authorization.authorizationCode}</strong><span>Purpose</span><strong>{authorization.purpose}</strong></div><p>You may close this page.</p></div></div>;
+  if (success) return <div className={pageClassName}><div className="secure-payment-card secure-payment-success"><div className="secure-payment-brand">THE FINAL SEAT <span>{paymentLabel}</span></div><div className="secure-payment-check">✓</div><h1>{authorization.recollectionOnly ? 'Security code updated' : 'Payment method secured'}</h1><p>Your payment information was sent directly to the secure vault. The Final Seat stores only vault references and masked card metadata.</p><div className="secure-payment-summary"><span>Authorization</span><strong>{authorization.authorizationCode}</strong><span>Purpose</span><strong>{authorization.purpose}</strong></div><p>You may close this page.</p></div></div>;
 
-  return <div className="secure-payment-page"><div className="secure-payment-card">
-    <div className="secure-payment-brand">THE FINAL SEAT <span>SECURE PAYMENT</span></div>
+  return <div className={pageClassName}><div className="secure-payment-card">
+    <div className="secure-payment-brand">THE FINAL SEAT <span>{paymentLabel}</span></div>
     <h1>{authorization.recollectionOnly ? 'Update card security code' : 'Secure payment authorization'}</h1>
     <p className="secure-payment-subtitle">Review the travel purpose and authorized maximum before providing your payment method.</p>
     <div className="secure-payment-summary">
