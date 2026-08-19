@@ -9,6 +9,7 @@ import { tripsHotelsRouter } from './trips-hotels.routes.mjs';
 import { carsBackofficeRouter } from './cars-backoffice.routes.mjs';
 import { financeSuppliersRouter } from './finance-suppliers.routes.mjs';
 import { adminReportingRouter } from './admin-reporting.routes.mjs';
+import { securePaymentAdminRouter } from './secure-payment-admin.routes.mjs';
 
 const router = express.Router();
 router.use(authenticate, loadBackOfficeProfile);
@@ -20,6 +21,7 @@ router.use('/', flightBridgeRouter);
 router.use('/', tripsHotelsRouter);
 router.use('/', carsBackofficeRouter);
 router.use('/', financeSuppliersRouter);
+router.use('/', securePaymentAdminRouter);
 router.get('/team/users',requirePermission('team.view'),async(req,res,next)=>{try{res.json({success:true,data:await backofficeRepository.listStaff()});}catch(e){next(e);}});
 router.get('/team/roles',requirePermission('team.view'),async(req,res,next)=>{try{res.json({success:true,data:await backofficeRepository.listRoles()});}catch(e){next(e);}});
 router.get('/team/teams',requirePermission('team.view'),async(req,res,next)=>{try{res.json({success:true,data:await backofficeRepository.listTeams()});}catch(e){next(e);}});

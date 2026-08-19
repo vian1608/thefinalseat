@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import './index.css';
 import './shared/styles/ProductionSafetyOverrides.css';
 import './shared/styles/ModernInteractionSystem.css';
@@ -16,6 +16,7 @@ import './shared/styles/MobileItineraryCompact.css';
 import './shared/styles/MobileItineraryRoutePolish.css';
 import App from './app/App';
 import BackOfficeRouter from './features/backoffice/BackOfficeRouter';
+import SecurePaymentPage from './features/secure-payments/SecurePaymentPage';
 import { boPatch } from './features/backoffice/backofficeApi';
 import { adminAPI } from './shared/api/api';
 import { HelmetProvider } from 'react-helmet-async';
@@ -55,15 +56,20 @@ if (crmLeadId && !adminAPI.__tfsCrmFlightCreateBridge) {
   Object.defineProperty(adminAPI, '__tfsCrmFlightCreateBridge', { value: true, configurable: false, enumerable: false, writable: false });
 }
 
-// Preserve every established App.js route. Only the new additive back-office URLs
-// are intercepted here so the stable flight/admin route table does not need a rewrite.
+// Preserve every established App.js route. Only additive back-office and secure-payment
+// URLs are intercepted here so the stable flight/admin route table does not need a rewrite.
 const isNewBackOfficePath = /^\/admin\/(backoffice|crm(?:\/|$)|trips(?:\/|$)|bookings\/(?:flights|hotels|cars)(?:\/|$)|payments(?:\/|$)|finance(?:\/|$)|suppliers(?:\/|$)|reports(?:\/|$)|team(?:\/|$)|settings(?:\/|$))/.test(window.location.pathname);
+const isSecurePaymentPath = /^\/secure-payment\/[^/]+\/?$/.test(window.location.pathname);
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
     <HelmetProvider>
-      {isNewBackOfficePath ? <BrowserRouter><BackOfficeRouter /></BrowserRouter> : <App />}
+      {isNewBackOfficePath ? (
+        <BrowserRouter><BackOfficeRouter /></BrowserRouter>
+      ) : isSecurePaymentPath ? (
+        <BrowserRouter><Routes><Route path="/secure-payment/:token" element={<SecurePaymentPage />} /></Routes></BrowserRouter>
+      ) : <App />}
     </HelmetProvider>
   </React.StrictMode>
 );
