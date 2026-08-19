@@ -145,6 +145,70 @@
   box-shadow: 0 10px 26px rgba(var(--psc-accent-rgb), 0.3) !important;
 }
 
+/* Flight homepage uses a legacy form component. Give the active flight tab the
+   same full-width card geometry without changing its search behavior. */
+#inquiry .inquiry-split-layout:has(.search-tabs-header .tab-btn:first-child.active) {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+#inquiry .inquiry-split-layout:has(.search-tabs-header .tab-btn:first-child.active) .inquiry-side-panel {
+  display: none !important;
+}
+
+#inquiry .inquiry-split-layout:has(.search-tabs-header .tab-btn:first-child.active) .inquiry-main-panel > .flights-inquiry-card {
+  --psc-accent: #8b1538;
+  --psc-accent-dark: #680e28;
+  --psc-accent-rgb: 139, 21, 56;
+  --psc-soft: #faf5f7;
+  --psc-ink: #1e293b;
+  border-radius: 18px !important;
+  padding: 1.15rem !important;
+  border: 1px solid rgba(15, 23, 42, 0.09) !important;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.11) !important;
+}
+
+#inquiry .inquiry-split-layout:has(.search-tabs-header .tab-btn:first-child.active) .inquiry-main-panel > .flights-inquiry-card > h2 {
+  margin: 0.2rem 0 0.45rem !important;
+  color: var(--psc-ink) !important;
+  font-size: 1.45rem !important;
+  line-height: 1.15 !important;
+}
+
+#inquiry .inquiry-split-layout:has(.search-tabs-header .tab-btn:first-child.active) .inquiry-main-panel > .flights-inquiry-card > h2::before {
+  content: 'FIND A FLIGHT';
+  display: block;
+  margin-bottom: 0.22rem;
+  color: var(--psc-accent);
+  font-size: 0.73rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+#inquiry .inquiry-split-layout:has(.search-tabs-header .tab-btn:first-child.active) .flights-form input:not([type="checkbox"]):focus,
+#inquiry .inquiry-split-layout:has(.search-tabs-header .tab-btn:first-child.active) .flights-form textarea:focus,
+#inquiry .inquiry-split-layout:has(.search-tabs-header .tab-btn:first-child.active) .flights-form .custom-select-trigger:focus-visible,
+#inquiry .inquiry-split-layout:has(.search-tabs-header .tab-btn:first-child.active) .passenger-trigger-btn:focus-visible,
+#inquiry .inquiry-split-layout:has(.search-tabs-header .tab-btn:first-child.active) .passenger-trigger-btn.active {
+  border-color: #8b1538 !important;
+  box-shadow: 0 0 0 3px rgba(139, 21, 56, 0.12) !important;
+}
+
+#inquiry .inquiry-split-layout:has(.search-tabs-header .tab-btn:first-child.active) .flights-btn--cta {
+  width: 100% !important;
+  min-height: 52px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, #8b1538 0%, #680e28 100%) !important;
+  box-shadow: 0 8px 20px rgba(139, 21, 56, 0.22) !important;
+}
+
+/* Slider navigation must stay visually above an overlapping search card. */
+.hero-slider__controls {
+  bottom: 58px !important;
+  z-index: 30 !important;
+}
+
 @media (max-width: 760px) {
   .product-search-card {
     padding: 0.85rem;
@@ -159,5 +223,9 @@
 
   .product-search-card__trust-note {
     text-align: left;
+  }
+
+  .hero-slider__controls {
+    bottom: 50px !important;
   }
 }
