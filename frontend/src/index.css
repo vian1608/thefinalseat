@@ -8,6 +8,7 @@
 @import url('./shared/styles/MobilePassengerSelector.css');
 @import url('./shared/styles/GlobalSliderControls.css');
 @import url('./shared/styles/HotelTheme.css');
+@import url('./shared/styles/HeroImageClarity.css');
 
 :root {
   --tfs-font-ui: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
