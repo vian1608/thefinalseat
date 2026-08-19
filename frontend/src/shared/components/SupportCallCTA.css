@@ -146,9 +146,26 @@
 
 .support-call-cta--flight-search-portal {
   position: absolute;
-  top: 1.05rem;
+  top: 0.92rem;
   right: 1.05rem;
   z-index: 8;
+  width: min(350px, 42%);
+  min-height: 50px;
+}
+
+.support-call-cta--flight-search-portal .support-call-cta__copy small {
+  display: none;
+}
+
+.support-call-cta--flight-search-portal .support-call-cta__icon {
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
+}
+
+.support-call-cta--flight-search-portal .support-call-cta__action {
+  min-height: 38px;
+  min-width: 120px;
 }
 
 /* Result-page CTA is intentionally compact: it helps when a customer feels
@@ -161,6 +178,24 @@
 .hotel-results-header:has(.support-call-cta--results-portal),
 .car-controls-bar:has(.support-call-cta--results-portal) {
   flex-wrap: wrap;
+}
+
+/* Checkout/payment support appears within the page at the decision point in
+   addition to the always-available sticky phone control. */
+.support-call-cta--journey-portal {
+  margin-top: 1rem;
+}
+
+.booking-hero-premium__inner > .support-call-cta--journey-portal {
+  margin-left: auto;
+  margin-right: auto;
+  text-align: left;
+}
+
+.consulting-payment-header > .support-call-cta--journey-portal {
+  margin-left: auto;
+  margin-right: auto;
+  text-align: left;
 }
 
 /* Always-available desktop assistance. */
@@ -179,6 +214,7 @@
   background: #fff;
   color: var(--call-ink);
   box-shadow: 0 14px 38px rgba(15, 23, 42, 0.2);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
 }
 
 .support-call-sticky:hover {
@@ -242,7 +278,8 @@
     display: none !important;
   }
 
-  .support-call-cta--results-portal {
+  .support-call-cta--results-portal,
+  .support-call-cta--journey-portal {
     width: 100%;
     max-width: none;
     margin: 0.35rem 0 0;
