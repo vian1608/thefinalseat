@@ -124,6 +124,15 @@
   color: var(--tfs-hotel-elegant-slate);
 }
 
+/* Keep the hotel search card fully below the offer strip. The previous negative
+   margin pulled the card underneath the strip and clipped its first row/labels. */
+.hotel-page .hotel-search-section {
+  margin-top: 0;
+  padding-top: 24px;
+  position: relative;
+  z-index: 3;
+}
+
 .hotel-page .hotel-search-card,
 .hotel-page .hotel-result-card,
 .hotel-page .hotel-modal {
@@ -201,6 +210,13 @@
 
 .hotel-page .hotel-modal-close:hover {
   color: var(--tfs-hotel-deep-teal);
+}
+
+@media (max-width: 760px) {
+  .hotel-page .hotel-search-section {
+    margin-top: 0;
+    padding-top: 16px;
+  }
 }
 
 /* Shared advisory section rendered inside Hotels. */
