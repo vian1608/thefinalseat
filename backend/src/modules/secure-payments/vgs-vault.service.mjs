@@ -8,7 +8,7 @@ const asPositiveInt = (value, fallback) => {
 
 export function getVgsVaultConfig() {
   const vaultId = String(process.env.VGS_VAULT_ID || '').trim();
-  const environment = String(process.env.VGS_ENVIRONMENT || 'sandbox').trim();
+  const environment = String(process.env.VGS_ENVIRONMENT || 'sandbox').trim().toLowerCase();
   const clientId = String(process.env.VGS_CLIENT_ID || '').trim();
   const clientSecret = String(process.env.VGS_CLIENT_SECRET || '').trim();
   const collectRouteId = String(process.env.VGS_COLLECT_ROUTE_ID || '').trim();
@@ -16,6 +16,10 @@ export function getVgsVaultConfig() {
   const showCname = String(process.env.VGS_SHOW_CNAME || '').trim();
   const targetCvvTtlHours = asPositiveInt(process.env.VGS_CVV_TTL_HOURS, 24);
   const cvvTtlConfirmed = String(process.env.VGS_CVV_TTL_CONFIRMED || 'false').toLowerCase() === 'true';
+  const sandboxDefaultCvvTtlHours = 1;
+  const usesSandboxDefaultTtl = environment === 'sandbox' && !cvvTtlConfirmed;
+  const effectiveCvvTtlHours = usesSandboxDefaultTtl ? sandboxDefaultCvvTtlHours : targetCvvTtlHours;
+  const ttlReady = environment === 'sandbox' || cvvTtlConfirmed;
   const publicLinkHours = asPositiveInt(process.env.SECURE_PAYMENT_PUBLIC_LINK_HOURS, 48);
   const otpMinutes = asPositiveInt(process.env.SECURE_PAYMENT_OTP_MINUTES, 5);
   const accessMinutes = asPositiveInt(process.env.SECURE_PAYMENT_ACCESS_MINUTES, 5);
@@ -28,6 +32,10 @@ export function getVgsVaultConfig() {
     collectCname,
     showCname,
     targetCvvTtlHours,
+    effectiveCvvTtlHours,
+    sandboxDefaultCvvTtlHours,
+    usesSandboxDefaultTtl,
+    ttlReady,
     cvvTtlConfirmed,
     publicLinkHours,
     otpMinutes,
@@ -46,9 +54,13 @@ export function getSafeVgsVaultConfig() {
     collectCname: config.collectCname || null,
     showCname: config.showCname || null,
     targetCvvTtlHours: config.targetCvvTtlHours,
+    effectiveCvvTtlHours: config.effectiveCvvTtlHours,
+    sandboxDefaultCvvTtlHours: config.sandboxDefaultCvvTtlHours,
+    usesSandboxDefaultTtl: config.usesSandboxDefaultTtl,
+    ttlReady: config.ttlReady,
     cvvTtlConfirmed: config.cvvTtlConfirmed,
     configured: config.configured,
-    collectEnabled: config.configured && config.cvvTtlConfirmed,
+    collectEnabled: config.configured && config.ttlReady,
     otpMinutes: config.otpMinutes,
     accessMinutes: config.accessMinutes,
     collectScript: 'https://js.verygoodvault.com/vgs-collect/3.3.0/vgs-collect.js',
