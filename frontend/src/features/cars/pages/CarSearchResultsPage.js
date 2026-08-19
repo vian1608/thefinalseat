@@ -50,6 +50,7 @@ function CarSearchResultsPage() {
   const [nextPageToken, setNextPageToken] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showEditSearch, setShowEditSearch] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedTransmissions, setSelectedTransmissions] = useState([]);
@@ -129,6 +130,7 @@ function CarSearchResultsPage() {
     }
 
     setSearchParams(parsed);
+    setShowMobileFilters(false);
     if (!parsed) {
       setLoading(false);
       setResults([]);
@@ -160,6 +162,69 @@ function CarSearchResultsPage() {
     fetchCarResults(searchParams, { append: true, pageToken: nextPageToken });
   };
 
+  const activeFilterCount = selectedCategories.length + selectedTransmissions.length + selectedMileages.length + selectedDepotTypes.length + (airConOnly ? 1 : 0);
+  const routeLabel = searchParams?.pickupText && searchParams?.dropoffText && searchParams.pickupText !== searchParams.dropoffText
+    ? `${searchParams.pickupText} → ${searchParams.dropoffText}`
+    : (searchParams?.pickupText || 'Airport Location');
+
+  const filterPanel = <>
+    <div className="filter-header">
+      <h3><i className="fas fa-sliders-h" /> Filter Cars</h3>
+      <div className="car-filter-header-actions">
+        <button type="button" className="reset-filters-btn" onClick={handleResetFilters}>Reset All</button>
+        <button type="button" className="car-filter-close-btn" onClick={() => setShowMobileFilters(false)} aria-label="Close filters">×</button>
+      </div>
+    </div>
+
+    <div className="filter-group">
+      <h4>Vehicle Category</h4>
+      {CATEGORY_OPTIONS.map((category) => (
+        <label key={category} className="filter-checkbox-label">
+          <input type="checkbox" checked={selectedCategories.includes(category)} onChange={() => toggleListValue(setSelectedCategories, category)} />
+          <span>{category}</span>
+        </label>
+      ))}
+    </div>
+
+    <div className="filter-group">
+      <h4>Transmission</h4>
+      {TRANSMISSION_OPTIONS.map((transmission) => (
+        <label key={transmission} className="filter-checkbox-label">
+          <input type="checkbox" checked={selectedTransmissions.includes(transmission)} onChange={() => toggleListValue(setSelectedTransmissions, transmission)} />
+          <span>{transmission}</span>
+        </label>
+      ))}
+    </div>
+
+    <div className="filter-group">
+      <h4>Mileage</h4>
+      {MILEAGE_OPTIONS.map((mileage) => (
+        <label key={mileage} className="filter-checkbox-label">
+          <input type="checkbox" checked={selectedMileages.includes(mileage)} onChange={() => toggleListValue(setSelectedMileages, mileage)} />
+          <span>{mileage} Mileage</span>
+        </label>
+      ))}
+    </div>
+
+    <div className="filter-group">
+      <h4>Pickup Location Type</h4>
+      {DEPOT_TYPES.map((depotType) => (
+        <label key={depotType} className="filter-checkbox-label">
+          <input type="checkbox" checked={selectedDepotTypes.includes(depotType)} onChange={() => toggleListValue(setSelectedDepotTypes, depotType)} />
+          <span>{depotType}</span>
+        </label>
+      ))}
+    </div>
+
+    <div className="filter-group">
+      <h4>Features</h4>
+      <label className="filter-checkbox-label">
+        <input type="checkbox" checked={airConOnly} onChange={(event) => setAirConOnly(event.target.checked)} />
+        <span>Air Conditioning Only</span>
+      </label>
+    </div>
+  </>;
+
   return (
     <div className="car-results-page">
       <Helmet>
@@ -172,7 +237,7 @@ function CarSearchResultsPage() {
           <div className="car-summary-info">
             <div className="summary-title-line">
               <i className="fas fa-car" aria-hidden="true" />
-              <h2>Car Rentals in {searchParams?.pickupText || 'Airport Location'}</h2>
+              <h2>Car Rentals · {routeLabel}</h2>
             </div>
             <p className="summary-dates-sub">
               {searchParams?.pickupDate || '—'} ({searchParams?.pickupTime?.substring(0, 5) || '—'}) — {searchParams?.dropoffDate || '—'} ({searchParams?.dropoffTime?.substring(0, 5) || '—'})
@@ -194,71 +259,25 @@ function CarSearchResultsPage() {
       )}
 
       <div className="container car-results-container">
-        <aside className="car-filter-sidebar">
-          <div className="filter-header">
-            <h3><i className="fas fa-sliders-h" /> Filter Cars</h3>
-            <button type="button" className="reset-filters-btn" onClick={handleResetFilters}>Reset All</button>
-          </div>
-
-          <div className="filter-group">
-            <h4>Vehicle Category</h4>
-            {CATEGORY_OPTIONS.map((category) => (
-              <label key={category} className="filter-checkbox-label">
-                <input type="checkbox" checked={selectedCategories.includes(category)} onChange={() => toggleListValue(setSelectedCategories, category)} />
-                <span>{category}</span>
-              </label>
-            ))}
-          </div>
-
-          <div className="filter-group">
-            <h4>Transmission</h4>
-            {TRANSMISSION_OPTIONS.map((transmission) => (
-              <label key={transmission} className="filter-checkbox-label">
-                <input type="checkbox" checked={selectedTransmissions.includes(transmission)} onChange={() => toggleListValue(setSelectedTransmissions, transmission)} />
-                <span>{transmission}</span>
-              </label>
-            ))}
-          </div>
-
-          <div className="filter-group">
-            <h4>Mileage</h4>
-            {MILEAGE_OPTIONS.map((mileage) => (
-              <label key={mileage} className="filter-checkbox-label">
-                <input type="checkbox" checked={selectedMileages.includes(mileage)} onChange={() => toggleListValue(setSelectedMileages, mileage)} />
-                <span>{mileage} Mileage</span>
-              </label>
-            ))}
-          </div>
-
-          <div className="filter-group">
-            <h4>Pickup Location Type</h4>
-            {DEPOT_TYPES.map((depotType) => (
-              <label key={depotType} className="filter-checkbox-label">
-                <input type="checkbox" checked={selectedDepotTypes.includes(depotType)} onChange={() => toggleListValue(setSelectedDepotTypes, depotType)} />
-                <span>{depotType}</span>
-              </label>
-            ))}
-          </div>
-
-          <div className="filter-group">
-            <h4>Features</h4>
-            <label className="filter-checkbox-label">
-              <input type="checkbox" checked={airConOnly} onChange={(event) => setAirConOnly(event.target.checked)} />
-              <span>Air Conditioning Only</span>
-            </label>
-          </div>
-        </aside>
+        <aside className={`car-filter-sidebar${showMobileFilters ? ' car-filter-sidebar--open' : ''}`}>{filterPanel}</aside>
+        {showMobileFilters && <button type="button" className="car-filter-backdrop" aria-label="Close filters" onClick={() => setShowMobileFilters(false)} />}
 
         <main className="car-results-main">
           <div className="car-controls-bar">
-            <span className="results-count-text">Showing <strong>{results.length}</strong> rental car options</span>
-            <div className="sort-select-wrapper">
-              <label htmlFor="car-sort-select">Sort by:</label>
-              <select id="car-sort-select" className="car-sort-select" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-                <option value="price_asc">Price: Low to High</option>
-                <option value="price_desc">Price: High to Low</option>
-                <option value="rating">Review Score</option>
-              </select>
+            <div className="car-results-count-wrap">
+              <span className="results-count-text">Showing <strong>{results.length}</strong> rental car option{results.length === 1 ? '' : 's'}</span>
+              {activeFilterCount > 0 && <button type="button" className="car-active-filter-reset" onClick={handleResetFilters}>{activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'} active · Clear</button>}
+            </div>
+            <div className="car-control-actions">
+              <button type="button" className="car-mobile-filter-btn" onClick={() => setShowMobileFilters(true)}><i className="fas fa-sliders-h" /> Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}</button>
+              <div className="sort-select-wrapper">
+                <label htmlFor="car-sort-select">Sort by:</label>
+                <select id="car-sort-select" className="car-sort-select" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+                  <option value="price_asc">Price: Low to High</option>
+                  <option value="price_desc">Price: High to Low</option>
+                  <option value="rating">Review Score</option>
+                </select>
+              </div>
             </div>
           </div>
 
