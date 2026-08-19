@@ -6,7 +6,7 @@ function getPortalTarget() {
   return document.getElementById('datepicker-portal-root') || document.body;
 }
 
-function TravelDatePicker({ id, value, onChange, label, placeholder = 'MM/DD/YYYY', minDate, required = false, disabled = false }) {
+function TravelDatePicker({ id, value, onChange, label, placeholder = 'MM/DD/YYYY', minDate, required = false, disabled = false, theme = '' }) {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [inputError, setInputError] = useState('');
@@ -25,6 +25,9 @@ function TravelDatePicker({ id, value, onChange, label, placeholder = 'MM/DD/YYY
   const popupRef = useRef(null);
   const inputRef = useRef(null);
   const [popupStyle, setPopupStyle] = useState({});
+
+  const themeClass = theme ? ` traveldate-container--${theme}` : '';
+  const popoverThemeClass = theme ? ` traveldate-popover--${theme}` : '';
 
   const formatForInput = useCallback((y, m, d) => {
     const yy = String(y);
@@ -321,7 +324,7 @@ function TravelDatePicker({ id, value, onChange, label, placeholder = 'MM/DD/YYY
   };
 
   return (
-    <div className="traveldate-container" ref={containerRef}>
+    <div className={`traveldate-container${themeClass}`} ref={containerRef}>
       {label && <label className="traveldate-label" htmlFor={id}>{label}</label>}
       <div className="traveldate-input-wrapper">
         <input
@@ -348,7 +351,7 @@ function TravelDatePicker({ id, value, onChange, label, placeholder = 'MM/DD/YYY
       {inputError && <div id={`${id || 'traveldate'}-error`} className="traveldate-input-error" role="alert">{inputError}</div>}
 
       {isOpen && createPortal(
-        <div className="traveldate-popover" ref={popupRef} style={popupStyle}>
+        <div className={`traveldate-popover${popoverThemeClass}`} ref={popupRef} style={popupStyle}>
           <div className="traveldate-header">
             <button type="button" onClick={goPrevious} disabled={previousDisabled} aria-label="Previous">&lt;</button>
             <div className="traveldate-title-controls">
