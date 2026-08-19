@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import HeroSlider from '../../../shared/components/HeroSlider';
+import ProductSearchCard from '../../../shared/components/ProductSearchCard';
 import SeamlessAdvisorySection from '../../../shared/components/SeamlessAdvisorySection';
 import hotelApi from '../hotelApi';
 import './HotelSearchPage.css';
@@ -55,7 +56,7 @@ function buildSearchFromParams(params) {
 function SearchForm({ value, onChange, onSubmit, busy }) {
   const update = (key, nextValue) => onChange({ ...value, [key]: nextValue });
   return (
-    <form className="hotel-search-card" onSubmit={onSubmit}>
+    <form className="hotel-search-form" onSubmit={onSubmit}>
       <div className="hotel-search-grid">
         <label className="hotel-field hotel-field--destination">
           <span>Destination or hotel</span>
@@ -201,7 +202,19 @@ export default function HotelSearchPage() {
       <link rel="canonical" href="https://www.thefinalseat.com/hotels"/>
     </Helmet>
     <HeroSlider slides={hotelHeroSlides} variant="flights" serviceNavActive="hotels" offerTag={heroOffer}/>
-    <section className="hotel-search-section"><div className="container"><SearchForm value={form} onChange={setForm} onSubmit={submitSearch} busy={loading}/></div></section>
+    <section className="hotel-search-section">
+      <div className="container">
+        <ProductSearchCard
+          theme="hotels"
+          eyebrow="Find a stay"
+          title="Search Hotels"
+          trustIcon="fas fa-hotel"
+          trustText="Live hotel search. Trackable reservation requests."
+        >
+          <SearchForm value={form} onChange={setForm} onSubmit={submitSearch} busy={loading}/>
+        </ProductSearchCard>
+      </div>
+    </section>
     <section className="hotel-results-section"><div className="container">
       {created && <div className="hotel-alert hotel-alert--success"><strong>Request received.</strong> Hotel reference <b>{created.hotelCode}</b> · CRM lead <b>{created.leadCode}</b>. Our team can now track this request end-to-end.</div>}
       {error && <div className="hotel-alert hotel-alert--error">{error}</div>}
