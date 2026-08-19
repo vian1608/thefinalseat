@@ -5,6 +5,7 @@ import { BackOfficeAuthProvider, useBackOfficeAuth } from './BackOfficeAuthConte
 import BackOfficeShell from './BackOfficeShell';
 import { AuditLogsPage, CarsPage, CommissionsPage, CustomersPage, DashboardPage, DisputesPage, FinancePage, FlightBookingsPage, HotelsPage, IntegrationsPage, LeadDetailPage, LeadsPage, PaymentsPage, PlaceholderPage, ProductBookingDetailPage, RefundsPage, ReportsPage, RolesPage, SecurityPage, SettingsPage, SupplierPaymentsPage, SuppliersPage, TasksPage, TeamPage, TeamsPage, TripDetailPage, TripsPage } from './BackOfficeDataPages';
 import { PaymentAuthorizationDetailPage, PaymentAuthorizationsPage } from './SecurePaymentAdminPages';
+import PaymentFlowTestPage from './PaymentFlowTestPage';
 import './SecurePaymentAdmin.css';
 
 function Guard({ permission, children }) { const { loading, profile, hasPermission } = useBackOfficeAuth(); if (loading) return <div className="bo-card">Loading back office…</div>; if (!profile) return <Navigate to="/admin/login" replace />; if (permission && !hasPermission(permission)) return <div className="bo-card"><h2>Access denied</h2><p>You do not have permission to open this module.</p></div>; return children; }
@@ -32,6 +33,7 @@ export default function BackOfficeRouter() { return <BackOfficeAuthProvider><Rou
   <Route path="payments/authorizations/:id" element={<Page permission="authorization.view"><PaymentAuthorizationDetailPage /></Page>} />
   <Route path="payments/refunds" element={<Page permission="payments.view"><RefundsPage /></Page>} />
   <Route path="payments/disputes" element={<Page permission="payments.view"><DisputesPage /></Page>} />
+  <Route path="testing/payment-flow" element={<Page permission="admin.settings"><PaymentFlowTestPage /></Page>} />
   <Route path="finance" element={<Page permission="finance.view"><FinancePage /></Page>} />
   <Route path="finance/commissions" element={<Page permission="finance.commissions"><CommissionsPage /></Page>} />
   <Route path="finance/supplier-payments" element={<Page permission="finance.view"><SupplierPaymentsPage /></Page>} />
