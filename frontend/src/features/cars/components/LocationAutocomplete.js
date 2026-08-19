@@ -16,6 +16,10 @@ function LocationAutocomplete({
   disabled = false
 }) {
   const [query, setQuery] = useState(typeof value === 'string' ? value : (value?.label || ''));
+  // Search term is intentionally separate from the displayed value. This keeps
+  // the default JFK value, parent-driven values, and selected suggestions from
+  // automatically triggering autocomplete and reopening the dropdown.
+  const [searchTerm, setSearchTerm] = useState('');
   const [options, setOptions] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -39,33 +43,50 @@ function LocationAutocomplete({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Debounced API search (300ms)
+  // Debounced API search (300ms). Only explicit user typing updates searchTerm,
+  // so the prefilled JFK airport no longer opens suggestions on page load.
   useEffect(() => {
-    if (!query || query.length < 2) {
+    const trimmed = searchTerm.trim();
+    if (!trimmed || trimmed.length < 2) {
       setOptions([]);
+      setLoading(false);
       return;
     }
 
+    let live = true;
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await carAPI.autocompleteLocations(query);
+        const res = await carAPI.autocompleteLocations(trimmed);
+        if (!live) return;
         if (res && res.success && Array.isArray(res.data)) {
           setOptions(res.data);
-          setIsOpen(true);
+          setIsOpen(res.data.length > 0);
+        } else {
+          setOptions([]);
+          setIsOpen(false);
         }
       } catch (err) {
-        console.warn('Location autocomplete notice:', err.message);
+        if (live) {
+          setOptions([]);
+          setIsOpen(false);
+          console.warn('Location autocomplete notice:', err.message);
+        }
       } finally {
-        setLoading(false);
+        if (live) setLoading(false);
       }
     }, 300);
 
-    return () => clearTimeout(timer);
-  }, [query]);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [searchTerm]);
 
   const handleSelect = (item) => {
     setQuery(item.label);
+    setSearchTerm('');
+    setOptions([]);
     setIsOpen(false);
 
     let structuredObj = null;
@@ -97,7 +118,8 @@ function LocationAutocomplete({
   const handleInputChange = (e) => {
     const val = e.target.value;
     setQuery(val);
-    setIsOpen(true);
+    setSearchTerm(val);
+    setIsOpen(false);
 
     // If typed value is a 3-letter IATA code, format structured object immediately
     const cleanIata = val.trim().toUpperCase();
@@ -107,6 +129,13 @@ function LocationAutocomplete({
       }
     } else if (onChange) {
       onChange(val, { type: 'airport', airport: cleanIata.substring(0, 3), label: val });
+    }
+  };
+
+  const handleFocus = () => {
+    // Reopen only suggestions that came from the user's current typed search.
+    if (searchTerm.trim().length >= 2 && options.length > 0) {
+      setIsOpen(true);
     }
   };
 
@@ -127,7 +156,7 @@ function LocationAutocomplete({
           className="car-location-input"
           value={query}
           onChange={handleInputChange}
-          onFocus={() => setIsOpen(options.length > 0)}
+          onFocus={handleFocus}
           placeholder={placeholder}
           required={required}
           disabled={disabled}
