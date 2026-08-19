@@ -254,52 +254,52 @@
 }
 
 /* Product-specific portal theme: car rentals keep Road Trip Blue even though
-   this shared picker is also used by the flight flow. */
-.traveldate-container--cars .traveldate-input:focus {
-  border-color: #1e88e5;
-  box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.13);
+   this shared picker is also used by the flight flow. These selectors are
+   intentionally more specific than the legacy flight defaults above because
+   the popover is rendered through a portal outside the car form DOM tree. */
+.traveldate-container.traveldate-container--cars .traveldate-input:focus {
+  border-color: #1e88e5 !important;
+  box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.13) !important;
 }
 
-.traveldate-container--cars .traveldate-icon-btn {
-  color: #1e88e5;
+.traveldate-container.traveldate-container--cars .traveldate-icon-btn,
+.traveldate-container.traveldate-container--cars .traveldate-icon-btn:hover {
+  color: #1e88e5 !important;
 }
 
-.traveldate-container--cars .traveldate-icon-btn:hover {
-  color: #0d6fca;
-}
-
-.traveldate-popover--cars .traveldate-header > button:hover:not(:disabled) {
-  background: #1e88e5;
-  border-color: #1e88e5;
-}
-
-.traveldate-popover--cars .traveldate-period-button:hover {
-  background: #eef6fd;
-  color: #0d6fca;
-}
-
-.traveldate-popover--cars .traveldate-day:hover:not(:disabled):not(.empty) {
-  background: #eef6fd;
-  color: #0d6fca;
-}
-
-.traveldate-popover--cars .traveldate-day.selected,
-.traveldate-popover--cars .traveldate-choice.selected {
+.traveldate-popover.traveldate-popover--cars .traveldate-header > button:hover:not(:disabled) {
   background: #1e88e5 !important;
   border-color: #1e88e5 !important;
   color: #fff !important;
-  box-shadow: 0 7px 16px rgba(30, 136, 229, 0.2);
 }
 
-.traveldate-popover--cars .traveldate-day.today {
-  color: #0d6fca;
-  border-color: #1e88e5;
+.traveldate-popover.traveldate-popover--cars .traveldate-period-button:hover {
+  background: #eef6fd !important;
+  color: #0d6fca !important;
 }
 
-.traveldate-popover--cars .traveldate-choice:hover:not(:disabled) {
-  background: #eef6fd;
-  border-color: #9dccf4;
-  color: #0d6fca;
+.traveldate-popover.traveldate-popover--cars .traveldate-day:hover:not(:disabled):not(.empty) {
+  background: #eef6fd !important;
+  color: #0d6fca !important;
+}
+
+.traveldate-popover.traveldate-popover--cars .traveldate-day.selected,
+.traveldate-popover.traveldate-popover--cars .traveldate-choice.selected {
+  background: #1e88e5 !important;
+  border-color: #1e88e5 !important;
+  color: #fff !important;
+  box-shadow: 0 7px 16px rgba(30, 136, 229, 0.22) !important;
+}
+
+.traveldate-popover.traveldate-popover--cars .traveldate-day.today {
+  color: #0d6fca !important;
+  border-color: #1e88e5 !important;
+}
+
+.traveldate-popover.traveldate-popover--cars .traveldate-choice:hover:not(:disabled) {
+  background: #eef6fd !important;
+  border-color: #9dccf4 !important;
+  color: #0d6fca !important;
 }
 
 @media (max-width: 480px) {
