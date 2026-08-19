@@ -10,6 +10,7 @@
 @import url('./shared/styles/HotelTheme.css');
 @import url('./shared/styles/HeroImageClarity.css');
 @import url('./shared/styles/CarTheme.css');
+@import url('./shared/components/ProductSearchCard.css');
 
 :root {
   --tfs-font-ui: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
