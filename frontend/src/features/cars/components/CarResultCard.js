@@ -40,7 +40,7 @@ function CarResultCard({ result, enrichment = {} }) {
     : (carInfo.name || result.vehicle_name || 'Rental Car');
   const category = carInfo.category || result.category || null;
   const isOrSimilar = carInfo.or_similar === true || result.or_similar === true;
-  const imageUrl = carInfo.image_url || carInfo.imageUrl || result.image_url || 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=600&q=80';
+  const imageUrl = carInfo.image_url || carInfo.imageUrl || result.image_url || null;
 
   const seats = carInfo.seats || result.seats || null;
   const doors = carInfo.doors || result.doors || null;
@@ -119,7 +119,14 @@ function CarResultCard({ result, enrichment = {} }) {
     <div className="car-result-card">
       <div className="car-card-main">
         <div className="car-card-media">
-          <img src={imageUrl} alt={makeModel} className="car-card-img" loading="lazy" />
+          {imageUrl ? (
+            <img src={imageUrl} alt={makeModel} className="car-card-img" loading="lazy" />
+          ) : (
+            <div className="car-card-img-placeholder" aria-label="Vehicle image unavailable">
+              <i className="fas fa-car-side" aria-hidden="true" />
+              <span>Vehicle image unavailable</span>
+            </div>
+          )}
           {category && <span className="car-category-badge">{category}</span>}
         </div>
 
