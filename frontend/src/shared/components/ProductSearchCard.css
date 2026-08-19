@@ -203,6 +203,21 @@
   box-shadow: 0 8px 20px rgba(139, 21, 56, 0.22) !important;
 }
 
+/* Flights, Hotels and Cars use one shared public shell width. This overrides
+   the legacy 1260px flight inquiry container so every product search card has
+   the same left/right edges at the same viewport size. */
+.flights-page #inquiry .container,
+.hotel-page .hotel-search-section .container,
+.car-rentals-home-page .car-search-shell .container {
+  width: 100% !important;
+  max-width: var(--tfs-public-shell, 1440px) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+  box-sizing: border-box !important;
+}
+
 /* Flights and Hotels now use the same physical placement as the Car Rentals
    search card: the white card overlaps the bottom edge of the hero by 34px.
    Their old offer/discount strip is intentionally hidden so there is no band
@@ -259,6 +274,13 @@
   .flights-page #inquiry,
   .hotel-page .hotel-search-section {
     margin-top: -18px !important;
+  }
+
+  .flights-page #inquiry .container,
+  .hotel-page .hotel-search-section .container,
+  .car-rentals-home-page .car-search-shell .container {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
   }
 
   .hero-slider__controls {
