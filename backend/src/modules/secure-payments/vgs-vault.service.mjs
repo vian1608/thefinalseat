@@ -46,6 +46,8 @@ export function getVgsVaultConfig() {
 
 export function getSafeVgsVaultConfig() {
   const config = getVgsVaultConfig();
+  const sandboxCollectScript = 'https://js.verygoodvault.com/vgs-collect/3.2.2/vgs-collect.js';
+  const liveCollectScript = 'https://js.verygoodvault.com/vgs-collect/3.3.0/vgs-collect.js';
   return {
     provider: 'VGS',
     vaultId: config.vaultId || null,
@@ -63,8 +65,11 @@ export function getSafeVgsVaultConfig() {
     collectEnabled: config.configured && config.ttlReady,
     otpMinutes: config.otpMinutes,
     accessMinutes: config.accessMinutes,
-    collectScript: 'https://js.verygoodvault.com/vgs-collect/3.3.0/vgs-collect.js',
-    collectIntegrity: 'sha384-YXvleED0q049Gx5rqUHI/hOTud/jKaLiL757lVq26oVFAd9SjTDHBoOviWw6XmPo',
+    // VGS currently documents 3.2.2 in the Collect JS quick-start. Use that
+    // unpinned-SRI sandbox path for test mode, while keeping the integrity-pinned
+    // 3.3.0 script for Live.
+    collectScript: config.environment === 'sandbox' ? sandboxCollectScript : liveCollectScript,
+    collectIntegrity: config.environment === 'sandbox' ? null : 'sha384-YXvleED0q049Gx5rqUHI/hOTud/jKaLiL757lVq26oVFAd9SjTDHBoOviWw6XmPo',
     showScript: 'https://js.verygoodvault.com/vgs-show/2.2.2/show.js',
   };
 }
