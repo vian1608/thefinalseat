@@ -67,7 +67,8 @@ function CarResultCard({ result, enrichment = {} }) {
   const depositAmount = policies.deposit?.amount ?? null;
   const depositText = formatMoney(depositAmount, currency);
   const numericRentalTotal = Number(pricing.rental_total);
-  const rentalTotal = Number.isFinite(numericRentalTotal)
+  const hasNumericRentalTotal = Number.isFinite(numericRentalTotal);
+  const rentalTotal = hasNumericRentalTotal
     ? formatMoney(numericRentalTotal, currency)
     : (pricing.display_price || null);
   const extraCharges = Array.isArray(pricing.extra_charges) ? pricing.extra_charges : [];
@@ -99,7 +100,7 @@ function CarResultCard({ result, enrichment = {} }) {
       supplier_id: supplierId,
       pickup_depot_id: pickupDepotId,
       currency,
-      displayed_total: rentalTotal,
+      displayed_total: hasNumericRentalTotal ? numericRentalTotal : (pricing.display_price || null),
       booking_url: safeUrl
     }).catch(() => {});
 
