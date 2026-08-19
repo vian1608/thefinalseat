@@ -29,13 +29,38 @@
   height: 160px;
   border-radius: 8px;
   overflow: hidden;
-  background: #f8fafc;
+  background: #eef6fd;
 }
 
 .car-card-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.car-card-img-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .55rem;
+  color: #607487;
+  background: linear-gradient(135deg, #f5f9fd, #e6f0fa);
+  text-align: center;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.car-card-img-placeholder i {
+  font-size: 2rem;
+  color: #1e88e5;
+}
+
+.car-card-img-placeholder span {
+  font-size: .76rem;
+  font-weight: 700;
 }
 
 .car-category-badge {
@@ -98,7 +123,7 @@
 .supplier-name-tag {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #8b1538;
+  color: #0d6fca;
 }
 
 .car-depot-location {
@@ -114,7 +139,6 @@
   border: 1px solid #bbf7d0;
   padding: 0.35rem 0.65rem;
   border-radius: 6px;
-
 }
 
 .rating-score {
@@ -211,14 +235,20 @@
 .currency-sym {
   font-size: 1.1rem;
   font-weight: 700;
-  color: #8b1538;
+  color: #0d6fca;
 }
 
 .total-num {
   font-size: 1.75rem;
   font-weight: 800;
   color: #0f172a;
+}
 
+.price-amount--unavailable .total-num {
+  margin-top: .25rem;
+  font-size: 1rem;
+  line-height: 1.25;
+  color: #475569;
 }
 
 .extra-charge-line {
@@ -229,9 +259,11 @@
 }
 
 .price-guarantee-note {
+  max-width: 220px;
   font-size: 0.7rem;
   color: #64748b;
   margin-top: 0.35rem;
+  line-height: 1.35;
 }
 
 .car-cta-wrapper {
@@ -246,6 +278,7 @@
   color: #64748b;
   margin: 0;
   text-align: center;
+  line-height: 1.35;
 }
 
 .car-deal-btn {
@@ -254,9 +287,9 @@
   justify-content: center;
   gap: 0.5rem;
   width: 100%;
-  background: linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%);
+  background: linear-gradient(135deg, #1e88e5 0%, #0d6fca 100%);
   color: #ffffff;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.95rem;
   padding: 0.75rem 1.25rem;
   border: none;
@@ -266,7 +299,7 @@
 }
 
 .car-deal-btn:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%);
+  background: linear-gradient(135deg, #3496ec 0%, #1e88e5 100%);
   transform: translateY(-1px);
 }
 
@@ -288,7 +321,7 @@
 }
 
 .car-card-disclosure i {
-  color: #8b1538;
+  color: #1e88e5;
   margin-top: 0.15rem;
 }
 
@@ -296,6 +329,10 @@
   .car-card-main {
     grid-template-columns: 1fr;
     gap: 1rem;
+  }
+
+  .car-card-media {
+    height: 210px;
   }
 
   .car-card-pricing {
@@ -310,5 +347,36 @@
   .price-breakdown {
     align-items: flex-start;
     margin-bottom: 0.75rem;
+  }
+
+  .price-guarantee-note {
+    max-width: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .car-card-main {
+    padding: 1rem;
+  }
+
+  .car-card-media {
+    height: 190px;
+  }
+
+  .car-card-header {
+    gap: .7rem;
+  }
+
+  .car-title {
+    font-size: 1.08rem;
+  }
+
+  .car-specs-grid {
+    gap: .45rem;
+  }
+
+  .car-spec-item,
+  .policy-badge {
+    font-size: .74rem;
   }
 }
