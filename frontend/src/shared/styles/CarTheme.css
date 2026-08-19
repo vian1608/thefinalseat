@@ -357,6 +357,66 @@
   border-top-color: rgba(var(--tfs-car-navy-rgb), 0.14);
 }
 
+/*
+ * Final Road Trip Blue authority for car-specific controls.
+ * Several controls are shared with Flights and their component styles are loaded
+ * after the global theme. These selectors intentionally use !important so a
+ * flight burgundy default can never leak into the car journey.
+ */
+:is(.car-rentals-home-page, .car-results-page) .car-meta-label i,
+:is(.car-rentals-home-page, .car-results-page) .car-location-label i,
+:is(.car-rentals-home-page, .car-results-page) .car-location-spinner,
+:is(.car-rentals-home-page, .car-results-page) .traveldate-icon-btn,
+:is(.car-rentals-home-page, .car-results-page) .custom-select-arrow {
+  color: var(--tfs-car-blue) !important;
+}
+
+:is(.car-rentals-home-page, .car-results-page) .car-checkbox-label input[type="checkbox"],
+:is(.car-rentals-home-page, .car-results-page) .filter-checkbox-label input[type="checkbox"] {
+  accent-color: var(--tfs-car-blue) !important;
+}
+
+:is(.car-rentals-home-page, .car-results-page) .car-search-submit-btn {
+  background: linear-gradient(135deg, var(--tfs-car-blue) 0%, var(--tfs-car-blue-dark) 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 20px rgba(var(--tfs-car-blue-rgb), 0.28) !important;
+}
+
+:is(.car-rentals-home-page, .car-results-page) .car-search-submit-btn:hover {
+  background: linear-gradient(135deg, #3496ec 0%, var(--tfs-car-blue) 100%) !important;
+  box-shadow: 0 10px 26px rgba(var(--tfs-car-blue-rgb), 0.34) !important;
+}
+
+:is(.car-rentals-home-page, .car-results-page) .car-location-input:focus,
+:is(.car-rentals-home-page, .car-results-page) .car-age-input:focus,
+:is(.car-rentals-home-page, .car-results-page) .traveldate-input:focus,
+:is(.car-rentals-home-page, .car-results-page) .custom-select-trigger:focus-visible {
+  border-color: var(--tfs-car-blue) !important;
+  box-shadow: 0 0 0 3px rgba(var(--tfs-car-blue-rgb), 0.13) !important;
+  outline: none !important;
+}
+
+:is(.car-rentals-home-page, .car-results-page) .traveldate-icon-btn:hover {
+  color: var(--tfs-car-blue-dark) !important;
+}
+
+:is(.car-rentals-home-page, .car-results-page) .custom-select-option.selected {
+  background: var(--tfs-car-ice) !important;
+  color: var(--tfs-car-blue-dark) !important;
+}
+
+:is(.car-rentals-home-page, .car-results-page) .custom-select-option .check-icon {
+  color: var(--tfs-car-blue) !important;
+}
+
+:is(.car-rentals-home-page, .car-results-page) .edit-search-toggle-btn,
+:is(.car-rentals-home-page, .car-results-page) .retry-search-btn,
+:is(.car-rentals-home-page, .car-results-page) .reset-filters-btn-large,
+:is(.car-rentals-home-page, .car-results-page) .load-more-btn,
+:is(.car-rentals-home-page, .car-results-page) .car-deal-btn {
+  border-color: transparent !important;
+}
+
 @media (max-width: 767px) {
   .car-rentals-home-page .hero-slider__slide-bg--overlay {
     background: linear-gradient(105deg, rgba(7, 26, 44, 0.9), rgba(13, 43, 69, 0.76), rgba(30, 136, 229, 0.3)) !important;
