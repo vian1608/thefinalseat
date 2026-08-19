@@ -203,7 +203,38 @@
   box-shadow: 0 8px 20px rgba(139, 21, 56, 0.22) !important;
 }
 
-/* Slider navigation must stay visually above an overlapping search card. */
+/* Flights and Hotels now use the same physical placement as the Car Rentals
+   search card: the white card overlaps the bottom edge of the hero by 34px.
+   Their old offer/discount strip is intentionally hidden so there is no band
+   between the hero and the overlapping card. */
+.flights-page .hero-offer-bar,
+.hotel-page .hero-offer-bar {
+  display: none !important;
+}
+
+.flights-page #inquiry {
+  position: relative;
+  z-index: 20;
+  margin-top: -34px !important;
+  padding-top: 0 !important;
+}
+
+.hotel-page .hotel-search-section {
+  position: relative;
+  z-index: 20;
+  margin-top: -34px !important;
+  padding-top: 0 !important;
+}
+
+/* Keep the search card itself above the hero edge, while leaving carousel
+   arrows/dots visibly above the card just like the Car Rentals page. */
+.flights-page #inquiry .container,
+.hotel-page .hotel-search-section .container,
+.car-search-shell .container {
+  position: relative;
+  z-index: 21;
+}
+
 .hero-slider__controls {
   bottom: 58px !important;
   z-index: 30 !important;
@@ -223,6 +254,11 @@
 
   .product-search-card__trust-note {
     text-align: left;
+  }
+
+  .flights-page #inquiry,
+  .hotel-page .hotel-search-section {
+    margin-top: -18px !important;
   }
 
   .hero-slider__controls {
