@@ -44,17 +44,25 @@ function HeroSlider({ slides, variant = 'flights', serviceNavActive, offerTag })
 
   const slide = slides[current];
   const isHotelSection = serviceNavActive === 'hotels';
+  const isCarSection = serviceNavActive === 'cars';
   const defaultEyebrow = isHotelSection
     ? 'The Final Seat — Hotel Booking Assistance'
-    : variant === 'rail'
-      ? 'The Final Seat — Rail Travel Support'
-      : 'The Final Seat — Flight Booking Assistance';
+    : isCarSection
+      ? 'The Final Seat — Car Rental Search'
+      : variant === 'rail'
+        ? 'The Final Seat — Rail Travel Support'
+        : 'The Final Seat — Flight Booking Assistance';
 
   const defaultChips = isHotelSection ? [
     { icon: 'fas fa-user-shield', label: 'Human Hotel Assistance' },
     { icon: 'fas fa-hotel', label: 'Clear Stay Comparison' },
     { icon: 'fas fa-users', label: 'Guest & Family Support' },
     { icon: 'fas fa-lock', label: 'Secure Reservation Process' },
+  ] : isCarSection ? [
+    { icon: 'fas fa-headset', label: 'Human Rental Support' },
+    { icon: 'fas fa-tags', label: 'Clear Rental Pricing' },
+    { icon: 'fas fa-car-side', label: 'Wide Vehicle Selection' },
+    { icon: 'fas fa-shield-alt', label: 'Secure Supplier Handoff' },
   ] : variant === 'rail' ? [
     { icon: 'fas fa-user-shield', label: 'Human Rail Assistance' },
     { icon: 'fas fa-tasks', label: 'Clear Train Comparison' },
