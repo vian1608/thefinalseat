@@ -43,11 +43,19 @@ function HeroSlider({ slides, variant = 'flights', serviceNavActive, offerTag })
   if (!slides || count === 0) return null;
 
   const slide = slides[current];
-  const defaultEyebrow = variant === 'rail' 
-    ? 'The Final Seat — Rail Travel Support' 
-    : 'The Final Seat — Flight Booking Assistance';
+  const isHotelSection = serviceNavActive === 'hotels';
+  const defaultEyebrow = isHotelSection
+    ? 'The Final Seat — Hotel Booking Assistance'
+    : variant === 'rail'
+      ? 'The Final Seat — Rail Travel Support'
+      : 'The Final Seat — Flight Booking Assistance';
 
-  const defaultChips = variant === 'rail' ? [
+  const defaultChips = isHotelSection ? [
+    { icon: 'fas fa-user-shield', label: 'Human Hotel Assistance' },
+    { icon: 'fas fa-hotel', label: 'Clear Stay Comparison' },
+    { icon: 'fas fa-users', label: 'Guest & Family Support' },
+    { icon: 'fas fa-lock', label: 'Secure Reservation Process' },
+  ] : variant === 'rail' ? [
     { icon: 'fas fa-user-shield', label: 'Human Rail Assistance' },
     { icon: 'fas fa-tasks', label: 'Clear Train Comparison' },
     { icon: 'fas fa-users', label: 'Family Travel Support' },
