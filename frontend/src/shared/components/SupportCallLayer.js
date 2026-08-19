@@ -92,6 +92,39 @@ function portalConfigForPath(pathname = '/') {
     };
   }
 
+  if (pathname.startsWith('/return-flight')) {
+    return {
+      selector: '.tfs-results-heading-row',
+      theme: 'flights',
+      mode: 'inline',
+      className: 'support-call-cta--results-portal',
+      title: 'Want help choosing your return flight?',
+      subtitle: 'A flight specialist can help by phone',
+    };
+  }
+
+  if (pathname.startsWith('/booking')) {
+    return {
+      selector: '.booking-hero-premium__inner',
+      theme: 'flights',
+      mode: 'inline',
+      className: 'support-call-cta--journey-portal',
+      title: 'Need help completing this reservation?',
+      subtitle: 'Talk to a flight specialist before you continue',
+    };
+  }
+
+  if (pathname.startsWith('/payment/')) {
+    return {
+      selector: '.consulting-payment-header',
+      theme: 'flights',
+      mode: 'inline',
+      className: 'support-call-cta--journey-portal',
+      title: 'Questions before paying?',
+      subtitle: 'Talk to a travel specialist',
+    };
+  }
+
   if (pathname === '/hotels/results') {
     return {
       selector: '.hotel-results-header',
