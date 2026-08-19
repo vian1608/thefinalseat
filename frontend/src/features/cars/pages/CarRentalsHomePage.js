@@ -1,35 +1,51 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import HeroSlider from '../../../shared/components/HeroSlider';
-import SeamlessAdvisorySection from '../../../shared/components/SeamlessAdvisorySection';
+import CarSearchForm from '../components/CarSearchForm';
 import { SUPPORT_PHONE_HREF, SUPPORT_PHONE_DISPLAY } from '../../../shared/constants/supportContact';
 import './CarRentalsHomePage.css';
 
 const carHeroSlides = [
   {
     id: 'car-slide-1',
-    title: 'Compare & Reserve Car Rentals Worldwide',
-    subtitle: 'Get personal help finding rental cars, airport pickup options, and clear rental policies.',
-    image: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=1600&q=80',
-    ctaText: `Call ${SUPPORT_PHONE_DISPLAY}`,
-    ctaLink: SUPPORT_PHONE_HREF
+    eyebrow: 'CAR RENTALS WORLDWIDE',
+    title: 'Drive Your Journey. Your Way.',
+    description: 'Compare rental car options, pickup locations, and policies with clear support from search to provider handoff.',
+    mobileLead: 'Compare rental cars, pickup options, and policies with clear support.',
+    image: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=1800&q=88'
   },
   {
     id: 'car-slide-2',
-    title: 'Airport Car Hire With Fast Pickup',
-    titleHighlight: 'Car Hire',
-    subtitle: 'Call our travel team for help finding airport and local rental car options.',
-    image: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=1600&q=80',
-    ctaText: `Call ${SUPPORT_PHONE_DISPLAY}`,
-    ctaLink: SUPPORT_PHONE_HREF
+    eyebrow: 'AIRPORT & CITY CAR RENTALS',
+    title: 'Flexible Cars for Every Kind of Trip',
+    description: 'Search airport and city rental options, compare practical details, and continue with the supplier that fits your trip.',
+    mobileLead: 'Search airport and city rentals and compare the details that matter.',
+    image: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=1800&q=88'
   }
 ];
 
-const carHeroOfferTag = {
-  badge: 'SUPPORT',
-  title: 'Car Rental Assistance',
-  text: `Call ${SUPPORT_PHONE_DISPLAY} for help`
-};
+const BENEFITS = [
+  {
+    icon: 'fas fa-tags',
+    title: 'Clear Rental Pricing',
+    text: 'Compare displayed rates and important rental details before continuing.'
+  },
+  {
+    icon: 'fas fa-calendar-alt',
+    title: 'Flexible Options',
+    text: 'Search different dates, locations, vehicle classes, and pickup arrangements.'
+  },
+  {
+    icon: 'fas fa-shield-alt',
+    title: 'Established Suppliers',
+    text: 'Review inventory and policies supplied by participating rental providers.'
+  },
+  {
+    icon: 'fas fa-headset',
+    title: 'Human Support',
+    text: `Need help comparing options? Call ${SUPPORT_PHONE_DISPLAY}.`
+  }
+];
 
 const POPULAR_AIRPORTS = [
   { code: 'JFK', name: 'New York (JFK)', location: 'John F. Kennedy International Airport', city: 'New York, NY' },
@@ -42,55 +58,70 @@ const POPULAR_AIRPORTS = [
 
 function CarRentalsHomePage() {
   return (
-    <div className="car-rentals-home-page">
+    <div className="car-rentals-home-page car-theme-page">
       <Helmet>
         <title>Car Rentals &amp; Airport Car Hire | The Final Seat</title>
-        <meta name="description" content="Get personal assistance comparing car rental options, suppliers, pickup locations and policies through The Final Seat." />
+        <meta name="description" content="Compare car rental options, suppliers, pickup locations and policies through The Final Seat." />
         <meta property="og:title" content="Car Rentals & Airport Car Hire | The Final Seat" />
-        <meta property="og:description" content="Call The Final Seat for help comparing rental car options, pickup locations, pricing and policies." />
+        <meta property="og:description" content="Compare rental car options, pickup locations, pricing and policies through The Final Seat." />
         <meta property="og:url" content="https://www.thefinalseat.com/car-rentals" />
         <meta property="og:type" content="website" />
         <link rel="canonical" href="https://www.thefinalseat.com/car-rentals" />
       </Helmet>
 
-      <HeroSlider slides={carHeroSlides} variant="flights" serviceNavActive="cars" offerTag={carHeroOfferTag} />
+      <HeroSlider slides={carHeroSlides} variant="flights" serviceNavActive="cars" />
 
-      <section className="car-call-section" aria-label="Car rental phone assistance">
+      <section className="car-search-shell" aria-label="Search rental cars">
         <div className="container">
-          <div className="car-call-card">
-            <div className="car-call-icon" aria-hidden="true">
-              <i className="fas fa-phone-alt" />
+          <div className="car-search-shell__card">
+            <div className="car-search-shell__heading">
+              <div>
+                <span className="car-section-eyebrow">Find a rental car</span>
+                <h2>Search Cars</h2>
+              </div>
+              <div className="car-search-shell__secure-note">
+                <i className="fas fa-shield-alt" aria-hidden="true" />
+                <span>Clear search details. Secure supplier handoff.</span>
+              </div>
             </div>
-            <div className="car-call-copy">
-              <span className="car-call-eyebrow">Car Rental Assistance</span>
-              <h1>Need a Rental Car?</h1>
-              <p>Call us for help comparing airport and local rental car options, pickup details, pricing and rental policies.</p>
-            </div>
-            <a className="car-call-button" href={SUPPORT_PHONE_HREF}>
-              <i className="fas fa-phone-alt" aria-hidden="true" />
-              <span>Call Now</span>
-              <strong>{SUPPORT_PHONE_DISPLAY}</strong>
-            </a>
+            <CarSearchForm />
+          </div>
+        </div>
+      </section>
+
+      <section className="car-benefits-strip" aria-label="Car rental benefits">
+        <div className="container">
+          <div className="car-benefits-grid">
+            {BENEFITS.map((benefit) => (
+              <article className="car-benefit-card" key={benefit.title}>
+                <div className="car-benefit-icon"><i className={benefit.icon} aria-hidden="true" /></div>
+                <div>
+                  <h3>{benefit.title}</h3>
+                  <p>{benefit.text}</p>
+                </div>
+              </article>
+            ))}
           </div>
         </div>
       </section>
 
       <section className="popular-airports-section">
         <div className="container">
+          <span className="car-section-eyebrow car-section-eyebrow--center">Popular pickup points</span>
           <h2 className="section-title">Popular Airport Car Rental Destinations</h2>
-          <p className="section-subtitle">Call us for help finding rental options at major airports and nearby locations.</p>
+          <p className="section-subtitle">Start with a major airport or search any supported pickup location above.</p>
 
           <div className="popular-airports-grid">
             {POPULAR_AIRPORTS.map((airport) => (
               <div key={airport.code} className="airport-card">
                 <div className="airport-card-header">
-                  <i className="fas fa-plane-arrival" />
+                  <i className="fas fa-map-marker-alt" />
                   <span className="airport-code">{airport.code}</span>
                 </div>
                 <h3>{airport.name}</h3>
                 <p className="airport-sub">{airport.location}</p>
                 <a href={SUPPORT_PHONE_HREF} className="airport-search-link">
-                  Call for cars in {airport.city} <i className="fas fa-phone-alt" />
+                  Need help in {airport.city}? <i className="fas fa-phone-alt" />
                 </a>
               </div>
             ))}
@@ -98,29 +129,23 @@ function CarRentalsHomePage() {
         </div>
       </section>
 
-      <section className="car-features-section">
+      <section className="car-support-section">
         <div className="container">
-          <div className="features-grid">
-            <div className="feature-card">
-              <div className="feature-icon"><i className="fas fa-search-dollar" /></div>
-              <h3>Compare Pricing</h3>
-              <p>Call us to review rental pricing, possible fees, deposits and pickup details before you reserve.</p>
+          <div className="car-support-card">
+            <div className="car-support-icon"><i className="fas fa-car-side" aria-hidden="true" /></div>
+            <div className="car-support-copy">
+              <span className="car-section-eyebrow">Car rental assistance</span>
+              <h2>Need Help Choosing a Rental?</h2>
+              <p>Call us if you want help comparing pickup details, policies, deposits, mileage, or supplier information before you continue.</p>
             </div>
-            <div className="feature-card">
-              <div className="feature-icon"><i className="fas fa-file-contract" /></div>
-              <h3>Clear Rental Policies</h3>
-              <p>Get help understanding cancellation rules, mileage allowances, fuel policies and rental requirements.</p>
-            </div>
-            <div className="feature-card">
-              <div className="feature-icon"><i className="fas fa-headset" /></div>
-              <h3>Human Support</h3>
-              <p>Questions about your trip? Call <a href={SUPPORT_PHONE_HREF}>{SUPPORT_PHONE_DISPLAY}</a> for assistance.</p>
-            </div>
+            <a className="car-support-button" href={SUPPORT_PHONE_HREF}>
+              <i className="fas fa-phone-alt" aria-hidden="true" />
+              <span>Call Now</span>
+              <strong>{SUPPORT_PHONE_DISPLAY}</strong>
+            </a>
           </div>
         </div>
       </section>
-
-      <SeamlessAdvisorySection variant="flight" />
     </div>
   );
 }
