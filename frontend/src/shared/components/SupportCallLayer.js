@@ -1,7 +1,43 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useLocation } from 'react-router-dom';
 import SupportCallCTA from './SupportCallCTA';
+
+function useBrowserPathname() {
+  const [pathname, setPathname] = useState(() => (typeof window === 'undefined' ? '/' : window.location.pathname));
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const sync = () => setPathname(window.location.pathname);
+    const pushState = window.history.pushState;
+    const replaceState = window.history.replaceState;
+
+    const patchedPushState = function patchedPushState(...args) {
+      const result = pushState.apply(this, args);
+      window.dispatchEvent(new Event('tfs-locationchange'));
+      return result;
+    };
+    const patchedReplaceState = function patchedReplaceState(...args) {
+      const result = replaceState.apply(this, args);
+      window.dispatchEvent(new Event('tfs-locationchange'));
+      return result;
+    };
+
+    window.history.pushState = patchedPushState;
+    window.history.replaceState = patchedReplaceState;
+    window.addEventListener('popstate', sync);
+    window.addEventListener('tfs-locationchange', sync);
+
+    return () => {
+      if (window.history.pushState === patchedPushState) window.history.pushState = pushState;
+      if (window.history.replaceState === patchedReplaceState) window.history.replaceState = replaceState;
+      window.removeEventListener('popstate', sync);
+      window.removeEventListener('tfs-locationchange', sync);
+    };
+  }, []);
+
+  return pathname;
+}
 
 function productThemeForPath(pathname = '/') {
   if (pathname.startsWith('/hotels')) return 'hotels';
@@ -19,6 +55,7 @@ function isTravelJourneyPath(pathname = '/') {
     '/booking',
     '/return-flight',
     '/payment',
+    '/secure-payment',
     '/authorize',
     '/confirmation',
     '/booking-confirmed',
@@ -106,9 +143,35 @@ function usePortalTarget(selector, pathname) {
   return target;
 }
 
+function useSecurePaymentTheme(pathname) {
+  const [theme, setTheme] = useState('flights');
+
+  useEffect(() => {
+    if (!pathname.startsWith('/secure-payment') || typeof document === 'undefined') {
+      setTheme(productThemeForPath(pathname));
+      return undefined;
+    }
+
+    const locate = () => {
+      if (document.querySelector('.secure-payment-page--hotels')) setTheme('hotels');
+      else if (document.querySelector('.secure-payment-page--cars')) setTheme('cars');
+      else setTheme('flights');
+    };
+
+    locate();
+    const observer = new MutationObserver(locate);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, [pathname]);
+
+  return theme;
+}
+
 export default function SupportCallLayer() {
-  const { pathname } = useLocation();
-  const theme = productThemeForPath(pathname);
+  const pathname = useBrowserPathname();
+  const routeTheme = productThemeForPath(pathname);
+  const securePaymentTheme = useSecurePaymentTheme(pathname);
+  const theme = pathname.startsWith('/secure-payment') ? securePaymentTheme : routeTheme;
   const showSticky = isTravelJourneyPath(pathname);
   const portalConfig = useMemo(() => portalConfigForPath(pathname), [pathname]);
   const portalTarget = usePortalTarget(portalConfig?.selector, pathname);
