@@ -181,7 +181,7 @@
 }
 
 /* Checkout/payment support appears within the page at the decision point in
-   addition to the always-available sticky phone control. */
+   addition to the always-available sticky phone control on larger screens. */
 .support-call-cta--journey-portal {
   margin-top: 1rem;
 }
@@ -198,7 +198,8 @@
   text-align: left;
 }
 
-/* Always-available desktop assistance. */
+/* Always-available desktop assistance. Mobile already has a prominent Call Now
+   action in the site header, so the sticky CTA is desktop/tablet only. */
 .support-call-sticky {
   position: fixed;
   right: 20px;
@@ -252,8 +253,14 @@
 }
 
 @media (max-width: 760px) {
+  /* Mobile header already exposes Call Now, so remove the duplicate persistent
+     bottom bar and the extra page padding that was reserved for it. */
   body:has(.support-call-sticky) .App {
-    padding-bottom: calc(62px + env(safe-area-inset-bottom));
+    padding-bottom: 0 !important;
+  }
+
+  .support-call-sticky {
+    display: none !important;
   }
 
   .product-search-card__heading .support-call-cta--card {
@@ -272,8 +279,8 @@
     min-width: 116px;
   }
 
-  /* On small screens the sticky bottom bar is the easiest and largest phone
-     target. Avoid duplicating an absolutely-positioned flight-card CTA. */
+  /* The flight card CTA also stays hidden on small screens because the mobile
+     header already has a large Call Now control. */
   .support-call-cta--flight-search-portal {
     display: none !important;
   }
@@ -284,28 +291,6 @@
     max-width: none;
     margin: 0.35rem 0 0;
   }
-
-  .support-call-sticky {
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    min-height: 62px;
-    padding: 0.45rem max(12px, env(safe-area-inset-right)) calc(0.45rem + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
-    border-width: 1px 0 0;
-    border-radius: 0;
-    box-shadow: 0 -8px 28px rgba(15, 23, 42, 0.16);
-  }
-
-  .support-call-sticky .support-call-cta__copy small {
-    display: none;
-  }
-
-  .support-call-sticky .support-call-cta__action {
-    margin-left: auto;
-    min-width: 132px;
-    min-height: 44px;
-  }
 }
 
 @media (max-width: 420px) {
@@ -315,14 +300,6 @@
 
   .support-call-cta__action {
     min-width: 112px;
-  }
-
-  .support-call-sticky .support-call-cta__copy {
-    display: none;
-  }
-
-  .support-call-sticky .support-call-cta__action {
-    flex: 1 1 auto;
   }
 }
 
