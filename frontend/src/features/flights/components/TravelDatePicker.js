@@ -76,7 +76,10 @@ function TravelDatePicker({ id, value, onChange, label, placeholder = 'MM/DD/YYY
     }
 
     let left = rect.left;
-    let width = Math.max(rect.width, 320);
+    // A calendar should remain a compact control even when the associated date
+    // field spans half of a wide desktop form. Matching the input width made
+    // the calendar grow into a huge overlay on the car-rental page.
+    let width = Math.min(Math.max(rect.width, 320), 360);
 
     if (window.innerWidth < 480) {
       left = Math.max(10, (window.innerWidth - 320) / 2);
