@@ -67,7 +67,10 @@
   transform: translateY(-1px);
 }
 
-.support-call-cta:focus-visible {
+.support-call-cta:focus-visible,
+.support-call-cta__phone-link:focus-visible,
+.support-call-cta__dismiss:focus-visible,
+.support-call-minimized:focus-visible {
   outline: 3px solid rgba(var(--call-accent-rgb), 0.22);
   outline-offset: 3px;
 }
@@ -242,6 +245,103 @@
   min-width: 118px;
 }
 
+/* The floating card is a group instead of one giant anchor so a real button can
+   minimize it without nesting interactive elements. Only the phone portion is
+   the tel: link; the X control is independently keyboard and screen-reader usable. */
+.support-call-sticky.support-call-cta--dismissible {
+  padding: 0;
+  gap: 0;
+  overflow: visible;
+}
+
+.support-call-cta__phone-link {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 58px;
+  padding: 0.52rem 0.62rem;
+  border-radius: inherit;
+  color: inherit;
+  text-decoration: none;
+}
+
+.support-call-cta__phone-link:hover {
+  color: inherit;
+  text-decoration: none;
+}
+
+.support-call-cta__dismiss {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(var(--call-accent-rgb), 0.26);
+  border-radius: 50%;
+  background: #fff;
+  color: #64748b;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.18);
+  cursor: pointer;
+  font-size: 0.72rem;
+  line-height: 1;
+  transition: color 0.16s ease, border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.support-call-cta__dismiss:hover {
+  color: var(--call-accent);
+  border-color: rgba(var(--call-accent-rgb), 0.52);
+  transform: scale(1.06);
+  box-shadow: 0 7px 18px rgba(15, 23, 42, 0.22);
+}
+
+/* Minimized state: a small product-themed side control stays available so the
+   traveler can restore the full support card at any point in the same tab. */
+.support-call-minimized {
+  position: fixed;
+  right: 16px;
+  bottom: 20px;
+  z-index: 4600;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--call-accent), var(--call-accent-dark));
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(var(--call-accent-rgb), 0.28);
+  cursor: pointer;
+  font-size: 1rem;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.support-call-minimized:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 15px 34px rgba(var(--call-accent-rgb), 0.34);
+}
+
+.support-call-minimized__indicator {
+  position: absolute;
+  left: -7px;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  transform: translateY(-50%);
+  border: 1px solid rgba(var(--call-accent-rgb), 0.2);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--call-accent);
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.14);
+  font-size: 0.56rem;
+}
+
 @media (max-width: 900px) {
   .product-search-card__heading .support-call-cta--card {
     width: min(350px, 100%);
@@ -259,7 +359,8 @@
     padding-bottom: 0 !important;
   }
 
-  .support-call-sticky {
+  .support-call-sticky,
+  .support-call-minimized {
     display: none !important;
   }
 
@@ -305,7 +406,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .support-call-cta,
-  .support-call-sticky {
+  .support-call-sticky,
+  .support-call-minimized,
+  .support-call-cta__dismiss {
     transition: none !important;
   }
 }
