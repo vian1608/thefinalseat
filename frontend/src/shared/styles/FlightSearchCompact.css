@@ -73,8 +73,23 @@
 }
 
 @media (max-width: 768px) {
+  /* The flight card overlaps the hero on mobile. Force the same rounded shell
+     used by Hotels/Cars on all four corners so the upper edge never appears
+     square when it sits over the hero background. Keep overflow visible so
+     autocomplete and passenger popovers are not clipped. */
+  .flights-page #inquiry .inquiry-main-panel,
+  .flights-page #inquiry .inquiry-main-panel > .flights-inquiry-card {
+    border-radius: 20px !important;
+    border-top-left-radius: 20px !important;
+    border-top-right-radius: 20px !important;
+    border-bottom-left-radius: 20px !important;
+    border-bottom-right-radius: 20px !important;
+    overflow: visible !important;
+  }
+
   .flights-page #inquiry .inquiry-main-panel > .flights-inquiry-card {
     padding: 0.85rem !important;
+    background-clip: padding-box !important;
   }
 
   .flights-page #inquiry .inquiry-main-panel > .flights-inquiry-card > h2 {
