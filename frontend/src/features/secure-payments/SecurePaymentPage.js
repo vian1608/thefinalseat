@@ -176,7 +176,8 @@ export default function SecurePaymentPage() {
       <span>Maximum authorized</span><strong>{money(authorization.authorizedAmount, authorization.currency)}</strong>
     </div>
     {!vault?.configured && <div className="secure-payment-error">The secure card vault is not configured yet. Please contact The Final Seat.</div>}
-    {vault?.configured && !vault?.cvvTtlConfirmed && <div className="secure-payment-warning">Card collection is intentionally disabled until VGS confirms the requested {vault.targetCvvTtlHours}-hour volatile CVV setting for this vault.</div>}
+    {vault?.configured && vault?.usesSandboxDefaultTtl && <div className="secure-payment-warning">Sandbox test mode is using VGS&apos;s default {vault.effectiveCvvTtlHours || 1}-hour volatile CVV window. The requested {vault.targetCvvTtlHours}-hour window remains disabled until Live is configured.</div>}
+    {vault?.configured && !vault?.ttlReady && <div className="secure-payment-warning">Card collection is intentionally disabled until VGS confirms the requested {vault.targetCvvTtlHours}-hour volatile CVV setting for this vault.</div>}
     {error && <div className="secure-payment-error">{error}</div>}
     {vault?.collectEnabled && <form onSubmit={submit}>
       {!authorization.recollectionOnly && <>
@@ -193,6 +194,6 @@ export default function SecurePaymentPage() {
       {authorization.recollectionOnly && <><div className="secure-payment-existing-card">Existing vaulted card: <strong>{authorization.paymentMethod?.cardBrand ? `${authorization.paymentMethod.cardBrand.toUpperCase()} ` : ''}{authorization.paymentMethod?.last4 ? `•••• ${authorization.paymentMethod.last4}` : 'secure card on file'}</strong></div><label>Security code<div id="tfs-vgs-cvv" className="secure-vgs-field" /></label><p className="secure-payment-note">Only a new CVV is being collected. Your existing vaulted card number remains unchanged.</p></>}
       <button className="secure-payment-submit" disabled={!formReady || submitting}>{submitting ? 'Securing payment method…' : authorization.recollectionOnly ? 'Secure New Security Code' : 'Authorize & Secure Payment Method'}</button>
     </form>}
-    <div className="secure-payment-security"><strong>Protected card entry</strong><p>Card number and security code fields are isolated by VGS. The Final Seat application receives vault aliases rather than the raw values.</p>{vault?.cvvTtlConfirmed && <p>Requested volatile CVV window: up to {vault.targetCvvTtlHours} hours, ending earlier when the related transaction is authorized.</p>}</div>
+    <div className="secure-payment-security"><strong>Protected card entry</strong><p>Card number and security code fields are isolated by VGS. The Final Seat application receives vault aliases rather than the raw values.</p>{vault?.ttlReady && <p>Current volatile CVV window: up to {vault.effectiveCvvTtlHours || vault.targetCvvTtlHours} hour{Number(vault.effectiveCvvTtlHours || vault.targetCvvTtlHours) === 1 ? '' : 's'}, ending earlier when the related transaction is authorized.</p>}</div>
   </div></div>;
 }
