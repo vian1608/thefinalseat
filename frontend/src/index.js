@@ -58,7 +58,7 @@ if (crmLeadId && !adminAPI.__tfsCrmFlightCreateBridge) {
 
 // Preserve every established App.js route. Only additive back-office and secure-payment
 // URLs are intercepted here so the stable flight/admin route table does not need a rewrite.
-const isNewBackOfficePath = /^\/admin\/(backoffice|crm(?:\/|$)|trips(?:\/|$)|bookings\/(?:flights|hotels|cars)(?:\/|$)|payments(?:\/|$)|finance(?:\/|$)|suppliers(?:\/|$)|reports(?:\/|$)|team(?:\/|$)|settings(?:\/|$))/.test(window.location.pathname);
+const isNewBackOfficePath = /^\/admin\/(backoffice|crm(?:\/|$)|trips(?:\/|$)|bookings\/(?:flights|hotels|cars)(?:\/|$)|payments(?:\/|$)|testing(?:\/|$)|finance(?:\/|$)|suppliers(?:\/|$)|reports(?:\/|$)|team(?:\/|$)|settings(?:\/|$))/.test(window.location.pathname);
 const isSecurePaymentPath = /^\/secure-payment\/[^/]+\/?$/.test(window.location.pathname);
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
