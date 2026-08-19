@@ -159,9 +159,11 @@ export default function SecurePaymentPage() {
     }, () => { setSubmitting(false); setError('Please correct the highlighted secure card fields and try again.'); });
   };
 
-  const isHotelAuthorization = String(authorization?.context?.entityType || '').toUpperCase() === 'HOTEL';
-  const pageClassName = `secure-payment-page${isHotelAuthorization ? ' secure-payment-page--hotels' : ''}`;
-  const paymentLabel = isHotelAuthorization ? 'HOTEL SECURE PAYMENT' : 'SECURE PAYMENT';
+  const entityType = String(authorization?.context?.entityType || '').toUpperCase();
+  const isHotelAuthorization = entityType === 'HOTEL';
+  const isCarAuthorization = ['CAR', 'CAR_RENTAL', 'RENTAL_CAR'].includes(entityType);
+  const pageClassName = `secure-payment-page${isHotelAuthorization ? ' secure-payment-page--hotels' : ''}${isCarAuthorization ? ' secure-payment-page--cars' : ''}`;
+  const paymentLabel = isHotelAuthorization ? 'HOTEL SECURE PAYMENT' : isCarAuthorization ? 'CAR RENTAL SECURE PAYMENT' : 'SECURE PAYMENT';
 
   if (loading) return <div className={pageClassName}><div className="secure-payment-card">Loading secure authorization…</div></div>;
   if (error && !authorization) return <div className={pageClassName}><div className="secure-payment-card"><div className="secure-payment-brand">THE FINAL SEAT</div><h1>Secure authorization unavailable</h1><div className="secure-payment-error">{error}</div></div></div>;
