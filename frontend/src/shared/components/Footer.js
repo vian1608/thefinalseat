@@ -24,9 +24,10 @@ function FooterSection({ title, children }) {
 function Footer() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
+  const isHotelRoute = location.pathname.startsWith('/hotels');
 
   return (
-    <footer className={`footer${isAdminRoute ? ' footer--admin' : ''}`}>
+    <footer className={`footer${isAdminRoute ? ' footer--admin' : ''}${isHotelRoute ? ' footer--hotels' : ''}`}>
       <div className="container">
         <div className="footer-content">
           <div className="footer-section footer-brand">
@@ -37,6 +38,7 @@ function Footer() {
           <FooterSection title="Company">
             <ul>
               <li><Link to="/">Flight Search</Link></li>
+              <li><Link to="/hotels">Hotels</Link></li>
               <li><Link to="/car-rentals">Car Rentals</Link></li>
               <li><Link to="/my-bookings">My Bookings</Link></li>
               <li><Link to="/contact">Contact Information</Link></li>
