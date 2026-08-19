@@ -46,18 +46,24 @@ function Header() {
   const isHotelsActive = location.pathname.startsWith('/hotels');
   const isCarsActive = location.pathname.startsWith('/car-rentals');
   const isContactActive = location.pathname === '/contact';
-  const isCarsTheme = isCarsActive;
   const isAdminRoute = location.pathname.startsWith('/admin');
+
+  // Keep each public travel section visually distinct. The key intentionally
+  // changes with the product so the existing icon-swap animation replays when
+  // a traveler moves between Flights, Hotels, and Car Rentals.
+  const sectionTheme = isHotelsActive ? 'hotels' : isCarsActive ? 'cars' : 'flights';
+  const logoIcon = isHotelsActive ? 'fa-hotel' : isCarsActive ? 'fa-car' : 'fa-plane-departure';
+  const headerThemeClass = isHotelsActive ? 'header--hotels' : isCarsActive ? 'header--cars' : 'header--flights';
 
   return (
     <header
-      className={`header ${isCarsTheme ? 'header--cars' : 'header--flights'} ${isAdminRoute ? 'header--admin-route' : ''} ${scrolled ? 'header--scrolled' : ''}`}
+      className={`header ${headerThemeClass} ${isAdminRoute ? 'header--admin-route' : ''} ${scrolled ? 'header--scrolled' : ''}`}
     >
       <div className="container header-inner">
         <div className="logo">
           <i
-            key={isCarsTheme ? 'car-icon' : 'flight-icon'}
-            className={`fas logo-icon ${isCarsTheme ? 'fa-car' : 'fa-plane-departure'}`}
+            key={`${sectionTheme}-icon`}
+            className={`fas logo-icon ${logoIcon}`}
             aria-hidden="true"
           />
           <Link to="/" className="logo-link" onClick={closeMenu}>
