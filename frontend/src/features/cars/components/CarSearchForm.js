@@ -242,6 +242,7 @@ function CarSearchForm({ initialValues = {}, compact = false }) {
             value={pickupDate}
             onChange={(val) => setPickupDate(val)}
             minDate={new Date().toISOString().split('T')[0]}
+            theme="cars"
             required
           />
           <div className="car-time-picker">
@@ -262,6 +263,7 @@ function CarSearchForm({ initialValues = {}, compact = false }) {
             value={dropoffDate}
             onChange={(val) => setDropoffDate(val)}
             minDate={pickupDate || new Date().toISOString().split('T')[0]}
+            theme="cars"
             required
           />
           <div className="car-time-picker">
