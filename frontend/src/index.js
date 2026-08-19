@@ -17,6 +17,7 @@ import './shared/styles/MobileItineraryRoutePolish.css';
 import App from './app/App';
 import BackOfficeRouter from './features/backoffice/BackOfficeRouter';
 import SecurePaymentPage from './features/secure-payments/SecurePaymentPage';
+import SupportCallLayer from './shared/components/SupportCallLayer';
 import { boPatch } from './features/backoffice/backofficeApi';
 import { adminAPI } from './shared/api/api';
 import { HelmetProvider } from 'react-helmet-async';
@@ -70,6 +71,7 @@ root.render(
       ) : isSecurePaymentPath ? (
         <BrowserRouter><Routes><Route path="/secure-payment/:token" element={<SecurePaymentPage />} /></Routes></BrowserRouter>
       ) : <App />}
+      {!isNewBackOfficePath && <SupportCallLayer />}
     </HelmetProvider>
   </React.StrictMode>
 );
