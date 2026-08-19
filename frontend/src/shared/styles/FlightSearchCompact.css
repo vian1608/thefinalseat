@@ -25,6 +25,24 @@
   margin-bottom: 0.8rem !important;
 }
 
+/* Keep all four compact search controls together on the left, matching the
+   Car Rentals card. The legacy markup puts Currency in a separate right-side
+   wrapper; display: contents makes both wrappers participate in one flex row
+   without touching any search state or select behavior. */
+.flights-page #inquiry .search-meta-row {
+  justify-content: flex-start !important;
+  align-items: center !important;
+}
+
+.flights-page #inquiry .search-meta-left,
+.flights-page #inquiry .search-meta-right {
+  display: contents !important;
+}
+
+.flights-page #inquiry #search-currency {
+  margin-left: 0 !important;
+}
+
 .flights-page #inquiry .airport-search-help {
   display: none !important;
 }
