@@ -11,6 +11,7 @@ import InternationalPhoneInput from '../../../shared/components/InternationalPho
 import CountrySelect from '../../../shared/components/CountrySelect';
 import EmailInput from '../../../shared/components/EmailInput';
 import AddressAutocompleteInput from '../../../shared/components/AddressAutocompleteInput';
+import VgsCheckoutCardFields from '../../secure-payments/VgsCheckoutCardFields';
 import {
   validatePostalCode,
   validatePassportNumber,
@@ -23,32 +24,6 @@ import { safeUpper } from '../../../shared/utils/itineraryNormalizer';
 import { trackGoogleAdsLeadConversion } from '../../../shared/analytics/googleAds';
 
 import './BookingPage.css';
-
-const detectCardBrand = (number = '') => {
-  const clean = number.replace(/\D/g, '');
-  if (/^4/.test(clean)) return { brand: 'visa', name: 'Visa', icon: 'fa-cc-visa', color: '#1a1f71' };
-  if (/^(5[1-5]|222[1-9]|22[3-9]|2[3-6]|27[0-1]|2720)/.test(clean)) return { brand: 'mastercard', name: 'Mastercard', icon: 'fa-cc-mastercard', color: '#eb001b' };
-  if (/^3[47]/.test(clean)) return { brand: 'amex', name: 'American Express', icon: 'fa-cc-amex', color: '#006fcf' };
-  if (/^(6011|65|64[4-9]|622)/.test(clean)) return { brand: 'discover', name: 'Discover', icon: 'fa-cc-discover', color: '#f9a01b' };
-  return { brand: 'generic', name: 'Credit Card', icon: 'fa-credit-card', color: '#475569' };
-};
-
-const formatCardNumber = (val = '') => {
-  const clean = val.replace(/\D/g, '').slice(0, 16);
-  return clean.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
-};
-
-const formatExpDate = (val = '') => {
-  const clean = val.replace(/\D/g, '').slice(0, 4);
-  if (clean.length >= 3) {
-    return `${clean.slice(0, 2)}/${clean.slice(2)}`;
-  }
-  return clean;
-};
-
-const formatCch = (val = '') => {
-  return val.replace(/\D/g, '').slice(0, 4);
-};
 
 const readBookingSessionJson = (key, fallback = null) => {
   try {
@@ -91,12 +66,9 @@ function Booking({ initialJourneyPayload = null }) {
   );
   const [error, setError] = useState('');
 
-  // Single unified Credit / Debit Card & Billing state
+  // Only non-sensitive payment metadata lives in React state. PAN / expiry / CVV stay inside VGS Collect fields.
   const [cardForm, setCardForm] = useState({
     cardholderName: '',
-    cardNumber: '',
-    expDate: '',
-    cch: '', // CCH / CVV / CVC
     billingPhone: '',
     billingAddress: '',
     billingAddress2: '',
@@ -108,6 +80,7 @@ function Booking({ initialJourneyPayload = null }) {
   const [cardError, setCardError] = useState('');
   const [cardProcessing, setCardProcessing] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
+  const secureCardRef = useRef(null);
 
   const pendingBookingId = useRef(null);
   const pendingBookingCode = useRef(null);
@@ -232,7 +205,7 @@ function Booking({ initialJourneyPayload = null }) {
   const revealPassenger = (index) => {
     setExpandedPassengers(prev => ({ ...prev, [index]: true }));
     window.setTimeout(() => {
-      document.querySelector(`[data-passenger-index=\"${index}\"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.querySelector(`[data-passenger-index="${index}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 40);
   };
 
@@ -436,9 +409,7 @@ function Booking({ initialJourneyPayload = null }) {
     }
   };
 
-
-
-  const createPendingBookingRecord = async () => {
+  const createPendingBookingRecord = async (maskedCard = {}) => {
     if (pendingBookingId.current) {
       return { id: pendingBookingId.current, code: pendingBookingCode.current };
     }
@@ -451,23 +422,15 @@ function Booking({ initialJourneyPayload = null }) {
       specialRequests: specialRequests
     };
 
-    const cleanCardNum = cardForm.cardNumber.replace(/\D/g, '');
-    const cardLast4 = cleanCardNum.length >= 4 ? cleanCardNum.slice(-4) : null;
-    const cardBrand = detectCardBrand(cardForm.cardNumber).name;
+    const rawLast4 = String(maskedCard.last4 || '').replace(/\D/g, '');
+    const cardLast4 = /^\d{4}$/.test(rawLast4) ? rawLast4 : null;
+    const cardBrand = String(maskedCard.cardBrand || '').trim() || null;
 
-    // Parse expDate "MM/YY" or "MM/YYYY" into separate integers
-    const expParts = (cardForm.expDate || '').split('/');
-    const cardExpMonth = expParts[0] ? parseInt(expParts[0], 10) : null;
-    const rawYear = expParts[1] ? parseInt(expParts[1], 10) : null;
-    const cardExpYear = rawYear ? (rawYear < 100 ? 2000 + rawYear : rawYear) : null;
-
-    // Canonical nested paymentMethod object for reliable service-layer pickup
+    // Canonical nested paymentMethod object contains only safe masked/billing metadata.
     const paymentMethod = {
       cardholderName: cardForm.cardholderName || customerName,
       cardBrand,
       cardLast4,
-      cardExpMonth,
-      cardExpYear,
       billingPhone: cardForm.billingPhone,
       billingEmail: primaryContact.email,
       billingAddressLine1: cardForm.billingAddress,
@@ -493,17 +456,11 @@ function Booking({ initialJourneyPayload = null }) {
       customer_price: pricing.total,
       displayedWebsitePrice: pricing.total,
       paymentStatus: 'PENDING',
-      payment_provider: 'card',
-      // Nested canonical object (primary pickup path)
+      payment_provider: 'VGS',
       paymentMethod,
-      // Flat fields (legacy fallback path)
       cardholderName: paymentMethod.cardholderName,
       cardLast4,
       cardBrand,
-      cardExpMonth,
-      cardExpYear,
-      cardExpDate: cardForm.expDate,
-      card_exp_date: cardForm.expDate,
       billingPhone: cardForm.billingPhone,
       billingEmail: primaryContact.email,
       billingAddressLine1: cardForm.billingAddress,
@@ -542,7 +499,6 @@ function Booking({ initialJourneyPayload = null }) {
         }
 
         if (res.idempotentReused) {
-          // Booking already existed from a previous attempt — navigate to confirmation
           console.info('[Checkout] Idempotent reuse detected — booking already exists:', bCode);
         }
 
@@ -554,13 +510,11 @@ function Booking({ initialJourneyPayload = null }) {
       }
     }
 
-    // Backend returned an error payload
     throw new Error(
       res?.error?.message || res?.message ||
       'We could not complete your reservation. No confirmed booking was created. Please review your details and try again.'
     );
   };
-
 
   const handleDirectCardPayment = async () => {
     setCardError('');
@@ -583,19 +537,13 @@ function Booking({ initialJourneyPayload = null }) {
       return;
     }
 
-    const cleanNum = cardForm.cardNumber.replace(/\D/g, '');
-    if (cleanNum.length < 15 || cleanNum.length > 16) {
-      setCardError('Please enter a valid 15 or 16-digit credit/debit card number.');
+    if (!secureCardRef.current?.isReady()) {
+      setCardError('Secure card fields are still loading. Please wait a moment and try again.');
       return;
     }
 
-    if (!cardForm.expDate || !/^(0[1-9]|1[0-2])\/\d{2}$/.test(cardForm.expDate)) {
-      setCardError('Please enter a valid expiration date in MM/YY format (e.g. 12/28).');
-      return;
-    }
-
-    if (!cardForm.cch || cardForm.cch.length < 3) {
-      setCardError('Please enter a valid 3 or 4-digit CCH / Security Code (CVV).');
+    if (!secureCardRef.current?.isValid()) {
+      setCardError('Please enter a valid card number, expiration date, and security code.');
       return;
     }
 
@@ -650,50 +598,71 @@ function Booking({ initialJourneyPayload = null }) {
     setCardProcessing(true);
 
     try {
-      // 1. Create atomic reservation record in Supabase
-      const pending = await createPendingBookingRecord();
+      // 1. Create the reservation using only safe card metadata. Raw card values never enter this payload.
+      const maskedCard = secureCardRef.current.getMaskedMetadata();
+      const pending = await createPendingBookingRecord(maskedCard);
       const bCode = pending.code;
 
-      // 2. Remove abandoned session tracking
+      // 2. Tokenize the same card fields already entered on this checkout and attach them to this booking.
+      //    PAN/expiry are persistent VGS aliases; CVV is a volatile VGS alias.
+      await secureCardRef.current.secureBooking({
+        bookingId: pending.id,
+        bookingCode: bCode,
+        customerEmail: primaryContact.email,
+        customerName: `${primaryContact.firstName} ${primaryContact.lastName}`.trim(),
+        customerPhone: primaryContact.phone,
+        authorizedAmount: Number(calculateTotal().total),
+        currency: 'USD',
+        purpose: `Flight booking ${bCode}`,
+        idempotencyKey: idempotencyKeyRef.current,
+        cardholderName: cardForm.cardholderName,
+        billingAddress: {
+          line1: cardForm.billingAddress,
+          line2: cardForm.billingAddress2 || '',
+          city: cardForm.billingCity,
+          region: cardForm.billingState,
+          postalCode: cardForm.billingZip,
+          country: cardForm.billingCountry,
+        },
+      });
+
+      // 3. Only complete checkout after the booking and its secure payment authorization are linked.
       bookingAPI.deleteAbandoned(abandonedSessionKey.current).catch(() => {});
       sessionStorage.removeItem('abandonedSessionKey');
 
       setPaymentComplete(true);
 
-      // 3. Prefer the opaque reservation-read token when the backend issued one.
       const readToken = pending.reservationReadToken || sessionStorage.getItem(`reservationReadToken:${bCode}`) || null;
       const confirmationRef = readToken || bCode;
       navigate(`/booking-confirmed/${encodeURIComponent(confirmationRef)}?email=${encodeURIComponent(primaryContact.email)}`);
     } catch (err) {
-      console.error('Card payment processing error:', err);
+      console.error('Secure booking processing error:', err);
 
-      const httpStatus = err?.response?.status;
+      const httpStatus = err?.response?.status || err?.status;
       const backendMessage = err?.response?.data?.error?.message || err?.response?.data?.message;
       const referenceId = idempotencyKeyRef.current;
 
-      if (!err.response || err.code === 'ERR_NETWORK' || err.code === 'ECONNABORTED') {
-        // Network error or timeout — outcome unknown
+      if (err?.code === 'ERR_NETWORK' || err?.code === 'ECONNABORTED') {
         setCardError(
           `We couldn't confirm whether your reservation was created due to a network issue. ` +
           `Please check your email or visit "My Bookings" before retrying to avoid a duplicate reservation. ` +
           `Reference ID: ${referenceId}`
         );
+      } else if (!err?.response) {
+        setCardError(err?.message || `We couldn't securely save your payment authorization. Reference ID: ${referenceId}`);
       } else if (httpStatus === 504 || httpStatus === 503 || httpStatus === 502) {
-        // Server timeout — booking may or may not have been saved
         setCardError(
           `The server took too long to respond. Your reservation may or may not have been created. ` +
           `Please check your email or "My Bookings" page before retrying. ` +
           `Reference ID: ${referenceId}`
         );
       } else if (httpStatus === 500) {
-        // Known server error
         setCardError(
           backendMessage ||
           `We couldn't complete your reservation. No confirmed booking was created. ` +
           `Please review your details and try again. Reference ID: ${referenceId}`
         );
       } else if (backendMessage) {
-        // Backend returned a specific validation or business error
         setCardError(backendMessage);
       } else {
         setCardError(
@@ -706,7 +675,6 @@ function Booking({ initialJourneyPayload = null }) {
       setCardProcessing(false);
     }
   };
-
 
   if (!flight) {
     return (
@@ -773,7 +741,7 @@ function Booking({ initialJourneyPayload = null }) {
             </span>
             <span className="booking-hero-badge">
               <i className="fas fa-shield-alt"></i>
-              256-Bit Encrypted Checkout
+              Secure Card Vault
             </span>
             <span className="booking-hero-badge">
               <i className="fas fa-bolt"></i>
@@ -1128,7 +1096,7 @@ function Booking({ initialJourneyPayload = null }) {
                 </div>
               </AccordionSection>
 
-              {/* SECTION 4: SECURE CREDIT / DEBIT CARD PAYMENT */}
+              {/* SECTION 4: UNIFIED SECURE CREDIT / DEBIT CARD PAYMENT */}
               <AccordionSection
                 id="payment"
                 stepNumber="4"
@@ -1141,8 +1109,8 @@ function Booking({ initialJourneyPayload = null }) {
                   {/* Security Notice Header */}
                   <div className="card-payment-header">
                     <div className="security-badge-group">
-                      <span className="secure-badge"><i className="fas fa-lock"></i> 256-Bit SSL Encrypted</span>
-                      <span className="secure-badge"><i className="fas fa-shield-alt"></i> PCI-DSS Compliant</span>
+                      <span className="secure-badge"><i className="fas fa-lock"></i> Encrypted Checkout</span>
+                      <span className="secure-badge"><i className="fas fa-shield-alt"></i> Card Fields Secured by VGS</span>
                     </div>
                     <div className="card-brand-logos">
                       <i className="fab fa-cc-visa" title="Visa"></i>
@@ -1172,59 +1140,11 @@ function Booking({ initialJourneyPayload = null }) {
                       {fieldErrors.cardholderName && <span className="field-error-text">{fieldErrors.cardholderName}</span>}
                     </div>
 
-                    <div className="booking-form-field" style={{ marginTop: '0.85rem' }}>
-                      <label htmlFor="cardNumber">Card Number <span style={{ color: '#dc2626' }}>*</span></label>
-                      <div className="card-input-wrapper">
-                        <input
-                          type="text"
-                          id="cardNumber"
-                          placeholder="0000 0000 0000 0000"
-                          value={cardForm.cardNumber}
-                          onChange={(e) => setCardForm({ ...cardForm, cardNumber: formatCardNumber(e.target.value) })}
-                          onFocus={handlePaymentFocus}
-                          maxLength={19}
-                          required
-                        />
-                        <span className="card-brand-icon">
-                          <i className={`fab ${detectCardBrand(cardForm.cardNumber).icon}`} style={{ color: detectCardBrand(cardForm.cardNumber).color }}></i>
-                        </span>
-                      </div>
-                    </div>
+                    <VgsCheckoutCardFields ref={secureCardRef} onFocus={handlePaymentFocus} />
 
-                    <div className="form-row-two">
-                      <div className="booking-form-field">
-                        <label htmlFor="expDate">Expiration Date (MM/YY) <span style={{ color: '#dc2626' }}>*</span></label>
-                        <input
-                          type="text"
-                          id="expDate"
-                          placeholder="MM/YY"
-                          value={cardForm.expDate}
-                          onChange={(e) => setCardForm({ ...cardForm, expDate: formatExpDate(e.target.value) })}
-                          onFocus={handlePaymentFocus}
-                          maxLength={5}
-                          required
-                        />
-                      </div>
-
-                      <div className="booking-form-field">
-                        <label htmlFor="cch">
-                          Security Code (CVV / CCH) <span style={{ color: '#dc2626' }}>*</span>
-                          <span className="cch-tooltip" title="3-digit CCH code on the back of Visa/Mastercard, or 4 digits on the front of AMEX">
-                            <i className="fas fa-question-circle"></i>
-                          </span>
-                        </label>
-                        <input
-                          type="password"
-                          id="cch"
-                          placeholder="123"
-                          value={cardForm.cch}
-                          onChange={(e) => setCardForm({ ...cardForm, cch: formatCch(e.target.value) })}
-                          onFocus={handlePaymentFocus}
-                          maxLength={4}
-                          required
-                        />
-                      </div>
-                    </div>
+                    <p style={{ margin: '0.8rem 0 0', fontSize: '0.82rem', lineHeight: 1.5, color: '#64748b' }}>
+                      Card number, expiration date, and security code are entered directly into protected VGS fields. The Final Seat receives vault references and masked metadata, not the raw values.
+                    </p>
                   </div>
 
                   {/* Billing Address & Phone Section */}
@@ -1410,7 +1330,7 @@ function Booking({ initialJourneyPayload = null }) {
                     disabled={cardProcessing || !termsAccepted}
                   >
                     {cardProcessing ? (
-                      <span><i className="fas fa-circle-notch fa-spin"></i> Processing 256-Bit Encrypted Card Payment...</span>
+                      <span><i className="fas fa-circle-notch fa-spin"></i> Securing Card & Creating Reservation...</span>
                     ) : (
                       <span><i className="fas fa-lock"></i> Complete Secure Booking — ${pricing.total} USD</span>
                     )}
