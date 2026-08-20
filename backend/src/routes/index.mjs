@@ -7,7 +7,6 @@ import { flightRouter, airportRouter } from '../modules/flights/flight.routes.mj
 import { enquiryRouter } from '../modules/enquiries/enquiry.routes.mjs';
 import { adminRouter } from '../modules/admin/admin.routes.mjs';
 import { backOfficeRouter } from '../modules/backoffice/backoffice.routes.mjs';
-import { securePaymentPublicRouter } from '../modules/secure-payments/secure-payment.routes.mjs';
 import passengerAuthorizationController from '../modules/authorizations/passenger-authorization.controller.mjs';
 import whopRouter from '../modules/payments/whop.routes.mjs';
 import paypalController from '../modules/payments/paypal.controller.mjs';
@@ -21,7 +20,6 @@ import addressAutocompleteController from '../modules/flights/address-autocomple
 
 const router = express.Router();
 const paypalRateLimiter = rateLimit({ windowMs: 60000, maxRequests: 15, message: 'Too many payment requests. Please wait a minute.' });
-const securePaymentRateLimiter = rateLimit({ windowMs: 60000, maxRequests: 30, message: 'Too many secure payment requests. Please wait a minute.' });
 const paypalRouter = express.Router();
 paypalRouter.post('/create-order', paypalRateLimiter, paypalController.createOrder);
 paypalRouter.post('/capture-order', paypalRateLimiter, paypalController.captureOrder);
@@ -38,7 +36,6 @@ router.use('/payments', noStore, paymentRouter);
 router.use('/paypal', noStore, paypalRouter);
 router.use('/authorizations', noStore, authorizationRouter);
 router.use('/authorization', noStore, authorizationRouter);
-router.use('/secure-payments', noStore, securePaymentRateLimiter, securePaymentPublicRouter);
 router.use('/admin', noStore, adminRouter);
 router.use('/backoffice', noStore, backOfficeRouter);
 router.use('/vouchers', noStore, voucherRoutes);
