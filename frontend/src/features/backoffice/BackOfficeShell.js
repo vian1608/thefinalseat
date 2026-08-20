@@ -13,8 +13,6 @@ const items = [
   ['Hotels','/admin/bookings/hotels','bookings.hotels.view'],
   ['Cars','/admin/bookings/cars','bookings.cars.view'],
   ['Payments','/admin/payments','payments.view'],
-  ['Authorizations','/admin/payments/authorizations','authorization.view'],
-  ['Payment Test','/admin/testing/payment-flow','admin.settings'],
   ['Refunds','/admin/payments/refunds','payments.refund'],
   ['Finance','/admin/finance','finance.view'],
   ['Suppliers','/admin/suppliers','suppliers.view'],
