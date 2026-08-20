@@ -86,6 +86,7 @@ export const GLOBAL_AIRPORTS = [
   { code: 'GRU', name: 'São Paulo/Guarulhos International Airport', city: 'Sao Paulo', state: '', country: 'Brazil' },
   { code: 'EZE', name: 'Ministro Pistarini International Airport', city: 'Buenos Aires', state: '', country: 'Argentina' },
   { code: 'BOG', name: 'El Dorado International Airport', city: 'Bogota', state: '', country: 'Colombia' },
+  { code: 'MDE', name: 'José María Córdova International Airport', city: 'Medellin', state: 'Antioquia', country: 'Colombia' },
 
   // Middle East & Asia Pacific
   { code: 'DXB', name: 'Dubai International Airport', city: 'Dubai', state: '', country: 'United Arab Emirates' },
