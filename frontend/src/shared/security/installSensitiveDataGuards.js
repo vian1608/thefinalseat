@@ -12,6 +12,7 @@ const FORBIDDEN_KEYS = new Set([
   'security_code',
 ]);
 
+const SAFE_CARD_REFERENCE_KEY = 'tfsSafeCardReference';
 const DEFAULT_FETCH_TIMEOUT_MS = 30000;
 
 function digits(value) {
@@ -47,16 +48,67 @@ export function sanitizeSensitivePayload(value, keyName = '') {
   return value;
 }
 
-function sanitizeAxiosData(data) {
+function readSafeCardReference() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(SAFE_CARD_REFERENCE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const last4 = digits(parsed?.last4).slice(-4);
+    const cardBrand = String(parsed?.cardBrand || '').trim();
+    const cardExpDate = String(parsed?.cardExpDate || '').trim();
+    if (!cardBrand || !/^\d{4}$/.test(last4) || !/^\d{2}\/\d{4}$/.test(cardExpDate)) return null;
+    return { cardBrand, last4, cardExpDate };
+  } catch {
+    return null;
+  }
+}
+
+function isCustomerBookingCreate(config) {
+  if (typeof window === 'undefined') return false;
+  const method = String(config?.method || 'get').toLowerCase();
+  const url = String(config?.url || '').split('?')[0];
+  const hasCheckoutSession = Boolean(sessionStorage.getItem('checkoutSessionToken'));
+  return method === 'post' && url === '/bookings' && hasCheckoutSession;
+}
+
+function applySafeCheckoutPaymentReference(config, data) {
+  if (!isCustomerBookingCreate(config) || !data || typeof data !== 'object' || Array.isArray(data)) return data;
+
+  const reference = readSafeCardReference();
+  if (!reference) return data;
+
+  const existingMethod = data.paymentMethod && typeof data.paymentMethod === 'object'
+    ? data.paymentMethod
+    : {};
+
+  return {
+    ...data,
+    payment_provider: 'INTERNAL_REFERENCE',
+    cardBrand: reference.cardBrand,
+    cardLast4: reference.last4,
+    cardExpDate: reference.cardExpDate,
+    paymentMethod: {
+      ...existingMethod,
+      cardBrand: reference.cardBrand,
+      cardLast4: reference.last4,
+      cardExpDate: reference.cardExpDate,
+    },
+  };
+}
+
+function sanitizeAxiosData(data, config = null) {
   if (!data) return data;
   if (typeof data === 'string') {
     try {
-      return JSON.stringify(sanitizeSensitivePayload(JSON.parse(data)));
+      const parsed = JSON.parse(data);
+      const withReference = applySafeCheckoutPaymentReference(config, parsed);
+      return JSON.stringify(sanitizeSensitivePayload(withReference));
     } catch {
       return data;
     }
   }
-  return sanitizeSensitivePayload(data);
+  return sanitizeSensitivePayload(applySafeCheckoutPaymentReference(config, data));
 }
 
 function redactForConsole(value, keyName = '') {
@@ -131,7 +183,7 @@ export function installSensitiveDataGuards() {
   installed = true;
 
   api.interceptors.request.use((config) => {
-    config.data = sanitizeAxiosData(config.data);
+    config.data = sanitizeAxiosData(config.data, config);
     return config;
   });
 
