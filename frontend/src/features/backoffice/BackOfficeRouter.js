@@ -4,9 +4,6 @@ import AdminDashboard from '../admin/pages/AdminDashboardPage';
 import { BackOfficeAuthProvider, useBackOfficeAuth } from './BackOfficeAuthContext';
 import BackOfficeShell from './BackOfficeShell';
 import { AuditLogsPage, CarsPage, CommissionsPage, CustomersPage, DashboardPage, DisputesPage, FinancePage, FlightBookingsPage, HotelsPage, IntegrationsPage, LeadDetailPage, LeadsPage, PaymentsPage, PlaceholderPage, ProductBookingDetailPage, RefundsPage, ReportsPage, RolesPage, SecurityPage, SettingsPage, SupplierPaymentsPage, SuppliersPage, TasksPage, TeamPage, TeamsPage, TripDetailPage, TripsPage } from './BackOfficeDataPages';
-import { PaymentAuthorizationDetailPage, PaymentAuthorizationsPage } from './SecurePaymentAdminPages';
-import PaymentFlowTestPage from './PaymentFlowTestPage';
-import './SecurePaymentAdmin.css';
 
 function Guard({ permission, children }) {
   const { loading, profile, hasPermission } = useBackOfficeAuth();
@@ -24,9 +21,7 @@ function Page({ permission, children }) {
 
 // This router is mounted directly inside a top-level BrowserRouter while the
 // browser location still includes /admin. Therefore every route must match the
-// complete browser pathname. Relative paths such as "backoffice" or
-// "testing/payment-flow" fall through to the wildcard and redirect back to
-// /admin/backoffice, which is what caused the blank redirect loop seen in production.
+// complete browser pathname.
 export default function BackOfficeRouter() {
   return <BackOfficeAuthProvider><Routes>
     <Route path="/admin/backoffice" element={<Page permission="dashboard.view"><DashboardPage /></Page>} />
@@ -46,11 +41,8 @@ export default function BackOfficeRouter() {
     <Route path="/admin/bookings/cars" element={<Page permission="bookings.cars.view"><CarsPage /></Page>} />
     <Route path="/admin/bookings/cars/:id" element={<Page permission="bookings.cars.view"><ProductBookingDetailPage type="car" /></Page>} />
     <Route path="/admin/payments" element={<Page permission="payments.view"><PaymentsPage /></Page>} />
-    <Route path="/admin/payments/authorizations" element={<Page permission="authorization.view"><PaymentAuthorizationsPage /></Page>} />
-    <Route path="/admin/payments/authorizations/:id" element={<Page permission="authorization.view"><PaymentAuthorizationDetailPage /></Page>} />
     <Route path="/admin/payments/refunds" element={<Page permission="payments.view"><RefundsPage /></Page>} />
     <Route path="/admin/payments/disputes" element={<Page permission="payments.view"><DisputesPage /></Page>} />
-    <Route path="/admin/testing/payment-flow" element={<Page permission="admin.settings"><PaymentFlowTestPage /></Page>} />
     <Route path="/admin/finance" element={<Page permission="finance.view"><FinancePage /></Page>} />
     <Route path="/admin/finance/commissions" element={<Page permission="finance.commissions"><CommissionsPage /></Page>} />
     <Route path="/admin/finance/supplier-payments" element={<Page permission="finance.view"><SupplierPaymentsPage /></Page>} />
