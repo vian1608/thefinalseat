@@ -74,14 +74,15 @@ assert.match(carResultCard, /window\.location\.assign/);
 assert.match(carResults, /requestSequence/);
 assert.match(carResults, /pageToken/);
 assert.match(carResults, /normalizeError/);
-// Current master intentionally presents car-rental phone assistance on the public
-// landing page. Keep the hardening contract aligned with that production behavior
-// rather than the superseded inline car-search form/default-date implementation.
+// Current production presents car-rental assistance through the shared product
+// search card plus an explicit support card. Keep this contract tied to the
+// active customer workflow rather than retired inline/default-date markup.
 assert.match(carHome, /SUPPORT_PHONE_HREF/);
+assert.match(carHome, /SUPPORT_PHONE_DISPLAY/);
 assert.match(carHome, /POPULAR_AIRPORTS/);
-assert.match(carHome, /aria-label="Car rental phone assistance"/);
+assert.match(carHome, /<ProductSearchCard/);
+assert.match(carHome, /className="car-support-button"/);
 assert.match(carHome, /serviceNavActive="cars"/);
-assert.match(carHome, /SeamlessAdvisorySection variant="flight"/);
 
 assert.match(returnFlights, /setError\(normalizeError/);
 assert.match(returnFlights, /Return Flight Search Failed/);

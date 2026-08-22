@@ -1,0 +1,66 @@
+version: 1
+canonical:
+  repository: vian1608/thefinalseat
+  branch: master
+
+downstream:
+  repository: vian1608/FareTransit
+  branch: main
+
+policy:
+  direction: finalseat_to_faretransit
+  delivery: pull_request_only
+  direct_downstream_push: false
+  reverse_changes: promote_to_canonical_first
+
+# Files in this list are safe candidates for exact shared-core parity after CI.
+shared_exact:
+  - backend/src/integrations/serpapi/serpapi.service.mjs
+  - backend/src/modules/flights/airport-ranker.mjs
+  - backend/src/modules/flights/flight.service.mjs
+  - backend/src/modules/flights/flight.routes.mjs
+  - backend/src/modules/cars/car-location.service.mjs
+  - backend/src/services/bookingDemandApiClient.mjs
+  - backend/src/modules/bookings/booking.mapper.mjs
+
+# These product areas should converge, but every change requires a semantic review
+# until brand/payment/data boundaries have been fully extracted.
+review_shared:
+  - frontend/src/features/flights/**
+  - frontend/src/features/hotels/**
+  - frontend/src/features/cars/**
+  - frontend/src/features/bookings/**
+  - frontend/src/features/journey/**
+  - frontend/src/features/customers/**
+  - frontend/src/features/backoffice/**
+  - backend/src/modules/bookings/**
+  - backend/src/modules/hotels/**
+  - backend/src/modules/cars/**
+  - backend/src/modules/backoffice/**
+  - backend/src/modules/authorizations/**
+
+# Never copy these from one business to the other as part of shared-core sync.
+protected:
+  - frontend/src/features/secure-payments/**
+  - backend/src/modules/secure-payments/**
+  - frontend/src/shared/constants/supportContact.js
+  - frontend/src/shared/pages/AboutUsPage.js
+  - frontend/src/shared/pages/PrivacyPolicyPage.js
+  - frontend/src/shared/pages/TermsAndConditionsPage.js
+  - frontend/src/shared/pages/RefundPolicyPage.js
+  - frontend/public/logo/**
+  - frontend/public/favicon.*
+  - vercel.json
+  - '**/.env*'
+  - backend/migrations/**
+  - supabase/**
+  - '**/*secret*'
+
+invariants:
+  - repositories_remain_separate
+  - databases_remain_separate
+  - production_secrets_remain_separate
+  - payment_processors_remain_separate
+  - brand_and_legal_identity_remain_separate
+  - shared_changes_land_in_finalseat_first
+  - faretransit_receives_shared_changes_via_reviewed_pr

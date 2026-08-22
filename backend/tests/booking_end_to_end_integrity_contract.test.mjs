@@ -61,9 +61,13 @@ assert.match(mapper, /infantType:\s*t\.infant_type/);
 assert.match(migration, /ADD COLUMN IF NOT EXISTS infant_type VARCHAR\(20\)/);
 assert.match(migration, /'IN_SEAT','ON_LAP'|'IN_SEAT', 'ON_LAP'/);
 
-// Never treat or log the full PAN as last4.
-assert.match(bookingPage, /cleanCardNum\.slice\(-4\)/);
-assert.doesNotMatch(bookingPage, /const cardLast4 = cleanCardNum \|\| null/);
+// Checkout must keep raw PAN/CVV out of React state and the booking payload.
+// Card entry remains inside the current secure-card component; the page receives
+// only masked metadata before invoking the secure booking attachment step.
+assert.match(bookingPage, /VgsCheckoutCardFields/);
+assert.match(bookingPage, /secureCardRef\.current\.getMaskedMetadata\(\)/);
+assert.match(bookingPage, /secureCardRef\.current\.secureBooking\(\{/);
+assert.doesNotMatch(bookingPage, /cleanCardNum/);
 assert.doesNotMatch(bookingPage, /console\.log\([\s\S]*cleanCardNum/);
 
 // Checkout token is a stable idempotency identity, and confirmation prefers the
