@@ -38,7 +38,7 @@ test('back-office expansion preserves the stable flight admin and enforces RBAC'
   });
 
   await t.test('new flight alias reuses the existing booking detail implementation', () => {
-    assert.match(boRouter, /path="bookings\/flights\/:code"[\s\S]*?<AdminDashboard \/>/, 'New flight route must reuse AdminDashboard booking detail.');
+    assert.match(boRouter, /path="\/admin\/bookings\/flights\/:code"[\s\S]*?<AdminDashboard \/>/, 'New flight route must reuse AdminDashboard booking detail.');
     assert.doesNotMatch(boRouter, /FlightEditor|NewFlightEditor/, 'Back office must not introduce a duplicate flight editor.');
   });
 
