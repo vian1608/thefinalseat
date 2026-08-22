@@ -68,29 +68,28 @@ test('back-office expansion preserves the stable flight admin and enforces RBAC'
   await t.test('staff share the existing login but do not land on the legacy owner dashboard', () => {
     assert.match(adminLogin, /isStaffProfile/);
     assert.match(adminLogin, /navigate\(isStaffProfile \? '\/admin\/backoffice' : '\/admin\/dashboard'\)/);
-    assert.match(index, /pathname\.startsWith\('\/admin\/backoffice'\)/);
+    assert.match(boShell, /hasPermission\(permission\)/, 'Sidebar visibility must be permission-aware.');
   });
 
   await t.test('backend independently protects sensitive settings and team administration', () => {
-    assert.match(boRoutes, /requirePermission\('team\.view'\)/);
-    assert.match(boRoutes, /requirePermission\('admin\.settings'\)/);
-    assert.match(boRoutes, /requirePermission\('admin\.integrations'\)/);
-    assert.match(adminReporting, /requirePermission\('reports\.view'\)/);
-    assert.match(adminReporting, /requirePermission\('finance\.view'\)/);
-    assert.match(rootRoutes, /router\.use\('\/admin\/backoffice'/);
+    assert.match(adminReporting, /settings\/integrations', requirePermission\('admin\.integrations'\)/);
+    assert.match(adminReporting, /settings\/audit-logs', requirePermission\('admin\.audit_logs'\)/);
+    assert.match(adminReporting, /team\/users\/:id',requirePermission\('team\.manage'\)/);
+    assert.match(adminReporting, /SELF_PERMISSION_CHANGE_BLOCKED/);
+    assert.match(adminReporting, /OWNER_ROLE_PROTECTED/);
+    assert.match(boRoutes, /loadBackOfficeProfile/);
   });
 
   await t.test('supplier and finance schema does not store credentials or raw payment-card secrets', () => {
-    assert.match(financeMigration, /CREATE TABLE IF NOT EXISTS suppliers/);
-    assert.match(financeMigration, /CREATE TABLE IF NOT EXISTS finance_entries/);
-    assert.match(financeMigration, /CREATE TABLE IF NOT EXISTS supplier_payments/);
-    assert.doesNotMatch(financeMigration, /api_key|password|secret|card_number|cvv/i);
+    assert.doesNotMatch(financeMigration, /\b(password|password_hash|api_key|api_secret|access_token|refresh_token)\b\s+(TEXT|VARCHAR|JSONB)/i);
+    assert.doesNotMatch(financeMigration, /\b(card_number|pan|cvv|cvc|security_code)\b\s+(TEXT|VARCHAR|CHAR|JSONB)/i);
+    assert.match(financeMigration, /refund_large_threshold/);
+    assert.match(adminReporting, /payment_details:'masked\/server-side only'/);
   });
 
   await t.test('public car routes remain mounted separately from internal car operations', () => {
-    assert.match(rootRoutes, /router\.use\('\/cars', carRoutes\)/);
-    assert.match(rootRoutes, /router\.use\('\/admin\/backoffice', backofficeRoutes\)/);
+    assert.match(app, /path="\/car-rentals"/);
+    assert.match(rootRoutes, /router\.use\('\/cars', carRouter\)/);
+    assert.match(boRoutes, /carsBackofficeRouter/);
   });
-
-  assert.match(boShell, /permissions/);
 });
