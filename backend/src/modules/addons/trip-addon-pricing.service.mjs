@@ -1,6 +1,7 @@
 const FLEX_RATE = 0.10;
 const FLEX_TERMS_VERSION = 'FLEX_V1';
-const ADDON_VERSION = 'TRIP_ADDONS_V1';
+const BAGGAGE_TERMS_VERSION = 'BAGGAGE_REQUEST_V2';
+const ADDON_VERSION = 'TRIP_ADDONS_V2';
 const MAX_BAGS_PER_TRAVELER_DIRECTION = 3;
 
 function money(value) {
@@ -62,17 +63,27 @@ function normalizeBaggage(rawBaggage, { passengerCount, hasReturn }) {
 
     const key = `${travelerIndex}:${direction}`;
     deduped.set(key, {
+      requestId: `bag_${travelerIndex}_${direction.toLowerCase()}`,
       addonType: 'CHECKED_BAGGAGE',
       travelerIndex,
       direction,
       quantity,
       weightKg: 23,
-      priceMode: 'REQUEST_ONLY',
-      unitPrice: 0,
-      totalPrice: 0,
+      priceMode: 'POST_RESERVATION_QUOTE',
       currency: 'USD',
+      paymentDueNow: 0,
+      supplierCost: null,
+      customerPrice: null,
+      quoteValidUntil: null,
+      paymentUrl: null,
+      paymentStatus: 'NOT_REQUIRED_YET',
+      supplierReference: null,
       status: 'REQUESTED',
-      message: 'Baggage is a request only until airline availability and the exact supplier fee are confirmed.',
+      requiresSeparatePayment: true,
+      termsVersion: BAGGAGE_TERMS_VERSION,
+      message: 'This is a baggage request only. Airline availability and the exact fee are confirmed after the flight reservation. Extra baggage is paid separately after you approve the confirmed price.',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     });
   });
 
@@ -106,6 +117,7 @@ export function buildAuthoritativeTripAddonQuote(checkoutPayload = {}) {
       disclaimer: 'Flex Assist is an agency service, not travel insurance or an airline flexible fare. Airline fare differences, penalties, taxes, availability, and fare rules may still apply.',
     },
     baggage,
+    baggagePaymentDueNow: 0,
     baggageTotal: 0,
     addOnTotal: flexPrice,
   };
@@ -149,6 +161,7 @@ export function applyAuthoritativeTripAddonPricing(bookingPayload = {}, quote = 
 export const tripAddonPricing = {
   FLEX_RATE,
   FLEX_TERMS_VERSION,
+  BAGGAGE_TERMS_VERSION,
   ADDON_VERSION,
   getPassengerCount,
   calculateTicketSellingBase,

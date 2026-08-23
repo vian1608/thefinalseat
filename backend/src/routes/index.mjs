@@ -13,6 +13,7 @@ import paypalController from '../modules/payments/paypal.controller.mjs';
 import rateLimit from '../middleware/rate-limit.mjs';
 import voucherRoutes from '../modules/vouchers/voucher.routes.mjs';
 import { journeySessionRouter } from '../modules/journey-sessions/journey-session.routes.mjs';
+import { tripAddonRouter } from '../modules/addons/trip-addon.routes.mjs';
 import { noStore, publicLookupCache } from '../middleware/cache-control.middleware.mjs';
 import { carRouter } from '../modules/cars/car.routes.mjs';
 import { hotelRouter } from '../modules/hotels/hotel.routes.mjs';
@@ -30,6 +31,7 @@ authorizationRouter.post('/accept', passengerAuthorizationController.acceptAutho
 
 router.use('/auth', noStore, authRouter);
 router.use('/customers', noStore, customerRouter);
+router.use('/', noStore, tripAddonRouter);
 router.use('/bookings', noStore, bookingRouter);
 router.use('/my-bookings', noStore, bookingRouter);
 router.use('/payments', noStore, paymentRouter);

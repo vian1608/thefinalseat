@@ -11,21 +11,28 @@ const checkout = {
   addons: {
     flexAssist: { selected: true, price: 1, rate: 0.01 },
     baggage: [
-      { travelerIndex: 0, direction: 'OUTBOUND', quantity: 1, unitPrice: 999 },
-      { travelerIndex: 1, direction: 'RETURN', quantity: 2, unitPrice: 999 },
+      { travelerIndex: 0, direction: 'OUTBOUND', quantity: 1, unitPrice: 999, customerPrice: 999 },
+      { travelerIndex: 1, direction: 'RETURN', quantity: 2, unitPrice: 999, customerPrice: 999 },
     ],
   },
 };
 
 const quote = buildAuthoritativeTripAddonQuote(checkout);
+assert.equal(quote.version, 'TRIP_ADDONS_V2');
 assert.equal(quote.ticketBase, 1000);
 assert.equal(quote.flexAssist.rate, 0.10);
 assert.equal(quote.flexAssist.price, 100);
 assert.equal(quote.addOnTotal, 100);
+assert.equal(quote.baggagePaymentDueNow, 0);
 assert.equal(quote.baggage.length, 2);
-assert.equal(quote.baggage[0].priceMode, 'REQUEST_ONLY');
-assert.equal(quote.baggage[0].unitPrice, 0);
-assert.equal(quote.baggage[1].totalPrice, 0);
+assert.equal(quote.baggage[0].priceMode, 'POST_RESERVATION_QUOTE');
+assert.equal(quote.baggage[0].paymentDueNow, 0);
+assert.equal(quote.baggage[0].supplierCost, null);
+assert.equal(quote.baggage[0].customerPrice, null);
+assert.equal(quote.baggage[0].status, 'REQUESTED');
+assert.equal(quote.baggage[0].paymentStatus, 'NOT_REQUIRED_YET');
+assert.equal(quote.baggage[0].requiresSeparatePayment, true);
+assert.equal(quote.baggage[1].paymentDueNow, 0);
 
 const priced = applyAuthoritativeTripAddonPricing({
   customer_price: 1,
