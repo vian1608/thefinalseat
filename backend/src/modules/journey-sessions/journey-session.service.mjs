@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import supabase from '../../integrations/supabase/supabase.client.mjs';
 import bookingService from '../bookings/booking.service.mjs';
+import { parseTripAddonsFromInternalNotes, publicTripAddonProjection } from '../addons/trip-addon.repository.mjs';
 
 export const JOURNEY_SESSION_TYPES = Object.freeze({
   QUOTE: 'QUOTE',
@@ -131,8 +132,6 @@ async function patchSession(token, type, patch = {}) {
   const nextPayload = sanitizeValue(patch?.payload ?? patch ?? {});
   const now = new Date().toISOString();
 
-  // One conditional UPDATE only. The browser already owns the loaded payload and
-  // sends its complete replacement, so autosave never becomes read-then-write fan-out.
   const { data, error } = await supabase
     .from('journey_sessions')
     .update({ payload: nextPayload, updated_at: now })
@@ -199,6 +198,11 @@ function buildPublicReservationDto(completeBooking = {}) {
   const rawLast4 = String(paymentMethod.card_last4 || paymentMethod.cardLast4 || paymentMethod.last4 || '').replace(/\D/g, '');
   const last4 = /^\d{4}$/.test(rawLast4) ? rawLast4 : null;
   const total = Number.parseFloat(completeBooking.customer_price ?? completeBooking.total_amount ?? 0);
+  const tripAddons = publicTripAddonProjection(
+    completeBooking.tripAddons
+      || completeBooking.trip_addons
+      || parseTripAddonsFromInternalNotes(completeBooking.internal_notes || completeBooking.internalNotes),
+  );
 
   return {
     booking: {
@@ -240,6 +244,7 @@ function buildPublicReservationDto(completeBooking = {}) {
       ].filter(Boolean).join(', ') || null,
       billingPhone: paymentMethod.billing_phone || paymentMethod.billingPhone || completeBooking.phone || null,
     },
+    tripAddons,
   };
 }
 
