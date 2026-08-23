@@ -29,8 +29,9 @@ function TermsAndConditions() {
 
           <section>
             <h2>6. Checked Baggage Requests</h2>
-            <p>A checked-baggage selection shown as a request is not a confirmed baggage purchase. Baggage acceptance, weight and size limits, eligibility, and pricing are controlled by the operating airline or supplier. Where a reliable ancillary price is not available during checkout, no baggage fee is charged at that stage.</p>
-            <p>We will confirm the airline or supplier fee and availability before any separate baggage purchase or charge. A requested bag is not guaranteed until The Final Seat provides confirmation.</p>
+            <p>Selecting extra checked baggage during flight checkout submits a request only. It does not purchase, reserve, or guarantee baggage and no baggage fee is included in the airfare payment at that stage. Baggage acceptance, eligibility, weight and size limits, and pricing are controlled by the operating airline or supplier.</p>
+            <p>After the flight reservation is submitted, The Final Seat will check baggage availability and the applicable airline or supplier fee. If the request is available, we may send a separate baggage offer showing the confirmed customer price and any applicable validity period.</p>
+            <p>Extra baggage is paid separately from airfare and will only be purchased after the traveler approves the confirmed price and completes the separate baggage payment. Payment receipt does not itself mean baggage is confirmed; baggage is confirmed only after the airline or supplier purchase is successfully completed. Supplier pricing and availability may change until purchase.</p>
           </section>
 
           <section><h2>7. Limitation of Liability</h2><p>We are not liable for delays, cancellations, overbooking, weather events, supplier actions, or unavailable replacement inventory outside our control. Our role is to advise and coordinate based on available information.</p></section>
