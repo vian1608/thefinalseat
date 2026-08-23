@@ -30,27 +30,41 @@ export function serializeTripAddonSnapshot(snapshot) {
   return `${WRITE_PREFIX}${JSON.stringify(snapshot || {})}`;
 }
 
+function publicBaggageStatus(item = {}) {
+  const status = String(item.status || 'REQUESTED').toUpperCase();
+  const expiresAt = item.quoteValidUntil ? new Date(item.quoteValidUntil).getTime() : null;
+  const expirable = ['PRICE_CONFIRMED', 'OFFER_SENT', 'AWAITING_PAYMENT'].includes(status);
+  if (expirable && Number.isFinite(expiresAt) && expiresAt <= Date.now()) return 'PRICE_EXPIRED';
+  return status;
+}
+
 export function publicTripAddonProjection(snapshot) {
   if (!snapshot || typeof snapshot !== 'object') return null;
   const baggage = Array.isArray(snapshot.baggage)
-    ? snapshot.baggage.map((item = {}) => ({
-        requestId: item.requestId || null,
-        addonType: 'CHECKED_BAGGAGE',
-        travelerIndex: Number.isInteger(Number(item.travelerIndex)) ? Number(item.travelerIndex) : null,
-        direction: item.direction || 'OUTBOUND',
-        quantity: Number(item.quantity) || 0,
-        weightKg: Number(item.weightKg) || 23,
-        currency: item.currency || 'USD',
-        status: item.status || 'REQUESTED',
-        customerPrice: item.customerPrice === null || item.customerPrice === undefined ? null : Number(item.customerPrice),
-        quoteValidUntil: item.quoteValidUntil || null,
-        paymentUrl: /^https:\/\//i.test(String(item.paymentUrl || '')) ? item.paymentUrl : null,
-        paymentStatus: item.paymentStatus || 'NOT_REQUIRED_YET',
-        supplierReference: item.status === 'CONFIRMED' ? (item.supplierReference || null) : null,
-        requiresSeparatePayment: item.requiresSeparatePayment !== false,
-        message: item.message || 'Baggage is subject to airline availability and separate payment after the reservation.',
-        updatedAt: item.updatedAt || null,
-      }))
+    ? snapshot.baggage.map((item = {}) => {
+        const status = publicBaggageStatus(item);
+        const canPay = ['PRICE_CONFIRMED', 'OFFER_SENT', 'AWAITING_PAYMENT'].includes(status);
+        return {
+          requestId: item.requestId || null,
+          addonType: 'CHECKED_BAGGAGE',
+          travelerIndex: Number.isInteger(Number(item.travelerIndex)) ? Number(item.travelerIndex) : null,
+          direction: item.direction || 'OUTBOUND',
+          quantity: Number(item.quantity) || 0,
+          weightKg: Number(item.weightKg) || 23,
+          currency: item.currency || 'USD',
+          status,
+          customerPrice: item.customerPrice === null || item.customerPrice === undefined ? null : Number(item.customerPrice),
+          quoteValidUntil: item.quoteValidUntil || null,
+          paymentUrl: canPay && /^https:\/\//i.test(String(item.paymentUrl || '')) ? item.paymentUrl : null,
+          paymentStatus: status === 'PRICE_EXPIRED' ? 'NOT_REQUIRED_YET' : (item.paymentStatus || 'NOT_REQUIRED_YET'),
+          supplierReference: status === 'CONFIRMED' ? (item.supplierReference || null) : null,
+          requiresSeparatePayment: item.requiresSeparatePayment !== false,
+          message: status === 'PRICE_EXPIRED'
+            ? 'This baggage price has expired. Please contact us if you still want extra baggage so we can reconfirm the airline fee.'
+            : (item.message || 'Baggage is subject to airline availability and separate payment after the reservation.'),
+          updatedAt: item.updatedAt || null,
+        };
+      })
     : [];
 
   return {
