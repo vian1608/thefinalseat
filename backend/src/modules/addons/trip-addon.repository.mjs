@@ -10,12 +10,12 @@ export function parseTripAddonsFromInternalNotes(value) {
     const line = notes.split(/\r?\n/).find((entry) => entry.startsWith(prefix));
     if (!line) continue;
     try {
-      return JSON.parse(line.slice(prefix.length));
+      return JSON.parse(line.slice(prefix.length)) || {};
     } catch {
-      return null;
+      return {};
     }
   }
-  return null;
+  return {};
 }
 
 export function stripTripAddonSnapshotFromNotes(value) {
