@@ -4,6 +4,7 @@ import {
   applyAuthoritativeTripAddonPricing,
 } from '../addons/trip-addon-pricing.service.mjs';
 import { persistTripAddonSnapshot } from '../addons/trip-addon.repository.mjs';
+import { sendTripAddonBookingSummaryEmail } from '../addons/trip-addon-booking-email.service.mjs';
 
 /**
  * Links a successful booking to its c_ checkout token and returns an r_ read token.
@@ -73,6 +74,7 @@ export async function completeJourneySessionAfterBooking(req, res, next) {
     Promise.allSettled([
       persistTripAddonSnapshot(bookingId, tripAddons),
       journeySessionService.completeCheckout(checkoutToken, bookingId),
+      sendTripAddonBookingSummaryEmail(bookingId, tripAddons),
     ]).then((results) => {
       if (sent) return;
       sent = true;
@@ -83,6 +85,9 @@ export async function completeJourneySessionAfterBooking(req, res, next) {
       }
       if (completion?.status === 'rejected') {
         console.error('[JourneySession] Non-blocking checkout completion warning:', completion.reason?.message);
+      }
+      if (results[2]?.status === 'rejected') {
+        console.error('[TripAddons] Non-blocking itemized email warning:', results[2].reason?.message);
       }
 
       const reservationToken = completion?.status === 'fulfilled'
