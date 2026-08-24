@@ -3,6 +3,7 @@ import authenticate from '../../middleware/authenticate.mjs';
 import authorize from '../../middleware/authorize.mjs';
 import rateLimit from '../../middleware/rate-limit.mjs';
 import './trip-addon.persistence-hardening.mjs';
+import './trip-addon-workflow-hardening.mjs';
 import { tripAddonPublicController, tripAddonAdminController } from './trip-addon.controller.mjs';
 import { tripAddonFlexController } from './trip-addon-flex.controller.mjs';
 
