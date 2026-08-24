@@ -15,6 +15,7 @@ import './shared/styles/BookingChoiceUX.css';
 import './shared/styles/MobileItineraryCompact.css';
 import './shared/styles/MobileItineraryRoutePolish.css';
 import './features/bookings/addons/TripAddonsEnhancement.css';
+import './features/bookings/addons/FlexAssistWorkflow.css';
 import App from './app/App';
 import BackOfficeRouter from './features/backoffice/BackOfficeRouter';
 import SupportCallLayer from './shared/components/SupportCallLayer';
@@ -27,6 +28,7 @@ import { installFareBreakdownUX } from './shared/pricing/installFareBreakdownUX'
 import { installMobileBookingUX } from './shared/mobile/installMobileBookingUX';
 import { installPrimaryContactSyncUX } from './shared/contact/installPrimaryContactSyncUX';
 import { installTripAddonsUX } from './features/bookings/addons/installTripAddonsUX';
+import { installFlexAssistWorkflowUX } from './features/bookings/addons/installFlexAssistWorkflowUX';
 
 installSensitiveDataGuards();
 installBookingValidationUX();
@@ -34,6 +36,7 @@ installFareBreakdownUX();
 installMobileBookingUX();
 installPrimaryContactSyncUX();
 installTripAddonsUX();
+installFlexAssistWorkflowUX();
 
 // CRM launches the EXISTING create-flight workflow with a leadId query parameter.
 // Patch only that single request path so the successful legacy create call is
