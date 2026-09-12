@@ -20,7 +20,7 @@ assert.match(wrapper, /adminAPI\.getBookings\s*=\s*\(params\s*=\s*\{\},\s*option
 // Continuous serial numbering must account for the current page without adding
 // React-managed table children directly.
 assert.match(wrapper, /\(\(page\s*-\s*1\)\s*\*\s*ADMIN_BOOKINGS_PAGE_SIZE\)\s*\+\s*index\s*\+\s*1|\(\(page\s*-\s*1\)\s*\*\s*ADMIN_BOOKINGS_PAGE_SIZE\)\s*\+\s*rowIndex\s*\+\s*1/);
-assert.match(wrapper, /row\.dataset\.bookingSerial\s*=\s*String\(serial\)/);
+assert.match(wrapper, /row\.dataset\.bookingSerial\s*=\s*String\(\(\(page\s*-\s*1\)\s*\*\s*ADMIN_BOOKINGS_PAGE_SIZE\)\s*\+\s*index\s*\+\s*1\)/);
 assert.doesNotMatch(wrapper, /document\.createElement\(['"]td['"]\)/);
 assert.doesNotMatch(wrapper, /document\.createElement\(['"]th['"]\)/);
 assert.match(css, /tbody tr::before[\s\S]*content:\s*attr\(data-booking-serial\)/);
