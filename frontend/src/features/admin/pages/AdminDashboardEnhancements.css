@@ -1,18 +1,29 @@
 /* Admin dashboard list + header enhancements.
-   Keep the admin brand row on the same 1540px / 22px horizontal geometry
-   as .adv2-shell and the dedicated booking workspace. */
+   The public site header uses the standard 1200px / 20px container. Keep the
+   admin brand row on exactly that geometry so “The Final Seat” and
+   “The Final Seat Admin” share the same left edge. */
+
+/* Override the older admin-route widening rule from Header.css. */
+.header--admin-route .container {
+  width: 100% !important;
+  max-width: 1200px !important;
+  padding-left: 20px !important;
+  padding-right: 20px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
 
 .adv2-header {
-  transition: box-shadow 180ms ease, background 180ms ease;
+  transition: box-shadow 180ms ease, background 180ms ease, backdrop-filter 180ms ease;
 }
 
 .adv2-header__inner {
   width: 100% !important;
-  max-width: 1540px !important;
+  max-width: 1200px !important;
   min-height: 64px;
   margin-left: auto !important;
   margin-right: auto !important;
-  padding: 12px 22px !important;
+  padding: 12px 20px !important;
   transition: min-height 180ms ease, padding 180ms ease, gap 180ms ease;
 }
 
@@ -30,6 +41,8 @@
 }
 
 .adv2-header--compact {
+  background: rgba(15, 39, 70, 0.96) !important;
+  backdrop-filter: blur(12px);
   box-shadow: 0 8px 24px rgba(15, 39, 70, 0.2) !important;
 }
 
@@ -41,6 +54,7 @@
 
 .adv2-header--compact .adv2-brand {
   transform: translateY(-1px);
+  font-size: 0.96em;
 }
 
 /* Booking list viewport: keep the header visible and roughly 15 booking rows
@@ -125,6 +139,11 @@
 }
 
 @media (max-width: 900px) {
+  .header--admin-route .container,
+  .adv2-header__inner {
+    max-width: 100% !important;
+  }
+
   .adv2-header__inner {
     min-height: 58px;
     gap: 10px;
@@ -140,9 +159,13 @@
 }
 
 @media (max-width: 640px) {
+  .header--admin-route .container,
   .adv2-header__inner {
     padding-left: 16px !important;
     padding-right: 16px !important;
+  }
+
+  .adv2-header__inner {
     flex-wrap: wrap;
     align-items: center;
   }
