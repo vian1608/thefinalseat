@@ -21,6 +21,53 @@ function isOptionalTableError(error) {
   return text.includes('schema cache') || text.includes('does not exist') || text.includes('relation') || text.includes('not found');
 }
 
+function moneyToCents(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.round(numeric * 100) : 0;
+}
+
+function splitTotalCents(splits = []) {
+  return (Array.isArray(splits) ? splits : []).reduce(
+    (sum, split) => sum + moneyToCents(split?.amount),
+    0
+  );
+}
+
+function reconcileAuthorizationAmount(booking, splits = []) {
+  if (!booking) return booking;
+
+  const splitCents = splitTotalCents(splits);
+  const bookingCents = moneyToCents(
+    booking.customer_price ??
+    booking.total_amount ??
+    booking.pricing?.customerTotal ??
+    0
+  );
+
+  // A saved split breakdown is authoritative only when it matches the current
+  // customer total. This prevents a stale/partial split edit from silently
+  // changing an authorization amount.
+  if (splitCents <= 0 || bookingCents <= 0 || splitCents !== bookingCents) {
+    return booking;
+  }
+
+  const canonicalAmount = splitCents / 100;
+  const currentAuthorizedCents = moneyToCents(
+    booking.authorized_amount ?? booking.authorization?.authorizedAmount ?? 0
+  );
+
+  if (currentAuthorizedCents === splitCents) return booking;
+
+  return {
+    ...booking,
+    authorized_amount: canonicalAmount,
+    authorization: {
+      ...(booking.authorization || {}),
+      authorizedAmount: canonicalAmount
+    }
+  };
+}
+
 async function resolveBookingKeys(input) {
   const raw = String(input || '').trim();
   if (!raw) return { realId: null, refCode: null };
@@ -69,8 +116,56 @@ async function querySplitsTable(table, identifiers) {
   }
 }
 
+async function persistCanonicalAuthorizationAmount(bookingId, amount) {
+  if (!bookingId || !Number.isFinite(amount) || amount <= 0) return;
+
+  try {
+    const result = await withTimeout(
+      supabase
+        .from('bookings')
+        .update({ authorized_amount: amount })
+        .eq('id', bookingId)
+        .select('id, authorized_amount')
+        .maybeSingle(),
+      4000,
+      'synchronize booking authorized amount'
+    );
+
+    if (result?.error) {
+      logger.warn(`[RepositoryRepair] Could not persist authorized_amount for ${bookingId}: ${result.error.message}`);
+    }
+  } catch (error) {
+    logger.warn(`[RepositoryRepair] Could not persist authorized_amount for ${bookingId}: ${error.message}`);
+  }
+
+  // Keep any already-created authorization record consistent too. The existing
+  // repository transaction already updates the quote snapshot/splits; this is
+  // an additional defensive sync for legacy/stale rows.
+  try {
+    const result = await withTimeout(
+      supabase
+        .from('passenger_authorizations')
+        .update({ authorized_amount: amount, updated_at: new Date().toISOString() })
+        .eq('booking_id', bookingId),
+      4000,
+      'synchronize passenger authorization amount'
+    );
+
+    if (result?.error && !isOptionalTableError(result.error)) {
+      logger.warn(`[RepositoryRepair] Could not synchronize passenger authorization amount for ${bookingId}: ${result.error.message}`);
+    }
+  } catch (error) {
+    if (!isOptionalTableError(error)) {
+      logger.warn(`[RepositoryRepair] Could not synchronize passenger authorization amount for ${bookingId}: ${error.message}`);
+    }
+  }
+}
+
 export function installBookingRepositoryRuntimeRepairs() {
   if (bookingRepository.__runtimeRepairInstalled) return bookingRepository;
+
+  const originalGetCompleteBookingById = bookingRepository.getCompleteBookingById.bind(bookingRepository);
+  const originalUpdatePaymentSplitsAndTotal = bookingRepository.updatePaymentSplitsAndTotal.bind(bookingRepository);
 
   /*
    * Critical recursion fix:
@@ -94,6 +189,79 @@ export function installBookingRepositoryRuntimeRepairs() {
     return querySplitsTable('payment_splits', identifiers);
   };
 
+  /*
+   * Legacy-data repair:
+   *
+   * A booking can have a current customer total + saved split total of $700,
+   * while an older bookings.authorized_amount still says $741. The authorization
+   * email protection correctly rejects that mismatch, even though the latest
+   * payment edit itself was valid.
+   *
+   * When the saved splits exactly equal the current booking total, expose that
+   * total as the canonical authorization amount. This makes existing records
+   * usable immediately without weakening the financial mismatch protection.
+   */
+  bookingRepository.getCompleteBookingById = async (bookingIdInput) => {
+    const booking = await originalGetCompleteBookingById(bookingIdInput);
+    if (!booking?.id) return booking;
+
+    const splits = Array.isArray(booking.payment_splits) && booking.payment_splits.length > 0
+      ? booking.payment_splits
+      : await bookingRepository.getPaymentSplits(booking.id);
+
+    const repaired = reconcileAuthorizationAmount(booking, splits);
+    if (repaired !== booking) {
+      logger.warn(
+        `[RepositoryRepair] Reconciled stale authorized amount for booking ${booking.id}: ` +
+        `authorized=$${Number(booking.authorized_amount || 0).toFixed(2)} -> $${Number(repaired.authorized_amount || 0).toFixed(2)}`
+      );
+    }
+    return repaired;
+  };
+
+  /*
+   * Write-path repair:
+   * Saving payment splits must synchronize all three financial values used by
+   * the authorization workflow: customer_price, total_amount and authorized_amount.
+   * The base repository already owns the transaction for prices/splits; this
+   * wrapper persists the missing authorized_amount and then returns a verified,
+   * reconciled booking snapshot.
+   */
+  bookingRepository.updatePaymentSplitsAndTotal = async (...args) => {
+    const result = await originalUpdatePaymentSplitsAndTotal(...args);
+    if (!result?.id) return result;
+
+    const splits = Array.isArray(result.payment_splits) && result.payment_splits.length > 0
+      ? result.payment_splits
+      : await bookingRepository.getPaymentSplits(result.id);
+
+    const splitCents = splitTotalCents(splits);
+    const bookingCents = moneyToCents(
+      result.customer_price ?? result.total_amount ?? result.pricing?.customerTotal ?? 0
+    );
+
+    if (splitCents > 0 && bookingCents > 0 && splitCents === bookingCents) {
+      const canonicalAmount = splitCents / 100;
+      await persistCanonicalAuthorizationAmount(result.id, canonicalAmount);
+
+      return reconcileAuthorizationAmount(
+        {
+          ...result,
+          authorized_amount: canonicalAmount,
+          authorization: {
+            ...(result.authorization || {}),
+            authorizedAmount: canonicalAmount
+          }
+        },
+        splits
+      );
+    }
+
+    // Do not mask a real mismatch. The authorization-email protection layer
+    // must continue blocking dispatch until the totals actually agree.
+    return result;
+  };
+
   Object.defineProperty(bookingRepository, '__runtimeRepairInstalled', {
     value: true,
     enumerable: false,
@@ -101,7 +269,7 @@ export function installBookingRepositoryRuntimeRepairs() {
     writable: false
   });
 
-  logger.info('[RepositoryRepair] Installed non-recursive payment split lookup.');
+  logger.info('[RepositoryRepair] Installed non-recursive payment split lookup and authorization amount synchronization.');
   return bookingRepository;
 }
 
